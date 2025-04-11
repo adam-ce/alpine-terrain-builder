@@ -21,9 +21,8 @@
 #include "TopDownTiler.h"
 
 template <typename ReadFunction, typename AggregateFunction>
-auto traverse_depth_first_and_aggregate(const TopDownTiler& tiler, ReadFunction read, AggregateFunction aggregate, const tile::Id& root_tile_id, unsigned max_zoom_level)
-    -> decltype(read(tiler.tile_for(root_tile_id)))
-{
+auto traverse_depth_first_and_aggregate(const TopDownTiler &tiler, ReadFunction read, AggregateFunction aggregate, const radix::tile::Id &root_tile_id, unsigned max_zoom_level)
+    -> decltype(read(tiler.tile_for(root_tile_id))) {
     using DataType = decltype(read(tiler.tile_for(root_tile_id)));
     const auto subtiles = tiler.generateTiles(root_tile_id);
     // subtiles can be empty if the parent tile had an overlap with the dataset extent only on the border pixels.

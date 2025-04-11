@@ -67,8 +67,7 @@ std::string Dataset::name() const
 
 Dataset::~Dataset() = default;
 
-tile::SrsBounds Dataset::bounds() const
-{
+radix::tile::SrsBounds Dataset::bounds() const {
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
         throw Exception("Could not get transformation information from source dataset");
@@ -90,8 +89,7 @@ tile::SrsBounds Dataset::bounds() const
     return { {westX, southY}, {eastX, northY} };
 }
 
-tile::SrsBounds Dataset::bounds(const OGRSpatialReference& targetSrs) const
-{
+radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) const {
     const auto l_bounds = bounds();
     const auto west = l_bounds.min.x;
     const auto east = l_bounds.max.x;
@@ -164,13 +162,11 @@ unsigned Dataset::heightInPixels() const
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
-double Dataset::widthInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
-{
+double Dataset::widthInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
     return bounds.width() / pixelWidthIn(bounds_srs);
 }
 
-double Dataset::heightInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
-{
+double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
     return bounds.height() / pixelHeightIn(bounds_srs);
 }
 

@@ -45,13 +45,13 @@ public:
 
     [[nodiscard]] std::string name() const;
 
-    [[nodiscard]] tile::SrsBounds bounds() const;
-    [[nodiscard]] tile::SrsBounds bounds(const OGRSpatialReference& targetSrs) const;
+    [[nodiscard]] radix::tile::SrsBounds bounds() const;
+    [[nodiscard]] radix::tile::SrsBounds bounds(const OGRSpatialReference &targetSrs) const;
     [[nodiscard]] OGRSpatialReference srs() const;
     [[nodiscard]] unsigned widthInPixels() const;
     [[nodiscard]] unsigned heightInPixels() const;
-    [[nodiscard]] double widthInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-    [[nodiscard]] double heightInPixels(const tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+    [[nodiscard]] double widthInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
+    [[nodiscard]] double heightInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
     [[nodiscard]] unsigned n_bands() const;
     [[nodiscard]] GDALDataset* gdalDataset();
 

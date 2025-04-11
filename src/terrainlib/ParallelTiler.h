@@ -23,11 +23,11 @@
 
 class ParallelTiler : public Tiler {
 public:
-    ParallelTiler(const ctb::Grid& grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme);
+    ParallelTiler(const ctb::Grid &grid, const radix::tile::SrsBounds &bounds, radix::tile::Border border, radix::tile::Scheme scheme);
 
-    [[nodiscard]] std::vector<tile::Descriptor> generateTiles(unsigned zoom_level) const;
-    [[nodiscard]] std::vector<tile::Descriptor> generateTiles(const std::pair<unsigned, unsigned>& zoom_range) const;
+    [[nodiscard]] std::vector<radix::tile::Descriptor> generateTiles(unsigned zoom_level) const;
+    [[nodiscard]] std::vector<radix::tile::Descriptor> generateTiles(const std::pair<unsigned, unsigned>& zoom_range) const;
 
-    [[nodiscard]] tile::Id southWestTile(unsigned zoom_level) const;
-    [[nodiscard]] tile::Id northEastTile(unsigned zoom_level) const;
+    [[nodiscard]] radix::tile::Id southWestTile(unsigned zoom_level) const;
+    [[nodiscard]] radix::tile::Id northEastTile(unsigned zoom_level) const;
 };

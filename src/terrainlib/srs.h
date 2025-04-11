@@ -44,8 +44,7 @@ inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpat
 }
 
 // this transform is non exact, because we are only transforming the corner vertices. however, due to projection warping, a rectangle can become an trapezoid with curved edges.
-inline tile::SrsBounds nonExactBoundsTransform(const tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
-{
+inline radix::tile::SrsBounds nonExactBoundsTransform(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
     const auto transform = transformation(sourceSrs, targetSrs);
     std::array xes = { bounds.min.x, bounds.max.x };
     std::array yes = { bounds.min.y, bounds.max.y };
@@ -176,13 +175,13 @@ inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BB
 /// Transforms bounds from one srs to another,
 /// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
 /// But there can be points inside the new bounds that were not present in the original ones.
-inline tile::SrsBounds encompassing_bounding_box_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const tile::SrsBounds &source_bounds) {
+inline radix::tile::SrsBounds encompassing_bounding_box_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const radix::tile::SrsBounds &source_bounds) {
     if (source_srs.IsSame(&target_srs)) {
         return source_bounds;
     }
 
     const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
-    tile::SrsBounds target_bounds;
+    radix::tile::SrsBounds target_bounds;
     const int result = transformation->TransformBounds(
         source_bounds.min.x, source_bounds.min.y, source_bounds.max.x, source_bounds.max.y,
         &target_bounds.min.x, &target_bounds.min.y, &target_bounds.max.x, &target_bounds.max.y,

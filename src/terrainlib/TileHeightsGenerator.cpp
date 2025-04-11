@@ -28,7 +28,7 @@
 #include "depth_first_tile_traverser.h"
 #include <radix/TileHeights.h>
 
-TileHeightsGenerator::TileHeightsGenerator(std::string input_data_path, ctb::Grid::Srs srs, tile::Scheme scheme, tile::Border border, std::filesystem::path output_path)
+TileHeightsGenerator::TileHeightsGenerator(std::string input_data_path, ctb::Grid::Srs srs, radix::tile::Scheme scheme, radix::tile::Border border, std::filesystem::path output_path)
     : m_input_data_path(std::move(input_data_path))
     , m_srs(srs)
     , m_scheme(scheme)
@@ -40,7 +40,7 @@ TileHeightsGenerator::TileHeightsGenerator(std::string input_data_path, ctb::Gri
 void TileHeightsGenerator::run(unsigned max_zoom_level) const
 {
     struct MinMaxData {
-        tile::Id tile_id;
+        radix::tile::Id tile_id;
         std::pair<float, float> min_max = std::make_pair(0, 9000);
     };
 
@@ -52,9 +52,9 @@ void TileHeightsGenerator::run(unsigned max_zoom_level) const
     const auto bounds = dataset->bounds(grid.getSRS());
     const auto tile_reader = DatasetReader(dataset, grid.getSRS(), 1, false);
     const auto tiler = TopDownTiler(grid, bounds, m_border, m_scheme);
-    auto tile_heights = TileHeights();
+    auto tile_heights = radix::TileHeights();
 
-    const auto read_function = [&](const tile::Descriptor& tile) -> MinMaxData {
+    const auto read_function = [&](const radix::tile::Descriptor &tile) -> MinMaxData {
         const auto tile_data = tile_reader.readWithOverviews(tile.srsBounds, tile.tileSize, tile.tileSize);
         auto [min, max] = std::ranges::minmax(tile_data);
         tile_heights.emplace(tile.id, std::make_pair(min, max));

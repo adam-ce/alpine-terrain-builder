@@ -30,13 +30,11 @@
 #include "ctb/Grid.hpp"
 #include <radix/height_encoding.h>
 
-ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, tile::Scheme tiling_scheme, tile::Border border, unsigned grid_resolution)
-{
+ParallelTileGenerator alpine_raster::make_generator(const std::string &input_data_path, const std::string &output_data_path, ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme, radix::tile::Border border, unsigned grid_resolution) {
     return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
 }
 
-void alpine_raster::TileWriter::write(const std::string& file_path, const tile::Descriptor& tile, const HeightData& heights) const
-{
+void alpine_raster::TileWriter::write(const std::string &file_path, const radix::tile::Descriptor &tile, const HeightData &heights) const {
     image::saveImageAsPng(image::transformImage(heights, radix::height_encoding::to_rgb),
                           file_path);
 }

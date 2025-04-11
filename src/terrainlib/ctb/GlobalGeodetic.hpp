@@ -38,11 +38,11 @@ public:
     /// Initialise the profile with a specific tile size
     GlobalGeodetic(i_tile tileSize = 256)
         : Grid(tileSize,
-               tile::SrsBounds{{-180, -90}, {180, 90}},
+               radix::tile::SrsBounds{{-180, -90}, {180, 90}},
                cSRS,
                4326,
-               // according to this global geodetic has 2 root tiles: https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic
-               std::vector<tile::Id>{tile::Id{0, {0, 0}, tile::Scheme::Tms}, tile::Id{0, {1, 0}, tile::Scheme::Tms}},
+               // global geodetic has 2 root tiles: https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic
+               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}, radix::tile::Scheme::Tms}, radix::tile::Id{0, {1, 0}, radix::tile::Scheme::Tms}},
                2) {
     }
 

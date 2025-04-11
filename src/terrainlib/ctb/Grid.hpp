@@ -70,21 +70,12 @@ public:
 
     /// Initialise a grid tile
     Grid(i_tile gridSize,
-        const tile::SrsBounds extent,
-        const OGRSpatialReference& srs,
-        int epsgCode,
-        std::vector<tile::Id> rootTiles,
-        double zoomFactor)
-        : mGridSize(gridSize)
-        , mExtent(extent)
-        , mSRS(srs)
-        , mEpsgCode(epsgCode)
-        , mInitialResolution((extent.size().x / rootTiles.size()) / gridSize)
-        , mXOriginShift(extent.size().x / 2)
-        , mYOriginShift(extent.size().y / 2)
-        , mZoomFactor(zoomFactor)
-        , mRootTiles(rootTiles)
-    {
+         const radix::tile::SrsBounds extent,
+         const OGRSpatialReference &srs,
+         int epsgCode,
+         std::vector<radix::tile::Id> rootTiles,
+         double zoomFactor)
+        : mGridSize(gridSize), mExtent(extent), mSRS(srs), mEpsgCode(epsgCode), mInitialResolution((extent.size().x / rootTiles.size()) / gridSize), mXOriginShift(extent.size().x / 2), mYOriginShift(extent.size().y / 2), mZoomFactor(zoomFactor), mRootTiles(rootTiles) {
         mSRS.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     }
 
@@ -150,20 +141,18 @@ public:
     }
 
     /// Get the tile coordinate in which a location falls at a specific zoom level
-    [[nodiscard]] inline tile::Id crsToTile(const CRSPoint& coord, i_zoom zoom) const
-    {
+    [[nodiscard]] inline radix::tile::Id crsToTile(const CRSPoint &coord, i_zoom zoom) const {
         const PixelPoint pixel = crsToPixels(coord, zoom);
         TilePoint tile = pixelsToTile(pixel);
 
-        return { zoom, tile, tile::Scheme::Tms };
+        return {zoom, tile, radix::tile::Scheme::Tms};
     }
 
     /// Get the CRS bounds of a particular tile
     /// border_se should be true if a border should be included on the south eastern corner
     /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
-    [[nodiscard]] inline tile::SrsBounds srsBounds(const tile::Id& tile_id, bool border_se) const
-    {
-        const auto tms_tile_id = tile_id.to(tile::Scheme::Tms);
+    [[nodiscard]] inline radix::tile::SrsBounds srsBounds(const radix::tile::Id &tile_id, bool border_se) const {
+        const auto tms_tile_id = tile_id.to(radix::tile::Scheme::Tms);
         // get the pixels coordinates representing the tile bounds
         const PixelPoint pxMinLeft(tms_tile_id.coords.x * mGridSize, tms_tile_id.coords.y * mGridSize);
         const PixelPoint pxMaxRight((tms_tile_id.coords.x + 1) * mGridSize + border_se, (tms_tile_id.coords.y + 1) * mGridSize + border_se);
@@ -174,13 +163,13 @@ public:
 
         return { minLeft, maxRight };
     }
-    
-    [[nodiscard]] const std::vector<tile::Id>& rootTiles() const {
+
+    [[nodiscard]] const std::vector<radix::tile::Id> &rootTiles() const {
         return this->mRootTiles;
     }
 
     // Searches for the smallest tile that encompasses the given bounding box.
-    [[nodiscard]] std::optional<tile::Id> findSmallestEncompassingTile(const tile::SrsBounds &bounds) const {
+    [[nodiscard]] std::optional<radix::tile::Id> findSmallestEncompassingTile(const radix::tile::SrsBounds &bounds) const {
         // We dont want to recurse indefinetely if the bounds are empty.
         if (bounds.width() == 0 || bounds.height() == 0) {
             throw std::invalid_argument("bounds cannot be empty");
@@ -195,9 +184,9 @@ public:
 
         // We start at the root tiles and repeatedly check every subtile until we find one that contains all
         // of the bounding box.
-        for (const tile::Id &root_tile : this->rootTiles()) {
+        for (const radix::tile::Id &root_tile : this->rootTiles()) {
             // Get the bounds of the current root tile.
-            const tile::SrsBounds root_tile_bounds = this->srsBounds(root_tile, false);
+            const radix::tile::SrsBounds root_tile_bounds = this->srsBounds(root_tile, false);
 
             // Check if all of the target bounding box is inside this tile.
             bool all_points_inside = true;
@@ -214,14 +203,14 @@ public:
             }
 
             // Now find the smallest tile under this root.
-            tile::Id current_smallest_encompassing_tile = root_tile;
+            radix::tile::Id current_smallest_encompassing_tile = root_tile;
             while (true) {
-                const std::array<tile::Id, 4> children = current_smallest_encompassing_tile.children();
+                const std::array<radix::tile::Id, 4> children = current_smallest_encompassing_tile.children();
 
                 bool all_points_inside_any_child = false;
                 for (const auto &child : children) {
                     // Get the bounds of the current child
-                    const tile::SrsBounds tile_bounds = this->srsBounds(child, false);
+                    const radix::tile::SrsBounds tile_bounds = this->srsBounds(child, false);
 
                     // Check if all of the target bounding box is inside this tile.
                     bool all_points_inside = true;
@@ -255,19 +244,19 @@ public:
     }
 
     // Searches for the smallest tile that encompasses the given bounding box.
-    [[nodiscard]] std::optional<tile::Id> findLargestContainedTile(const tile::SrsBounds &bounds) const {
-        const std::optional<tile::Id> root = this->findSmallestEncompassingTile(bounds);
+    [[nodiscard]] std::optional<radix::tile::Id> findLargestContainedTile(const radix::tile::SrsBounds &bounds) const {
+        const std::optional<radix::tile::Id> root = this->findSmallestEncompassingTile(bounds);
         if (!root.has_value()) {
             return std::nullopt;
         }
 
-        std::vector<tile::Id> tiles_to_inspect;
-        const std::array<tile::Id, 4> root_children = root->children();
+        std::vector<radix::tile::Id> tiles_to_inspect;
+        const std::array<radix::tile::Id, 4> root_children = root->children();
         tiles_to_inspect.insert(tiles_to_inspect.end(), root_children.begin(), root_children.end());
 
-        std::optional<tile::Id> current_candidate;
+        std::optional<radix::tile::Id> current_candidate;
         while (!tiles_to_inspect.empty()) {
-            const tile::Id tile = tiles_to_inspect.back();
+            const radix::tile::Id tile = tiles_to_inspect.back();
             tiles_to_inspect.pop_back();
 
             if (current_candidate.has_value() && current_candidate->zoom_level <= tile.zoom_level) {
@@ -275,14 +264,14 @@ public:
                 continue;
             }
 
-            const tile::SrsBounds tile_bounds = this->srsBounds(tile, false);
+            const radix::tile::SrsBounds tile_bounds = this->srsBounds(tile, false);
             const std::array<glm::dvec2, 4> points = {
                 tile_bounds.min,
                 tile_bounds.max,
                 glm::dvec2(tile_bounds.min.x, tile_bounds.max.y),
                 glm::dvec2(tile_bounds.max.x, tile_bounds.min.y)};
 
-            const bool target_bounds_overlapping_tile = geometry::intersect(tile_bounds, bounds);
+            const bool target_bounds_overlapping_tile = radix::geometry::intersect(tile_bounds, bounds);
             bool target_bounds_fully_inside_tile = false;
             if (target_bounds_overlapping_tile) {
                 target_bounds_fully_inside_tile = true;
@@ -302,7 +291,7 @@ public:
             }
 
             if (target_bounds_overlapping_tile) {
-                const std::array<tile::Id, 4> children = tile.children();
+                const std::array<radix::tile::Id, 4> children = tile.children();
                 tiles_to_inspect.insert(tiles_to_inspect.end(), children.begin(), children.end());
             }
         }
@@ -323,8 +312,7 @@ public:
     }
 
     /// Get the extent covered by the grid in CRS coordinates
-    [[nodiscard]] inline const tile::SrsBounds& getExtent() const
-    {
+    [[nodiscard]] inline const radix::tile::SrsBounds &getExtent() const {
         return mExtent;
     }
 
@@ -338,7 +326,7 @@ private:
     i_tile mGridSize;
 
     /// The area covered by the grid
-    tile::SrsBounds mExtent;
+    radix::tile::SrsBounds mExtent;
 
     /// The spatial reference system covered by the grid
     OGRSpatialReference mSRS;
@@ -352,7 +340,7 @@ private:
     double mZoomFactor;
 
     /// A list of all the root tiles of the grid.
-    std::vector<tile::Id> mRootTiles;
+    std::vector<radix::tile::Id> mRootTiles;
 };
 
 #endif /* CTBGRID_HPP */

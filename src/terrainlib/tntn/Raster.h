@@ -61,7 +61,7 @@ private:
 public:
     Raster() { ::tntn::detail::NDVDefault<T>::set(m_noDataValue); }
     Raster(Raster&& other) noexcept = default;
-    explicit Raster(Image<T>&& other, const tile::SrsBounds& srs_bounds)
+    explicit Raster(Image<T>&& other, const radix::tile::SrsBounds& srs_bounds)
         : m_width(other.width())
         , m_height(other.height())
         , m_data(std::move(other.m_data))

@@ -43,17 +43,16 @@ std::string toWkt(const OGRSpatialReference& srs)
     return wkt_string;
 }
 
-std::array<double, 6> computeGeoTransform(const tile::SrsBounds& bounds, unsigned width, unsigned height)
+std::array<double, 6> computeGeoTransform(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
 {
     return { bounds.min.x, bounds.width() / width, 0,
         bounds.max.y, 0, -bounds.height() / height };
 }
 
 using GdalImageTransformArgsPtr = std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)>;
-GdalImageTransformArgsPtr make_image_transform_args(const DatasetReader& reader,
-    Dataset* dataset,
-    const tile::SrsBounds& bounds, unsigned width, unsigned height)
-{
+GdalImageTransformArgsPtr make_image_transform_args(const DatasetReader &reader,
+                                                    Dataset *dataset,
+                                                    const radix::tile::SrsBounds &bounds, unsigned width, unsigned height) {
     CPLStringList transformOptions;
     if (reader.isReprojecting()) {
         transformOptions.SetNameValue("SRC_SRS", reader.dataset_srs_wkt().c_str());
@@ -73,7 +72,7 @@ GdalImageTransformArgsPtr make_image_transform_args(const DatasetReader& reader,
 using GdalWarpOptionsPtr = std::unique_ptr<GDALWarpOptions, decltype(&GDALDestroyWarpOptions)>;
 using WarpOptionData = std::pair<GdalWarpOptionsPtr, GdalImageTransformArgsPtr>;
 
-WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const tile::SrsBounds& bounds, unsigned width, unsigned height)
+WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
 {
     auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
     options->hSrcDS = dataset->gdalDataset();
@@ -185,13 +184,11 @@ DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRS
         throw Exception(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));
 }
 
-HeightData DatasetReader::read(const tile::SrsBounds& bounds, unsigned width, unsigned height) const
-{
+HeightData DatasetReader::read(const radix::tile::SrsBounds &bounds, unsigned width, unsigned height) const {
     return readFrom(m_dataset, bounds, width, height);
 }
 
-HeightData DatasetReader::readWithOverviews(const tile::SrsBounds& bounds, unsigned width, unsigned height) const
-{
+HeightData DatasetReader::readWithOverviews(const radix::tile::SrsBounds &bounds, unsigned width, unsigned height) const {
 #ifdef ATB_ENABLE_OVERVIEW_READING
     auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
     auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get(), m_warn_on_missing_overviews);
@@ -202,8 +199,7 @@ HeightData DatasetReader::readWithOverviews(const tile::SrsBounds& bounds, unsig
 #endif
 }
 
-HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const tile::SrsBounds& bounds, unsigned width, unsigned height) const
-{
+HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset> &source_dataset, const radix::tile::SrsBounds &bounds, unsigned width, unsigned height) const {
     // if we have performance problems with the warping, it'd still be possible to approximate the warping operation with a linear transform (mostly when zoomed in / on higher zoom levels).
     // CTB does this in GDALTiler.cpp around line 375 ("// Decide if we are doing an approximate or exact transformation").
 

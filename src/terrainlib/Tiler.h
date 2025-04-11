@@ -25,24 +25,24 @@
 class Tiler
 {
 public:
-    Tiler(ctb::Grid  grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme);
+    Tiler(ctb::Grid grid, const radix::tile::SrsBounds &bounds, radix::tile::Border border, radix::tile::Scheme scheme);
 
-    [[nodiscard]] tile::Scheme scheme() const;
-    [[nodiscard]] const tile::SrsBounds& bounds() const;
-    void setBounds(const tile::SrsBounds& newBounds);
-    [[nodiscard]] tile::Descriptor tile_for(const tile::Id& tile_id) const;
+    [[nodiscard]] radix::tile::Scheme scheme() const;
+    [[nodiscard]] const radix::tile::SrsBounds &bounds() const;
+    void setBounds(const radix::tile::SrsBounds &newBounds);
+    [[nodiscard]] radix::tile::Descriptor tile_for(const radix::tile::Id &tile_id) const;
 
 protected:
     [[nodiscard]] const ctb::Grid& grid() const;
     [[nodiscard]] ctb::i_tile grid_size() const;
     [[nodiscard]] ctb::i_tile tile_size() const;
-    [[nodiscard]] tile::Border border_south_east() const;
+    [[nodiscard]] radix::tile::Border border_south_east() const;
 
 private:
 
     const ctb::Grid m_grid;
-    tile::SrsBounds m_bounds;
-    const tile::Border m_border_south_east;
-    const tile::Scheme m_scheme;
+    radix::tile::SrsBounds m_bounds;
+    const radix::tile::Border m_border_south_east;
+    const radix::tile::Scheme m_scheme;
 };
 

@@ -20,7 +20,7 @@
 
 #include <utility>
 
-Tiler::Tiler(ctb::Grid  grid, const tile::SrsBounds& bounds, tile::Border border, tile::Scheme scheme)
+Tiler::Tiler(ctb::Grid  grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme)
     : m_grid(std::move(grid))
     , m_bounds(bounds)
     , m_border_south_east(border)
@@ -44,29 +44,25 @@ ctb::i_tile Tiler::tile_size() const
     return grid_size() + unsigned(border_south_east());
 }
 
-tile::Border Tiler::border_south_east() const
+radix::tile::Border Tiler::border_south_east() const
 {
     return m_border_south_east;
 }
 
-tile::Descriptor Tiler::tile_for(const tile::Id& tile_id) const
+radix::tile::Descriptor Tiler::tile_for(const radix::tile::Id& tile_id) const
 {
-    tile::SrsBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == tile::Border::Yes);
+    radix::tile::SrsBounds srs_bounds = grid().srsBounds(tile_id, border_south_east() == radix::tile::Border::Yes);
     return {tile_id, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size()};
 }
 
-tile::Scheme Tiler::scheme() const
-{
+radix::tile::Scheme Tiler::scheme() const {
     return m_scheme;
 }
 
-const tile::SrsBounds& Tiler::bounds() const
-{
+const radix::tile::SrsBounds &Tiler::bounds() const {
     return m_bounds;
 }
 
-void Tiler::setBounds(const tile::SrsBounds& newBounds)
-{
+void Tiler::setBounds(const radix::tile::SrsBounds &newBounds) {
     m_bounds = newBounds;
 }
-

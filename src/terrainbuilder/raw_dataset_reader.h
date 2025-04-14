@@ -39,7 +39,7 @@ public:
         return glm::uvec2(heights_band->GetXSize(), heights_band->GetYSize());
     }
 
-    std::optional<HeightData> read_data_in_pixel_bounds(geometry::Aabb2i bounds, const bool clamp_bounds = false) {
+    std::optional<HeightData> read_data_in_pixel_bounds(radix::geometry::Aabb2i bounds, const bool clamp_bounds = false) {
         if (clamp_bounds) {
             const glm::ivec2 max_in_bounds = glm::ivec2(this->dataset_size()) - glm::ivec2(1);
             bounds.min = glm::clamp(bounds.min, glm::ivec2(0), max_in_bounds);
@@ -79,43 +79,43 @@ public:
         return height_data;
     }
 
-    std::optional<HeightData> read_data_in_srs_bounds(const tile::SrsBounds &bounds, const bool clamp_bounds = false) {
+    std::optional<HeightData> read_data_in_srs_bounds(const radix::tile::SrsBounds &bounds, const bool clamp_bounds = false) {
         // Transform the SrsBounds to pixel space
-        const geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
+        const radix::geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
 
         // Use the transformed pixel bounds to read data
         return this->read_data_in_pixel_bounds(pixel_bounds, clamp_bounds);
     }
 
-    geometry::Aabb2i transform_srs_bounds_to_pixel_bounds(const tile::SrsBounds &bounds) const {
-        geometry::Aabb2d pixel_bounds_exact = this->transform_srs_bounds_to_pixel_bounds_exact(bounds);
+    radix::geometry::Aabb2i transform_srs_bounds_to_pixel_bounds(const radix::tile::SrsBounds &bounds) const {
+        radix::geometry::Aabb2d pixel_bounds_exact = this->transform_srs_bounds_to_pixel_bounds_exact(bounds);
 
-        const geometry::Aabb2i pixel_bounds(
+        const radix::geometry::Aabb2i pixel_bounds(
             glm::ivec2(static_cast<int>(std::floor(pixel_bounds_exact.min.x)), static_cast<int>(std::floor(pixel_bounds_exact.min.y))),
             glm::ivec2(static_cast<int>(std::ceil(pixel_bounds_exact.max.x)), static_cast<int>(std::ceil(pixel_bounds_exact.max.y))));
 
         return pixel_bounds;
     }
 
-    tile::SrsBounds transform_srs_bounds_to_pixel_bounds_exact(const tile::SrsBounds &bounds) const {
-        tile::SrsBounds transformed_bounds;
+    radix::tile::SrsBounds transform_srs_bounds_to_pixel_bounds_exact(const radix::tile::SrsBounds &bounds) const {
+        radix::tile::SrsBounds transformed_bounds;
         transformed_bounds.min = this->transform_srs_point_to_pixel_exact(bounds.min);
         transformed_bounds.max = this->transform_srs_point_to_pixel_exact(bounds.max);
-        transformed_bounds = tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
-                                             glm::max(transformed_bounds.min, transformed_bounds.max));
+        transformed_bounds = radix::tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
+                                                    glm::max(transformed_bounds.min, transformed_bounds.max));
         return transformed_bounds;
     }
 
-    tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const tile::SrsBounds &bounds) const {
-        tile::SrsBounds transformed_bounds;
+    radix::tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const radix::tile::SrsBounds &bounds) const {
+        radix::tile::SrsBounds transformed_bounds;
         transformed_bounds.min = this->transform_pixel_to_srs_point(bounds.min);
         transformed_bounds.max = this->transform_pixel_to_srs_point(bounds.max);
-        transformed_bounds = tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
-                                             glm::max(transformed_bounds.min, transformed_bounds.max));
+        transformed_bounds = radix::tile::SrsBounds(glm::min(transformed_bounds.min, transformed_bounds.max),
+                                                    glm::max(transformed_bounds.min, transformed_bounds.max));
         return transformed_bounds;
     }
-    tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const geometry::Aabb2i &bounds) const {
-        return this->transform_pixel_bounds_to_srs_bounds(tile::SrsBounds(glm::dvec2(bounds.min), glm::dvec2(bounds.max)));
+    radix::tile::SrsBounds transform_pixel_bounds_to_srs_bounds(const radix::geometry::Aabb2i &bounds) const {
+        return this->transform_pixel_bounds_to_srs_bounds(radix::tile::SrsBounds(glm::dvec2(bounds.min), glm::dvec2(bounds.max)));
     }
 
     template <typename T>

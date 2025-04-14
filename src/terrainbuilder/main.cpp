@@ -51,10 +51,10 @@ int run(std::span<char*> args) {
         ->excludes("--bounds");
     target->require_option(1);
 
-    tile::Scheme target_tile_scheme;
-    std::map<std::string, tile::Scheme> scheme_str_map{{"slippymap", tile::Scheme::SlippyMap}, {"google", tile::Scheme::SlippyMap}, {"tms", tile::Scheme::Tms}};
+    radix::tile::Scheme target_tile_scheme;
+    std::map<std::string, radix::tile::Scheme> scheme_str_map{{"slippymap", radix::tile::Scheme::SlippyMap}, {"google", radix::tile::Scheme::SlippyMap}, {"tms", radix::tile::Scheme::Tms}};
     app.add_option("--scheme", target_tile_scheme, "Target tile id for the reference tile as \"{zoom} {x} {y}\"")
-        ->default_val(tile::Scheme::SlippyMap)
+        ->default_val(radix::tile::Scheme::SlippyMap)
         ->excludes("--bounds")
         ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
 
@@ -92,17 +92,17 @@ int run(std::span<char*> args) {
     texture_srs.importFromEPSG(3857);
     texture_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    tile::SrsBounds tile_bounds;
+    radix::tile::SrsBounds tile_bounds;
     if (!target_bounds_data.empty()) {
         const glm::dvec2 tile_bounds_min(target_bounds_data[0], target_bounds_data[1]);
         const glm::dvec2 tile_bounds_size(target_bounds_data[2], target_bounds_data[3]);
-        tile_bounds = tile::SrsBounds(tile_bounds_min, tile_bounds_min + tile_bounds_size);
+        tile_bounds = radix::tile::SrsBounds(tile_bounds_min, tile_bounds_min + tile_bounds_size);
     } else {
         const ctb::Grid grid = ctb::GlobalMercator();
 
         const unsigned int zoom_level = target_tile_data[0];
         const glm::uvec2 tile_coords(target_tile_data[1], target_tile_data[2]);
-        const tile::Id target_tile(zoom_level, tile_coords, target_tile_scheme);
+        const radix::tile::Id target_tile(zoom_level, tile_coords, target_tile_scheme);
         if (!tile_srs.IsSame(&grid.getSRS())) {
             LOG_ERROR("Target tile id is only supported for webmercator reference system");
             exit(1);

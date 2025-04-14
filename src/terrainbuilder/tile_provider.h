@@ -10,24 +10,24 @@
 
 class TileProvider {
 public:
-    virtual std::optional<cv::Mat> get_tile(const tile::Id tile) const = 0;
-    virtual bool has_tile(const tile::Id tile) const {
+    virtual std::optional<cv::Mat> get_tile(const radix::tile::Id tile) const = 0;
+    virtual bool has_tile(const radix::tile::Id tile) const {
         return this->get_tile(tile).has_value();
     }
 };
 
 class TilePathProvider : public TileProvider {
 public:
-    virtual std::optional<std::filesystem::path> get_tile_path(const tile::Id tile) const = 0;
+    virtual std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile) const = 0;
 
-    std::optional<cv::Mat> get_tile(const tile::Id tile) const override {
+    std::optional<cv::Mat> get_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
         if (tile_path.has_value() && TilePathProvider::is_usable_tile_path(tile_path.value())) {
             return cv::imread(tile_path.value());
         }
         return std::nullopt;
     }
-    virtual bool has_tile(const tile::Id tile) const override {
+    virtual bool has_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
         return tile_path.has_value() && TilePathProvider::is_usable_tile_path(tile_path.value());
     }
@@ -47,18 +47,18 @@ private:
 
 class StaticTileProvider : public TileProvider {
 public:
-    std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher> tiles;
+    std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher> tiles;
 
-    StaticTileProvider(const std::unordered_map<tile::Id, cv::Mat, tile::Id::Hasher>& tiles) {
+    StaticTileProvider(const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher>& tiles) {
         // TODO: remove this once the == operator of tile::Id is updated.
         for (const auto& tile : tiles) {
-            const tile::Id tile_id = tile.first.to(tile::Scheme::SlippyMap);
+            const radix::tile::Id tile_id = tile.first.to(radix::tile::Scheme::SlippyMap);
             this->tiles[tile_id] = tile.second;
         }
     }
 
-    virtual std::optional<cv::Mat> get_tile(const tile::Id tile_id) const override {
-        const auto tile = this->tiles.find(tile_id.to(tile::Scheme::SlippyMap));
+    virtual std::optional<cv::Mat> get_tile(const radix::tile::Id tile_id) const override {
+        const auto tile = this->tiles.find(tile_id.to(radix::tile::Scheme::SlippyMap));
         if (tile != this->tiles.end()) {
             return tile->second;
         } else {
@@ -66,8 +66,8 @@ public:
         }
     }
 
-    virtual bool has_tile(const tile::Id tile_id) const override {
-        return this->tiles.find(tile_id.to(tile::Scheme::SlippyMap)) != this->tiles.cend();
+    virtual bool has_tile(const radix::tile::Id tile_id) const override {
+        return this->tiles.find(tile_id.to(radix::tile::Scheme::SlippyMap)) != this->tiles.cend();
     }
 };
 

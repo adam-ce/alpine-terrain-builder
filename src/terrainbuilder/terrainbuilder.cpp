@@ -33,7 +33,7 @@ public:
     BasemapSchemeTilePathProvider(std::filesystem::path base_path)
         : base_path(base_path) {}
 
-    std::optional<std::filesystem::path> get_tile_path(const tile::Id tile_id) const override {
+    std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile_id) const override {
         return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.generic_string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
     }
 
@@ -47,12 +47,12 @@ void build(
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs,
     const OGRSpatialReference &texture_srs,
-    const tile::SrsBounds &tile_bounds,
+    const radix::tile::SrsBounds &tile_bounds,
     const std::filesystem::path &output_path) {
     const ctb::Grid grid = ctb::GlobalMercator();
 
-    tile::SrsBounds target_tile_bounds(tile_bounds);
-    tile::SrsBounds texture_bounds;
+    radix::tile::SrsBounds target_tile_bounds(tile_bounds);
+    radix::tile::SrsBounds texture_bounds;
 
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
@@ -67,11 +67,11 @@ void build(
     if (!mesh_result.has_value()) {
         const mesh::BuildError error = mesh_result.error();
         if (error == mesh::BuildError::OutOfBounds) {
-            const tile::SrsBounds dataset_bounds = dataset.bounds();
-            const tile::Id dataset_largest_tile = grid.findLargestContainedTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
-            const tile::Id dataset_encompassing_tile = grid.findSmallestEncompassingTile(dataset_bounds).value().to(tile::Scheme::SlippyMap);
-            const tile::Id target_largest_tile = grid.findLargestContainedTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
-            const tile::Id target_encompassing_tile = grid.findSmallestEncompassingTile(tile_bounds).value().to(tile::Scheme::SlippyMap);
+            const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
+            const radix::tile::Id dataset_largest_tile = grid.findLargestContainedTile(dataset_bounds).value().to(radix::tile::Scheme::SlippyMap);
+            const radix::tile::Id dataset_encompassing_tile = grid.findSmallestEncompassingTile(dataset_bounds).value().to(radix::tile::Scheme::SlippyMap);
+            const radix::tile::Id target_largest_tile = grid.findLargestContainedTile(tile_bounds).value().to(radix::tile::Scheme::SlippyMap);
+            const radix::tile::Id target_encompassing_tile = grid.findSmallestEncompassingTile(tile_bounds).value().to(radix::tile::Scheme::SlippyMap);
             LOG_ERROR("Target bounds are fully outside of dataset region\n"
                       "Dataset {{\n"
                       "\tBounds {{x={}, y={}, w={}, h={}}}.\n"
@@ -136,5 +136,4 @@ void build(
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
     LOG_INFO("Done", output_path.string());
 }
-
 }

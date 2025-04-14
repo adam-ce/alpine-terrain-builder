@@ -43,13 +43,12 @@ public:
 };
 
 template <typename T1, typename T2>
-inline void add_border_to_aabb(geometry::Aabb2<T1> &bounds, const Border<T2> &border) {
+inline void add_border_to_aabb(radix::geometry::Aabb2<T1> &bounds, const Border<T2> &border) {
     bounds.min.x -= border.left;
     bounds.min.y -= border.top;
     bounds.max.x += border.right;
     bounds.max.y += border.bottom;
 }
-    
 }
 
 #endif

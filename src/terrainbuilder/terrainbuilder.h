@@ -16,7 +16,7 @@ void build(
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs,
     const OGRSpatialReference &texture_srs,
-    const tile::SrsBounds &tile_bounds,
+    const radix::tile::SrsBounds &tile_bounds,
     const std::filesystem::path &output_path);
 }
 

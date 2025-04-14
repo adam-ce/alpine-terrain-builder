@@ -57,18 +57,18 @@ static glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const 
 tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, tile::SrsBounds &texture_bounds,
+    const OGRSpatialReference &tile_srs, radix::tile::SrsBounds &tile_bounds,
+    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds,
     const Border<int> &vertex_border,
     const bool inclusive_bounds) {
     const OGRSpatialReference &source_srs = dataset.srs();
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
-    const tile::SrsBounds tile_bounds_in_source_srs = srs::encompassing_bounding_box_transfer(tile_srs, source_srs, tile_bounds);
+    const radix::tile::SrsBounds tile_bounds_in_source_srs = srs::encompassing_bounding_box_transfer(tile_srs, source_srs, tile_bounds);
 
     // Read height data according to bounds directly from dataset (no interpolation).
     RawDatasetReader reader(dataset);
-    geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
+    radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
     add_border_to_aabb(pixel_bounds, vertex_border);
     if (inclusive_bounds) {
         add_border_to_aabb(pixel_bounds, Border(1));
@@ -95,7 +95,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
 
     // Preparation for loop
     const double infinity = std::numeric_limits<double>::infinity();
-    tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
+    radix::tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
 
     std::vector<glm::dvec3> source_positions;
     source_positions.resize(max_vertex_count);
@@ -249,7 +249,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
 
     // Calculate absolute texture coordinates for every vertex.
     LOG_TRACE("Calculating uv coordinates");
-    tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
+    radix::tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
     std::vector<glm::dvec2> texture_positions;
     texture_positions.reserve(max_vertex_count);
     for (unsigned int i = 0; i < actual_vertex_count; i++) {

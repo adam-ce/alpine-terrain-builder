@@ -20,11 +20,10 @@ enum class BuildError {
 tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, tile::SrsBounds &texture_bounds,
+    const OGRSpatialReference &tile_srs, radix::tile::SrsBounds &tile_bounds,
+    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds,
     const Border<int> &vertex_border,
     const bool inclusive_bounds);
-
 }
 
 #endif

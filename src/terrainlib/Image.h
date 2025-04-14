@@ -25,6 +25,7 @@
 #include <cassert>
 #include <glm/fwd.hpp>
 #include <vector>
+#include <string>
 
 #include <glm/glm.hpp>
 

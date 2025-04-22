@@ -1,0 +1,10 @@
+# 3rd party code
+3rdparty/
+
+# Build results
+out/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+CMakePresets.json

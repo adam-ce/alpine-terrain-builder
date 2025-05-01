@@ -12,7 +12,7 @@ cmrc_add_resource_library(
     NAMESPACE res
 
 # ADD NEW RESOURCES AFTER HERE
-    # shaders/basic.vsh
-    # shaders/basic.fsh
+    shaders/basic.vert
+    shaders/basic.frag
     # shaders/select.csh
 )

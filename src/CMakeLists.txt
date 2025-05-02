@@ -86,6 +86,7 @@ add_executable(alpenite-browser
     core/Window.cpp
     core/Shader.cpp
     core/ShaderProgram.cpp
+    core/Buffer.cpp
 
     utils/log/Log.cpp
 )

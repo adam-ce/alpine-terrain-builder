@@ -282,7 +282,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     }
 
     // Start by transforming the input bounds into the srs the tiles are in.
-    const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounding_box_transfer(target_srs, grid.getSRS(), target_bounds);
+    const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
     const radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(radix::tile::Scheme::SlippyMap);
     LOG_TRACE("Smallest encompassing tile for texture bounds is [{}, ({}, {})]",

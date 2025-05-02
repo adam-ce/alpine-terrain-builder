@@ -112,23 +112,25 @@ void check_non_empty(const TerrainMesh &mesh) {
 }
 
 TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
-    const std::vector<std::tuple<std::string, std::string, tile::Id>> tile_test_cases = {
-        {"tiny tile", "/austria/pizbuin_1m_epsg4326.tif", tile::Id(23, glm::uvec2(4430412, 2955980), tile::Scheme::SlippyMap)},
-        {"small tile", "/austria/pizbuin_1m_epsg3857.tif", tile::Id(20, glm::uvec2(553801, 369497), tile::Scheme::SlippyMap)},
-        {"tile on the border", "/austria/pizbuin_1m_mgi.tif", tile::Id(18, glm::uvec2(138457, 169781), tile::Scheme::Tms)}
+    const std::vector<std::tuple<std::string, std::string, radix::tile::Id>> tile_test_cases = {
+        {"tiny tile", "/austria/pizbuin_1m_epsg4326.tif", radix::tile::Id(23, glm::uvec2(4430412, 2955980), radix::tile::Scheme::SlippyMap)},
+        {"small tile", "/austria/pizbuin_1m_epsg3857.tif", radix::tile::Id(20, glm::uvec2(553801, 369497), radix::tile::Scheme::SlippyMap)},
+        {"tile on the border", "/austria/pizbuin_1m_mgi.tif", radix::tile::Id(18, glm::uvec2(138457, 169781), radix::tile::Scheme::Tms)}
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
-        {"tile slightly larger than dataset", "/austria/pizbuin_1m_mgi.tif", tile::Id(11, glm::uvec2(1081, 721), tile::Scheme::SlippyMap)},
-        {"huge tile", "/austria/pizbuin_1m_epsg3857.tif", tile::Id(6, glm::uvec2(33, 41), tile::Scheme::Tms)},
-        {"giant tile", "/austria/at_mgi.tif", tile::Id(1, glm::uvec2(1, 0), tile::Scheme::SlippyMap)},
+        {"tile slightly larger than dataset", "/austria/pizbuin_1m_mgi.tif", radix::tile::Id(11, glm::uvec2(1081, 721), radix::tile::Scheme::SlippyMap)},
+        {"huge tile", "/austria/pizbuin_1m_epsg3857.tif", radix::tile::Id(6, glm::uvec2(33, 41), radix::tile::Scheme::Tms)},
+        {"giant tile", "/austria/at_mgi.tif", radix::tile::Id(1, glm::uvec2(1, 0), radix::tile::Scheme::SlippyMap)},
 #endif
     };
 
+    
+
     const ctb::Grid grid = ctb::GlobalMercator();
-    std::vector<std::tuple<std::string, std::string, tile::SrsBounds>> test_cases = {
-        {"custom bounds", "/austria/pizbuin_1m_epsg4326.tif", tile::SrsBounds(glm::dvec2(1127962, 5915858), glm::dvec2(1127966, 5915882))}};
+    std::vector<std::tuple<std::string, std::string, radix::tile::SrsBounds>> test_cases = {
+        {"custom bounds", "/austria/pizbuin_1m_epsg4326.tif", radix::tile::SrsBounds(glm::dvec2(1127962, 5915858), glm::dvec2(1127966, 5915882))}};
     for (const auto &test : tile_test_cases) {
         const auto [test_name, dataset_suffix, target_tile] = test;
-        const tile::SrsBounds tile_bounds = grid.srsBounds(target_tile, false);
+        const radix::tile::SrsBounds tile_bounds = grid.srsBounds(target_tile, false);
         test_cases.push_back({test_name, dataset_suffix, tile_bounds});
     }
 
@@ -146,8 +148,8 @@ TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
             ecef_srs.importFromEPSG(4978);
             ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-            tile::SrsBounds output_tile_bounds;
-            tile::SrsBounds output_texture_bounds;
+            radix::tile::SrsBounds output_tile_bounds;
+            radix::tile::SrsBounds output_texture_bounds;
 
             output_tile_bounds = target_bounds;
             output_texture_bounds = target_bounds;
@@ -179,11 +181,11 @@ TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
 TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
     const ctb::Grid grid = ctb::GlobalMercator();
     const std::string dataset_suffix = "/austria/pizbuin_1m_epsg3857.tif";
-    const std::array<tile::Id, 4> tiles = tile::Id(20, glm::uvec2(553801, 369497), tile::Scheme::SlippyMap).children();
+    const std::array<radix::tile::Id, 4> tiles = radix::tile::Id(20, glm::uvec2(553801, 369497), radix::tile::Scheme::SlippyMap).children();
 
     std::vector<TerrainMesh> tile_meshes;
-    for (const tile::Id &tile : tiles) {
-        const tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
+    for (const radix::tile::Id &tile : tiles) {
+        const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
         DYNAMIC_SECTION(tile) {
             const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
             Dataset dataset(dataset_path);
@@ -195,8 +197,8 @@ TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
             ecef_srs.importFromEPSG(4978);
             ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-            tile::SrsBounds output_tile_bounds;
-            tile::SrsBounds output_texture_bounds;
+            radix::tile::SrsBounds output_tile_bounds;
+            radix::tile::SrsBounds output_texture_bounds;
 
             output_tile_bounds = tile_bounds;
             output_texture_bounds = tile_bounds;
@@ -221,12 +223,12 @@ TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
     const ctb::Grid grid = ctb::GlobalMercator();
     const std::string dataset_suffix = "/austria/innenstadt_gs_1m_mgi.tif";
 
-    const tile::Id root_tile_id(16, glm::uvec2(35748, 22724), tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile_id(16, glm::uvec2(35748, 22724), radix::tile::Scheme::SlippyMap);
     std::vector<TerrainMesh> child_meshes;
-    for (const tile::Id child_tile_id : root_tile_id.children()) {
+    for (const radix::tile::Id child_tile_id : root_tile_id.children()) {
         std::vector<TerrainMesh> grand_child_meshes;
-        for (const tile::Id grand_child_tile_id : child_tile_id.children()) {
-            const tile::SrsBounds grand_child_tile_bounds = grid.srsBounds(grand_child_tile_id, false);
+        for (const radix::tile::Id grand_child_tile_id : child_tile_id.children()) {
+            const radix::tile::SrsBounds grand_child_tile_bounds = grid.srsBounds(grand_child_tile_id, false);
             DYNAMIC_SECTION(grand_child_tile_id) {
                 const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
                 Dataset dataset(dataset_path);
@@ -238,8 +240,8 @@ TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
                 ecef_srs.importFromEPSG(4978);
                 ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                tile::SrsBounds output_tile_bounds;
-                tile::SrsBounds output_texture_bounds;
+                radix::tile::SrsBounds output_tile_bounds;
+                radix::tile::SrsBounds output_texture_bounds;
 
                 output_tile_bounds = grand_child_tile_bounds;
                 output_texture_bounds = grand_child_tile_bounds;

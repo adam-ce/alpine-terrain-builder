@@ -8,6 +8,7 @@
 #include <radix/geometry.h>
 
 #include "log.h"
+#include "raster.h"
 
 namespace terrainbuilder {
 
@@ -39,7 +40,8 @@ public:
         return glm::uvec2(heights_band->GetXSize(), heights_band->GetYSize());
     }
 
-    std::optional<HeightData> read_data_in_pixel_bounds(radix::geometry::Aabb2i bounds, const bool clamp_bounds = false) {
+    // TODO: support reading other data types
+    std::optional<raster::HeightMap> read_data_in_pixel_bounds(radix::geometry::Aabb2i bounds, const bool clamp_bounds = false) {
         if (clamp_bounds) {
             const glm::ivec2 max_in_bounds = glm::ivec2(this->dataset_size()) - glm::ivec2(1);
             bounds.min = glm::clamp(bounds.min, glm::ivec2(0), max_in_bounds);
@@ -55,7 +57,7 @@ public:
         GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
         // Initialize the HeightData for reading
-        HeightData height_data(bounds.width(), bounds.height());
+        raster::HeightMap height_data(bounds.width(), bounds.height());
         if (bounds.width() == 0 || bounds.height() == 0) {
             if (clamp_bounds) {
                 LOG_WARN("Target dataset bounds are empty (clamped)");
@@ -79,7 +81,7 @@ public:
         return height_data;
     }
 
-    std::optional<HeightData> read_data_in_srs_bounds(const radix::tile::SrsBounds &bounds, const bool clamp_bounds = false) {
+    std::optional<raster::HeightMap> read_data_in_srs_bounds(const radix::tile::SrsBounds &bounds, const bool clamp_bounds = false) {
         // Transform the SrsBounds to pixel space
         const radix::geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
 

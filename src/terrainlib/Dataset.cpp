@@ -190,12 +190,12 @@ double Dataset::gridResolution(const OGRSpatialReference& target_srs) const
 double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
 {
     const auto b0 = bounds();
-    const auto b1 = srs::nonExactBoundsTransform(b0, srs(), target_srs);
+    const auto b1 = srs::non_exact_bounds_transform(b0, srs(), target_srs);
     return b1.width() / widthInPixels();
 }
 
 double Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
 {
-    const auto b = srs::nonExactBoundsTransform(bounds(), srs(), target_srs);
+    const auto b = srs::non_exact_bounds_transform(bounds(), srs(), target_srs);
     return b.height() / heightInPixels();
 }

@@ -10,7 +10,7 @@ include(FetchContent)
 FetchContent_Declare(catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
     GIT_TAG v3.3.2
-    SOURCE_DIR 		${CMAKE_SOURCE_DIR}/3rdparty/Catch2
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/Catch2
 )
 FetchContent_MakeAvailable(catch2)
 
@@ -68,21 +68,28 @@ if (ATB_UNITTESTS_DEBUG_IMAGES)
 else()
     target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=false")
 endif()
-target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2)
+target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2WithMain)
 
 
 add_executable(unittests_terrainmerger
     catch2_helpers.h
     terrainmerger/convert.cpp
-    terrainmerger/merge.cpp)
+    terrainmerger/merge.cpp
+)
 
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2)
+target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2WithMain)
 
 
 add_executable(unittests_terrainbuilder
     catch2_helpers.h
-    terrainbuilder/mesh_io.cpp
-    terrainbuilder/mesh.cpp
-    terrainbuilder/texture.cpp)
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2::Catch2 CGAL::CGAL)
+    terrainbuilder/octree_id.cpp
+    terrainbuilder/octree_space.cpp
+    terrainbuilder/mesh2.cpp
+    # TODO:
+    # terrainbuilder/mesh_io.cpp
+    # terrainbuilder/mesh.cpp
+    # terrainbuilder/texture.cpp
+)
+
+target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2WithMain CGAL::CGAL)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")

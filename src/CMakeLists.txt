@@ -44,7 +44,7 @@ endif()
 if(ALP_AUTOUPDATE_RADIX)
     FetchContent_Declare(radix
         GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG origin/main
+        GIT_TAG d01b84248e21e4754e028492bf70519e3416c86
         SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
         SOURCE_SUBDIR src
     )
@@ -217,8 +217,12 @@ add_library(terrainbuilderlib
     terrainbuilder/raw_dataset_reader.h
     terrainbuilder/texture_assembler.h
     terrainbuilder/border.h
+    terrainbuilder/raster.h
     terrainbuilder/terrainbuilder.h
     terrainbuilder/terrainbuilder.cpp
+    terrainbuilder/octree/id.h
+    terrainbuilder/octree/storage.h
+    terrainbuilder/octree/space.h
 )
 target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
 target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 expected)

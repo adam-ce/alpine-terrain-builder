@@ -117,8 +117,8 @@ static double measure_max_absolute_error(const SurfaceMesh &original, const Surf
     return error + bound_on_error;
 }
 
-static geometry::Aabb<3, double> calculate_bounds(const SurfaceMesh &mesh) {
-    geometry::Aabb<3, double> bounds;
+static radix::geometry::Aabb<3, double> calculate_bounds(const SurfaceMesh &mesh) {
+    radix::geometry::Aabb<3, double> bounds;
     bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
     bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
 
@@ -186,26 +186,6 @@ static std::pair<bool, double> check_condition(const StopCondition &stop_conditi
                           },
                           [&](const AbsoluteError &absolute_error) {
                               return check_condition(absolute_error, modified, original);
-                          }},
-                      stop_condition);
-}
-
-static double get_condition_target(const StopCondition &stop_condition) {
-    return std::visit(overloaded{
-                          [&](const VertexRatio &vertex_ratio) {
-                              return vertex_ratio.ratio;
-                          },
-                          [&](const EdgeRatio &edge_ratio) {
-                              return edge_ratio.ratio;
-                          },
-                          [&](const FaceRatio &face_ratio) {
-                              return face_ratio.ratio;
-                          },
-                          [&](const RelativeError &relative_error) {
-                              return relative_error.error_bound;
-                          },
-                          [&](const AbsoluteError &absolute_error) {
-                              return absolute_error.error_bound;
                           }},
                       stop_condition);
 }

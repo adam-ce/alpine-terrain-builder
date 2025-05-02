@@ -16,6 +16,16 @@
 #include "terrainbuilder.h"
 #include "log.h"
 
+#include "octree/storage.h"
+#include "octree/space.h"
+
+radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
+    const double infinity = std::numeric_limits<double>::infinity();
+    const glm::dvec3 min(bounds2d.min, -infinity);
+    const glm::dvec3 max(bounds2d.max, infinity);
+    return radix::geometry::Aabb3d(min, max);
+}
+
 int run(std::span<char*> args) {
     int argc = args.size();
     char ** argv = args.data();
@@ -35,27 +45,32 @@ int run(std::span<char*> args) {
 
     std::string mesh_srs_input;
     app.add_option("--mesh-srs", mesh_srs_input, "EPSG code of the target srs of the mesh positions")
-        ->default_val("EPSG:4978");
+        ->default_val("EPSG:4978"); // ECEF
 
     std::string target_srs_input;
-    app.add_option("--target-srs", target_srs_input, "EPSG code of the srs of the target bounds or tile id")
-        ->default_val("EPSG:3857");
+    app.add_option("--target-srs", target_srs_input, "EPSG code of the srs of the target bounds or id")
+        ->default_val("EPSG:4978"); // ECEF
 
     auto *target = app.add_option_group("target");
     std::vector<double> target_bounds_data;
-    target->add_option("--bounds", target_bounds_data, "Target bounds for the reference tile as \"{xmin} {ymin} {width} {height}\"")
-        ->expected(4);
-    std::vector<unsigned int> target_tile_data;
+    target->add_option("--bounds", target_bounds_data, "Target bounds for the reference mesh as \"{xmin} {width} {ymin} {height} [{zmin} {depth}]\"")
+        ->expected(4, 6);
+    std::vector<uint32_t> target_tile_data;
     target->add_option("--tile", target_tile_data, "Target tile id for the reference tile as \"{zoom} {x} {y}\"")
         ->expected(3)
+        ->excludes("--bounds");
+    std::vector<uint64_t> target_node_data;
+    target->add_option("--node", target_node_data, "Target node id for the reference node as \"{zoom} {index}\" or \"{zoom} {x} {y} {z}\"")
+        ->expected(2, 4)
+        ->excludes("--tile")
         ->excludes("--bounds");
     target->require_option(1);
 
     radix::tile::Scheme target_tile_scheme;
     std::map<std::string, radix::tile::Scheme> scheme_str_map{{"slippymap", radix::tile::Scheme::SlippyMap}, {"google", radix::tile::Scheme::SlippyMap}, {"tms", radix::tile::Scheme::Tms}};
-    app.add_option("--scheme", target_tile_scheme, "Target tile id for the reference tile as \"{zoom} {x} {y}\"")
+    app.add_option("--scheme", target_tile_scheme, "Target scheme for the tile id")
         ->default_val(radix::tile::Scheme::SlippyMap)
-        ->excludes("--bounds")
+        ->needs("--tile")
         ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
 
     std::filesystem::path output_path;
@@ -80,44 +95,71 @@ int run(std::span<char*> args) {
 
     Dataset dataset(dataset_path);
 
-    OGRSpatialReference tile_srs;
-    tile_srs.SetFromUserInput(target_srs_input.c_str());
-    tile_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    OGRSpatialReference target_bounds_srs;
+    target_bounds_srs.SetFromUserInput(target_srs_input.c_str());
+    target_bounds_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     OGRSpatialReference mesh_srs;
     mesh_srs.SetFromUserInput(mesh_srs_input.c_str());
     mesh_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    OGRSpatialReference texture_srs;
-    texture_srs.importFromEPSG(3857);
-    texture_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    OGRSpatialReference texture_srs = srs::webmercator();
 
-    radix::tile::SrsBounds tile_bounds;
+    radix::geometry::Aabb3d target_bounds;
     if (!target_bounds_data.empty()) {
-        const glm::dvec2 tile_bounds_min(target_bounds_data[0], target_bounds_data[1]);
-        const glm::dvec2 tile_bounds_size(target_bounds_data[2], target_bounds_data[3]);
-        tile_bounds = radix::tile::SrsBounds(tile_bounds_min, tile_bounds_min + tile_bounds_size);
-    } else {
+        // Target bounds are given directly
+        if (target_bounds_data.size() == 4) {
+            const glm::dvec2 min(target_bounds_data[0], target_bounds_data[2]);
+            const glm::dvec2 max(target_bounds_data[0] + target_bounds_data[1], target_bounds_data[2] + target_bounds_data[3]);
+            target_bounds = extend_bounds_to_3d(radix::geometry::Aabb2d(min, max));
+        } else if (target_bounds_data.size() == 6) {
+            const glm::dvec3 min(target_bounds_data[0], target_bounds_data[2], target_bounds_data[4]);
+            const glm::dvec3 max(target_bounds_data[0] + target_bounds_data[1], target_bounds_data[2] + target_bounds_data[3], target_bounds_data[4] + target_bounds_data[5]);
+            target_bounds = radix::geometry::Aabb3d(min, max);
+        } else {
+            LOG_ERROR("Invalid number of elements for --bounds. Expected 4 or 6 ({xmin} {width} {ymin} {height} [{zmin} {depth}]).");
+            return 1;
+        }
+    } else if (!target_tile_data.empty()) {
+        // Target bounds are based on a webmercator tile id
         const ctb::Grid grid = ctb::GlobalMercator();
 
         const unsigned int zoom_level = target_tile_data[0];
         const glm::uvec2 tile_coords(target_tile_data[1], target_tile_data[2]);
         const radix::tile::Id target_tile(zoom_level, tile_coords, target_tile_scheme);
-        if (!tile_srs.IsSame(&grid.getSRS())) {
-            LOG_ERROR("Target tile id is only supported for webmercator reference system");
+        if (!target_bounds_srs.IsSame(&grid.getSRS())) {
+            LOG_ERROR("Target tile id is only supported for the webmercator reference system");
             exit(1);
         }
 
-        tile_bounds = grid.srsBounds(target_tile, false);
+        target_bounds = extend_bounds_to_3d(grid.srsBounds(target_tile, false));
+    } else {
+        // Target bounds are based on an octree node id
+        const uint32_t zoom_level = target_node_data[0];
+        octree::Id target_node = octree::Id::root();
+        if (target_node_data.size() == 2) {
+            const uint64_t node_index = target_node_data[1];
+            target_node = {zoom_level, node_index};
+        } else if (target_node_data.size() == 4) {
+            const glm::uvec3 coords(target_node_data[1], target_node_data[2], target_node_data[3]);
+            target_node = { zoom_level, coords };
+        } else {
+            LOG_ERROR("Invalid number of args for --node. Expected 2 or 4.");
+            return 1;
+        }
+
+        const octree::Space world = octree::Space::earth();
+        target_bounds = world.get_node_bounds(target_node);
     }
+
 
     terrainbuilder::build(
         dataset,
+        target_bounds_srs,
+        target_bounds,
+        texture_srs,
         texture_base_path,
         mesh_srs,
-        tile_srs,
-        texture_srs,
-        tile_bounds,
         output_path);
 
     return 0;

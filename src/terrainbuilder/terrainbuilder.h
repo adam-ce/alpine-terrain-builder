@@ -12,11 +12,11 @@ namespace terrainbuilder {
 
 void build(
     Dataset &dataset,
+    const OGRSpatialReference &target_bounds_srs,
+    const radix::geometry::Aabb3d &target_bounds,
+    const OGRSpatialReference &texture_srs,
     const std::optional<std::filesystem::path> texture_base_path,
     const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs,
-    const OGRSpatialReference &texture_srs,
-    const radix::tile::SrsBounds &tile_bounds,
     const std::filesystem::path &output_path);
 }
 

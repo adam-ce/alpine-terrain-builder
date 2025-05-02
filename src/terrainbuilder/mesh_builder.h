@@ -15,15 +15,14 @@ enum class BuildError {
     OutOfBounds,
     EmptyRegion
 };
+std::ostream &operator<<(std::ostream &os, BuildError error);
 
 /// Builds a mesh from the given height dataset.
-tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
+tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, radix::tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds,
-    const Border<int> &vertex_border,
-    const bool inclusive_bounds);
+    const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
+    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds);
 }
 
 #endif

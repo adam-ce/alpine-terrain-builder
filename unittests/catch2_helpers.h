@@ -20,7 +20,8 @@
 #ifndef CATCH2_HELPERS_H
 #define CATCH2_HELPERS_H
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include <glm/gtx/string_cast.hpp>
 

@@ -1,3 +1,4 @@
+#include <random>
 #include <ranges>
 
 #include "terrain_mesh.h"
@@ -25,6 +26,42 @@ radix::geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> m
         }
     }
     return bounds;
+}
+
+std::optional<double> estimate_average_edge_length(const TerrainMesh &mesh, const size_t sample_size) {
+    const auto &triangles = mesh.triangles;
+    if (triangles.empty()) {
+        return std::nullopt;
+    }
+
+    // Random sampling setup
+    std::vector<glm::uvec3> sampled_triangles;
+    sampled_triangles.reserve(std::min(sample_size, triangles.size()));
+
+    std::random_device rd;
+    std::mt19937 rng(rd());
+    std::sample(triangles.begin(), triangles.end(),
+                std::back_inserter(sampled_triangles),
+                std::min(sample_size, triangles.size()),
+                rng);
+
+    double total_length = 0.0;
+    size_t edge_count = 0;
+
+    for (const auto &tri : sampled_triangles) {
+        const glm::dvec3 &a = mesh.positions[tri.x];
+        const glm::dvec3 &b = mesh.positions[tri.y];
+        const glm::dvec3 &c = mesh.positions[tri.z];
+
+        total_length += glm::distance(a, b);
+        total_length += glm::distance(b, c);
+        total_length += glm::distance(c, a);
+
+        edge_count += 3;
+    }
+
+    assert(edge_count > 0);
+    return total_length / edge_count;
 }
 
 std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {

@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <numeric>
+#include <ranges>
 #include <vector>
 
 #include <gdal.h>
@@ -7,16 +9,31 @@
 #include <radix/geometry.h>
 
 #include "Dataset.h"
-#include "Image.h"
 #include "mesh/terrain_mesh.h"
 #include "srs.h"
-#include "tntn/gdal_init.h"
+#include "raster.h"
 
 #include "log.h"
 #include "mesh_builder.h"
 #include "raw_dataset_reader.h"
+#include <glm/gtx/norm.hpp>
 
 namespace terrainbuilder::mesh {
+
+std::ostream &operator<<(std::ostream &os, BuildError error) {
+    switch (error) {
+    case BuildError::OutOfBounds:
+        os << "out of bounds";
+        break;
+    case BuildError::EmptyRegion:
+        os << "empty region";
+        break;
+    default:
+        os << "unknown build error";
+        break;
+    }
+    return os;
+}
 
 template <typename T>
 static glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
@@ -24,319 +41,312 @@ static glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tv
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
     return result;
 }
-static glm::dvec2 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec2 &v) {
-    glm::dvec2 result(v);
-    if (!transform->Transform(1, &result.x, &result.y)) {
-        throw std::runtime_error("apply_transform() failed");
-    }
-    return result;
-}
-static glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
-    glm::dvec3 result(v);
-    if (!transform->Transform(1, &result.x, &result.y, &result.z)) {
-        throw std::runtime_error("apply_transform() failed");
-    }
-    return result;
+
+using PixelBounds = radix::geometry::Aabb2i;
+
+// TODO:: write documentation
+// TODO: use referencedBounds
+
+bool is_valid(float height) {
+    return !isnan(height) && !isinf(height)      /* <- invalid values */
+           && height > -20000 && height < 20000; /* <- padding */
 }
 
-/// Builds a mesh from the given height dataset.
-// TODO: split this up: Grid class, Mask class/alias, mask filter method/utils
-// steps (each a method):
-// - read data (height)
-// - filter invalid values (create mask)
-// - calculate positions in source srs
-// - filter by bounds (considering inclusivity and invalid values)
-// - extend mask by border
-// - compact vertices
-// - check if empty
-// - calculate position in texture srs and normalize
-// - generate actual triangles
-//   (shouldnt require reindexing of vertices; use an interface that combines this and inclusivity filtering)
-// - validate final mesh
-// TODO: return result struct instead of using inout parameters
-tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
-    Dataset &dataset,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, radix::tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds,
-    const Border<int> &vertex_border,
-    const bool inclusive_bounds) {
-    const OGRSpatialReference &source_srs = dataset.srs();
+glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
+    const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
+    const glm::dvec2 coords_raster_relative = glm::dvec2(pixel_coords) + point_offset_in_raster;
+    const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
+    const glm::dvec3 coords_source(reader.transform_pixel_to_srs_point(coords_raster_absolute), height);
+    return coords_source;
+}
 
-    // Translate tile bounds from tile srs into the source srs, so we know what data to read.
-    const radix::tile::SrsBounds tile_bounds_in_source_srs = srs::encompassing_bounding_box_transfer(tile_srs, source_srs, tile_bounds);
-
-    // Read height data according to bounds directly from dataset (no interpolation).
-    RawDatasetReader reader(dataset);
-    radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(tile_bounds_in_source_srs);
-    add_border_to_aabb(pixel_bounds, vertex_border);
-    if (inclusive_bounds) {
-        add_border_to_aabb(pixel_bounds, Border(1));
-    }
-    LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
-    const std::optional<HeightData> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
-    if (!read_result.has_value() || read_result->size() == 0) {
-        return tl::unexpected(BuildError::OutOfBounds);
-    }
-    const HeightData raw_tile_data = read_result.value();
-
-    // Allocate mesh data structure
-    const unsigned int max_vertex_count = raw_tile_data.width() * raw_tile_data.height();
-    const unsigned int max_triangle_count = (raw_tile_data.width() - 1) * (raw_tile_data.height() - 1) * 2;
-    TerrainMesh mesh;
-    mesh.positions.reserve(max_vertex_count);
-    mesh.uvs.reserve(max_vertex_count);
-    mesh.triangles.reserve(max_triangle_count);
-
-    // Prepare transformations here to avoid io inside the loop.
-    const std::unique_ptr<OGRCoordinateTransformation> transform_source_tile = srs::transformation(source_srs, tile_srs);
-    const std::unique_ptr<OGRCoordinateTransformation> transform_source_mesh = srs::transformation(source_srs, mesh_srs);
-    const std::unique_ptr<OGRCoordinateTransformation> transform_source_texture = srs::transformation(source_srs, texture_srs);
-
-    // Preparation for loop
-    const double infinity = std::numeric_limits<double>::infinity();
-    radix::tile::SrsBounds actual_tile_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
-
-    std::vector<glm::dvec3> source_positions;
-    source_positions.resize(max_vertex_count);
-
-    std::vector<bool> is_in_bounds;
-    is_in_bounds.resize(max_vertex_count);
-    std::fill(is_in_bounds.begin(), is_in_bounds.end(), false);
-
-    std::vector<bool> is_valid;
-    is_valid.resize(max_vertex_count);
-    std::fill(is_valid.begin(), is_valid.end(), true);
-
-    // Pixel values represent the average over their area, or a value at their center.
-    const glm::dvec2 point_offset_in_raster(0.5);
-
-    LOG_TRACE("Transforming pixels to vertices");
-    // Iterate over height map and calculate vertex positions for each pixel and whether they are inside the requested bounds.
-    for (unsigned int j = 0; j < raw_tile_data.height(); j++) {
-        for (unsigned int i = 0; i < raw_tile_data.width(); i++) {
-            const unsigned int vertex_index = j * raw_tile_data.width() + i;
-            const double height = raw_tile_data.pixel(j, i);
-
-            // Check if pixel is valid.
-            if (isnan(height) || isinf(height) /* <- invalid values */
-                || height < -20000 || height > 20000) /* <- padding */ {
-                is_valid[vertex_index] = false;
-                continue;
-            }
-
-            // Convert pixel coordinates into a point in the dataset's srs.
-            const glm::dvec2 coords_raster_relative = glm::dvec2(i, j) + point_offset_in_raster;
-            const glm::dvec2 coords_raster_absolute = coords_raster_relative + glm::dvec2(pixel_bounds.min);
-            const glm::dvec3 coords_source(reader.transform_pixel_to_srs_point(coords_raster_absolute), height);
-            actual_tile_bounds.expand_by(coords_source);
-            source_positions[vertex_index] = coords_source;
-
-            // Check if the point is inside the given bounds.
-            if (inclusive_bounds) {
-                // For inclusive bounds we decide based on the center of the quad,
-                // that is spanned from the current vertex to the right and bottom.
-                // We do not account for the extra quads on the top and left here,
-                // because this is done by adding a 1px border to raw_tile_data above.
-
-                if (i >= raw_tile_data.width() - 1 || j >= raw_tile_data.height() - 1) {
-                    // Skip last row and column because they don't form new triangles
-                    continue;
-                }
-
-                // Transform the center of the quad into the srs the bounds are given.
-                const glm::ivec2 coords_center_raster_relative = glm::dvec2(i, j) + point_offset_in_raster + glm::dvec2(0.5);
-                const glm::ivec2 coords_center_raster_absolute = coords_center_raster_relative + pixel_bounds.min;
-                const glm::dvec2 coords_center_source = reader.transform_pixel_to_srs_point(coords_center_raster_absolute);
-                const glm::dvec2 coords_center_tile = apply_transform(transform_source_tile.get(), coords_center_source);
-
-                if (!tile_bounds.contains_inclusive(coords_center_tile)) {
-                    continue;
-                }
-            } else {
-                // For exclusive bounds, we only include points (and thereforce triangles) that are (fully) inside the bounds.
-                const glm::dvec2 coords_tile = apply_transform(transform_source_tile.get(), coords_source);
-                if (!tile_bounds.contains_inclusive(coords_tile)) {
-                    continue;
-                }
-            }
-
-            // If we arrive here the point is inside the bounds.
-            is_in_bounds[vertex_index] = true;
-        }
-    }
-
-    // Mark all border vertices as inside bounds.
-    // TODO: This code is rather inefficient for larger borders.
-    if (!vertex_border.is_empty()) {
-        LOG_TRACE("Adding border vertices");
-        std::vector<unsigned int> border_vertices;
-        const unsigned int max_border_vertices = std::max(raw_tile_data.width(), raw_tile_data.height()); // for each step, assuming convexity
-        border_vertices.reserve(max_border_vertices);
-
-        const std::array<std::pair<unsigned int, glm::ivec2>, 4> border_offsets = {
-            std::make_pair(vertex_border.left, glm::ivec2(-1, 0)),
-            std::make_pair(vertex_border.right, glm::ivec2(1, 0)),
-            std::make_pair(vertex_border.top, glm::ivec2(0, -1)),
-            std::make_pair(vertex_border.bottom, glm::ivec2(0, 1))};
-
-        for (unsigned int k = 0; k < border_offsets.size(); k++) {
-            const unsigned int border_thickness = border_offsets[k].first;
-            const glm::ivec2 border_direction = border_offsets[k].second;
-
-            for (unsigned int l = 0; l < border_thickness; l++) {
-                for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
-                    for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
-                        const unsigned int vertex_index = j * raw_tile_data.width() + i;
-
-                        // skip all vertices already inside bounds
-                        if (is_in_bounds[vertex_index]) {
-                            continue;
-                        }
-
-                        // Current vertex index offset into the opposite direction of the current border direction.
-                        // So if we are currently making a top border, we offset the current position down.
-                        const unsigned int vertex_index_to_check = (j + border_direction.y) * raw_tile_data.width() + (i + border_direction.x);
-                        assert(vertex_index_to_check < max_vertex_count);
-                        if (is_in_bounds[vertex_index_to_check]) {
-                            // as we cannot have a reference into an std::vector<bool> we have to have another lookup here.
-                            border_vertices.push_back(vertex_index);
-                        }
-                    }
-                }
-
-                for (const unsigned int border_vertex : border_vertices) {
-                    assert(border_vertex < is_in_bounds.size());
-                    if (is_valid[border_vertex]) {
-                        is_in_bounds[border_vertex] = true;
-                    }
-                }
-
-                assert(border_vertices.size() <= max_border_vertices);
-                border_vertices.clear();
-            }
-        }
-    }
-
-    // Compact the vertex array to exclude all vertices out of bounds.
-    const unsigned int actual_vertex_count = std::accumulate(is_in_bounds.begin(), is_in_bounds.end(), 0);
+TerrainMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster::Mask& mask) {
+    // Compact the vertex grid into a list of valid ones.
+    const size_t valid_vertex_count = std::reduce(mask.begin(), mask.end(), 0);
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
-    if (actual_vertex_count == 0) {
-        return tl::unexpected(BuildError::EmptyRegion);
+    if (valid_vertex_count == 0) {
+        return TerrainMesh();
     }
-    // Marks entries that are not present in the new vector (not inside bounds or border)
-    const unsigned int no_new_index = max_vertex_count + 1;
-    // Index in old vector mapped to the index in the new one.
-    std::vector<unsigned int> new_vertex_indices;
-    if (actual_vertex_count != max_vertex_count) {
-        new_vertex_indices.reserve(max_vertex_count);
 
-        unsigned int write_index = 0;
-        for (unsigned int read_index = 0; read_index < max_vertex_count; read_index++) {
-            if (is_in_bounds[read_index]) {
-                assert(is_valid[read_index]);
-                new_vertex_indices.push_back(write_index);
-                source_positions[write_index] = source_positions[read_index];
-                write_index += 1;
-            } else {
-                new_vertex_indices.push_back(no_new_index);
+    std::vector<glm::dvec3> positions;
+    positions.reserve(valid_vertex_count);
+
+    const raster::Raster<size_t> vertex_index_map = raster::transform(source_points, mask, [&](const glm::dvec3 &point) -> size_t {
+        const size_t index = positions.size();
+        positions.push_back(point);
+        return index;
+    });
+    assert(positions.size() == valid_vertex_count);
+
+    // Allocate triangle vector
+    const size_t max_triangle_count = (source_points.width() - 1) * (source_points.height() - 1) * 2;
+    std::vector<glm::uvec3> triangles;
+    triangles.reserve(max_triangle_count);
+
+    for (size_t x = 0; x < source_points.width() - 1; x++) {
+        for (size_t y = 0; y < source_points.height() - 1; y++) {
+            const std::array<raster::Coords, 4> quad {
+                raster::Coords{x, y},
+                raster::Coords{x + 1, y},
+                raster::Coords{x + 1, y + 1},
+                raster::Coords{x, y + 1}};
+
+            for (uint32_t i = 0; i < 4; i++) {
+                const auto& v0 = quad[i];
+                const auto& v1 = quad[(i + 1) % 4];
+                const auto& v2 = quad[(i + 2) % 4];
+
+                // Check if the indices are valid
+                if (mask.pixel(v0) && mask.pixel(v1) && mask.pixel(v2)) {
+                    triangles.emplace_back(vertex_index_map.pixel(v0), vertex_index_map.pixel(v1), vertex_index_map.pixel(v2));
+                    i++;
+                }
             }
         }
+    }
+    assert(triangles.size() <= max_triangle_count);
 
-        // Remove out of bounds vertices
-        source_positions.resize(actual_vertex_count);
+    return TerrainMesh(triangles, positions);
+}
+
+TerrainMesh transform_mesh(const TerrainMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
+    TerrainMesh target_mesh;
+    target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
+    target_mesh.triangles = source_mesh.triangles;
+    target_mesh.uvs = source_mesh.uvs;
+    target_mesh.texture = source_mesh.texture;
+    return target_mesh;
+}
+
+TerrainMesh reindex_mesh(const TerrainMesh &mesh) {
+    std::vector<glm::dvec3> new_positions;
+    new_positions.reserve(mesh.vertex_count());
+    std::vector<glm::uvec3> new_triangles;
+    new_triangles.reserve(mesh.face_count());
+    const uint32_t invalid_index = static_cast<uint32_t>(-1);
+    std::vector<uint32_t> index_map(mesh.positions.size(), invalid_index);
+
+    for (const auto &triangle : mesh.triangles) {
+        glm::uvec3 new_triangle_indices;
+        for (size_t i = 0; i < 3; i++) {
+            const uint32_t old_index = triangle[i];
+            if (index_map[old_index] == invalid_index) {
+                // Vertex newly encountered
+                const uint32_t new_index = new_positions.size();
+                new_positions.push_back(mesh.positions[old_index]);
+                new_triangle_indices[i] = new_index;
+                index_map[old_index] = new_index;
+            } else {
+                // Vertex already encountered
+                new_triangle_indices[i] = index_map[old_index];
+            }
+        }
+        new_triangles.push_back(new_triangle_indices);
     }
 
-    // Calculate absolute texture coordinates for every vertex.
-    LOG_TRACE("Calculating uv coordinates");
-    radix::tile::SrsBounds actual_texture_bounds(glm::dvec2(infinity), glm::dvec2(-infinity));
-    std::vector<glm::dvec2> texture_positions;
-    texture_positions.reserve(max_vertex_count);
-    for (unsigned int i = 0; i < actual_vertex_count; i++) {
-        const glm::dvec3 coords_source = source_positions[i];
-        const glm::dvec2 coords_texture_absolute = apply_transform(transform_source_texture.get(), coords_source);
-        actual_texture_bounds.expand_by(coords_texture_absolute);
-        texture_positions.push_back(coords_texture_absolute);
+    return TerrainMesh(new_triangles, new_positions);
+}
+
+namespace {
+    struct DVec3Hash {
+        std::size_t operator()(const glm::dvec3 &v) const {
+            std::size_t h1 = std::hash<double>{}(v.x);
+            std::size_t h2 = std::hash<double>{}(v.y);
+            std::size_t h3 = std::hash<double>{}(v.z);
+            return h1 ^ (h2 << 1) ^ (h3 << 2);
+        }
+    };
+
+    struct DVec3Equal {
+        const double epsilon;
+
+        bool operator()(const glm::dvec3 &a, const glm::dvec3 &b) const {
+            return glm::all(glm::epsilonEqual(a, b, 1e-8));
+        }
+    };
+}
+
+TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bounds) {
+    if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
+        return {};
     }
 
-    // Normalize texture coordinates
-    mesh.uvs = std::move(texture_positions);
-    for (glm::dvec2 &uv : mesh.uvs) {
-        uv = (uv - actual_texture_bounds.min) / actual_texture_bounds.size();
-    }
-    assert(mesh.uvs.size() == actual_vertex_count);
+    // Calculate epsilon to merge newly created vertices
+    const double average_edge_length = estimate_average_edge_length(mesh).value();
+    const double epsilon = average_edge_length / 1000;
 
-    // Add triangles
-    LOG_TRACE("Generating triangles");
-    for (unsigned int j = 0; j < raw_tile_data.height() - 1; j++) {
-        for (unsigned int i = 0; i < raw_tile_data.width() - 1; i++) {
-            const unsigned int vertex_index = j * raw_tile_data.width() + i;
+    std::unordered_map<glm::dvec3, size_t, DVec3Hash, DVec3Equal> seen_vertices(mesh.positions.size(), DVec3Hash(), DVec3Equal(epsilon));
 
-            std::array<unsigned int, 4> quad = {
-                vertex_index,
-                vertex_index + 1,
-                vertex_index + raw_tile_data.width() + 1,
-                vertex_index + raw_tile_data.width(),
-            };
+    // Construct 6 axis-aligned clipping planes from the bounding box
+    const std::array<radix::geometry::Plane<double>, 6> planes = {
+        radix::geometry::Plane(glm::dvec3(1.0, 0.0, 0.0), -bounds.min.x), // left
+        radix::geometry::Plane(glm::dvec3(-1.0, 0.0, 0.0), bounds.max.x), // right
+        radix::geometry::Plane(glm::dvec3(0.0, 1.0, 0.0), -bounds.min.y), // bottom
+        radix::geometry::Plane(glm::dvec3(0.0, -1.0, 0.0), bounds.max.y), // top
+        radix::geometry::Plane(glm::dvec3(0.0, 0.0, 1.0), -bounds.min.z), // near
+        radix::geometry::Plane(glm::dvec3(0.0, 0.0, -1.0), bounds.max.z)  // far
+    };
 
-            if (inclusive_bounds) {
-                // Check if all of the quad is inside the bounds
-                bool skip_quad = false;
-                for (const unsigned int vertex_index : quad) {
-                    if (!is_in_bounds[vertex_index]) {
-                        skip_quad = true;
+    std::vector<glm::dvec3> new_positions = mesh.positions;
+    std::vector<glm::uvec3> new_triangles;
+    new_triangles.reserve(mesh.face_count());
+
+    // Iterate over each triangle in the mesh
+    for (const glm::uvec3 &source_triangle : mesh.triangles) {
+        using Tri = radix::geometry::Triangle<3, double>;
+
+        // Get the positions for the current triangle
+        const Tri triangle = {
+            mesh.positions[source_triangle.x],
+            mesh.positions[source_triangle.y],
+            mesh.positions[source_triangle.z]};
+
+        uint16_t inside_count = 0;
+        for (const auto &vertex : triangle) {
+            if (bounds.contains_inclusive(vertex)) {
+                inside_count += 1;
+            }
+        }
+        if (inside_count == 0) {
+            continue;
+        }
+        if (inside_count == source_triangle.length()) {
+            new_triangles.push_back(source_triangle);
+            continue;
+        }
+
+        // Start with the original triangle
+        // TODO: this is rather inefficient since six vectors are allocated for each clipped triangle
+        const std::vector<Tri> clipped_triangles = radix::geometry::clip(std::vector{triangle}, planes);
+        assert(!clipped_triangles.empty());
+
+        for (const auto &clipped_triangle : clipped_triangles) {
+            glm::uvec3 decomposed_triangle;
+            for (size_t i = 0; i < clipped_triangle.size(); i++) {
+                const auto &vertex = clipped_triangle[i];
+                std::optional<uint32_t> vertex_index;
+
+                // Check if this vertex was already in the source triangle
+                for (size_t j = 0; j < triangle.size(); j++) {
+                    const auto &source_vertex = triangle[j];
+                    if (vertex == source_vertex) {
+                        vertex_index = source_triangle[j];
                         break;
                     }
                 }
-                if (skip_quad) {
-                    continue;
-                }
 
-                // Calculate the index of the given vertex in the reindexed buffer.
-                if (actual_vertex_count != max_vertex_count) {
-                    for (unsigned int &vertex_index : quad) {
-                        vertex_index = new_vertex_indices[vertex_index];
-                        assert(vertex_index != no_new_index);
+                // Check if this vertex was already added
+                if (!vertex_index.has_value()) {
+                    const auto it = seen_vertices.find(vertex);
+                    if (it != seen_vertices.cend()) {
+                        vertex_index = it->second;
                     }
+                    
                 }
 
-                mesh.triangles.emplace_back(quad[0], quad[3], quad[2]);
-                mesh.triangles.emplace_back(quad[0], quad[2], quad[1]);
-            } else {
-                for (unsigned int i = 0; i < 4; i++) {
-                    const unsigned int v0 = quad[i];
-                    const unsigned int v1 = quad[(i + 1) % 4];
-                    const unsigned int v2 = quad[(i + 2) % 4];
-
-                    // Check if the indices are valid
-                    if (is_in_bounds[v0] && is_in_bounds[v1] && is_in_bounds[v2]) {
-                        mesh.triangles.emplace_back(new_vertex_indices[v0], new_vertex_indices[v1], new_vertex_indices[v2]);
-                        i++;
-                    }
+                // Add a new vertex
+                if (!vertex_index.has_value()) {
+                    vertex_index = new_positions.size();
+                    new_positions.push_back(vertex);
+                    seen_vertices.emplace(vertex, vertex_index.value());
                 }
+
+                decomposed_triangle[i] = vertex_index.value();
             }
+            new_triangles.push_back(decomposed_triangle);
         }
     }
-    assert(mesh.triangles.size() <= max_triangle_count);
 
-    mesh.positions = std::move(source_positions);
-    for (glm::dvec3 &position : mesh.positions) {
-        position = apply_transform(transform_source_mesh.get(), position);
+    // TODO: derive new_positions from seen_vertices
+    return reindex_mesh(TerrainMesh(new_triangles, new_positions));
+}
+
+std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
+    std::vector<glm::dvec2> uvs = srs::transform_points_to_2d(srs::transformation(mesh_srs, texture_srs).get(), positions);
+    texture_bounds = radix::tile::SrsBounds(radix::geometry::find_bounds(uvs));
+
+    for (glm::dvec2 &uv : uvs) {
+        uv = (uv - texture_bounds.min) / texture_bounds.size();
     }
-    assert(mesh.positions.size() == actual_vertex_count);
 
-    // Sadly all that work above trying to only include vertices that will appear in a triangle
-    // is not enough for some configurations with non inclusive bounds or when there are invalid vertices.
-    // Thus we have to filter any loose vertices here.
-    remove_isolated_vertices(mesh);
+    return uvs;
+}
 
-    // Now validate the final mesh
-    validate_mesh(mesh);
+radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
+    const double infinity = std::numeric_limits<double>::infinity();
+    const glm::dvec3 min(bounds2d.min, -infinity);
+    const glm::dvec3 max(bounds2d.max, infinity);
+    return radix::geometry::Aabb3d(min, max);
+}
 
-    tile_bounds = actual_tile_bounds;
-    texture_bounds = actual_texture_bounds;
+tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
+    Dataset &dataset,
+    const OGRSpatialReference &mesh_srs,
+    const OGRSpatialReference &tile_srs, const radix::tile::SrsBounds &tile_bounds,
+    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
+    return build_reference_mesh_patch(dataset, mesh_srs, tile_srs, extend_bounds_to_3d(tile_bounds), texture_srs, texture_bounds);
+}
 
-    return mesh;
+tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
+    Dataset &dataset,
+    const OGRSpatialReference &mesh_srs,
+    const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
+    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
+    const OGRSpatialReference &source_srs = dataset.srs();
+
+    // Translate tile bounds from tile srs into the source srs, so we know what data to read.
+    radix::tile::SrsBounds target_bounds_in_source_srs;
+    if (std::isinf(clip_bounds.min.z) && std::isinf(clip_bounds.max.z)) {
+        // Make target bounds 2d if the unbounded by height.
+        target_bounds_in_source_srs = srs::encompassing_bounds_transfer(clip_srs, source_srs, radix::tile::SrsBounds(clip_bounds));
+    } else {
+        target_bounds_in_source_srs = srs::encompassing_bounds_transfer(clip_srs, source_srs, clip_bounds);
+    }
+
+    // Read height data according to bounds directly from dataset (no interpolation).
+    RawDatasetReader reader(dataset);
+    radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(target_bounds_in_source_srs);
+    add_border_to_aabb(pixel_bounds, Border(1));
+    LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
+    const std::optional<raster::HeightMap> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
+    if (!read_result.has_value() || read_result->size() == 0) {
+        return tl::unexpected(BuildError::OutOfBounds);
+    }
+    const raster::HeightMap height_map = read_result.value();
+
+    LOG_TRACE("Finding valid pixels");
+    const raster::Mask valid_mask = raster::transform(height_map, is_valid);
+
+    LOG_TRACE("Transforming pixels to vertices");
+    const raster::Raster<glm::dvec3> source_points = raster::transform(height_map, valid_mask, [&](const float height, const raster::Coords& coords) {
+        return convert_pixel_to_vertex(height, coords, reader, pixel_bounds);
+    });
+
+    LOG_TRACE("Generating triangles");
+    const TerrainMesh mesh_in_source_srs = meshify(source_points, valid_mask);
+    // Check if we even have any valid vertices. Can happen if all of the region is padding.
+    if (mesh_in_source_srs.vertex_count() == 0 || mesh_in_source_srs.face_count() == 0) {
+        return tl::unexpected(BuildError::EmptyRegion);
+    }
+
+    LOG_TRACE("Clipping mesh based on target bounds");
+    const TerrainMesh mesh_in_clip_srs = transform_mesh(mesh_in_source_srs, source_srs, clip_srs);
+    TerrainMesh clipped_mesh = clip_mesh(mesh_in_clip_srs, clip_bounds);
+    // Check if there are any vertices left
+    if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
+        return tl::unexpected(BuildError::EmptyRegion);
+    }
+
+    // TODO: move this to another function?
+    LOG_TRACE("Generating uv space and calculating required texture bounds");
+    clipped_mesh.uvs = generate_uv_space(clipped_mesh.positions, clip_srs, texture_srs, texture_bounds);
+
+    LOG_TRACE("Transforming mesh into output srs");
+    TerrainMesh target_mesh = transform_mesh(clipped_mesh, clip_srs, mesh_srs);
+    
+    remove_isolated_vertices(target_mesh); // TODO: is this still required?
+    validate_mesh(target_mesh);
+    return target_mesh;
 }
 
 } // namespace terrainbuilder::mesh

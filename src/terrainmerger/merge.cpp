@@ -167,15 +167,15 @@ private:
     std::vector<GridCell> grid_data;
 };
 
-static geometry::Aabb<3, double> pad_bounds(const geometry::Aabb<3, double> &bounds, const double percentage) {
+static radix::geometry::Aabb<3, double> pad_bounds(const radix::geometry::Aabb<3, double> &bounds, const double percentage) {
     const glm::dvec3 bounds_padding = bounds.size() * percentage;
-    const geometry::Aabb<3, double> padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
+    const radix::geometry::Aabb<3, double> padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
     return padded_bounds;
 }
 
 template <typename T>
-static Grid3d<T> _construct_grid_for_meshes(const geometry::Aabb<3, double> &bounds, const size_t vertex_count) {
-    const geometry::Aabb<3, double> padded_bounds = pad_bounds(bounds, 0.01);
+static Grid3d<T> _construct_grid_for_meshes(const radix::geometry::Aabb<3, double> &bounds, const size_t vertex_count) {
+    const radix::geometry::Aabb<3, double> padded_bounds = pad_bounds(bounds, 0.01);
 
     const double max_extends = max_component(padded_bounds.size());
     const glm::dvec3 relative_extends = padded_bounds.size() / max_extends;
@@ -187,14 +187,14 @@ static Grid3d<T> _construct_grid_for_meshes(const geometry::Aabb<3, double> &bou
 
 template <typename T>
 static Grid3d<T> construct_grid_for_mesh(const TerrainMesh &mesh) {
-    const geometry::Aabb<3, double> bounds = calculate_bounds(mesh);
+    const radix::geometry::Aabb<3, double> bounds = calculate_bounds(mesh);
     const size_t vertex_count = mesh.vertex_count();
     return _construct_grid_for_meshes<T>(bounds, vertex_count);
 }
 
 template <typename T>
 static Grid3d<T> construct_grid_for_meshes(const std::span<const TerrainMesh> meshes) {
-    const geometry::Aabb<3, double> bounds = calculate_bounds(meshes);
+    const radix::geometry::Aabb<3, double> bounds = calculate_bounds(meshes);
     const size_t maximal_merged_mesh_size = std::transform_reduce(
         meshes.begin(), meshes.end(), 0, [](const size_t a, const size_t b) { return a + b; }, [](const TerrainMesh &mesh) { return mesh.vertex_count(); });
     return _construct_grid_for_meshes<T>(bounds, maximal_merged_mesh_size);
@@ -480,7 +480,7 @@ static bool are_all_bounds_connected(const std::span<const TerrainMesh> meshes) 
         return true;
     }
 
-    std::vector<geometry::Aabb<3, double>> mesh_bounds;
+    std::vector<radix::geometry::Aabb<3, double>> mesh_bounds;
     mesh_bounds.reserve(meshes.size());
     std::transform(meshes.begin(), meshes.end(),
                    std::back_inserter(mesh_bounds),
@@ -492,7 +492,7 @@ static bool are_all_bounds_connected(const std::span<const TerrainMesh> meshes) 
                 continue;
             }
 
-            if (geometry::intersect(mesh_bounds[i], mesh_bounds[j])) {
+            if (radix::geometry::intersect(mesh_bounds[i], mesh_bounds[j])) {
                 intersect_any_other = true;
                 break;
             }

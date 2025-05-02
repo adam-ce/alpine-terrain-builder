@@ -63,6 +63,10 @@ void ShaderProgram::link() {
 	}
 }
 
+GLuint ShaderProgram::handle() {
+	return m_handle;
+}
+
 GLint ShaderProgram::get_uniform_location(std::string name) {
 	const auto result = m_uniform_locations.find(name);
 	if (result == m_uniform_locations.end()) {

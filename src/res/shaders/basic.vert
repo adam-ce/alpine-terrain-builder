@@ -13,5 +13,5 @@ void main()
 {
     vs_out.world_pos = projection * view * vec4(pos, 1.0);
 
-    gl_Position = vec4(vs_out.world_pos.xyz, 1.0f);
+    gl_Position = vs_out.world_pos;
 }

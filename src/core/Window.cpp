@@ -33,6 +33,11 @@ Window::Window(WindowConfig config) : m_width(config.width), m_height(config.hei
 
     // Set the required callback functions
     glfwSetKeyCallback(m_window, key_callback);
+    glfwSetMouseButtonCallback(m_window, mouse_button_callback);
+    glfwSetCursorPosCallback(m_window, cursor_position_callback);
+
+    // Link a pointer to this class with the window handle, to be able to access this class from the callbacks
+    glfwSetWindowUserPointer(m_window, (void*)this);
 }
 
 Window::~Window() {
@@ -50,14 +55,95 @@ void Window::poll_events() {
     glfwPollEvents();
 }
 
+void Window::swapBuffers() {
+    glfwSwapBuffers(m_window);
+}
+
+void Window::set_capture_mouse(bool captured) {
+    if (captured) {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    } else {
+        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+    }
+}
+
+glm::dvec2 Window::get_cursor_position() {
+    glm::dvec2 cursor_position;
+    glfwGetCursorPos(m_window, &cursor_position.x, &cursor_position.y);
+    return cursor_position;
+}
+
+glm::dvec2 Window::get_window_size() {
+    return glm::dvec2(m_width, m_height);
+}
+
+bool Window::is_key_pressed(int key) {
+    auto result = m_key_states.find(key);
+    
+    if (result == m_key_states.end()) {
+        return false;
+    }
+
+    return result->second;
+}
+
+bool Window::is_mouse_button_pressed(int button) {
+    auto result = m_mouse_button_states.find(button);
+
+    if (result == m_mouse_button_states.end()) {
+        return false;
+    }
+
+    return result->second;
+}
+
+float Window::getAspectRatio() {
+    return (float)m_width / (float)m_height;
+}
+
 void Window::glfw_error_callback(int error, const char* description) {
     LOG_GLFW_ERROR("[{}] {}", error, description);
 }
 
 void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
+    Window* w = (Window*)glfwGetWindowUserPointer(window);
+
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, GL_TRUE);
     }
+
+    if (!w->m_key_states.contains(key)) {
+        w->m_key_states.emplace(key, false);
+    }
+
+    if (action == GLFW_PRESS) {
+        LOG_DEBUG("KEY {} PRESS", key);
+        w->m_key_states[key] = true;
+    } else if (action == GLFW_RELEASE) {
+        LOG_DEBUG("KEY {} RELEASE", key);
+        w->m_key_states[key] = false;
+    }
+}
+
+void Window::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    Window* w = (Window*)glfwGetWindowUserPointer(window);
+    
+    if (!w->m_mouse_button_states.contains(button)) {
+        w->m_mouse_button_states.emplace(button, false);
+    }
+
+    if (action == GLFW_PRESS) {
+        w->m_mouse_button_states[button] = true;
+    } else if (action == GLFW_RELEASE) {
+        w->m_mouse_button_states[button] = false;
+    }
+}
+
+void Window::cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
+    Window* w = (Window*)glfwGetWindowUserPointer(window);
+
+    w->m_current_cursor_pos.x = xpos;
+    w->m_current_cursor_pos.y = ypos;
 }
 
 void Window::update_window_count(int delta) {

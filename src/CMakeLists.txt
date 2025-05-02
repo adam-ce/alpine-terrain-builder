@@ -87,8 +87,10 @@ add_executable(alpenite-browser
     core/Shader.cpp
     core/ShaderProgram.cpp
     core/Buffer.cpp
+    core/Camera.cpp
 
     utils/log/Log.cpp
+
 )
 target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog)
 target_include_directories(alpenite-browser PRIVATE .)

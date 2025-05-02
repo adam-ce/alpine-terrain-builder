@@ -11,6 +11,8 @@ public:
 	
 	void link();
 	
+	GLuint handle();
+
 	GLint get_uniform_location(std::string name);
 
 	template <typename T>

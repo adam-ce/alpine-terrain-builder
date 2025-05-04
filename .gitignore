@@ -6,3 +6,4 @@ build/
 .vscode
 unittest_tiles
 .vs
+/extern/*

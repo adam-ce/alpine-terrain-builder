@@ -5,11 +5,26 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 
-option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-find_package(GDAL REQUIRED)
+
+
+# alp_add_git_repository(PROJ URL https://github.com/OSGeo/PROJ.git COMMITISH 9.6.0)
+# # set(CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}/alp_external/PROJ" ${CMAKE_PREFIX_PATH})
+
+# set(PROJ_ROOT ${CMAKE_BINARY_DIR}/alp_external/PROJ CACHE INTERNAL "unsure this is correct")
+# set(PROJ_DIR ${CMAKE_BINARY_DIR}/alp_external/PROJ CACHE INTERNAL "unsure this is correct")
+# set(PROJ_INCLUDE_DIR ${CMAKE_BINARY_DIR}/alp_external/PROJ/include CACHE INTERNAL "this should be correct")
+# set(PROJ_LIBRARY PROJ::proj CACHE INTERNAL "hope this works")
+
+# can't include proj via repo, gdals find script doesn't play well with it.
+# next: set gdal flags to build only lib, build only necessary formats, build alpine maps, clone cgal, replace FetchContent, clean up
+set(GDAL_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "")
+set(OGR_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "")
+set(BUILD_APPS OFF CACHE BOOL "")
+alp_add_git_repository(gdal URL https://github.com/OSGeo/gdal.git COMMITISH v3.10.3)
+
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -17,18 +32,6 @@ find_package(CGAL REQUIRED)
 find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(CURL REQUIRED)
 
-if(NOT GDAL_CONFIG)
-    message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
-endif()
-
-execute_process(
-    COMMAND ${GDAL_CONFIG} --version
-    OUTPUT_VARIABLE SYSTEM_GDAL_VERSION
-)
-
-if(SYSTEM_GDAL_VERSION VERSION_LESS "3.3")
-    message(FATAL_ERROR "GDAL version \"${SYSTEM_GDAL_VERSION}\" is too old, at least 3.2 is required")
-endif()
 
 include(FetchContent)
 
@@ -41,26 +44,7 @@ if(NOT TARGET fmt::fmt)
     FetchContent_MakeAvailable(fmt)
 endif()
 
-if(ALP_AUTOUPDATE_RADIX)
-    FetchContent_Declare(radix
-        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG d01b84248e21e4754e028492bf70519e3416c86
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        SOURCE_SUBDIR src
-    )
-    FetchContent_MakeAvailable(radix)
-else()
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
-        FetchContent_Declare(radix
-            GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-            GIT_TAG 7ace0d0cab1a6166c196bba5d0f11bbf07381abd
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        )
-        FetchContent_MakeAvailable(radix)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/radix ${CMAKE_BINARY_DIR}/_deps/radix-build)
-    endif()
-endif()
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH bbed8f3607c2d5fa97e309b119d0520fbebca983 NOT_SYSTEM)
 
 if(NOT TARGET cgltf)
     FetchContent_Declare(cgltf
@@ -108,14 +92,9 @@ if(NOT TARGET cli11)
     endif()
 endif()
 
-if(NOT TARGET expected)
-    FetchContent_Declare(expected
-        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-        GIT_TAG 3f0ca7b19253129700a073abfa6d8638d9f7c80c
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
-    )
-    FetchContent_MakeAvailable(expected)
-endif()
+alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
+add_library(tl_expected INTERFACE)
+target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
 
 if(NOT TARGET spdlog)
     set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
@@ -204,7 +183,7 @@ add_library(terrainlib
     terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
     terrainlib/tntn/ZoomRange.h
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected ${OpenCV_LIBS})
 target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -225,7 +204,7 @@ add_library(terrainbuilderlib
     terrainbuilder/octree/space.h
 )
 target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 expected)
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )

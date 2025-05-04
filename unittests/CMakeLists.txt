@@ -6,13 +6,9 @@ option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
 
-include(FetchContent)
-FetchContent_Declare(catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.3.2
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/Catch2
-)
-FetchContent_MakeAvailable(catch2)
+if (NOT TARGET Catch2)
+    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.5.1)
+endif()
 
 add_executable(unittests_terrainlib
     alpine_raster_format.cpp
@@ -68,7 +64,7 @@ if (ATB_UNITTESTS_DEBUG_IMAGES)
 else()
     target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=false")
 endif()
-target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2WithMain)
+target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainmerger
@@ -77,7 +73,7 @@ add_executable(unittests_terrainmerger
     terrainmerger/merge.cpp
 )
 
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2WithMain)
+target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainbuilder

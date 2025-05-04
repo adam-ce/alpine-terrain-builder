@@ -20,9 +20,20 @@ option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with ne
 
 # can't include proj via repo, gdals find script doesn't play well with it.
 # next: set gdal flags to build only lib, build only necessary formats, build alpine maps, clone cgal, replace FetchContent, clean up
-set(GDAL_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "")
-set(OGR_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "")
-set(BUILD_APPS OFF CACHE BOOL "")
+
+set(GDAL_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
+set(OGR_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
+set(BUILD_APPS OFF CACHE BOOL "don't build gdal apps" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "don't build gdal apps" FORCE)
+set(BUILD_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
+set(BUILD_JAVA_BINDINGS OFF CACHE BOOL "" FORCE)
+set(BUILD_CSHARP_BINDINGS OFF CACHE BOOL "" FORCE)
+set(GDAL_USE_JPEG OFF CACHE BOOL "not targetting jpeg for now and it builds an additonal executable" FORCE)
+
+# The Iconv library is used to convert text from one encoding to another encoding. It is generally available as a system library for Unix-like systems.
+# On Windows, GDAL can leverage the API of the operating system for a few base conversions, but using Iconv will provide additional capabilities.
+# gdal supports vector layers, we won't need it here for now, and an unnecessary target will be produced.
+set(GDAL_USE_ICONV OFF CACHE BOOL "i don't think we need this one" FORCE)
 alp_add_git_repository(gdal URL https://github.com/OSGeo/gdal.git COMMITISH v3.10.3)
 
 find_package(TBB REQUIRED)
@@ -60,6 +71,7 @@ endif()
 if(NOT TARGET tinygltf)
     set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
     set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+    set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
     FetchContent_Declare(tinygltf
         GIT_REPOSITORY https://github.com/syoyo/tinygltf
         GIT_TAG 4fea26f6c8652f545560807bccc934cf0cdd86dd

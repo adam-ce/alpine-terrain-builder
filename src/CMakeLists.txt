@@ -39,14 +39,17 @@ alp_add_git_repository(gdal URL https://github.com/OSGeo/gdal.git COMMITISH v3.1
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(CGAL REQUIRED)
-find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(CURL REQUIRED)
 
-
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH bbed8f3607c2d5fa97e309b119d0520fbebca983 NOT_SYSTEM)
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
+
+alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
+add_library(Eigen3 INTERFACE)
+target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
+
+include(../cmake/SetupCGAL.cmake)
+alp_setup_cgal("v6.0.1")
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
@@ -72,6 +75,8 @@ add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
+
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 5d56bcefbb8f13ebedebdf30bc24c92708566a70 NOT_SYSTEM)
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
@@ -147,7 +152,7 @@ add_library(terrainmergerlib
 )
 target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
 target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )

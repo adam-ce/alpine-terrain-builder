@@ -62,5 +62,5 @@ add_executable(unittests_terrainbuilder
     # terrainbuilder/texture.cpp
 )
 
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2WithMain CGAL::CGAL)
+target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2WithMain)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")

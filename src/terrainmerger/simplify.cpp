@@ -290,7 +290,7 @@ struct UvMapUpdateEdgeCollapseVisitor : CGAL::Surface_mesh_simplification::Edge_
 
     // Called during the processing phase for each edge being collapsed.
     // If placement is absent the edge is left uncollapsed.
-    void OnCollapsing(const Profile &profile, std::optional<Point> placement) {
+    void OnCollapsing(const Profile &profile, boost::optional<Point> placement) {
         if (!placement) {
             return;
         }

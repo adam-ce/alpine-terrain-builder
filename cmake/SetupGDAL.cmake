@@ -26,11 +26,9 @@ function(_alp_build_and_install NAME SRC_DIR BUILD_DIR INSTALL_DIR)
         message(STATUS "[alp] Configuring ${NAME}")
         # file(MAKE_DIRECTORY "${BUILD_DIR}")
 
-        message(STATUS "CMake generator: ${CMAKE_GENERATOR}")
-
         execute_process(
             COMMAND ${CMAKE_COMMAND}
-                    -G "${CMAKE_GENERATOR}"
+                    -G ${CMAKE_GENERATOR}
                     -S ${SRC_DIR}
                     -B ${BUILD_DIR}
                     -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}

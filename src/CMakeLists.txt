@@ -95,48 +95,13 @@ add_library(terrainlib
     terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
     terrainlib/Tiler.h terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
-    terrainlib/algorithms/primitives.h
-    terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
-    terrainlib/tntn/BinaryIO.h terrainlib/tntn/BinaryIO.cpp
-    terrainlib/tntn/Delaunator.h terrainlib/tntn/Delaunator.cpp
-    terrainlib/tntn/DelaunayMesh.h terrainlib/tntn/DelaunayMesh.cpp
-    terrainlib/tntn/DelaunayTriangle.h terrainlib/tntn/DelaunayTriangle.cpp
-    terrainlib/tntn/endianness.h
-    terrainlib/tntn/FileFormat.h
-    terrainlib/tntn/File.h terrainlib/tntn/File.cpp
-    terrainlib/tntn/gdal_init.h terrainlib/tntn/gdal_init.cpp
-    terrainlib/tntn/geometrix.h terrainlib/tntn/geometrix.cpp
-    terrainlib/tntn/logging.h terrainlib/tntn/logging.cpp
-    terrainlib/tntn/Mesh2Raster.h terrainlib/tntn/Mesh2Raster.cpp
-    terrainlib/tntn/Mesh.h terrainlib/tntn/Mesh.cpp
-    terrainlib/tntn/MeshIO.h terrainlib/tntn/MeshIO.cpp
-    terrainlib/tntn/MeshMode.h
-    terrainlib/tntn/MeshWriter.h terrainlib/tntn/MeshWriter.cpp
-    terrainlib/tntn/ObjPool.h
-    terrainlib/tntn/OFFReader.h terrainlib/tntn/OFFReader.cpp
-    terrainlib/tntn/Points2Mesh.h terrainlib/tntn/Points2Mesh.cpp
-    terrainlib/tntn/QuadEdge.h terrainlib/tntn/QuadEdge.cpp
-    terrainlib/tntn/QuantizedMeshIO.h terrainlib/tntn/QuantizedMeshIO.cpp
-    terrainlib/tntn/Raster.h
-    terrainlib/tntn/RasterIO.h terrainlib/tntn/RasterIO.cpp
-    terrainlib/tntn/raster_tools.h terrainlib/tntn/raster_tools.cpp
-    terrainlib/tntn/simple_meshing.h terrainlib/tntn/simple_meshing.cpp
-    terrainlib/tntn/SuperTriangle.h terrainlib/tntn/SuperTriangle.cpp
-    terrainlib/tntn/SurfacePoints.h terrainlib/tntn/SurfacePoints.cpp
-    terrainlib/tntn/TerraMesh.h terrainlib/tntn/TerraMesh.cpp
-    terrainlib/tntn/terra_meshing.h terrainlib/tntn/terra_meshing.cpp
-    terrainlib/tntn/TerraUtils.h terrainlib/tntn/TerraUtils.cpp
-    terrainlib/tntn/tntn_assert.h
-    terrainlib/tntn/util.h terrainlib/tntn/util.cpp
-    terrainlib/tntn/ZemlyaMesh.h terrainlib/tntn/ZemlyaMesh.cpp
-    terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
-    terrainlib/tntn/ZoomRange.h
+    terrainlib/init.h terrainlib/init.cpp
 )
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected ${OpenCV_LIBS})
 target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})

@@ -30,15 +30,15 @@
 #include "Exception.h"
 #include "ctb/Grid.hpp"
 #include "srs.h"
-#include "tntn/gdal_init.h"
-#include "tntn/logging.h"
+#include "init.h"
+#include "log.h"
 
 Dataset::Dataset(const std::string& path)
 {
     tntn::initialize_gdal_once();
     m_gdal_dataset.reset(static_cast<GDALDataset*>(GDALOpen(path.c_str(), GA_ReadOnly)));
     if (!m_gdal_dataset) {
-        TNTN_LOG_FATAL("Couldn't open dataset {}.\n", path);
+        LOG_ERROR("Couldn't open dataset {}.\n", path);
         throw Exception("");
     }
     m_name = std::regex_replace(path, std::regex("^.*/"), "");
@@ -50,7 +50,7 @@ Dataset::Dataset(GDALDataset* dataset)
     tntn::initialize_gdal_once();
     m_gdal_dataset.reset(dataset);
     if (!m_gdal_dataset) {
-        TNTN_LOG_FATAL("Dataset is null.\n");
+        LOG_ERROR("Dataset is null.\n");
         throw Exception("Dataset is null.");
     }
 }

@@ -31,7 +31,6 @@
 #include "Exception.h"
 #include "Image.h"
 #include "ctb/types.hpp"
-#include "tntn/logging.h"
 
 namespace {
 std::string toWkt(const OGRSpatialReference& srs)
@@ -123,7 +122,7 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
     assert(nOvCount >= 0);
     if (nOvCount == 0) {
         if (warn_on_missing_overviews)
-            TNTN_LOG_WARN("No dataset overviews found.");
+            LOG_WARN("No dataset overviews found.");
         return dataset;
     }
 
@@ -137,16 +136,16 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
             adfSuggestedGeoTransform.data(), &nPixels, &nLines,
             adfExtent.data(), 0)
         == CE_Failure) {
-        TNTN_LOG_WARN("GDALSuggestedWarpOutput2 failed. We won't use dataset overviews!");
+        LOG_WARN("GDALSuggestedWarpOutput2 failed. We won't use dataset overviews!");
         return dataset;
     }
 
     double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
     //  if( dfTargetRatio <= 1.0 ) {
-    //    TNTN_LOG_WARN(fmt::format("dfTargetRatio {} <= 1.0. We won't use dataset overviews!\n", dfTargetRatio));
-    //    TNTN_LOG_WARN(fmt::format("Other values: nPixels={}, nLines={}, adfExtent={}/{}/{}/{}\n",
+    //    LOG_WARN(fmt::format("dfTargetRatio {} <= 1.0. We won't use dataset overviews!\n", dfTargetRatio));
+    //    LOG_WARN(fmt::format("Other values: nPixels={}, nLines={}, adfExtent={}/{}/{}/{}\n",
     //                              nPixels, nLines, adfExtent[0], adfExtent[1], adfExtent[2], adfExtent[3]));
-    //    TNTN_LOG_WARN(fmt::format("Other values: adfSuggestedGeoTransform={}/{}/{}/{}/{}/{}\n",
+    //    LOG_WARN(fmt::format("Other values: adfSuggestedGeoTransform={}/{}/{}/{}/{}/{}\n",
     //                              adfSuggestedGeoTransform[0], adfSuggestedGeoTransform[1], adfSuggestedGeoTransform[2],
     //                              adfSuggestedGeoTransform[3], adfSuggestedGeoTransform[4], adfSuggestedGeoTransform[5]));
     //    return dataset;
@@ -163,7 +162,7 @@ std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& data
     }
     iOvr += nOvLevel + 2;
     if (iOvr >= 0) {
-        TNTN_LOG_DEBUG("WARPING: Selecting overview level {} for output dataset {}x{}\n", iOvr, nPixels, nLines);
+        LOG_DEBUG("WARPING: Selecting overview level {} for output dataset {}x{}\n", iOvr, nPixels, nLines);
         return std::make_shared<Dataset>(static_cast<GDALDataset*>(GDALCreateOverviewDataset(poSrcDS, iOvr, FALSE)));
     }
     return dataset;

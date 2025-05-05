@@ -8,33 +8,8 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-
-
-# alp_add_git_repository(PROJ URL https://github.com/OSGeo/PROJ.git COMMITISH 9.6.0)
-# # set(CMAKE_PREFIX_PATH "${CMAKE_BINARY_DIR}/alp_external/PROJ" ${CMAKE_PREFIX_PATH})
-
-# set(PROJ_ROOT ${CMAKE_BINARY_DIR}/alp_external/PROJ CACHE INTERNAL "unsure this is correct")
-# set(PROJ_DIR ${CMAKE_BINARY_DIR}/alp_external/PROJ CACHE INTERNAL "unsure this is correct")
-# set(PROJ_INCLUDE_DIR ${CMAKE_BINARY_DIR}/alp_external/PROJ/include CACHE INTERNAL "this should be correct")
-# set(PROJ_LIBRARY PROJ::proj CACHE INTERNAL "hope this works")
-
-# can't include proj via repo, gdals find script doesn't play well with it.
-# todo: clone cgal, clean up
-
-set(GDAL_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
-set(OGR_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
-set(BUILD_APPS OFF CACHE BOOL "don't build gdal apps" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "don't build gdal apps" FORCE)
-set(BUILD_PYTHON_BINDINGS OFF CACHE BOOL "" FORCE)
-set(BUILD_JAVA_BINDINGS OFF CACHE BOOL "" FORCE)
-set(BUILD_CSHARP_BINDINGS OFF CACHE BOOL "" FORCE)
-set(GDAL_USE_JPEG OFF CACHE BOOL "not targetting jpeg for now and it builds an additonal executable" FORCE)
-
-# The Iconv library is used to convert text from one encoding to another encoding. It is generally available as a system library for Unix-like systems.
-# On Windows, GDAL can leverage the API of the operating system for a few base conversions, but using Iconv will provide additional capabilities.
-# gdal supports vector layers, we won't need it here for now, and an unnecessary target will be produced.
-set(GDAL_USE_ICONV OFF CACHE BOOL "i don't think we need this one" FORCE)
-alp_add_git_repository(gdal URL https://github.com/OSGeo/gdal.git COMMITISH v3.10.3)
+include(../cmake/SetupGDAL.cmake)
+alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
 
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)

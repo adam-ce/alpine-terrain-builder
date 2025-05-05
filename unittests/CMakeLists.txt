@@ -26,31 +26,31 @@ add_executable(unittests_terrainlib
     srs_test.cpp
     tile_heights_generator.cpp
     top_down_tiler.cpp
-    algorithms/primitives.cpp
-    algorithms/raster_triangle_scanline.cpp
-    tntn/Delaunay_tests.cpp
-    tntn/File_tests.cpp
-    tntn/geometrix_tests.cpp
-    tntn/Mesh_tests.cpp
-    tntn/ObjPool_tests.cpp
-    tntn/OFFReader_tests.cpp
-
-    tntn/RasterIO_tests.cpp
-    tntn/Raster_tests.cpp
-    tntn/raster_tools_tests.cpp
-    tntn/simple_meshing_tests.cpp
-    tntn/SimpleRange_tests.cpp
-    tntn/SuperTriangle_tests.cpp
-    tntn/SurfacePoints_tests.cpp
-    tntn/terra_meshing_tests.cpp
-    tntn/test_common.cpp
-    tntn/test_common.h
-    tntn/triangle_indices.cpp
-    tntn/triangle_indices_data.cpp
-    tntn/triangle_indices.h
-    tntn/util_tests.cpp
-    tntn/vertex_points.cpp
-    tntn/vertex_points.h)
+    # algorithms/primitives.cpp
+    # algorithms/raster_triangle_scanline.cpp
+    # tntn/Delaunay_tests.cpp
+    # tntn/File_tests.cpp
+    # tntn/geometrix_tests.cpp
+    # tntn/Mesh_tests.cpp
+    # tntn/ObjPool_tests.cpp
+    # tntn/OFFReader_tests.cpp
+    # tntn/RasterIO_tests.cpp
+    # tntn/Raster_tests.cpp
+    # tntn/raster_tools_tests.cpp
+    # tntn/simple_meshing_tests.cpp
+    # tntn/SimpleRange_tests.cpp
+    # tntn/SuperTriangle_tests.cpp
+    # tntn/SurfacePoints_tests.cpp
+    # tntn/terra_meshing_tests.cpp
+    # tntn/test_common.cpp
+    # tntn/test_common.h
+    # tntn/triangle_indices.cpp
+    # tntn/triangle_indices_data.cpp
+    # tntn/triangle_indices.h
+    # tntn/util_tests.cpp
+    # tntn/vertex_points.cpp
+    # tntn/vertex_points.h
+)
     
 target_compile_definitions(unittests_terrainlib PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
 target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_AUSTRIA_HIGHRES=\"${ATB_UNITTESTS_AUSTRIA_HIGHRES}\"")

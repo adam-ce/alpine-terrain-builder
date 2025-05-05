@@ -1,5 +1,4 @@
-#ifndef TERRAINMESH_H
-#define TERRAINMESH_H
+#pragma once
 
 #include <vector>
 #include <optional>
@@ -92,5 +91,3 @@ void sort_and_normalize_triangles(TerrainMesh &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 
 void validate_mesh(const TerrainMesh &mesh);
-
-#endif

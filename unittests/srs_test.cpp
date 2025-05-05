@@ -17,13 +17,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
+#include "srs.h"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 #include <ogr_spatialref.h>
 #include <vector>
 
-#include "srs.h"
+using namespace radix;
+using Catch::Approx;
 
 TEST_CASE("ECEF conversinos")
 {
@@ -39,7 +42,7 @@ TEST_CASE("ECEF conversinos")
     {
         // comparison against https://www.oc.nps.edu/oc2902w/coord/llhxyz.htm
         const auto steffl_wgs84 = glm::dvec3(16.372489, 48.208814, 171.28);
-        const auto steffl_webmercator = srs::to(wgs84, webmercator, steffl_wgs84);
+        const auto steffl_webmercator = srs::transform_point(wgs84, webmercator, steffl_wgs84);
         {
             const auto steffl_ecef = srs::toECEF(wgs84, steffl_wgs84);
             CHECK(steffl_ecef.x == Approx(4085862.0));

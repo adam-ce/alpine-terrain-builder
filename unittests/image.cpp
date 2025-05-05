@@ -18,9 +18,11 @@
  *****************************************************************************/
 
 #include <algorithm>
-#include <catch2/catch.hpp>
-
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 #include "Image.h"
+
+using Catch::Approx;
 
 TEST_CASE("image")
 {

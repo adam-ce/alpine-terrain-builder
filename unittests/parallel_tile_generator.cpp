@@ -21,9 +21,10 @@
 #include <fstream>
 #include <memory>
 #include <utility>
-
 #include "ParallelTileGenerator.h"
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+using namespace radix;
 
 TEST_CASE("parallel tile generator")
 {

@@ -17,17 +17,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <chrono>
+#include "ParallelTileGenerator.h"
+#include "ProgressIndicator.h"
+#include <catch2/catch_test_macros.hpp>
 #include <execution>
 #include <thread>
 #include <vector>
 
-#include <catch2/catch.hpp>
-
-#include "ParallelTileGenerator.h"
-#include "ProgressIndicator.h"
-
 using namespace std::literals;
+using namespace radix;
 
 TEST_CASE("progress indicator")
 {

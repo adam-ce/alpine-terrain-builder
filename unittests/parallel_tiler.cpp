@@ -17,17 +17,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <glm/detail/qualifier.hpp>
-#include <type_traits>
-
-#include <catch2/catch.hpp>
-#include <fmt/core.h>
-
 #include "Dataset.h"
 #include "ParallelTiler.h"
 #include "catch2_helpers.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_template_test_macros.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <fmt/core.h>
+#include <glm/detail/qualifier.hpp>
+#include <numeric>
+#include <type_traits>
+
+using Catch::Approx;
+using namespace radix;
 
 TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::false_type)
 {

@@ -46,15 +46,7 @@ find_package(CURL REQUIRED)
 
 include(FetchContent)
 
-if(NOT TARGET fmt::fmt)
-    FetchContent_Declare(fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt
-        GIT_TAG 10.2.1
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
-    )
-    FetchContent_MakeAvailable(fmt)
-endif()
-
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH bbed8f3607c2d5fa97e309b119d0520fbebca983 NOT_SYSTEM)
 
 if(NOT TARGET cgltf)
@@ -119,16 +111,10 @@ if(NOT TARGET spdlog)
     add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 endif()
 
-if(NOT TARGET zpp_bits)
-    FetchContent_Declare(zpp_bits
-        GIT_REPOSITORY https://github.com/eyalz800/zpp_bits.git
-        GIT_TAG v4.4.20
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/zpp_bits
-    )
-    FetchContent_MakeAvailable(zpp_bits)
-    add_library(zpp_bits INTERFACE)
-    target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
-endif()
+
+alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
+add_library(zpp_bits INTERFACE)
+target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp

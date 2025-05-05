@@ -17,12 +17,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include "../catch2_helpers.h"
-#include <catch2/catch.hpp>
-#include <glm/glm.hpp>
-
 #include "algorithms/raster_triangle_scanline.h"
+#include "../catch2_helpers.h"
 #include "tntn/Raster.h"
+#include <glm/glm.hpp>
 
 TEST_CASE("raster triangle goes through pixels exactly once (small rect)")
 {

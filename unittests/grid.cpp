@@ -17,7 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -26,6 +27,8 @@
 // the Grid class is taken from ctb, which didn't use unit tests.
 // Therefore it's unlikely, that it will be fully covered by tests.
 // New functions should be tested though!
+
+using Catch::Approx;
 
 TEST_CASE("grid")
 {

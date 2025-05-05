@@ -16,7 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include <set>
 
@@ -26,6 +26,8 @@
 #include "ctb/GlobalMercator.hpp"
 #include "depth_first_tile_traverser.h"
 #include <radix/tile.h>
+
+using namespace radix;
 
 TEST_CASE("depth_first_tile_traverser interface")
 {

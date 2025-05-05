@@ -1,7 +1,5 @@
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <opencv2/opencv.hpp>
-
-#include "../catch2_helpers.h"
 #include "mesh/io.h"
 #include "convert.h"
 #include "cgal.h"

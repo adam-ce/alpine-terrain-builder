@@ -18,16 +18,17 @@
  *****************************************************************************/
 
 #include <array>
+#include <numeric>
 #include <string>
 #include <tuple>
-
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <fmt/core.h>
-
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
 #include "srs.h"
+
+using namespace radix;
 
 TEST_CASE("reading")
 {
@@ -94,7 +95,7 @@ TEST_CASE("reading")
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                    const auto srs_bounds = srs::nonExactBoundsTransform(geodetic_bounds, geodetic_srs, srs);
+                    const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs);
 
                     const auto reader = DatasetReader(dataset, srs, 1);
                     if (ATB_UNITTESTS_DEBUG_IMAGES) {

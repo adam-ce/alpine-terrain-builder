@@ -19,7 +19,7 @@ option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with ne
 # set(PROJ_LIBRARY PROJ::proj CACHE INTERNAL "hope this works")
 
 # can't include proj via repo, gdals find script doesn't play well with it.
-# next: set gdal flags to build only lib, build only necessary formats, build alpine maps, clone cgal, replace FetchContent, clean up
+# todo: clone cgal, clean up
 
 set(GDAL_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
 set(OGR_BUILD_OPTIONAL_DRIVERS OFF CACHE BOOL "" FORCE)
@@ -44,73 +44,30 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(CURL REQUIRED)
 
 
-include(FetchContent)
-
-alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH bbed8f3607c2d5fa97e309b119d0520fbebca983 NOT_SYSTEM)
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
+alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
 
-if(NOT TARGET cgltf)
-    FetchContent_Declare(cgltf
-        GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
-        GIT_TAG 7331a5adf4b0fde15f0e682a5803e4f17137e0ad
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
-    )
-    FetchContent_MakeAvailable(cgltf)
-    add_library(cgltf INTERFACE)
-    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
-endif()
+alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
+add_library(cgltf INTERFACE)
+target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
 
-if(NOT TARGET tinygltf)
-    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
-    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
-    set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
-    FetchContent_Declare(tinygltf
-        GIT_REPOSITORY https://github.com/syoyo/tinygltf
-        GIT_TAG 4fea26f6c8652f545560807bccc934cf0cdd86dd
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
-    )
-    FetchContent_MakeAvailable(tinygltf)
-endif()
+set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
+alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 4fea26f6c8652f545560807bccc934cf0cdd86dd)
 
-if(NOT TARGET stb)
-    FetchContent_Declare(stb
-        GIT_REPOSITORY https://github.com/nothings/stb
-        GIT_TAG f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
-    )
-    FetchContent_MakeAvailable(stb)
-    add_library(stb INTERFACE)
-    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
-endif()
-
-if(NOT TARGET cli11)
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
-        FetchContent_Declare(cli11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-            GIT_TAG 20de8b73bbbabaf2f94dd07c4ece8ff3590af531
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
-        )
-        FetchContent_MakeAvailable(cli11)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/cli11 ${CMAKE_BINARY_DIR}/_deps/cli11-build)
-    endif()
-endif()
+alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 add_library(tl_expected INTERFACE)
 target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
 
-if(NOT TARGET spdlog)
-    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
-    FetchContent_Declare(spdlog
-        GIT_REPOSITORY https://github.com/gabime/spdlog.git
-        GIT_TAG v1.13.0
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/spdlog
-    )
-    FetchContent_MakeAvailable(spdlog)
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
-endif()
-
+set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
+alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)

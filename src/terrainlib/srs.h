@@ -303,25 +303,4 @@ inline OGRSpatialReference mgi() {
     return from_epsg(4312);
 }
 
-// only for tntn
-template <typename T>
-inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p) {
-    return transform_point(source_srs, ecef(), p);
-}
-
-template <typename T>
-inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, std::vector<glm::tvec3<T>> points) {
-    return transform_points(source_srs, ecef(), points);
-}
-
-template <typename T, std::size_t n>
-inline std::array<glm::tvec3<T>, n> toECEF(const OGRSpatialReference& source_srs, std::array<glm::tvec3<T>, n> points) {
-    return transform_points(source_srs, ecef(), points);
-}
-
-template <typename T>
-inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2) {
-    return toECEF<T, 2>(source_srs, { p1, p2 });
-}
-
 }

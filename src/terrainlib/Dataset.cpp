@@ -35,7 +35,7 @@
 
 Dataset::Dataset(const std::string& path)
 {
-    tntn::initialize_gdal_once();
+    initialize_gdal_once();
     m_gdal_dataset.reset(static_cast<GDALDataset*>(GDALOpen(path.c_str(), GA_ReadOnly)));
     if (!m_gdal_dataset) {
         LOG_ERROR("Couldn't open dataset {}.\n", path);
@@ -47,7 +47,7 @@ Dataset::Dataset(const std::string& path)
 
 Dataset::Dataset(GDALDataset* dataset)
 {
-    tntn::initialize_gdal_once();
+    initialize_gdal_once();
     m_gdal_dataset.reset(dataset);
     if (!m_gdal_dataset) {
         LOG_ERROR("Dataset is null.\n");

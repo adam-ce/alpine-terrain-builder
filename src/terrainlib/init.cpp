@@ -5,8 +5,6 @@
 
 #include <gdal.h>
 
-namespace tntn {
-
 std::once_flag g_gdal_initialized_once_flag;
 
 void initialize_gdal_once()
@@ -36,4 +34,3 @@ void initialize_freeimage_once()
     });
     static FreeImageDeinitialiserHandler deinitialiser;
 }
-} // namespace tntn

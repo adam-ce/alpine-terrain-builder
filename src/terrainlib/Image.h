@@ -29,11 +29,6 @@
 
 #include <glm/glm.hpp>
 
-namespace tntn {
-template <typename T>
-class Raster;
-}
-
 template <typename T>
 class Image {
 public:
@@ -68,8 +63,6 @@ private:
     unsigned m_width = 0;
     unsigned m_height = 0;
     std::vector<T> m_data;
-
-    friend class tntn::Raster<T>;
 };
 
 using HeightData = Image<float>;

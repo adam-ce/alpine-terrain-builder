@@ -23,7 +23,6 @@ add_executable(unittests_terrainlib
     parallel_tile_generator.cpp
     parallel_tiler.cpp
     progress_indicator_test.cpp
-    srs_test.cpp
     tile_heights_generator.cpp
     top_down_tiler.cpp
 )

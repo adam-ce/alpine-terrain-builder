@@ -8,12 +8,8 @@ message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-include(../cmake/SetupGDAL.cmake)
-alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
-
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(CURL REQUIRED)
 
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
@@ -23,8 +19,17 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
 
-include(../cmake/SetupCGAL.cmake)
-alp_setup_cgal("v6.0.1")
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF)
+find_package(Boost CONFIG REQUIRED)
+
+include(../cmake/SetupGDAL.cmake)
+alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
+
+alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
+find_package(CGAL REQUIRED)
+
+alp_setup_cmake_project(opencv URL https://github.com/opencv/opencv.git COMMITISH 4.11.0 CMAKE_ARGUMENTS -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_opencv_apps=OFF)
+find_package(OpenCV REQUIRED)
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
@@ -83,8 +88,9 @@ add_library(terrainlib
     terrainlib/ctb/types.hpp
     terrainlib/init.h terrainlib/init.cpp
 )
+target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected ${OpenCV_LIBS})
-target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
+
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
@@ -103,12 +109,11 @@ add_library(terrainbuilderlib
     terrainbuilder/octree/storage.h
     terrainbuilder/octree/space.h
 )
-target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
+target_include_directories(terrainbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainbuilder)
 target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
-target_include_directories(terrainbuilder PUBLIC terrainbuilder)
 target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
 add_library(terrainmergerlib
@@ -125,25 +130,22 @@ add_library(terrainmergerlib
     terrainmerger/convert.cpp
     terrainmerger/validate.h
 )
+target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
 target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
-target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )
-target_include_directories(terrainmerger PUBLIC terrainmerger)
 target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
-target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
 
 add_executable(terrainconvert
     terrainconvert/cli.h
     terrainconvert/cli.cpp
     terrainconvert/main.cpp
 )
-target_include_directories(terrainconvert PUBLIC terrainlib)
 target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)

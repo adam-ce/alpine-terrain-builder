@@ -95,14 +95,8 @@ int run(std::span<char*> args) {
 
     Dataset dataset(dataset_path);
 
-    OGRSpatialReference target_bounds_srs;
-    target_bounds_srs.SetFromUserInput(target_srs_input.c_str());
-    target_bounds_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-    OGRSpatialReference mesh_srs;
-    mesh_srs.SetFromUserInput(mesh_srs_input.c_str());
-    mesh_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
+    OGRSpatialReference target_bounds_srs = srs::from_user_input(target_srs_input);
+    OGRSpatialReference mesh_srs = srs::from_user_input(mesh_srs_input);
     OGRSpatialReference texture_srs = srs::webmercator();
 
     radix::geometry::Aabb3d target_bounds;

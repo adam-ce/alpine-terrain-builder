@@ -18,35 +18,39 @@
  *****************************************************************************/
 
 #include <filesystem>
+#include <unordered_set>
 
-#include <catch2/catch.hpp>
 #include <fmt/core.h>
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
+#include <CGAL/Polygon_mesh_processing/border.h>
 #include <CGAL/Polygon_mesh_processing/connected_components.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
-#include <CGAL/Polygon_mesh_processing/stitch_borders.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
 #include <CGAL/Unique_hash_map.h>
 
 #include "../catch2_helpers.h"
 #include "Dataset.h"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/Grid.hpp"
+#include "merge.h"
+#include "mesh/terrain_mesh.h"
+#include "mesh_builder.h"
+#include "octree/id.h"
+#include "octree/space.h"
 #include "srs.h"
 
 #include "mesh/io.h"
-#include "mesh_builder.h"
-#include "mesh/terrain_mesh.h"
-#include "merge.h"
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel;
-typedef Kernel::Point_3 Point3;
-typedef CGAL::Surface_mesh<Point3> SurfaceMesh;
-typedef boost::graph_traits<SurfaceMesh>::vertex_descriptor VertexDescriptor;
-typedef boost::graph_traits<SurfaceMesh>::edge_descriptor EdgeDescriptor;
-typedef boost::graph_traits<SurfaceMesh>::face_descriptor FaceDescriptor;
+using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
+using Point3 = Kernel::Point_3;
+using SurfaceMesh = CGAL::Surface_mesh<Point3>;
+
+using VertexIndex = SurfaceMesh::Vertex_index;
+using EdgeIndex = SurfaceMesh::Edge_index;
+using HalfEdgeIndex = SurfaceMesh::Halfedge_index;
+using FaceIndex = SurfaceMesh::Face_index;
+
+using VertexDescriptor = boost::graph_traits<SurfaceMesh>::vertex_descriptor;
+using HalfedgeDescriptor = boost::graph_traits<SurfaceMesh>::halfedge_descriptor;
 
 Point3 glm2cgal(glm::dvec3 point) {
     return Point3(point[0], point[1], point[2]);
@@ -61,10 +65,10 @@ SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
     }
 
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        const CGAL::SM_Face_index face = cgal_mesh.add_face(
-            CGAL::SM_Vertex_index(triangle.x),
-            CGAL::SM_Vertex_index(triangle.y),
-            CGAL::SM_Vertex_index(triangle.z));
+        const FaceIndex face = cgal_mesh.add_face(
+            VertexIndex(triangle.x),
+            VertexIndex(triangle.y),
+            VertexIndex(triangle.z));
 
         REQUIRE(face != SurfaceMesh::null_face());
     }
@@ -72,29 +76,31 @@ SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 
-size_t count_connected_components(const SurfaceMesh &mesh) {
-    typedef CGAL::Unique_hash_map<FaceDescriptor, size_t> CcMap;
-    typedef boost::associative_property_map<CcMap> CcPropertyMap;
+void check_mesh_basics(const TerrainMesh &mesh) {
+    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
+    CHECK(cgal_mesh.is_valid(true));
+    CHECK(CGAL::is_triangle_mesh(cgal_mesh));
+    CHECK(CGAL::is_valid_polygon_mesh(cgal_mesh, true));
+    CHECK_FALSE(CGAL::Polygon_mesh_processing::does_self_intersect(cgal_mesh));
+}
+
+void check_no_holes(const TerrainMesh &mesh) {
+    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
+    std::vector<HalfedgeDescriptor> border_cycles;
+    CGAL::Polygon_mesh_processing::extract_boundary_cycles(cgal_mesh, std::back_inserter(border_cycles));
+    const size_t nb_holes = border_cycles.size() - 1; // outer edge is a boundary cycle
+    CHECK(nb_holes == 0);
+}
+
+size_t count_connected_components(const TerrainMesh &mesh) {
+    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
+    using CcMap = CGAL::Unique_hash_map<FaceDescriptor, size_t>;
+    using CcPropertyMap = boost::associative_property_map<CcMap>;
 
     CcMap cc_map;
     CcPropertyMap cc_pmap(cc_map);
-    const size_t num = CGAL::Polygon_mesh_processing::connected_components(mesh, cc_pmap);
+    const size_t num = CGAL::Polygon_mesh_processing::connected_components(cgal_mesh, cc_pmap);
     return num;
-}
-
-glm::dvec3 apply_transform(OGRCoordinateTransformation *transform, const glm::dvec3 &v) {
-    glm::dvec3 result(v);
-    REQUIRE(transform->Transform(1, &result.x, &result.y, &result.z));
-    return result;
-}
-
-void check_mesh_is_plane(const TerrainMesh &mesh) {
-    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
-    REQUIRE(cgal_mesh.is_valid(true));
-    REQUIRE(CGAL::is_triangle_mesh(cgal_mesh));
-    REQUIRE(CGAL::is_valid_polygon_mesh(cgal_mesh, true));
-    REQUIRE(count_connected_components(cgal_mesh) == 1);
-    REQUIRE(!CGAL::Polygon_mesh_processing::does_self_intersect(cgal_mesh));
 }
 
 void check_uvs(const TerrainMesh &mesh) {
@@ -111,157 +117,219 @@ void check_non_empty(const TerrainMesh &mesh) {
     REQUIRE(mesh.triangles.size() > 0);
 }
 
-TEST_CASE("can build reference mesh tiles", "[terrainbuilder]") {
-    const std::vector<std::tuple<std::string, std::string, radix::tile::Id>> tile_test_cases = {
-        {"tiny tile", "/austria/pizbuin_1m_epsg4326.tif", radix::tile::Id(23, glm::uvec2(4430412, 2955980), radix::tile::Scheme::SlippyMap)},
-        {"small tile", "/austria/pizbuin_1m_epsg3857.tif", radix::tile::Id(20, glm::uvec2(553801, 369497), radix::tile::Scheme::SlippyMap)},
-        {"tile on the border", "/austria/pizbuin_1m_mgi.tif", radix::tile::Id(18, glm::uvec2(138457, 169781), radix::tile::Scheme::Tms)}
-#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
-        {"tile slightly larger than dataset", "/austria/pizbuin_1m_mgi.tif", radix::tile::Id(11, glm::uvec2(1081, 721), radix::tile::Scheme::SlippyMap)},
-        {"huge tile", "/austria/pizbuin_1m_epsg3857.tif", radix::tile::Id(6, glm::uvec2(33, 41), radix::tile::Scheme::Tms)},
-        {"giant tile", "/austria/at_mgi.tif", radix::tile::Id(1, glm::uvec2(1, 0), radix::tile::Scheme::SlippyMap)},
-#endif
+struct DVec3Hash {
+    std::size_t operator()(const glm::dvec3 &v) const {
+        std::size_t h1 = std::hash<double>{}(v.x);
+        std::size_t h2 = std::hash<double>{}(v.y);
+        std::size_t h3 = std::hash<double>{}(v.z);
+        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+};
+
+struct DVec3Equal {
+    bool operator()(const glm::dvec3 &a, const glm::dvec3 &b) const {
+        return glm::all(glm::epsilonEqual(a, b, 1e-8));
+    }
+};
+
+void check_duplicate_vertices(const std::vector<glm::dvec3> &positions) {
+    std::unordered_set<glm::dvec3, DVec3Hash, DVec3Equal> seen;
+    for (const auto &pos : positions) {
+        REQUIRE(seen.insert(pos).second);
+    }
+}
+/*
+void check_duplicate_vertices(const std::vector<glm::dvec3> &positions, double epsilon=1e-8) {
+    for (size_t i = 0; i < positions.size(); i++) {
+        for (size_t j = i + 1; j < positions.size(); j++) {
+            REQUIRE(glm::distance(positions[i], positions[j]) > epsilon);
+        }
+    }
+}
+*/
+
+void check_duplicate_triangles(std::vector<glm::uvec3> triangles) {
+    const auto duplicate_triangles = find_duplicate_triangles(triangles, true);
+    CHECK(duplicate_triangles == triangles.end());
+}
+
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> bounds_around_point(const glm::vec<n_dims, T> centre, const T margin) {
+    radix::geometry::Aabb<n_dims, T> bounds;
+    bounds.min = centre - glm::vec<n_dims, T>(margin);
+    bounds.max = centre + glm::vec<n_dims, T>(margin);
+    return bounds;
+}
+
+radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
+    const double infinity = std::numeric_limits<double>::infinity();
+    const glm::dvec3 min(bounds2d.min, -infinity);
+    const glm::dvec3 max(bounds2d.max, infinity);
+    return radix::geometry::Aabb3d(min, max);
+}
+
+TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuilder]") {
+    struct TestData {
+        std::string path_suffix;
+        radix::geometry::Aabb3d target_bounds;
+        OGRSpatialReference target_srs;
+        OGRSpatialReference mesh_srs;
+        double resolution; // in m
     };
 
-    
+    const auto mgi_srs = srs::mgi();
+    const auto ecef_srs = srs::ecef();
+    const auto wgs84_srs = srs::wgs84();
+    const auto webmercator_srs = srs::webmercator();
 
-    const ctb::Grid grid = ctb::GlobalMercator();
-    std::vector<std::tuple<std::string, std::string, radix::tile::SrsBounds>> test_cases = {
-        {"custom bounds", "/austria/pizbuin_1m_epsg4326.tif", radix::tile::SrsBounds(glm::dvec2(1127962, 5915858), glm::dvec2(1127966, 5915882))}};
-    for (const auto &test : tile_test_cases) {
-        const auto [test_name, dataset_suffix, target_tile] = test;
-        const radix::tile::SrsBounds tile_bounds = grid.srsBounds(target_tile, false);
-        test_cases.push_back({test_name, dataset_suffix, tile_bounds});
-    }
+    const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
+    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const glm::dvec3 steffl_wgs84(16.3735655, 48.2083264, 204);
+    const glm::dvec3 steffl_ecef = srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84);
 
-    for (const auto &test : test_cases) {
-        const auto [test_name, dataset_suffix, target_bounds] = test;
+    const std::vector<TestData> test_data{
+        {"/austria/pizbuin_1m_epsg4326.tif",
+         extend_bounds_to_3d(bounds_around_point(glm::dvec2(pizbuin_summit_wgs84), 0.0001)),
+         wgs84_srs,
+         wgs84_srs,
+         1},
+        {"/austria/pizbuin_1m_mgi.tif",
+         bounds_around_point(pizbuin_summit_ecef, 50 * 1.),
+         ecef_srs,
+         ecef_srs,
+         1},
+        {"/austria/vienna_20m_mgi.tif",
+         bounds_around_point(steffl_ecef, 50 * 20.),
+         ecef_srs,
+         ecef_srs,
+         20},
+        {"/austria/at_100m_mgi.tif",
+         bounds_around_point(steffl_ecef, 50 * 100.),
+         ecef_srs,
+         ecef_srs,
+         100}};
 
-        DYNAMIC_SECTION(test_name) {
-            const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
-            Dataset dataset(dataset_path);
+    for (const auto &data : test_data) {
+        DYNAMIC_SECTION(data.path_suffix) {
+            Dataset dataset(std::filesystem::path(ATB_TEST_DATA_DIR).concat(data.path_suffix));
+            const auto source_srs = dataset.srs();
+            const auto &mesh_srs = data.mesh_srs;
+            const auto &target_srs = data.target_srs;
+            const auto &target_bounds = data.target_bounds;
+            const auto resolution = data.resolution;
 
-            OGRSpatialReference webmercator_srs;
-            webmercator_srs.importFromEPSG(3857);
-            webmercator_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-            OGRSpatialReference ecef_srs;
-            ecef_srs.importFromEPSG(4978);
-            ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-            radix::tile::SrsBounds output_tile_bounds;
-            radix::tile::SrsBounds output_texture_bounds;
-
-            output_tile_bounds = target_bounds;
-            output_texture_bounds = target_bounds;
-            const TerrainMesh mesh = terrainbuilder::mesh::build_reference_mesh_tile(
-                                         dataset,
-                                         ecef_srs,
-                                         grid.getSRS(), output_tile_bounds,
-                                         webmercator_srs, output_texture_bounds,
-                                         terrainbuilder::Border(0),
-                                         false)
-                                         .value();
-
-            check_non_empty(mesh);
-            check_uvs(mesh);
-            check_mesh_is_plane(mesh);
-
-            // check all vertices inside bounds
-            const std::unique_ptr<OGRCoordinateTransformation> transform_ecef_webmercator = srs::transformation(ecef_srs, webmercator_srs);
-            for (const glm::dvec3 ecef_position : mesh.positions) {
-                const glm::dvec3 webmercator_position = apply_transform(transform_ecef_webmercator.get(), ecef_position);
-                REQUIRE(target_bounds.contains_inclusive(webmercator_position));
-            }
-
-            // TODO: also test inclusive bounds (but this requires reconstructing the quads of the mesh)
-        }
-    }
-}
-
-TEST_CASE("neighbouring tiles fit together", "[terrainbuilder]") {
-    const ctb::Grid grid = ctb::GlobalMercator();
-    const std::string dataset_suffix = "/austria/pizbuin_1m_epsg3857.tif";
-    const std::array<radix::tile::Id, 4> tiles = radix::tile::Id(20, glm::uvec2(553801, 369497), radix::tile::Scheme::SlippyMap).children();
-
-    std::vector<TerrainMesh> tile_meshes;
-    for (const radix::tile::Id &tile : tiles) {
-        const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
-        DYNAMIC_SECTION(tile) {
-            const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
-            Dataset dataset(dataset_path);
-
-            OGRSpatialReference webmercator_srs;
-            webmercator_srs.importFromEPSG(3857);
-            webmercator_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-            OGRSpatialReference ecef_srs;
-            ecef_srs.importFromEPSG(4978);
-            ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-            radix::tile::SrsBounds output_tile_bounds;
-            radix::tile::SrsBounds output_texture_bounds;
-
-            output_tile_bounds = tile_bounds;
-            output_texture_bounds = tile_bounds;
-            const TerrainMesh mesh = terrainbuilder::mesh::build_reference_mesh_tile(
+            radix::tile::SrsBounds texture_bounds;
+            const auto result = terrainbuilder::mesh::build_reference_mesh_patch(
                 dataset,
-                ecef_srs,
-                grid.getSRS(), output_tile_bounds,
-                webmercator_srs, output_texture_bounds,
-                terrainbuilder::Border(0, 1, 1, 0),
-                true).value();
+                mesh_srs,
+                target_srs, target_bounds,
+                source_srs, texture_bounds);
+            if (!result) {
+                FAIL("Failed to build mesh: " << result.error());
+            }
+            const TerrainMesh mesh = result.value();
 
-            tile_meshes.push_back(mesh);
-        }
-    }
+            SECTION("Basic mesh properties") {
+                check_non_empty(mesh);
+                check_uvs(mesh);
+                check_duplicate_vertices(mesh.positions);
+                check_duplicate_triangles(mesh.triangles);
+                check_mesh_basics(mesh);
+            }
 
-    const TerrainMesh merged_mesh = merge::merge_meshes(tile_meshes, 0.1);
-    check_non_empty(merged_mesh);
-    check_mesh_is_plane(merged_mesh);
-}
+            const std::vector<glm::dvec3> positions_in_target_srs = srs::transform_points(mesh_srs, target_srs, mesh.positions);
+            SECTION("Vertices within target bounds") {
+                for (const auto &position : positions_in_target_srs) {
+                    REQUIRE(radix::geometry::Aabb2d(target_bounds).contains_inclusive(glm::dvec2(position)));
+                    REQUIRE(target_bounds.contains_inclusive(position));
+                }
+            }
 
-TEST_CASE("neighbouring tiles fit together repeatedly", "[terrainbuilder]") {
-    const ctb::Grid grid = ctb::GlobalMercator();
-    const std::string dataset_suffix = "/austria/innenstadt_gs_1m_mgi.tif";
+            SECTION("Some vertices on bounds (clipping check)") {
+                std::vector<glm::dvec3> vertices_on_bounds;
+                for (const glm::dvec3 position : positions_in_target_srs) {
+                    if (!target_bounds.contains_exclusive(position)) {
+                        vertices_on_bounds.push_back(position);
+                    }
+                }
+                CHECK(vertices_on_bounds.size() > 10);
+            }
 
-    const radix::tile::Id root_tile_id(16, glm::uvec2(35748, 22724), radix::tile::Scheme::SlippyMap);
-    std::vector<TerrainMesh> child_meshes;
-    for (const radix::tile::Id child_tile_id : root_tile_id.children()) {
-        std::vector<TerrainMesh> grand_child_meshes;
-        for (const radix::tile::Id grand_child_tile_id : child_tile_id.children()) {
-            const radix::tile::SrsBounds grand_child_tile_bounds = grid.srsBounds(grand_child_tile_id, false);
-            DYNAMIC_SECTION(grand_child_tile_id) {
-                const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
-                Dataset dataset(dataset_path);
+            SECTION("Matches dataset resolution") {
+                const auto positions_in_source_srs = srs::transform_points(mesh_srs, source_srs, mesh.positions);
+                auto flat_positions_in_source_srs = positions_in_source_srs;
+                for (auto &pos : flat_positions_in_source_srs) {
+                    pos.z = 0.0;
+                }
+                const auto flat_positions_in_ecef_srs = srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs);
 
-                OGRSpatialReference webmercator_srs;
-                webmercator_srs.importFromEPSG(3857);
-                webmercator_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-                OGRSpatialReference ecef_srs;
-                ecef_srs.importFromEPSG(4978);
-                ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+                const auto target_bounds_2d = radix::geometry::Aabb2d(target_bounds);
+                const auto padding = target_bounds_2d.size() * 0.1;
+                const auto inner_min = target_bounds_2d.min + padding;
+                const auto inner_max = target_bounds_2d.max - padding;
+                const radix::geometry::Aabb2d inner_bounds_2d{inner_min, inner_max};
 
-                radix::tile::SrsBounds output_tile_bounds;
-                radix::tile::SrsBounds output_texture_bounds;
+                std::vector<glm::uvec3> filtered_triangles;
+                for (const auto &tri : mesh.triangles) {
+                    const glm::dvec3 &a = positions_in_target_srs[tri.x];
+                    const glm::dvec3 &b = positions_in_target_srs[tri.y];
+                    const glm::dvec3 &c = positions_in_target_srs[tri.z];
+                    if (inner_bounds_2d.contains_inclusive(a) &&
+                        inner_bounds_2d.contains_inclusive(b) &&
+                        inner_bounds_2d.contains_inclusive(c)) {
+                        filtered_triangles.push_back(tri);
+                    }
+                }
+                TerrainMesh inside_flat_mesh;
+                inside_flat_mesh.positions = flat_positions_in_ecef_srs;
+                inside_flat_mesh.triangles = filtered_triangles;
 
-                output_tile_bounds = grand_child_tile_bounds;
-                output_texture_bounds = grand_child_tile_bounds;
-                const TerrainMesh grand_child_mesh = terrainbuilder::mesh::build_reference_mesh_tile(
-                    dataset,
-                    ecef_srs,
-                    grid.getSRS(), output_tile_bounds,
-                    webmercator_srs, output_texture_bounds,
-                    terrainbuilder::Border(0, 1, 1, 0),
-                    true).value();
-
-                grand_child_meshes.push_back(grand_child_mesh);
+                const auto avg_edge_length = estimate_average_edge_length(inside_flat_mesh);
+                REQUIRE(avg_edge_length.has_value());
+                const auto expected_avg_edge_length = ((1 + 1 + std::sqrt(3)) / 3) * resolution;
+                CHECK(avg_edge_length.value() == Catch::Approx(expected_avg_edge_length).margin(expected_avg_edge_length * 0.2));
             }
         }
-
-        const TerrainMesh child_mesh = merge::merge_meshes(grand_child_meshes, 0.1);
-        child_meshes.push_back(child_mesh);
     }
+}
 
-    const TerrainMesh mesh = merge::merge_meshes(child_meshes, 0.1);
-    check_non_empty(mesh);
-    check_mesh_is_plane(mesh);
+TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
+    const auto mgi_srs = srs::mgi();
+    const auto ecef_srs = srs::ecef();
+    const auto wgs84_srs = srs::wgs84();
+    const auto webmercator_srs = srs::webmercator();
+
+    const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
+    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const octree::Space space = octree::Space::earth();
+    const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 17).value();
+    std::vector<octree::Id> nodes = summit_node.neighbours();
+    nodes.push_back(summit_node);
+
+    const std::string dataset_suffix = "/austria/pizbuin_1m_mgi.tif";
+    const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
+    Dataset dataset(dataset_path);
+
+    std::vector<TerrainMesh> node_meshes;
+    for (const octree::Id &node : nodes) {
+        const octree::Bounds node_bounds = space.get_node_bounds(node);
+        radix::tile::SrsBounds output_texture_bounds;
+        const auto result = terrainbuilder::mesh::build_reference_mesh_patch(
+            dataset,
+            ecef_srs,
+            ecef_srs, node_bounds,
+            webmercator_srs, output_texture_bounds);
+        if (!result.has_value()) {
+            continue;
+        }
+        const TerrainMesh mesh = result.value();
+        node_meshes.push_back(mesh);
+    }
+    CHECK(node_meshes.size() >= 3);
+
+    const TerrainMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-6);
+    check_mesh_basics(merged_mesh);
+    check_non_empty(merged_mesh);
+    check_no_holes(merged_mesh);
+    CHECK(count_connected_components(merged_mesh) == 1);
 }

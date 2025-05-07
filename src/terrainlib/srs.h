@@ -295,6 +295,12 @@ inline OGRSpatialReference from_epsg(uint32_t epsg) {
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }
+inline OGRSpatialReference from_user_input(const std::string& user_input) {
+    OGRSpatialReference srs;
+    srs.SetFromUserInput(user_input.c_str());
+    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    return srs;
+}
 inline OGRSpatialReference ecef() {
     return from_epsg(4978);
 }

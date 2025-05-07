@@ -84,11 +84,9 @@ add_executable(unittests_terrainbuilder
     catch2_helpers.h
     terrainbuilder/octree_id.cpp
     terrainbuilder/octree_space.cpp
-    terrainbuilder/mesh2.cpp
-    # TODO:
-    # terrainbuilder/mesh_io.cpp
-    # terrainbuilder/mesh.cpp
-    # terrainbuilder/texture.cpp
+    terrainbuilder/mesh.cpp
+    terrainbuilder/mesh_io.cpp
+    terrainbuilder/texture.cpp
 )
 
 target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2WithMain CGAL::CGAL)

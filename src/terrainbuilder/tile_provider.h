@@ -4,7 +4,6 @@
 #include <filesystem>
 #include <optional>
 
-#include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/tile.h>
 

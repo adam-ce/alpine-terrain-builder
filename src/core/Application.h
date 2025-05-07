@@ -5,13 +5,16 @@
 
 #include <string>
 #include <memory>
-#include "Window.h"
+#include "window/Window.h"
+#include "Camera.h"
+#include "shader/Uniform.h"
 
 class Application {
 public:
   Application(std::string title, int width, int height);
 
   void run();
+  void update_camera(float frame_delta_time, Uniform<glm::mat4> U_view);
 
   ~Application();
 
@@ -20,6 +23,13 @@ private:
   int m_width, m_height;
 
   std::unique_ptr<Window> m_window;
+  std::unique_ptr<Camera> m_camera;
+
+  float m_movement_speed, m_roll_speed, m_mouse_sensitivity;
+
+  bool m_nav_mode;
+
+  void toggle_nav_mode();
 
   void init_glad();
   void init_gl();

@@ -61,6 +61,11 @@ void ShaderProgram::link() {
 		m_uniform_locations.insert(std::make_pair(name.substr(0, length), location));
 		LOG_DEBUG("Uniform #{} Name: {}", i, name.substr(0, length));
 	}
+
+	// load all attribute locations
+
+	GLint attribute_count;
+	glGetProgramiv(m_handle, GL_ACTIVE_ATTRIBUTES, &attribute_count);
 }
 
 GLuint ShaderProgram::handle() {

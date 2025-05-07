@@ -9,38 +9,71 @@ Camera::Camera(CameraConfig config) :
 	m_position(config.position),
 	m_up(glm::normalize(config.up)){
 	
-	glm::vec3 forward = glm::normalize(config.target - m_position);
+	glm::dvec3 forward = glm::normalize(config.target - m_position);
 	m_rotation = glm::quatLookAt(forward, m_up);
 
 	update_projection_matrix();
 	update_view_matrix();
 }
 
-void Camera::rotate(glm::vec3 euler_radians_delta) {
+void Camera::rotate(double delta_yaw, double delta_pitch, double delta_roll) {
 	m_view_matrix_cache.reset();
 
-	glm::vec3 euler_rot = glm::eulerAngles(m_rotation);
-	glm::vec3 new_euler_rot = euler_rot + euler_radians_delta;
+	glm::dquat pitch = glm::angleAxis(delta_pitch, get_local_right_dir());
+	glm::dquat yaw = glm::angleAxis(delta_yaw, get_local_up_dir());
+	glm::dquat roll = glm::angleAxis(delta_roll, get_local_forward_dir());
 
-	new_euler_rot.x = glm::mod(new_euler_rot.x, glm::two_pi<float>());
-	new_euler_rot.y = glm::mod(new_euler_rot.y, glm::two_pi<float>());
-	new_euler_rot.z = glm::mod(new_euler_rot.z, glm::two_pi<float>());
+	glm::dquat rotation = yaw * pitch * roll;
 
-	LOG_DEBUG("{} / {} / {} => {} / {} / {}", euler_rot.x, euler_rot.y, euler_rot.z, new_euler_rot.x, new_euler_rot.y, new_euler_rot.z);
-
-	m_rotation = glm::quat(new_euler_rot);
+	m_rotation = rotation * m_rotation;
 }
 
-void Camera::move_local(glm::vec3 local_movement_delta) {
+void Camera::move_local(glm::dvec3 local_movement_delta) {
 	m_view_matrix_cache.reset();
 
-	glm::vec3 right_dir = local_movement_delta.x * glm::normalize(m_rotation * glm::vec3(1.0f, 0.0f, 0.0f));
-	glm::vec3 up_dir = local_movement_delta.y * glm::normalize(m_rotation * m_up);
-	glm::vec3 forward_dir = local_movement_delta.z * glm::normalize(m_rotation * glm::vec3(0.0f, 0.0f, -1.0f));
-
-	auto copy = glm::vec3(m_position);
+	glm::dvec3 right_dir = local_movement_delta.x * get_local_right_dir();
+	glm::dvec3 up_dir = local_movement_delta.y * get_local_up_dir();
+	glm::dvec3 forward_dir = local_movement_delta.z * get_local_forward_dir();
 
 	m_position += right_dir + up_dir + forward_dir;
+}
+
+void Camera::set_near(float near) {
+	LOG_TRACE("SETTING NEAR: {}", near);
+	m_projection_matrix_cache.reset();
+
+	m_near_plane = near;
+}
+
+void Camera::set_far(float far) {
+	LOG_TRACE("SETTING FAR: {}", far);
+	m_projection_matrix_cache.reset();
+
+	m_far_plane = far;
+}
+
+float Camera::get_near() {
+	return m_near_plane;
+}
+
+float Camera::get_far() {
+	return m_far_plane;
+}
+
+glm::dvec3 Camera::get_position() {
+	return m_position;
+}
+
+glm::dvec3 Camera::get_local_right_dir() {
+	return glm::normalize(m_rotation * glm::dvec3(1.0f, 0.0f, 0.0f));
+}
+
+glm::dvec3 Camera::get_local_up_dir() {
+	return glm::normalize(m_rotation * m_up);
+}
+
+glm::dvec3 Camera::get_local_forward_dir() {
+	return glm::normalize(m_rotation * glm::dvec3(0.0f, 0.0f, -1.0f));
 }
 
 bool Camera::is_view_matrix_outdated() {
@@ -66,7 +99,7 @@ glm::mat4 Camera::view_matrix() {
 void Camera::update_view_matrix() {
 	if (!m_view_matrix_cache.has_value()) {
 		glm::mat4 rotation = glm::mat4_cast(m_rotation);
-		glm::mat4 translation = glm::translate(glm::mat4(1.0f), m_position);
+		glm::mat4 translation = glm::translate(glm::dmat4(1.0f), m_position); //TODO: Use camera re-centering to mitigate precision losses at large values
 		m_view_matrix_cache.emplace(glm::inverse(translation * rotation));
 	}
 }

@@ -4,51 +4,67 @@
 std::atomic<bool> Window::glfw_initialized(false);
 std::atomic<size_t> Window::window_instances(0);
 
-Window::Window(WindowConfig config) : m_width(config.width), m_height(config.height), m_title(config.title) {
+Window::Window(WindowConfig config) : m_width(config.width), m_height(config.height), m_title(config.title), m_msaa_samples(config.msaa_samples) {
     update_window_count(1);
 
     const auto [gl_major_version, gl_minor_version] = config.opengl_version;
 
-    LOG_GL_INFO("Creating window with context: OpenGL {}.{}{}", gl_major_version, gl_minor_version, config.opengl_core_profile ? " CORE" : "");
+    LOG_GL_INFO("Creating window \"{}\" with context: OpenGL {}.{}{}", m_title, gl_major_version, gl_minor_version, config.opengl_core_profile ? " CORE" : "");
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, gl_major_version);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, gl_minor_version);
     glfwWindowHint(GLFW_OPENGL_PROFILE, config.opengl_core_profile ? GLFW_OPENGL_CORE_PROFILE : GLFW_OPENGL_ANY_PROFILE);
     glfwWindowHint(GLFW_RESIZABLE, config.resizeable ? GLFW_TRUE : GLFW_FALSE);
+    glfwWindowHint(GLFW_SAMPLES, config.msaa_samples);
 
 #ifdef _DEBUG
     // enable debug mode
     LOG_GL_DEBUG("Setting OpenGL Debug Context");
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
     glfwWindowHint(GLFW_CONTEXT_NO_ERROR, GLFW_FALSE);
-    // doesnt work: glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 #endif // _DEBUG
 
-    m_window = glfwCreateWindow(m_width, m_height, m_title.c_str(), NULL, NULL);
-    if (m_window == NULL) {
+    m_handle = glfwCreateWindow(m_width, m_height, m_title.c_str(), NULL, NULL);
+    if (m_handle == NULL) {
         update_window_count(-1);
         LOG_GL_FATAL_AND_EXIT("Failed to create GLFW window");
     }
-    glfwMakeContextCurrent(m_window);
+    glfwMakeContextCurrent(m_handle);
 
     // Set the required callback functions
-    glfwSetKeyCallback(m_window, key_callback);
-    glfwSetMouseButtonCallback(m_window, mouse_button_callback);
-    glfwSetCursorPosCallback(m_window, cursor_position_callback);
+    glfwSetKeyCallback(m_handle, key_callback);
+    glfwSetMouseButtonCallback(m_handle, mouse_button_callback);
+    glfwSetCursorPosCallback(m_handle, cursor_position_callback);
+    glfwSetScrollCallback(m_handle, scroll_callback);
+
+    // Initialize current and last cursor positions
+    glfwGetCursorPos(m_handle, &m_current_unfetched_cursor_pos.x, &m_current_unfetched_cursor_pos.y);
+    clear_accumulated_cursor_delta();
+
+    m_min_dimension = glm::min(m_width, m_height);
+    m_max_dimension = glm::max(m_width, m_height);
 
     // Link a pointer to this class with the window handle, to be able to access this class from the callbacks
-    glfwSetWindowUserPointer(m_window, (void*)this);
+    glfwSetWindowUserPointer(m_handle, (void*)this);
 }
 
 Window::~Window() {
     LOG_GL_INFO("Destroying Window \"{}\"", m_title);
-    glfwDestroyWindow(m_window);
+    glfwDestroyWindow(m_handle);
 
     update_window_count(-1);
 }
 
 bool Window::should_close() {
-    return glfwWindowShouldClose(m_window);
+    return glfwWindowShouldClose(m_handle);
+}
+
+void Window::set_should_close(bool should_close) {
+    glfwSetWindowShouldClose(m_handle, should_close ? GL_TRUE : GL_FALSE);
+}
+
+void Window::set_title_suffix(std::string suffix) {
+    glfwSetWindowTitle(m_handle, (m_title + suffix).c_str());
 }
 
 void Window::poll_events() {
@@ -56,20 +72,46 @@ void Window::poll_events() {
 }
 
 void Window::swapBuffers() {
-    glfwSwapBuffers(m_window);
+    glfwSwapBuffers(m_handle);
+}
+
+bool Window::is_mouse_captured() {
+    return glfwGetInputMode(m_handle, GLFW_CURSOR) == GLFW_CURSOR_DISABLED;
+}
+
+void Window::toggle_capture_mouse() {
+    if (is_mouse_captured()) {
+        set_capture_mouse(false);
+    } else {
+        set_capture_mouse(true);
+    }
 }
 
 void Window::set_capture_mouse(bool captured) {
     if (captured) {
-        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        glfwSetInputMode(m_handle, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        glfwSetInputMode(m_handle, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
     } else {
-        glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        glfwSetInputMode(m_handle, GLFW_RAW_MOUSE_MOTION, GLFW_FALSE);
+        glfwSetInputMode(m_handle, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
+}
+
+glm::dvec2 Window::get_accumulated_cursor_delta() {
+    glm::dvec2 delta = (m_current_unfetched_cursor_pos - m_last_fetched_cursor_pos) / (double)m_max_dimension;
+
+    clear_accumulated_cursor_delta();
+
+    return delta;
+}
+
+void Window::clear_accumulated_cursor_delta() {
+    m_last_fetched_cursor_pos = m_current_unfetched_cursor_pos;;
 }
 
 glm::dvec2 Window::get_cursor_position() {
     glm::dvec2 cursor_position;
-    glfwGetCursorPos(m_window, &cursor_position.x, &cursor_position.y);
+    glfwGetCursorPos(m_handle, &cursor_position.x, &cursor_position.y);
     return cursor_position;
 }
 
@@ -97,6 +139,20 @@ bool Window::is_mouse_button_pressed(int button) {
     return result->second;
 }
 
+void Window::register_key_event(int action, int key, std::function<void()> callback) {
+    m_key_callbacks.try_emplace({ action, key }, std::vector<std::function<void()>>(0));
+
+    auto callbacks = m_key_callbacks.find({ action, key });
+
+    if (callbacks != m_key_callbacks.end()) {
+        callbacks->second.push_back(callback);
+    }
+}
+
+void Window::register_scroll_event(std::function<void(glm::dvec2)> callback) {
+    m_scroll_callbacks.push_back(callback);
+}
+
 float Window::getAspectRatio() {
     return (float)m_width / (float)m_height;
 }
@@ -108,20 +164,24 @@ void Window::glfw_error_callback(int error, const char* description) {
 void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     Window* w = (Window*)glfwGetWindowUserPointer(window);
 
-    if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, GL_TRUE);
-    }
-
     if (!w->m_key_states.contains(key)) {
         w->m_key_states.emplace(key, false);
     }
 
     if (action == GLFW_PRESS) {
-        LOG_DEBUG("KEY {} PRESS", key);
         w->m_key_states[key] = true;
     } else if (action == GLFW_RELEASE) {
-        LOG_DEBUG("KEY {} RELEASE", key);
         w->m_key_states[key] = false;
+    }
+
+    w->m_key_callbacks.try_emplace({action, key}, std::vector<std::function<void()>>(0));
+
+    auto callbacks = w->m_key_callbacks.find({ action, key });
+
+    if (callbacks != w->m_key_callbacks.end()) {
+        for (auto callback : callbacks->second) {
+            callback();
+        }
     }
 }
 
@@ -142,8 +202,16 @@ void Window::mouse_button_callback(GLFWwindow* window, int button, int action, i
 void Window::cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
     Window* w = (Window*)glfwGetWindowUserPointer(window);
 
-    w->m_current_cursor_pos.x = xpos;
-    w->m_current_cursor_pos.y = ypos;
+    w->m_current_unfetched_cursor_pos.x = xpos;
+    w->m_current_unfetched_cursor_pos.y = ypos;
+}
+
+void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    Window* w = (Window*)glfwGetWindowUserPointer(window);
+
+    for (auto callback : w->m_scroll_callbacks) {
+        callback(glm::dvec2(xoffset, yoffset));
+    }
 }
 
 void Window::update_window_count(int delta) {

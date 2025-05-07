@@ -12,7 +12,7 @@ cmrc_add_resource_library(
     NAMESPACE res
 
 # ADD NEW RESOURCES AFTER HERE
-    shaders/basic.vert
-    shaders/basic.frag
+    shaders/octree_lines.vert
+    shaders/octree_lines.frag
     # shaders/select.csh
 )

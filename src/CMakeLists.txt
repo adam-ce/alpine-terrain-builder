@@ -79,18 +79,35 @@ if(NOT TARGET spdlog)
     FetchContent_MakeAvailable(spdlog)
 endif()
 
+if(NOT TARGET radix)
+    FetchContent_Declare(radix
+        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
+        GIT_TAG origin/main
+        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
+        SOURCE_SUBDIR src
+    )
+    message(STATUS "Including radix")
+    FetchContent_MakeAvailable(radix)
+endif()
+
 add_executable(alpenite-browser
     main.cpp
 
     core/Application.cpp
-    core/Window.cpp
-    core/Shader.cpp
-    core/ShaderProgram.cpp
+    core/window/Window.cpp
+    core/shader/Shader.cpp
+    core/shader/ShaderProgram.cpp
+    core/shader/Uniform.h
+    core/shader/GLUniformAbstractions.h
     core/Buffer.cpp
     core/Camera.cpp
 
     utils/log/Log.cpp
 
+    core/geometry/UnitCube.h
+
+    core/octree/id.h
+    core/octree/space.h
 )
-target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog)
+target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog radix)
 target_include_directories(alpenite-browser PRIVATE .)

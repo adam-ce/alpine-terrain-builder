@@ -43,7 +43,7 @@ public:
 
         Id current_smallest_encompassing_node = root;
         while (true) {
-            const std::array<Id, 8> children = current_smallest_encompassing_node.children();
+            const std::array<Id, 8> children = current_smallest_encompassing_node.children().value();
             std::optional<Id> next_smallest;
 
             for (const auto &child : children) {
@@ -73,14 +73,18 @@ public:
     }
     
     std::optional<Id> find_node_at_level_containing_point(const glm::dvec3& point, const uint32_t target_level, const Id root = Id::root()) const {
+        assert(target_level <= Id::max_level());
+
         Id current = root;
         const Bounds root_bounds = this->get_node_bounds(current);
         if (!root_bounds.contains_exclusive(point)) {
             return std::nullopt;
         }
 
+        // TODO: this could be much more efficient
         while (current.level() < target_level) {
-            for (const auto& child : current.children()) {
+            const auto children = current.children().value();
+            for (const auto& child : children) {
                 const Bounds child_bounds = this->get_node_bounds(child);
                 if (child_bounds.contains_exclusive(point)) {
                     current = child;

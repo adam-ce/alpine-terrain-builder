@@ -13,7 +13,7 @@ using Node = TerrainMesh;
 
 class Storage {
     public:
-        Storage(const std::filesystem::path &basePath) : base_path(basePath) {}
+        Storage(const std::filesystem::path &base_path) : base_path(base_path) {}
 
         std::optional<Node> load_node(const Id &id) const {
             const auto node_path = this->get_node_path(id);

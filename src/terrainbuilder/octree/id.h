@@ -20,20 +20,20 @@ public:
     [[nodiscard]] static constexpr Level max_level() {
         return (sizeof(Index) * 8) / 3;
     }
-    [[nodiscard]] static constexpr Coord max_coord_on_level(Level level) {
+    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
         return (1ull << level) - 1;
     }
-    [[nodiscard]] static constexpr Index max_index_on_level(Level level) {
+    [[nodiscard]] static constexpr Index max_index_on_level(const Level level) {
         return (1ull << (3 * level)) - 1;
     }
 
-    constexpr Id(Level level, Coords coords)
+    constexpr Id(const Level level, const Coords coords)
         : Id(level, interleave3(coords)) {
     }
-    constexpr Id(Level level, Index index)
+    constexpr Id(const Level level, const Index index)
         : _level(level), _index(index) {
-        assert(this->_level <= Id::max_level());
-        assert(this->_index <= Id::max_index_on_level(this->_level));
+        assert(level <= Id::max_level());
+        assert(index <= Id::max_index_on_level(this->_level));
     }
 
     [[nodiscard]] constexpr Level level() const {
@@ -95,19 +95,27 @@ public:
         return Id(this->level() - 1, parent_coords);
     }
 
-    // TODO: make this return std::optional and check against max level?
-    [[nodiscard]] constexpr Id child(uint32_t child_index) const {
+    [[nodiscard]] constexpr std::optional<Id> child(uint32_t child_index) const {
         if (child_index > 7) {
             throw std::invalid_argument("Invalid child index (must be 0-7)");
         }
-        return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
+        if (!this->has_children()) {
+            return std::nullopt;
+        }
+        return this->_child(child_index);
     }
 
-    [[nodiscard]] constexpr std::array<Id, 8> children() const {
-        return {
-            this->child(0), this->child(1), this->child(2), this->child(3), 
-            this->child(4), this->child(5), this->child(6), this->child(7)
-        };
+    [[nodiscard]] constexpr std::optional<std::array<Id, 8>> children() const {
+        if (!this->has_children()) {
+            return std::nullopt;
+        }
+        return std::array<Id, 8>{
+            this->_child(0), this->_child(1), this->_child(2), this->_child(3),
+            this->_child(4), this->_child(5), this->_child(6), this->_child(7)};
+    }
+
+    [[nodiscard]] constexpr bool has_children() const {
+        return this->level() < Id::max_level();
     }
 
     [[nodiscard]] constexpr bool is_root() const {
@@ -125,6 +133,11 @@ public:
 private:
     Level _level;
     Index _index;
+
+    [[nodiscard]] constexpr Id _child(const uint32_t child_index) const {
+        assert(child_index <= 7);
+        return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
+    }
 
     [[nodiscard]] static constexpr Index interleave3(const Coords &coords) {
         assert(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));

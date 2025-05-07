@@ -53,7 +53,7 @@ TEST_CASE("Id parent returns correct parent", "[octree::Id]") {
 
 TEST_CASE("Id child returns correct child", "[octree::Id]") {
     Id parent(1, glm::uvec3(1, 1, 1));
-    Id child = parent.child(5);
+    Id child = parent.child(5).value();
     CHECK(child.level() == 2);
     CHECK((child.index_on_level() >> 3) == parent.index_on_level());
     CHECK((child.index_on_level() & 7) == 5);

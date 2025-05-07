@@ -14,6 +14,7 @@
 #include "srs.h"
 
 using namespace std::literals;
+using namespace radix;
 
 static unsigned verbosity = 1;
 

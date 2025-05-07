@@ -17,13 +17,17 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include "Dataset.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/types.hpp"
 #include "srs.h"
+
+using namespace radix;
+using Catch::Approx;
 
 void checkBounds(const tile::SrsBounds& a, const tile::SrsBounds& b)
 {
@@ -118,8 +122,8 @@ TEST_CASE("bbox width pixels")
 
     REQUIRE(d_mgi.widthInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(620.0));
     REQUIRE(d_mgi.heightInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(350.0));
-    REQUIRE(d_mgi.widthInPixels(srs::nonExactBoundsTransform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(620.0));
-    REQUIRE(d_mgi.heightInPixels(srs::nonExactBoundsTransform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
+    REQUIRE(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(620.0));
+    REQUIRE(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
 
     auto adjust_bounds = [](auto bounds) {
         const auto unadjusted_width = bounds.width();
@@ -132,7 +136,7 @@ TEST_CASE("bbox width pixels")
     REQUIRE(d_wgs84.widthInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(620.0 * 0.7));
     REQUIRE(d_wgs84.heightInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(350.0 * 0.5));
 
-    const auto webmercator_bounds = srs::nonExactBoundsTransform(d_wgs84.bounds(), d_wgs84.srs(), webmercator);
+    const auto webmercator_bounds = srs::non_exact_bounds_transform(d_wgs84.bounds(), d_wgs84.srs(), webmercator);
     REQUIRE(d_wgs84.widthInPixels(webmercator_bounds, webmercator) == Approx(620.0));
     REQUIRE(d_wgs84.heightInPixels(webmercator_bounds, webmercator) == Approx(350.0));
 

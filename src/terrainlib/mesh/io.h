@@ -1,5 +1,4 @@
-#ifndef IO_H
-#define IO_H
+#pragma once
 
 #include <filesystem>
 #include <optional>
@@ -155,5 +154,3 @@ auto serialize(auto &archive, const cv::Mat &v) {
 }
 } // namespace zpp::bits
 
-
-#endif

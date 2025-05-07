@@ -18,9 +18,7 @@
  *****************************************************************************/
 
 #define CATCH_CONFIG_MAIN
-#include <catch2/catch.hpp>
-
-#include "../catch2_helpers.h"
+#include <catch2/catch_test_macros.hpp>
 #include "merge.h"
 
 TEST_CASE("terrainmerger") {

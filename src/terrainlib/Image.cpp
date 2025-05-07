@@ -18,13 +18,13 @@
  *****************************************************************************/
 
 #include "Image.h"
-#include "tntn/gdal_init.h"
+#include "init.h"
 #include <FreeImage.h>
 #include <cstdlib>
 
 void image::saveImageAsPng(const Image<glm::u8vec3>& image, const std::string& path)
 {
-    tntn::initialize_freeimage_once();
+    initialize_freeimage_once();
 
     FIBITMAP* free_bitmap = FreeImage_Allocate(int(image.width()), int(image.height()), 24);
     // free image has line 0 at the bottom

@@ -19,12 +19,16 @@
 
 #include <filesystem>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_template_test_macros.hpp>
+#include <catch2/catch_test_macros.hpp>
 #include <fmt/core.h>
+#include <numeric>
 
 #include "Image.h"
 #include "alpine_raster.h"
 #include "ctb/Grid.hpp"
+
+using namespace radix;
 
 tile::Border testTypeValue2Border(bool v)
 {

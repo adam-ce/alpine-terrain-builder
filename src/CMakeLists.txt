@@ -5,139 +5,53 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 
-option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-find_package(GDAL REQUIRED)
+include(../cmake/SetupGDAL.cmake)
+alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
+
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(CGAL REQUIRED)
-find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(CURL REQUIRED)
 
-if(NOT GDAL_CONFIG)
-    message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
-endif()
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
+alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
 
-execute_process(
-    COMMAND ${GDAL_CONFIG} --version
-    OUTPUT_VARIABLE SYSTEM_GDAL_VERSION
-)
+alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
+add_library(Eigen3 INTERFACE)
+target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
 
-if(SYSTEM_GDAL_VERSION VERSION_LESS "3.3")
-    message(FATAL_ERROR "GDAL version \"${SYSTEM_GDAL_VERSION}\" is too old, at least 3.2 is required")
-endif()
+include(../cmake/SetupCGAL.cmake)
+alp_setup_cgal("v6.0.1")
 
-include(FetchContent)
+alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
+add_library(cgltf INTERFACE)
+target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
 
-if(NOT TARGET fmt::fmt)
-    FetchContent_Declare(fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt
-        GIT_TAG 10.2.1
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
-    )
-    FetchContent_MakeAvailable(fmt)
-endif()
+set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
+alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 4fea26f6c8652f545560807bccc934cf0cdd86dd)
 
-if(ALP_AUTOUPDATE_RADIX)
-    FetchContent_Declare(radix
-        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG d01b84248e21e4754e028492bf70519e3416c86
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        SOURCE_SUBDIR src
-    )
-    FetchContent_MakeAvailable(radix)
-else()
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
-        FetchContent_Declare(radix
-            GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-            GIT_TAG 7ace0d0cab1a6166c196bba5d0f11bbf07381abd
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        )
-        FetchContent_MakeAvailable(radix)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/radix ${CMAKE_BINARY_DIR}/_deps/radix-build)
-    endif()
-endif()
+alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
 
-if(NOT TARGET cgltf)
-    FetchContent_Declare(cgltf
-        GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
-        GIT_TAG 7331a5adf4b0fde15f0e682a5803e4f17137e0ad
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
-    )
-    FetchContent_MakeAvailable(cgltf)
-    add_library(cgltf INTERFACE)
-    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
-endif()
+alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
+add_library(tl_expected INTERFACE)
+target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
 
-if(NOT TARGET tinygltf)
-    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
-    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
-    FetchContent_Declare(tinygltf
-        GIT_REPOSITORY https://github.com/syoyo/tinygltf
-        GIT_TAG 4fea26f6c8652f545560807bccc934cf0cdd86dd
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
-    )
-    FetchContent_MakeAvailable(tinygltf)
-endif()
+set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
+alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
-if(NOT TARGET stb)
-    FetchContent_Declare(stb
-        GIT_REPOSITORY https://github.com/nothings/stb
-        GIT_TAG f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
-    )
-    FetchContent_MakeAvailable(stb)
-    add_library(stb INTERFACE)
-    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
-endif()
+alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
+add_library(zpp_bits INTERFACE)
+target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
-if(NOT TARGET cli11)
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
-        FetchContent_Declare(cli11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-            GIT_TAG 20de8b73bbbabaf2f94dd07c4ece8ff3590af531
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
-        )
-        FetchContent_MakeAvailable(cli11)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/cli11 ${CMAKE_BINARY_DIR}/_deps/cli11-build)
-    endif()
-endif()
-
-if(NOT TARGET expected)
-    FetchContent_Declare(expected
-        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-        GIT_TAG 3f0ca7b19253129700a073abfa6d8638d9f7c80c
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
-    )
-    FetchContent_MakeAvailable(expected)
-endif()
-
-if(NOT TARGET spdlog)
-    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
-    FetchContent_Declare(spdlog
-        GIT_REPOSITORY https://github.com/gabime/spdlog.git
-        GIT_TAG v1.13.0
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/spdlog
-    )
-    FetchContent_MakeAvailable(spdlog)
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
-endif()
-
-if(NOT TARGET zpp_bits)
-    FetchContent_Declare(zpp_bits
-        GIT_REPOSITORY https://github.com/eyalz800/zpp_bits.git
-        GIT_TAG v4.4.20
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/zpp_bits
-    )
-    FetchContent_MakeAvailable(zpp_bits)
-    add_library(zpp_bits INTERFACE)
-    target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
-endif()
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH abc5efb32c7c7a8295fcad3077c3100a35a4baab NOT_SYSTEM)
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
@@ -161,50 +75,15 @@ add_library(terrainlib
     terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
     terrainlib/Tiler.h terrainlib/Tiler.cpp
     terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
-    terrainlib/algorithms/primitives.h
-    terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
-    terrainlib/tntn/BinaryIO.h terrainlib/tntn/BinaryIO.cpp
-    terrainlib/tntn/Delaunator.h terrainlib/tntn/Delaunator.cpp
-    terrainlib/tntn/DelaunayMesh.h terrainlib/tntn/DelaunayMesh.cpp
-    terrainlib/tntn/DelaunayTriangle.h terrainlib/tntn/DelaunayTriangle.cpp
-    terrainlib/tntn/endianness.h
-    terrainlib/tntn/FileFormat.h
-    terrainlib/tntn/File.h terrainlib/tntn/File.cpp
-    terrainlib/tntn/gdal_init.h terrainlib/tntn/gdal_init.cpp
-    terrainlib/tntn/geometrix.h terrainlib/tntn/geometrix.cpp
-    terrainlib/tntn/logging.h terrainlib/tntn/logging.cpp
-    terrainlib/tntn/Mesh2Raster.h terrainlib/tntn/Mesh2Raster.cpp
-    terrainlib/tntn/Mesh.h terrainlib/tntn/Mesh.cpp
-    terrainlib/tntn/MeshIO.h terrainlib/tntn/MeshIO.cpp
-    terrainlib/tntn/MeshMode.h
-    terrainlib/tntn/MeshWriter.h terrainlib/tntn/MeshWriter.cpp
-    terrainlib/tntn/ObjPool.h
-    terrainlib/tntn/OFFReader.h terrainlib/tntn/OFFReader.cpp
-    terrainlib/tntn/Points2Mesh.h terrainlib/tntn/Points2Mesh.cpp
-    terrainlib/tntn/QuadEdge.h terrainlib/tntn/QuadEdge.cpp
-    terrainlib/tntn/QuantizedMeshIO.h terrainlib/tntn/QuantizedMeshIO.cpp
-    terrainlib/tntn/Raster.h
-    terrainlib/tntn/RasterIO.h terrainlib/tntn/RasterIO.cpp
-    terrainlib/tntn/raster_tools.h terrainlib/tntn/raster_tools.cpp
-    terrainlib/tntn/simple_meshing.h terrainlib/tntn/simple_meshing.cpp
-    terrainlib/tntn/SuperTriangle.h terrainlib/tntn/SuperTriangle.cpp
-    terrainlib/tntn/SurfacePoints.h terrainlib/tntn/SurfacePoints.cpp
-    terrainlib/tntn/TerraMesh.h terrainlib/tntn/TerraMesh.cpp
-    terrainlib/tntn/terra_meshing.h terrainlib/tntn/terra_meshing.cpp
-    terrainlib/tntn/TerraUtils.h terrainlib/tntn/TerraUtils.cpp
-    terrainlib/tntn/tntn_assert.h
-    terrainlib/tntn/util.h terrainlib/tntn/util.cpp
-    terrainlib/tntn/ZemlyaMesh.h terrainlib/tntn/ZemlyaMesh.cpp
-    terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
-    terrainlib/tntn/ZoomRange.h
+    terrainlib/init.h terrainlib/init.cpp
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected ${OpenCV_LIBS})
 target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -225,7 +104,7 @@ add_library(terrainbuilderlib
     terrainbuilder/octree/space.h
 )
 target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 expected)
+target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
 add_executable(terrainbuilder
     terrainbuilder/main.cpp
 )
@@ -248,7 +127,7 @@ add_library(terrainmergerlib
 )
 target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
 target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
 add_executable(terrainmerger
     terrainmerger/main.cpp
 )

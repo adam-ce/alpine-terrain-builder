@@ -16,14 +16,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
-#include <fmt/core.h>
-
 #include "Dataset.h"
 #include "ParallelTiler.h"
 #include "TopDownTiler.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
+#include <catch2/catch_template_test_macros.hpp>
+#include <fmt/core.h>
+
+using namespace radix;
 
 namespace {
 void compare_tile_lists(const std::vector<tile::Descriptor>& a_tiles, std::vector<tile::Descriptor> b_tiles)

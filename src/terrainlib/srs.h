@@ -1,6 +1,5 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
  * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,20 +16,16 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef SRS_H
-#define SRS_H
-
-#include <cstddef>
-#include <glm/detail/qualifier.hpp>
-#include <memory>
-
-#include <glm/glm.hpp>
-#include <ogr_spatialref.h>
-#include <vector>
+#pragma once
 
 #include "Exception.h"
-#include "tntn/geometrix.h"
+#include <cstddef>
+#include <glm/detail/qualifier.hpp>
+#include <glm/glm.hpp>
+#include <memory>
+#include <ogr_spatialref.h>
 #include <radix/tile.h>
+#include <vector>
 
 namespace srs {
 
@@ -314,58 +309,4 @@ inline OGRSpatialReference mgi() {
     return from_epsg(4312);
 }
 
-// only for tntn
-template <typename T>
-inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p) {
-    return transform_point(source_srs, ecef(), p);
 }
-
-template <typename T>
-inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, std::vector<glm::tvec3<T>> points) {
-    return transform_points(source_srs, ecef(), points);
-}
-
-template <typename T, std::size_t n>
-inline std::array<glm::tvec3<T>, n> toECEF(const OGRSpatialReference& source_srs, std::array<glm::tvec3<T>, n> points) {
-    return transform_points(source_srs, ecef(), points);
-}
-
-template <typename T>
-inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2) {
-    return toECEF<T, 2>(source_srs, { p1, p2 });
-}
-inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BBox3D& box) {
-    constexpr auto n_samples = 100;
-    std::vector<glm::dvec3> points;
-    points.emplace_back(box.min.x, box.min.y, box.min.z);
-    points.emplace_back(box.min.x, box.min.y, box.max.z);
-    points.emplace_back(box.min.x, box.max.y, box.min.z);
-    points.emplace_back(box.min.x, box.max.y, box.max.z);
-    points.emplace_back(box.max.x, box.min.y, box.min.z);
-    points.emplace_back(box.max.x, box.min.y, box.max.z);
-    points.emplace_back(box.max.x, box.max.y, box.min.z);
-    points.emplace_back(box.max.x, box.max.y, box.max.z);
-
-    const auto dx = (box.max.x - box.min.x) / n_samples;
-    const auto dy = (box.max.y - box.min.y) / n_samples;
-    for (auto i = 0; i < n_samples; ++i) {
-        // top and bottom
-        points.emplace_back(box.min.x + i * dx, box.min.y, box.min.z);
-        points.emplace_back(box.min.x + i * dx, box.min.y, box.max.z);
-        points.emplace_back(box.min.x + i * dx, box.max.y, box.min.z);
-        points.emplace_back(box.min.x + i * dx, box.max.y, box.max.z);
-        // left and right
-        points.emplace_back(box.min.x, box.min.y + i * dy, box.min.z);
-        points.emplace_back(box.min.x, box.min.y + i * dy, box.max.z);
-        points.emplace_back(box.max.x, box.min.y + i * dy, box.min.z);
-        points.emplace_back(box.max.x, box.min.y + i * dy, box.max.z);
-    }
-    const auto ecef_points = toECEF(source_srs, points);
-    tntn::BBox3D resulting_bbox;
-    resulting_bbox.add(ecef_points.begin(), ecef_points.end());
-    return resulting_bbox;
-}
-
-}
-
-#endif // SRS_H

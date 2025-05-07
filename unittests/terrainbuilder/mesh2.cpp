@@ -24,8 +24,10 @@
 
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Polygon_mesh_processing/border.h>
+#include <CGAL/Polygon_mesh_processing/connected_components.h>
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <CGAL/Surface_mesh/Surface_mesh.h>
+#include <CGAL/Unique_hash_map.h>
 
 #include "../catch2_helpers.h"
 #include "Dataset.h"
@@ -38,15 +40,17 @@
 
 #include "mesh/io.h"
 
-typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel;
-typedef Kernel::Point_3 Point3;
-typedef CGAL::Surface_mesh<Point3> SurfaceMesh;
-typedef SurfaceMesh::Vertex_index VertexIndex;
-typedef SurfaceMesh::Edge_index EdgeIndex;
-typedef SurfaceMesh::Halfedge_index HalfEdgeIndex;
-typedef SurfaceMesh::Face_index FaceIndex;
-typedef boost::graph_traits<SurfaceMesh>::vertex_descriptor VertexDescriptor;
-typedef boost::graph_traits<SurfaceMesh>::halfedge_descriptor HalfedgeDescriptor;
+using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
+using Point3 = Kernel::Point_3;
+using SurfaceMesh = CGAL::Surface_mesh<Point3>;
+
+using VertexIndex = SurfaceMesh::Vertex_index;
+using EdgeIndex = SurfaceMesh::Edge_index;
+using HalfEdgeIndex = SurfaceMesh::Halfedge_index;
+using FaceIndex = SurfaceMesh::Face_index;
+
+using VertexDescriptor = boost::graph_traits<SurfaceMesh>::vertex_descriptor;
+using HalfedgeDescriptor = boost::graph_traits<SurfaceMesh>::halfedge_descriptor;
 
 Point3 glm2cgal(glm::dvec3 point) {
     return Point3(point[0], point[1], point[2]);
@@ -72,7 +76,7 @@ SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 
-void check_mesh(const TerrainMesh &mesh) {
+void check_mesh_basics(const TerrainMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     CHECK(cgal_mesh.is_valid(true));
     CHECK(CGAL::is_triangle_mesh(cgal_mesh));
@@ -84,8 +88,19 @@ void check_no_holes(const TerrainMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     std::vector<HalfedgeDescriptor> border_cycles;
     CGAL::Polygon_mesh_processing::extract_boundary_cycles(cgal_mesh, std::back_inserter(border_cycles));
-    const size_t nb_holes = border_cycles.size();
+    const size_t nb_holes = border_cycles.size() - 1; // outer edge is a boundary cycle
     CHECK(nb_holes == 0);
+}
+
+size_t count_connected_components(const TerrainMesh &mesh) {
+    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
+    using CcMap = CGAL::Unique_hash_map<FaceDescriptor, size_t>;
+    using CcPropertyMap = boost::associative_property_map<CcMap>;
+
+    CcMap cc_map;
+    CcPropertyMap cc_pmap(cc_map);
+    const size_t num = CGAL::Polygon_mesh_processing::connected_components(cgal_mesh, cc_pmap);
+    return num;
 }
 
 void check_uvs(const TerrainMesh &mesh) {
@@ -219,7 +234,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 check_uvs(mesh);
                 check_duplicate_vertices(mesh.positions);
                 check_duplicate_triangles(mesh.triangles);
-                check_mesh(mesh);
+                check_mesh_basics(mesh);
             }
 
             const std::vector<glm::dvec3> positions_in_target_srs = srs::transform_points(mesh_srs, target_srs, mesh.positions);
@@ -287,7 +302,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
     const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
     const octree::Space space = octree::Space::earth();
-    const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 16).value();
+    const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 17).value();
     std::vector<octree::Id> nodes = summit_node.neighbours();
     nodes.push_back(summit_node);
 
@@ -312,9 +327,9 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     }
     CHECK(node_meshes.size() >= 3);
 
-    const TerrainMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-8);
-    const std::filesystem::path mesh_path = "/mnt/e/Code/TU/2023S/Project/terrain-builder/build/unittests/mesh.glb";
-    io::save_mesh_to_path(mesh_path, merged_mesh, io::SaveOptions{.texture_format = ".png"});
+    const TerrainMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-6);
+    check_mesh_basics(merged_mesh);
     check_non_empty(merged_mesh);
     check_no_holes(merged_mesh);
+    CHECK(count_connected_components(merged_mesh) == 1);
 }

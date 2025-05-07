@@ -59,6 +59,7 @@ radix::geometry::Aabb<3, double> calculate_bounds(const TerrainMesh &mesh);
 radix::geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> meshes);
 
 std::optional<double> estimate_average_edge_length(const TerrainMesh &mesh, const size_t sample_size = 1000);
+std::optional<double> calculate_max_edge_length(const TerrainMesh &mesh);
 
 std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh);
 size_t remove_isolated_vertices(TerrainMesh& mesh);

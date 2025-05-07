@@ -7,16 +7,15 @@
 #include <gdal_priv.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <glm/gtx/norm.hpp>
 
 #include "Dataset.h"
 #include "mesh/terrain_mesh.h"
 #include "srs.h"
 #include "raster.h"
-
 #include "log.h"
 #include "mesh_builder.h"
 #include "raw_dataset_reader.h"
-#include <glm/gtx/norm.hpp>
 
 namespace terrainbuilder::mesh {
 
@@ -172,19 +171,21 @@ TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bo
     }
 
     // Calculate epsilon to merge newly created vertices
+    const double max_edge_length = calculate_max_edge_length(mesh).value();
     const double average_edge_length = estimate_average_edge_length(mesh).value();
     const double epsilon = average_edge_length / 1000;
 
     std::unordered_map<glm::dvec3, size_t, DVec3Hash, DVec3Equal> seen_vertices(mesh.positions.size(), DVec3Hash(), DVec3Equal(epsilon));
 
     // Construct 6 axis-aligned clipping planes from the bounding box
-    const std::array<radix::geometry::Plane<double>, 6> planes = {
-        radix::geometry::Plane(glm::dvec3(1.0, 0.0, 0.0), -bounds.min.x), // left
-        radix::geometry::Plane(glm::dvec3(-1.0, 0.0, 0.0), bounds.max.x), // right
-        radix::geometry::Plane(glm::dvec3(0.0, 1.0, 0.0), -bounds.min.y), // bottom
-        radix::geometry::Plane(glm::dvec3(0.0, -1.0, 0.0), bounds.max.y), // top
-        radix::geometry::Plane(glm::dvec3(0.0, 0.0, 1.0), -bounds.min.z), // near
-        radix::geometry::Plane(glm::dvec3(0.0, 0.0, -1.0), bounds.max.z)  // far
+    using Plane = radix::geometry::Plane<double>;
+    const std::array<Plane, 6> planes = {
+        Plane(glm::dvec3(1.0, 0.0, 0.0), -bounds.min.x), // left
+        Plane(glm::dvec3(-1.0, 0.0, 0.0), bounds.max.x), // right
+        Plane(glm::dvec3(0.0, 1.0, 0.0), -bounds.min.y), // bottom
+        Plane(glm::dvec3(0.0, -1.0, 0.0), bounds.max.y), // top
+        Plane(glm::dvec3(0.0, 0.0, 1.0), -bounds.min.z), // near
+        Plane(glm::dvec3(0.0, 0.0, -1.0), bounds.max.z)  // far
     };
 
     std::vector<glm::dvec3> new_positions = mesh.positions;
@@ -201,14 +202,16 @@ TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bo
             mesh.positions[source_triangle.y],
             mesh.positions[source_triangle.z]};
 
-        uint16_t inside_count = 0;
-        for (const auto &vertex : triangle) {
-            if (bounds.contains_inclusive(vertex)) {
-                inside_count += 1;
-            }
-        }
+        const uint8_t inside_count = std::count_if(triangle.begin(), triangle.end(), [&](const auto &vertex) {
+            return bounds.contains_inclusive(vertex);
+        });
         if (inside_count == 0) {
-            continue;
+            // Triangle vertices are not inside the bounds, however there can still be intersection
+            if (std::any_of(triangle.begin(), triangle.end(), [&](const auto &vertex) {
+                    return radix::geometry::distance_sq(bounds, vertex) > max_edge_length * max_edge_length;
+                })) {
+                continue;
+            }
         }
         if (inside_count == source_triangle.length()) {
             new_triangles.push_back(source_triangle);
@@ -218,8 +221,6 @@ TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bo
         // Start with the original triangle
         // TODO: this is rather inefficient since six vectors are allocated for each clipped triangle
         const std::vector<Tri> clipped_triangles = radix::geometry::clip(std::vector{triangle}, planes);
-        assert(!clipped_triangles.empty());
-
         for (const auto &clipped_triangle : clipped_triangles) {
             glm::uvec3 decomposed_triangle;
             for (size_t i = 0; i < clipped_triangle.size(); i++) {
@@ -241,7 +242,7 @@ TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bo
                     if (it != seen_vertices.cend()) {
                         vertex_index = it->second;
                     }
-                    
+
                 }
 
                 // Add a new vertex

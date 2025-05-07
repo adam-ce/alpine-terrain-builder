@@ -64,6 +64,26 @@ std::optional<double> estimate_average_edge_length(const TerrainMesh &mesh, cons
     return total_length / edge_count;
 }
 
+std::optional<double> calculate_max_edge_length(const TerrainMesh &mesh) {
+    if (mesh.face_count() == 0) {
+        return std::nullopt;
+    }
+
+    double max_length = 0.0;
+    for (const auto &tri : mesh.triangles) {
+        const glm::dvec3 &a = mesh.positions[tri.x];
+        const glm::dvec3 &b = mesh.positions[tri.y];
+        const glm::dvec3 &c = mesh.positions[tri.z];
+
+        const double ab = glm::distance(a, b);
+        const double bc = glm::distance(b, c);
+        const double ca = glm::distance(c, a);
+
+        max_length = std::max({ab, bc, ca, max_length});
+    }
+    return max_length;
+}
+
 std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {
     std::vector<bool> connected;
     connected.resize(mesh.vertex_count());

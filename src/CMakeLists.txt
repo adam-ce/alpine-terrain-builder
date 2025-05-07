@@ -19,7 +19,7 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF)
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph'")
 find_package(Boost CONFIG REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
@@ -28,8 +28,8 @@ alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
 alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
 find_package(CGAL REQUIRED)
 
-alp_setup_cmake_project(opencv URL https://github.com/opencv/opencv.git COMMITISH 4.11.0 CMAKE_ARGUMENTS -DBUILD_TESTS=OFF -DBUILD_PERF_TESTS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_opencv_apps=OFF)
-find_package(OpenCV REQUIRED)
+include(../cmake/SetupOpenCV.cmake)
+alp_setup_opencv(4.11.0)
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)

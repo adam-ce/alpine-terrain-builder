@@ -44,7 +44,6 @@ function(alp_setup_gdal)
             -DBUILD_PYTHON_BINDINGS=OFF
             -DBUILD_JAVA_BINDINGS=OFF
             -DBUILD_CSHARP_BINDINGS=OFF
-            -DGDAL_USE_JPEG=OFF
             -DGDAL_USE_ICONV=OFF
         )
 

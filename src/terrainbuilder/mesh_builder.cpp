@@ -331,7 +331,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
 
     LOG_TRACE("Clipping mesh based on target bounds");
     const TerrainMesh mesh_in_clip_srs = transform_mesh(mesh_in_source_srs, source_srs, clip_srs);
-    TerrainMesh clipped_mesh = mesh_in_clip_srs; // clip_mesh(mesh_in_clip_srs, clip_bounds);
+    TerrainMesh clipped_mesh = clip_mesh(mesh_in_clip_srs, clip_bounds);
     // Check if there are any vertices left
     if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
         return tl::unexpected(BuildError::EmptyRegion);

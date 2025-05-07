@@ -64,7 +64,7 @@ function(alp_setup_cmake_project arg_NAME)
     set(version_var "ALP_INSTALLED_${arg_NAME}_VERSION")
     set(path_var    "ALP_INSTALLED_${arg_NAME}_PATH")
 
-    if(DEFINED ${version_var} AND "${${version_var}}" STREQUAL "${arg_COMMITISH}" AND DEFINED ${path_var} AND EXISTS "${${path_var}}")
+    if(DEFINED ${version_var} AND "${${version_var}}" STREQUAL "${arg_COMMITISH}${arg_CMAKE_ARGUMENTS}" AND DEFINED ${path_var} AND EXISTS "${${path_var}}")
         list(PREPEND CMAKE_PREFIX_PATH "${${path_var}}")
         set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
         return()
@@ -83,7 +83,7 @@ function(alp_setup_cmake_project arg_NAME)
 
 
     set(${path_var}    "${install_dir}"   CACHE PATH   "Install path for ${arg_NAME}"            FORCE)
-    set(${version_var} "${arg_COMMITISH}" CACHE STRING "Installed commit/tag for ${arg_NAME}"    FORCE)
+    set(${version_var} "${arg_COMMITISH}${arg_CMAKE_ARGUMENTS}" CACHE STRING "Installed commit/tag for $ + build flags"    FORCE)
 endfunction()
 
 

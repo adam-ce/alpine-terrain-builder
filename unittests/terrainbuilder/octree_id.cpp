@@ -34,8 +34,8 @@ TEST_CASE("Id neighbour out of bounds returns nullopt", "[octree::Id]") {
     CHECK_FALSE(id.neighbour(glm::ivec3(0, -1, 0)).has_value());
     CHECK_FALSE(id.neighbour(glm::ivec3(0, 0, -1)).has_value());
     CHECK_FALSE(id.neighbour(glm::ivec3(100, 0, 0)).has_value());
-    CHECK_FALSE(id.neighbour(glm::ivec3(0, Id::max_coord_on_level(id.level()), 0)).has_value());
-    CHECK_FALSE(id.neighbour(glm::ivec3(Id::max_coord_on_level(id.level()))).has_value());
+    CHECK_FALSE(id.neighbour(glm::ivec3(0, Id::max_coord_on_level(id.level()) + 1, 0)).has_value());
+    CHECK_FALSE(id.neighbour(glm::ivec3(Id::max_coord_on_level(id.level()) + 1)).has_value());
 }
 
 TEST_CASE("Id parent returns nullopt at root level", "[octree::Id]") {

@@ -1,51 +1,70 @@
 #pragma once
 
+#include <vector>
 #include <array>
 #include <cstdint>
-#include <fmt/core.h>
-#include <fmt/format.h>
-#include <glm/glm.hpp>
 #include <optional>
 #include <stdexcept>
 
+#include <glm/glm.hpp>
+
 namespace octree {
+
+using Level = uint32_t;
+using Coord = uint32_t;
+using Coords = glm::tvec3<Coord>;
+using Index = uint64_t;
 
 class Id {
 public:
-    constexpr Id(uint32_t level, glm::uvec3 coords)
-        : _level(level), _index(interleave3(coords)) {}
-    constexpr Id(uint32_t level, uint64_t index)
-        : _level(level), _index(index) {}
+    [[nodiscard]] static constexpr Level max_level() {
+        return (sizeof(Index) * 8) / 3;
+    }
+    [[nodiscard]] static constexpr Coord max_coord_on_level(Level level) {
+        return (1ull << level) - 1;
+    }
+    [[nodiscard]] static constexpr Index max_index_on_level(Level level) {
+        return (1ull << (3 * level)) - 1;
+    }
 
-    constexpr uint32_t level() const {
+    constexpr Id(Level level, Coords coords)
+        : Id(level, interleave3(coords)) {
+    }
+    constexpr Id(Level level, Index index)
+        : _level(level), _index(index) {
+        assert(this->_level <= Id::max_level());
+        assert(this->_index <= Id::max_index_on_level(this->_level));
+    }
+
+    [[nodiscard]] constexpr Level level() const {
         return this->_level;
     }
-    constexpr uint64_t index_on_level() const {
+    [[nodiscard]] constexpr Index index_on_level() const {
         return this->_index;
     }
-    constexpr glm::uvec3 coords() const {
+    [[nodiscard]] constexpr Coords coords() const {
         return deinterleave3(this->index_on_level());
     }
-    constexpr uint32_t x() const {
+    [[nodiscard]] constexpr Coord x() const {
         return this->coords().x;
     }
-    constexpr uint32_t y() const {
+    [[nodiscard]] constexpr Coord y() const {
         return this->coords().y;
     }
-    constexpr uint32_t z() const {
+    [[nodiscard]] constexpr Coord z() const {
         return this->coords().z;
     }
 
-    constexpr std::optional<Id> neighbour(const glm::ivec3& d) const {
-        const auto new_coords = glm::ivec3(this->coords()) + d;
-        if (new_coords.x < 0 || new_coords.y < 0 || new_coords.z < 0) {
-            // throw std::out_of_range("Neighbour coordinates cannot be negative");
+    [[nodiscard]] constexpr std::optional<Id> neighbour(const glm::ivec3& d) const {
+        const Coord max_coord = Id::max_coord_on_level(this->level());
+        const glm::ivec3 new_coords = glm::ivec3(this->coords()) + d;
+        if (glm::any(glm::lessThan(new_coords, glm::ivec3(0))) || glm::any(glm::greaterThan(new_coords, glm::ivec3(max_coord)))) {
             return std::nullopt;
         }
-        return Id(this->level(), glm::uvec3(new_coords));
+        return Id(this->level(), Coords(new_coords));
     }
 
-    constexpr std::vector<Id> neighbours() const {
+    [[nodiscard]] std::vector<Id> neighbours() const {
         std::vector<Id> result;
         result.reserve(26);
         for (int dx = -1; dx <= 1; dx++) {
@@ -67,30 +86,35 @@ public:
         return result;
     }
 
-    constexpr std::optional<Id> parent() const {
+    [[nodiscard]] constexpr std::optional<Id> parent() const {
         if (this->level() == 0) {
             return std::nullopt;
         }
 
-        const auto parent_coords = this->coords() / glm::uvec3(2);
+        const auto parent_coords = this->coords() / Coords(2);
         return Id(this->level() - 1, parent_coords);
     }
 
-    constexpr Id child(uint32_t child_index) const {
+    // TODO: make this return std::optional and check against max level?
+    [[nodiscard]] constexpr Id child(uint32_t child_index) const {
         if (child_index > 7) {
             throw std::invalid_argument("Invalid child index (must be 0-7)");
         }
         return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
     }
 
-    constexpr std::array<Id, 8> children() const {
+    [[nodiscard]] constexpr std::array<Id, 8> children() const {
         return {
             this->child(0), this->child(1), this->child(2), this->child(3), 
             this->child(4), this->child(5), this->child(6), this->child(7)
         };
     }
 
-    static constexpr Id root() {
+    [[nodiscard]] constexpr bool is_root() const {
+        return this->level() == 0;
+    }
+
+    [[nodiscard]] static constexpr Id root() {
         return Id(0, 0);
     }
 
@@ -99,16 +123,18 @@ public:
     }
 
 private:
-    uint32_t _level;
-    uint64_t _index;
+    Level _level;
+    Index _index;
 
-    static constexpr uint64_t interleave3(const glm::uvec3 &coords) {
-        const uint64_t x = coords.x;
-        const uint64_t y = coords.y;
-        const uint64_t z = coords.z;
+    [[nodiscard]] static constexpr Index interleave3(const Coords &coords) {
+        assert(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
 
-        uint64_t result = 0;
-        for (uint32_t i = 0; i < (sizeof(uint64_t) * 8) / 3; i++) {
+        const Index x = coords.x;
+        const Index y = coords.y;
+        const Index z = coords.z;
+
+        Index result = 0;
+        for (Level i = 0; i < Id::max_level(); i++) {
             result |= ((x >> i) & 1) << (3 * i);
             result |= ((y >> i) & 1) << (3 * i + 1);
             result |= ((z >> i) & 1) << (3 * i + 2);
@@ -116,11 +142,11 @@ private:
         return result;
     }
 
-    static constexpr glm::uvec3 deinterleave3(uint64_t index) {
-        uint32_t x = 0;
-        uint32_t y = 0;
-        uint32_t z = 0;
-        for (uint32_t i = 0; i < (sizeof(uint64_t) * 8) / 3; i++) {
+    [[nodiscard]] static constexpr Coords deinterleave3(Index index) {
+        Coord x = 0;
+        Coord y = 0;
+        Coord z = 0;
+        for (Level i = 0; i < Id::max_level(); i++) {
             x |= ((index >> (3 * i)) & 1) << i;
             y |= ((index >> (3 * i + 1)) & 1) << i;
             z |= ((index >> (3 * i + 2)) & 1) << i;
@@ -131,6 +157,8 @@ private:
 
 } // namespace octree
 
+#include <fmt/core.h>
+#include <fmt/format.h>
 template <>
 struct fmt::formatter<octree::Id> {
     // Parses format specifications; here we ignore them.
@@ -148,6 +176,7 @@ struct fmt::formatter<octree::Id> {
             id.level(), id.x(), id.y(), id.z(), id.index_on_level());
     }
 };
+
 #include <fmt/ostream.h>
 #include <iostream>
 namespace octree{

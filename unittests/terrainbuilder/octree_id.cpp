@@ -7,12 +7,12 @@
 using namespace octree;
 
 TEST_CASE("Id basic construction and accessors", "[octree::Id]") {
-    Id id(2, glm::uvec3(3, 1, 4));
+    Id id(2, glm::uvec3(3, 1, 2));
     CHECK(id.level() == 2);
-    CHECK(id.coords() == glm::uvec3(3, 1, 4));
+    CHECK(id.coords() == glm::uvec3(3, 1, 2));
     CHECK(id.x() == 3);
     CHECK(id.y() == 1);
-    CHECK(id.z() == 4);
+    CHECK(id.z() == 2);
 }
 
 TEST_CASE("Id interleave and deinterleave roundtrip", "[octree::Id]") {
@@ -33,6 +33,9 @@ TEST_CASE("Id neighbour out of bounds returns nullopt", "[octree::Id]") {
     CHECK_FALSE(id.neighbour(glm::ivec3(-1, 0, 0)).has_value());
     CHECK_FALSE(id.neighbour(glm::ivec3(0, -1, 0)).has_value());
     CHECK_FALSE(id.neighbour(glm::ivec3(0, 0, -1)).has_value());
+    CHECK_FALSE(id.neighbour(glm::ivec3(100, 0, 0)).has_value());
+    CHECK_FALSE(id.neighbour(glm::ivec3(0, Id::max_coord_on_level(id.level()), 0)).has_value());
+    CHECK_FALSE(id.neighbour(glm::ivec3(Id::max_coord_on_level(id.level()))).has_value());
 }
 
 TEST_CASE("Id parent returns nullopt at root level", "[octree::Id]") {
@@ -41,10 +44,10 @@ TEST_CASE("Id parent returns nullopt at root level", "[octree::Id]") {
 }
 
 TEST_CASE("Id parent returns correct parent", "[octree::Id]") {
-    Id id(2, glm::uvec3(6, 4, 2));
+    Id id(5, glm::uvec3(6, 4, 2));
     auto parent = id.parent();
     REQUIRE(parent.has_value());
-    CHECK(parent->level() == 1);
+    CHECK(parent->level() == 4);
     CHECK(parent->coords() == glm::uvec3(3, 2, 1));
 }
 

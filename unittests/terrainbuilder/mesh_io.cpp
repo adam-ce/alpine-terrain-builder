@@ -17,8 +17,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch.hpp>
-
 #include <opencv2/opencv.hpp>
 
 #include "../catch2_helpers.h"

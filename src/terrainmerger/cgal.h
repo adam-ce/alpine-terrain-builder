@@ -1,5 +1,4 @@
-#ifndef CGAL_H
-#define CGAL_H
+#pragma once
 
 #include <CGAL/Surface_mesh/Surface_mesh.h>
 #include <CGAL/Simple_cartesian.h>
@@ -32,4 +31,4 @@ namespace simple {
 
 DEFINE_KERNEL(CGAL::Exact_predicates_inexact_constructions_kernel)
 
-#endif
+#undef DEFINE_KERNEL

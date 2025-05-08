@@ -56,7 +56,7 @@ alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COM
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH abc5efb32c7c7a8295fcad3077c3100a35a4baab NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 add_library(terrainlib
     terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp

@@ -28,38 +28,54 @@ if(NOT DEFINED _alp_add_repo_check_flag)
     set_property(GLOBAL PROPERTY _alp_add_repo_check_flag FALSE)
 endif()
 
-function(_alp_git_checkout_branch repo repo_dir commitish)
-    message(STATUS "[alp/git] In ${repo}, checking out ${commitish}.")
+function(_alp_git_checkout repo repo_dir commitish)
+    message(STATUS "[alp/git] ${repo}: Checking out ${commitish}.")
     execute_process(
         COMMAND ${GIT_EXECUTABLE} checkout --quiet ${commitish}
         WORKING_DIRECTORY ${repo_dir}
         RESULT_VARIABLE GIT_CHECKOUT_RESULT
+        ERROR_VARIABLE checkout_output
+        OUTPUT_VARIABLE checkout_output
     )
     if (NOT GIT_CHECKOUT_RESULT)
-        message(STATUS "[alp/git] In ${repo}, checking out branch ${commitish} was successfull.")
+        # message(STATUS "[alp/git] In ${repo}, checking out ${commitish} succeeded.")
     else()
-        message(FATAL_ERROR "[alp/git] In ${repo}, checking out branch ${commitish} was NOT successfull!")
+        message(WARNING "[alp/git] ${repo}: Checking out ${commitish} was NOT successful: ${checkout_output}")
     endif()
 
     if (EXISTS "${repo_dir}/.gitmodules")
+        # init/update submodules; for shallow clones this will still be shallow because the super‑project is.
         execute_process(
-            COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+            COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive ${_ALP_SUBMODULE_UPDATE_ARGS}
             WORKING_DIRECTORY ${repo_dir}
             RESULT_VARIABLE GIT_SUBMODULE_RESULT
+            ERROR_VARIABLE checkout_output
+            OUTPUT_VARIABLE checkout_output
         )
         if(GIT_SUBMODULE_RESULT EQUAL 0)
-            message(STATUS "[alp/git] In ${repo}, submodules updated to match ${commitish}.")
+            # message(STATUS "[alp/git] ${repo}: Submodules updated to match ${commitish}.")
         else()
-            message(WARNING "[alp/git] In ${repo}, submodule update failed after checking out ${commitish}.")
+            message(WARNING "[alp/git] ${repo}: Submodule update failed after checking out ${commitish}: ${checkout_output}")
         endif()
     endif()
 endfunction()
 
 function(alp_add_git_repository name)
-    set(options DO_NOT_ADD_SUBPROJECT NOT_SYSTEM PRIVATE_DO_NOT_CHECK_FOR_SCRIPT_UPDATES)
+    set(options DO_NOT_ADD_SUBPROJECT NOT_SYSTEM DEEP_CLONE PRIVATE_DO_NOT_CHECK_FOR_SCRIPT_UPDATES)
     set(oneValueArgs URL COMMITISH DESTINATION_PATH)
     set(multiValueArgs )
     cmake_parse_arguments(PARSE_ARGV 1 PARAM "${options}" "${oneValueArgs}" "${multiValueArgs}")
+
+    # Determine whether we should do a shallow or deep clone/fetch.
+    if(PARAM_DEEP_CLONE)
+        # message(STATUS "[alp/git] Cloning ${PARAM_URL} DEEPLY to ${repo_dir}.")
+        set(_ALP_GIT_CLONE_ARGS)
+        set(_ALP_SUBMODULE_UPDATE_ARGS)
+    else()
+        # message(STATUS "[alp/git] Cloning ${PARAM_URL} SHALLOWY to ${repo_dir}.")
+        set(_ALP_GIT_CLONE_ARGS --no-checkout --depth 1 --shallow-submodules)
+        set(_ALP_SUBMODULE_UPDATE_ARGS --depth 1 --recommend-shallow)
+    endif()
 
     get_property(_check_ran GLOBAL PROPERTY _alp_add_repo_check_flag)
     if(NOT PARAM_PRIVATE_DO_NOT_CHECK_FOR_SCRIPT_UPDATES AND NOT _check_ran)
@@ -84,103 +100,140 @@ function(alp_add_git_repository name)
 
     set(${name}_SOURCE_DIR "${repo_dir}" PARENT_SCOPE)
 
-    string(REGEX MATCH "^[^/]+/.+" commitish_is_remote_branch "${PARAM_COMMITISH}")
+    # Detect if the requested ref looks like a remote branch (e.g. origin/main)
+    string(REGEX MATCH "^[^/]+/.+" force_fetch "${PARAM_COMMITISH}")
 
-    if(EXISTS "${repo_dir}/.git")
-        # First, see if PARAM_COMMITISH is a valid local ref:
+    set(force_checkout FALSE)
+    if(NOT EXISTS "${repo_dir}/.git")
+        # Do a fresh clone
+        message(STATUS "[alp/git] ${short_repo_dir}: Cloning ${PARAM_URL} to ${repo_dir}.")
         execute_process(
-            COMMAND ${GIT_EXECUTABLE} rev-parse --verify ${PARAM_COMMITISH}
+            COMMAND ${GIT_EXECUTABLE} clone ${_ALP_GIT_CLONE_ARGS} --recurse-submodules ${PARAM_URL} ${repo_dir}
+            RESULT_VARIABLE GIT_CLONE_RESULT
+            ERROR_VARIABLE clone_output
+            OUTPUT_VARIABLE clone_output
+        )
+        if (NOT GIT_CLONE_RESULT EQUAL 0)
+            message(SEND_ERROR "[alp/git] ${short_repo_dir}: Cloning was NOT successful: ${clone_output}")
+        endif()
+        if (NOT PARAM_DEEP_CLONE)
+            # shallow clone, fetch ref and checkout
+            set(force_fetch TRUE)
+        endif()
+        set(force_checkout TRUE)
+    endif()
+
+    # Check out the correct branch:
+    # First, see if PARAM_COMMITISH is a valid local ref:
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --verify ${PARAM_COMMITISH}
+        WORKING_DIRECTORY ${repo_dir}
+        OUTPUT_VARIABLE GIT_COMMIT_OUTPUT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE commit_present_result
+        ERROR_QUIET
+    )
+    if (commit_present_result EQUAL 0 AND NOT force_fetch)
+        # PARAM_COMMITISH is recognized by Git => no need to fetch
+        # (could be a tag (lightweight or annotated) or a direct commit SHA).
+        # if it's an *annotated* tag, rev-parse gives us the tag object's hash, not the commit hash.
+        # => Force resolve the actual commit object with ^{commit}:
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse --verify ${PARAM_COMMITISH}^{commit}
             WORKING_DIRECTORY ${repo_dir}
-            OUTPUT_VARIABLE GIT_COMMIT_OUTPUT
+            OUTPUT_VARIABLE GIT_COMMIT_OBJECT
             OUTPUT_STRIP_TRAILING_WHITESPACE
-            RESULT_VARIABLE GIT_COMMIT_RESULT
+            RESULT_VARIABLE commit_object_result
         )
 
-        if (GIT_COMMIT_RESULT EQUAL 0 AND NOT commitish_is_remote_branch)
-            # PARAM_COMMITISH is recognized by Git => no need to fetch
-            # (could be a tag (lightweight or annotated) or a direct commit SHA).
-            # if it's an *annotated* tag, rev-parse gives us the tag object's hash, not the commit hash.
-            # => Force resolve the actual commit object with ^{commit}:
-            execute_process(
-                COMMAND ${GIT_EXECUTABLE} rev-parse --verify ${PARAM_COMMITISH}^{commit}
-                WORKING_DIRECTORY ${repo_dir}
-                OUTPUT_VARIABLE GIT_COMMIT_OBJECT
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-                RESULT_VARIABLE GIT_COMMIT_OBJECT_RESULT
-            )
-
-            if (GIT_COMMIT_OBJECT_RESULT EQUAL 0)
-                # Successfully resolved a commit object
-                set(CHECK_COMMITISH "${GIT_COMMIT_OBJECT}")
-            else()
-                # Fallback if that fails (should rarely happen if it's a proper commit/tag)
-                set(CHECK_COMMITISH "${GIT_COMMIT_OUTPUT}")
-            endif()
-
-            # Grab HEAD commit
-            execute_process(
-                COMMAND ${GIT_EXECUTABLE} rev-parse --verify HEAD
-                WORKING_DIRECTORY ${repo_dir}
-                OUTPUT_VARIABLE GIT_HEAD_OUTPUT
-                OUTPUT_STRIP_TRAILING_WHITESPACE
-            )
-
-            if (GIT_HEAD_OUTPUT STREQUAL CHECK_COMMITISH)
-                message(STATUS "[alp/git] ${short_repo_dir} is already at ${PARAM_COMMITISH}. Skipping checkout.")
-            else()
-                _alp_git_checkout_branch(${short_repo_dir} ${repo_dir} ${PARAM_COMMITISH})
-            endif()
+        if (commit_object_result EQUAL 0)
+            # Successfully resolved a commit object
+            set(commitish_hash "${GIT_COMMIT_OBJECT}")
         else()
-            # either remote branch or commitish not recognised
-            message(STATUS "[alp/git] Fetching updates for ${short_repo_dir}.")
-            execute_process(
-                COMMAND ${GIT_EXECUTABLE} fetch
-                WORKING_DIRECTORY ${repo_dir}
-                RESULT_VARIABLE GIT_FETCH_RESULT
-            )
-            if (GIT_FETCH_RESULT EQUAL 0)
-                message(STATUS "[alp/git] Fetch successful for ${short_repo_dir}.")
-                execute_process(
-                    COMMAND ${GIT_EXECUTABLE} branch --show-current
-                    WORKING_DIRECTORY ${repo_dir}
-                    OUTPUT_STRIP_TRAILING_WHITESPACE
-                    OUTPUT_VARIABLE GIT_BRANCH_OUTPUT
-                    RESULT_VARIABLE GIT_BRANCH_RESULT
-                )
-                if (NOT GIT_BRANCH_RESULT EQUAL 0)
-                    message(FATAL_ERROR "[alp/git] In ${short_repo_dir}, git branch --show-current not successfull")
-                endif()
+            # Fallback if that fails (should rarely happen if it's a proper commit/tag)
+            set(commitish_hash "${GIT_COMMIT_OUTPUT}")
+        endif()
 
-                if (GIT_BRANCH_OUTPUT STREQUAL "")
-                    # Currently detached; let's checkout the branch
-                    _alp_git_checkout_branch(${short_repo_dir} ${repo_dir} ${PARAM_COMMITISH})
-                else()
-                    message(WARNING
-                        "[alp/git] ${short_repo_dir} on branch ${GIT_BRANCH_OUTPUT}, leaving it there. "
-                        "NOT checking out ${PARAM_COMMITISH}! Use origin/main or similar if you "
-                        "want to stay up-to-date with upstream."
-                    )
-                endif()
-            else ()
-                message(WARNING "[alp/git] Not able to fetch updates for ${short_repo_dir} and ${PARAM_COMMITISH} was not found locally or is a remote branch.")
-            endif()
+        # Grab HEAD commit
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} rev-parse --verify HEAD
+            WORKING_DIRECTORY ${repo_dir}
+            OUTPUT_VARIABLE git_head_hash
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if (git_head_hash STREQUAL commitish_hash AND NOT force_checkout)
+            message(STATUS "[alp/git] ${short_repo_dir}: Already at ${PARAM_COMMITISH}. Skipping checkout.")
+        else()
+            _alp_git_checkout(${short_repo_dir} ${repo_dir} ${PARAM_COMMITISH})
         endif()
     else()
-        # If the repo doesn't exist, do a fresh clone
-        message(STATUS "[alp/git] Cloning ${PARAM_URL} to ${repo_dir}.")
-        execute_process(
-            COMMAND ${GIT_EXECUTABLE} clone --recurse-submodules ${PARAM_URL} ${repo_dir}
-            RESULT_VARIABLE GIT_CLONE_RESULT
-        )
-        if (GIT_CLONE_RESULT EQUAL 0)
-            _alp_git_checkout_branch(${short_repo_dir} ${repo_dir} ${PARAM_COMMITISH})
+        # either remote branch or commitish not recognised
+        message(STATUS "[alp/git] ${short_repo_dir}: Fetching updates.")
+
+        if(PARAM_DEEP_CLONE)
+            # Original deep‑clone logic: fetch everything (incl. all tags) deeply.
+            # message(STATUS "[alp/git] Deep clone, fetching all.")
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} fetch origin --tags
+                WORKING_DIRECTORY ${repo_dir}
+                RESULT_VARIABLE fetch_result
+                OUTPUT_QUIET
+                ERROR_QUIET
+            )
         else()
-            message(FATAL_ERROR "[alp/git] Cloning ${short_repo_dir} was NOT successfull!")
+            # ── Shallow path ─────────────────────────
+            # 1. Try to fetch COMMITISH as a tag
+            # message(STATUS "[alp/git] Shallow clone, trying to fetch tag ${PARAM_COMMITISH}.")
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} fetch origin tag ${PARAM_COMMITISH} --depth 1
+                WORKING_DIRECTORY ${repo_dir}
+                RESULT_VARIABLE fetch_result
+                OUTPUT_QUIET
+                ERROR_QUIET
+            )
+
+            # 2. If that failed, try it as branch‑name or raw hash
+            if(NOT fetch_result EQUAL 0)
+                # message(STATUS "[alp/git] Shallow clone, failed to fetch tag ${PARAM_COMMITISH}. Probably it is a branch or hash. Trying again..")
+                set(_FETCH_REF "${PARAM_COMMITISH}")
+                string(REGEX REPLACE "^origin/(.+)" "\\1" _FETCH_REF "${_FETCH_REF}")
+                execute_process(
+                    COMMAND ${GIT_EXECUTABLE} fetch origin ${_FETCH_REF} --depth 1
+                    WORKING_DIRECTORY ${repo_dir}
+                    RESULT_VARIABLE fetch_result
+                    OUTPUT_QUIET
+                    ERROR_QUIET
+                )
+            endif()
+        endif()
+
+        if (fetch_result EQUAL 0)
+            # message(STATUS "[alp/git] Fetch successful for ${short_repo_dir}.")
+            execute_process(
+                COMMAND ${GIT_EXECUTABLE} branch --show-current
+                WORKING_DIRECTORY ${repo_dir}
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                OUTPUT_VARIABLE current_branch
+                RESULT_VARIABLE branch_result
+            )
+            if (NOT branch_result EQUAL 0)
+                message(FATAL_ERROR "[alp/git] ${short_repo_dir}: git branch --show-current failed")
+            endif()
+
+            if (current_branch STREQUAL "" OR force_checkout)
+                # not on a branch. that's what we usually have (detached head state)
+                _alp_git_checkout(${short_repo_dir} ${repo_dir} ${PARAM_COMMITISH})
+            else()
+                message(WARNING "[alp/git] ${short_repo_dir}: On branch ${current_branch}, leaving it there. NOT checking out ${PARAM_COMMITISH}! Use origin/main or similar if you want to stay up‑to‑date with upstream.")
+            endif()
+        else()
+            message(WARNING "[alp/git] ${short_repo_dir}: Unable to fetch updates for; ${PARAM_COMMITISH} not found locally or is a remote branch.")
         endif()
     endif()
 
-    if (NOT ${PARAM_DO_NOT_ADD_SUBPROJECT})
-        if (NOT ${PARAM_NOT_SYSTEM})
+    if (NOT PARAM_DO_NOT_ADD_SUBPROJECT)
+        if (NOT PARAM_NOT_SYSTEM)
             add_subdirectory(${repo_dir} ${CMAKE_BINARY_DIR}/alp_external/${name} SYSTEM)
         else()
             add_subdirectory(${repo_dir} ${CMAKE_BINARY_DIR}/alp_external/${name})

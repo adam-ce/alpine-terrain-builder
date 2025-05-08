@@ -89,7 +89,7 @@ add_library(terrainlib
     terrainlib/init.h terrainlib/init.cpp
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected ${OpenCV_LIBS})
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

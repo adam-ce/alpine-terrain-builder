@@ -37,7 +37,7 @@ function(alp_setup_opencv version)
             -DWITH_FFMPEG=OFF
             -DWITH_JPEG=OFF -DWITH_PNG=OFF -DWITH_TIFF=OFF
             -DWITH_GTK=OFF -DWITH_QT=OFF
-            -DBUILD_LIST=core,imgproc
+            -DBUILD_LIST=core,imgproc,imgcodecs
         )
     find_package(OpenCV REQUIRED)
 endfunction()

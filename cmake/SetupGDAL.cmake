@@ -45,6 +45,7 @@ function(alp_setup_gdal)
             -DBUILD_JAVA_BINDINGS=OFF
             -DBUILD_CSHARP_BINDINGS=OFF
             -DGDAL_USE_ICONV=OFF
+            -DGDAL_USE_EXTERNAL_LIBS=OFF
         )
 
     find_package(GDAL CONFIG REQUIRED)

@@ -34,6 +34,8 @@ private:
   void init_glad();
   void init_gl();
 
+  void draw_camera_settings_window();
+
   static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                                           GLenum severity, GLsizei length,
                                           const GLchar *message,

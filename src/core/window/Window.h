@@ -39,6 +39,9 @@ public:
 
 	glm::dvec2 get_cursor_position();
 	glm::dvec2 get_window_size();
+
+	GLFWwindow* handle();
+
 	bool is_key_pressed(int key);
 	bool is_mouse_button_pressed(int key);
 

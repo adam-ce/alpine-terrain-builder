@@ -52,10 +52,24 @@ void Camera::set_far(float far) {
 	m_far_plane = far;
 }
 
+float Camera::get_aspect_ratio() {
+	return m_aspect_ratio;
+}
+
 void Camera::set_aspect_ratio(float new_aspect_ratio) {
 	m_projection_matrix_cache.reset();
 
 	m_aspect_ratio = new_aspect_ratio;
+}
+
+float Camera::get_fov() {
+	return m_fov_deg;
+}
+
+void Camera::set_fov(float new_fov_deg) {
+	m_projection_matrix_cache.reset();
+
+	m_fov_deg = new_fov_deg;
 }
 
 float Camera::get_near() {
@@ -68,6 +82,32 @@ float Camera::get_far() {
 
 glm::dvec3 Camera::get_position() {
 	return m_position;
+}
+
+void Camera::set_position(glm::dvec3 new_position) {
+	m_view_matrix_cache.reset();
+
+	m_position = new_position;
+}
+
+glm::quat Camera::get_rotation_quat() {
+	return m_rotation;
+}
+
+void Camera::set_rotation_quat(glm::quat new_rotation_quat) {
+	m_view_matrix_cache.reset();
+
+	m_rotation = new_rotation_quat;
+}
+
+glm::vec3 Camera::get_rotation_euler() {
+	return glm::eulerAngles(m_rotation);
+}
+
+void Camera::set_rotation_euler(glm::vec3 new_rotation_euler_radians) {
+	m_view_matrix_cache.reset();
+
+	m_rotation = glm::quat(new_rotation_euler_radians);
 }
 
 glm::dvec3 Camera::get_local_right_dir() {

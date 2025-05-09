@@ -6,6 +6,10 @@
 // CMRC Resource Compiler
 #include <cmrc/cmrc.hpp>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include "shader/Shader.h"
 #include "shader/ShaderProgram.h"
 #include "Buffer.h"
@@ -35,6 +39,16 @@ Application::Application(std::string title, int width, int height)
     init_glad();
     init_gl();
 
+    // Setup Dear ImGui context
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(m_window->handle(), true);          // Second param install_callback=true will install GLFW callbacks and chain to existing ones.
+    ImGui_ImplOpenGL3_Init();
+
     if (c.msaa_samples > 0) {
         glEnable(GL_MULTISAMPLE);
     }
@@ -52,13 +66,23 @@ void Application::run() {
     LOG_INFO("Setting up key event callbacks");
     m_window->register_key_event(GLFW_PRESS, GLFW_KEY_TAB, [this]() {
         toggle_nav_mode();
+    
+        ImGuiIO& io = ImGui::GetIO();
 
         if (m_nav_mode) {
             LOG_DEBUG("Entering Nav Mode");
+
+            io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+            io.ConfigFlags |= ImGuiConfigFlags_NoKeyboard;
+
             m_window->set_capture_mouse(true);
             m_window->clear_accumulated_cursor_delta();
         } else {
             LOG_DEBUG("Exiting Nav Mode");
+
+            io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+            io.ConfigFlags &= ~ImGuiConfigFlags_NoKeyboard;
+
             m_window->set_capture_mouse(false);
         }
     });
@@ -108,7 +132,7 @@ void Application::run() {
         .near_plane = 1000.0f,
         .far_plane = 200000000.0f,
 
-        .position = glm::vec3(0.0f, 0.0f, 10000000.0f),
+        .position = glm::vec3(10000000.0f),
         .target = glm::vec3(0.0f),
         .up = glm::vec3(0.0f, 1.0f, 0.0f),
     };
@@ -191,11 +215,20 @@ void Application::run() {
     glClearColor(0.f, 0.f, 0.f, 1.f);
 
     while (!m_window->should_close()) {
+
+        m_window->poll_events();
+
         const double current_frame_time = glfwGetTime();
         const double frame_delta_time = current_frame_time - last_frame_time;
         last_frame_time = current_frame_time;
+        
+        // Start the Dear ImGui frame
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
 
-        m_window->poll_events();
+        draw_camera_settings_window();
+
         update_camera(frame_delta_time, U_view);
 
         octree::OctreeRenderIntent rendering_intent = space.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false);
@@ -203,48 +236,27 @@ void Application::run() {
         cube_instance_active_buffer.set_data(rendering_intent.instances_active);
         cube_instance_model_buffer.set_data(rendering_intent.instances_model_mats);
 
-        if (rendering_intent.min_scene_distance.has_value() && m_camera->get_near() != rendering_intent.min_scene_distance.value()) {
+        if (rendering_intent.min_scene_distance.has_value() && m_camera->get_near() != (float)rendering_intent.min_scene_distance.value() * 0.5f) {
             m_camera->set_near(rendering_intent.min_scene_distance.value() * 0.5f);
         }
-        if (rendering_intent.max_scene_distance.has_value() && m_camera->get_far() != rendering_intent.max_scene_distance.value()) {
+        if (rendering_intent.max_scene_distance.has_value() && m_camera->get_far() != (float)rendering_intent.max_scene_distance.value() * 1.5f) {
             m_camera->set_far(rendering_intent.max_scene_distance.value() * 1.5f);
         }
 
+        if (m_camera->is_view_matrix_outdated()) {
+            U_view.set(m_camera->view_matrix());
+        }
         if (m_camera->is_projection_matrix_outdated()) {
             U_projection.set(m_camera->projection_matrix());
         }
 
-        glm::dvec3 cam_pos = m_camera->get_position();
-        float near = m_camera->get_near();
-        float far = m_camera->get_far();
-
-        std::string id_string;
-
-        if (rendering_intent.closest_node.has_value()) {
-            auto id = rendering_intent.closest_node.value();
-
-            uint32_t level = id.level();
-            uint32_t id_x = id.coords().x;
-            uint32_t id_y = id.coords().y;
-            uint32_t id_z = id.coords().z;
-
-            id_string = std::vformat(" | CLOSEST ID: L{} {} {} {}",
-                std::make_format_args(
-                    level, id_x, id_y, id_z
-                )
-            );
-        }
-        octree::Coords coords = rendering_intent.closest_node.value().coords();
-
-        m_window->set_title_suffix(std::vformat(" | CAM POS: {:.2f}, {:.2f}, {:.2f} | Z-NEAR: {:.2f}, Z-FAR: {:.2f}{}", 
-            std::make_format_args(
-                cam_pos.x, cam_pos.y, cam_pos.z, near, far, id_string
-            )
-        ));
-
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glLineWidth(2.0f);
+        //glLineWidth(2.0f);
         glDrawElementsInstanced(GL_LINES, indices.size(), GL_UNSIGNED_INT, 0, rendering_intent.instance_count);
+
+        // RENDER IMGUI AFTER OUR RENDERS
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         m_window->swapBuffers();
     }
@@ -318,14 +330,13 @@ void Application::update_camera(float frame_delta_time, Uniform<glm::mat4> U_vie
     if (movement_magnitude != 0.0f) {
         m_camera->move_local(local_movement_delta * (float)frame_delta_time * movement_speed);
     }
-
-    if (m_camera->is_view_matrix_outdated()) {
-        U_view.set(m_camera->view_matrix());
-    }
 }
 
 Application::~Application() {
   LOG_INFO("Exiting");
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
+  ImGui::DestroyContext();
 }
 
 void Application::toggle_nav_mode() {
@@ -351,6 +362,132 @@ void Application::init_gl() {
 #endif // _DEBUG
 
   glViewport(0, 0, m_width, m_height);
+}
+
+void Application::draw_camera_settings_window() {
+    const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiCond_FirstUseEver);
+
+    if (!ImGui::Begin("Camera Settings")) {
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Position")) {
+        bool cam_pos_edited = false;
+        glm::dvec3 cam_pos = m_camera->get_position();
+
+
+        float double_input_width = ImGui::CalcTextSize("#########.#########").x;
+
+        ImGui::SetNextItemWidth(double_input_width);
+        ImGui::InputDouble("X", &cam_pos.x);
+
+        if (ImGui::IsItemEdited()) {
+            cam_pos_edited = true;
+        }
+
+        ImGui::SetNextItemWidth(double_input_width);
+        ImGui::InputDouble("Y", &cam_pos.y);
+
+        if (ImGui::IsItemEdited()) {
+            cam_pos_edited = true;
+        }
+
+        ImGui::SetNextItemWidth(double_input_width);
+        ImGui::InputDouble("Z", &cam_pos.z);
+
+        if (ImGui::IsItemEdited() || cam_pos_edited) {
+            cam_pos_edited = true;
+
+            m_camera->set_position(cam_pos);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Orientation")) {
+        ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+        if (ImGui::TreeNode("Euler Angles")) {
+            bool euler_edited = false;
+            glm::vec3 euler = glm::degrees(m_camera->get_rotation_euler());
+
+            ImGui::SliderFloat("Pitch (X)", &euler.x, -180.0f, 180.0f);
+            if (ImGui::IsItemEdited()) {
+                euler_edited = true;
+            }
+
+            ImGui::SliderFloat("Yaw (Y)", &euler.y, -90.0f, 90.0f);
+            if (ImGui::IsItemEdited()) {
+                euler_edited = true;
+            }
+
+            ImGui::SliderFloat("Roll (Z)", &euler.z, -180.0f, 180.0f);
+            if (ImGui::IsItemEdited() || euler_edited) {
+                euler_edited = true;
+
+                m_camera->set_rotation_euler(glm::radians(euler));
+            }
+
+            ImGui::TreePop();
+        }
+
+        ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+        if (ImGui::TreeNode("Quaternion")) {
+            bool quat_edited = false;
+            glm::quat quat = m_camera->get_rotation_quat();
+
+            ImGui::SliderFloat("X", &quat.x, -1.0, 1.0);
+            if (ImGui::IsItemEdited()) {
+                quat_edited = true;
+            }
+
+            ImGui::SliderFloat("Y", &quat.y, -1.0, 1.0);
+            if (ImGui::IsItemEdited()) {
+                quat_edited = true;
+            }
+
+            ImGui::SliderFloat("Z", &quat.z, -1.0, 1.0);
+            if (ImGui::IsItemEdited()) {
+                quat_edited = true;
+            }
+
+            ImGui::SliderFloat("W", &quat.w, -1.0, 1.0);
+            if (ImGui::IsItemEdited() || quat_edited) {
+                quat_edited = true;
+
+                m_camera->set_rotation_quat(glm::normalize(quat));
+            }
+
+            ImGui::TreePop();
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Projection")) {
+        float fov = m_camera->get_fov();
+
+        ImGui::SliderFloat("FOV", &fov, 0.1f, 120.0f);
+        if (ImGui::IsItemEdited()) {
+            m_camera->set_fov(fov);
+        }
+
+        ImGui::Separator();
+
+        float near = m_camera->get_near();
+        ImGui::InputFloat("Near Plane", &near);
+        if (ImGui::IsItemEdited()) {
+            m_camera->set_near(near);
+        }
+
+        float far = m_camera->get_far();
+        ImGui::InputFloat("Far Plane", &far);
+        if (ImGui::IsItemEdited()) {
+            m_camera->set_far(far);
+        }
+
+        ImGui::Separator();
+    }
+
+    ImGui::End();
 }
 
 void Application::gl_debug_callback(GLenum source, GLenum type,

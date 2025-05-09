@@ -22,12 +22,24 @@ public:
 	void move_local(glm::dvec3 local_movement_delta);
 	void set_near(float near);
 	void set_far(float far);
+	
+	float get_aspect_ratio();
 	void set_aspect_ratio(float new_aspect_ratio);
+
+	float get_fov();
+	void set_fov(float new_fov_deg);
 
 	float get_near();
 	float get_far();
 
 	glm::dvec3 get_position();
+	void set_position(glm::dvec3 new_position);
+
+	glm::quat get_rotation_quat();
+	void set_rotation_quat(glm::quat new_rotation_quat);
+
+	glm::vec3 get_rotation_euler();
+	void set_rotation_euler(glm::vec3 new_rotation_euler_radians);
 
 	glm::dvec3 get_local_right_dir();
 	glm::dvec3 get_local_up_dir();

@@ -133,7 +133,7 @@ public:
     OctreeRenderIntent generate_octree_render_intent(const Id root, glm::dvec3 cam_pos, bool draw_neighbours_only) {
         // Defines under which ratio between dist(cam, node_bbox_centre) / node_bbox_size the node is split
         // I.e.: dist = 2000 and node_bbox_size = 4000 -> ratio = 0.5 -> node would get refined
-        double refining_ratio = 0.5f;
+        double refining_ratio = 1.0f;
 
         std::vector<Id> refining_ids;
         refining_ids.push_back(root);

@@ -120,6 +120,10 @@ glm::dvec2 Window::get_window_size() {
     return glm::dvec2(m_width, m_height);
 }
 
+GLFWwindow* Window::handle() {
+    return m_handle;
+}
+
 bool Window::is_key_pressed(int key) {
     auto result = m_key_states.find(key);
     

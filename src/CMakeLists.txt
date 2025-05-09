@@ -90,6 +90,32 @@ if(NOT TARGET radix)
     FetchContent_MakeAvailable(radix)
 endif()
 
+if(NOT TARGET imgui)
+    SET(IMGUI_SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/imgui)
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG origin/master
+        SOURCE_DIR ${IMGUI_SOURCE_DIR}
+    )
+    message(STATUS "Including imgui")
+    #FetchContent_MakeAvailable(imgui)
+
+    add_library(imgui STATIC
+        ${IMGUI_SOURCE_DIR}/imgui.cpp
+        ${IMGUI_SOURCE_DIR}/imgui_draw.cpp
+        ${IMGUI_SOURCE_DIR}/imgui_demo.cpp # TODO: Remove after use
+        ${IMGUI_SOURCE_DIR}/imgui_tables.cpp
+        ${IMGUI_SOURCE_DIR}/imgui_widgets.cpp
+        ${IMGUI_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        ${IMGUI_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    )
+    target_include_directories(imgui PUBLIC
+        ${IMGUI_SOURCE_DIR}
+        ${IMGUI_SOURCE_DIR}/backends
+    )
+    target_link_libraries(imgui PUBLIC glfw)
+endif()
+
 add_executable(alpenite-browser
     main.cpp
 
@@ -109,5 +135,5 @@ add_executable(alpenite-browser
     core/octree/id.h
     core/octree/space.h
 )
-target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog radix)
+target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog radix imgui)
 target_include_directories(alpenite-browser PRIVATE .)

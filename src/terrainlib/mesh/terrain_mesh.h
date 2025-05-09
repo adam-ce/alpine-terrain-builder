@@ -45,6 +45,9 @@ public:
     size_t face_count() const {
         return this->triangles.size();
     }
+    bool is_empty() const {
+        return this->vertex_count() == 0 && this->face_count() == 0;
+    }
 
     bool has_uvs() const {
         return this->positions.size() == this->uvs.size();

@@ -21,8 +21,7 @@
 #include <filesystem>
 #include <optional>
 #include <ranges>
-
-#include <fmt/core.h>
+#include <set>
 
 #include "../catch2_helpers.h"
 #include "Dataset.h"

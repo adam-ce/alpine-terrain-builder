@@ -36,8 +36,16 @@ class Storage {
         }
 
     private:
-        std::filesystem::path get_node_path(const Id &id) const {
-            return base_path / std::to_string(id.level()) / std::to_string(id.x()) / (std::to_string(id.y()) + ".gltf");
+        std::filesystem::path get_node_path(const Id &id, std::string_view ext = "glb") const {
+            if (!ext.empty() && ext.front() == '.') {
+                ext = ext.substr(1); // Remove leading dot
+            }
+
+            return base_path
+                / std::to_string(id.level())
+                / std::to_string(id.x())
+                / std::to_string(id.y())
+                / fmt::format("{}.{}", id.z(), ext);
         }
 
     private:

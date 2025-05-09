@@ -27,5 +27,29 @@ public:
 #define LOG_INFO(...)  SPDLOG_LOGGER_INFO (::Log::get_logger(), __VA_ARGS__)
 #define LOG_WARN(...)  SPDLOG_LOGGER_WARN (::Log::get_logger(), __VA_ARGS__)
 #define LOG_ERROR(...) SPDLOG_LOGGER_ERROR(::Log::get_logger(), __VA_ARGS__)
+#define LOG_ERROR_AND_EXIT(...) \
+    do {                        \
+        LOG_ERROR(__VA_ARGS__); \
+        exit(1);                \
+    } while (false)
+#if defined(__GNUC__) || defined(__clang__)
+#define UNREACHABLE()                                                       \
+    do {                                                                    \
+        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
+        __builtin_unreachable();                                            \
+    } while (0)
+#elif defined(_MSC_VER)
+#define UNREACHABLE()                                                       \
+    do {                                                                    \
+        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
+        __assume(false);                                                    \
+    } while (0)
+#else
+#define UNREACHABLE()                                                       \
+    do {                                                                    \
+        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
+        std::abort();                                                       \
+    } while (0)
+#endif
 
 #endif

@@ -316,7 +316,11 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
     const raster::HeightMap height_map = read_result.value();
 
     LOG_TRACE("Finding valid pixels");
-    const raster::Mask valid_mask = raster::transform(height_map, is_valid);
+    const float no_data_value = reader.get_no_data_value();
+    const raster::Mask valid_mask = raster::transform(height_map, [=](const float height) {
+        return height != no_data_value;
+    });
+    // const raster::Mask valid_mask = raster::transform(height_map, is_valid);
 
     LOG_TRACE("Transforming pixels to vertices");
     const raster::Raster<glm::dvec3> source_points = raster::transform(height_map, valid_mask, [&](const float height, const raster::Coords& coords) {

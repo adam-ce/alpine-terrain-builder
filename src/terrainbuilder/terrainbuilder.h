@@ -6,11 +6,12 @@
 #include <radix/geometry.h>
 
 #include "Dataset.h"
+#include "mesh/terrain_mesh.h"
 #include "srs.h"
 
 namespace terrainbuilder {
 
-void build(
+void build_and_save(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
@@ -18,6 +19,14 @@ void build(
     const std::optional<std::filesystem::path> texture_base_path,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_path);
+
+TerrainMesh build(
+    Dataset &dataset,
+    const OGRSpatialReference &target_bounds_srs,
+    const radix::geometry::Aabb3d &target_bounds,
+    const OGRSpatialReference &texture_srs,
+    const std::optional<std::filesystem::path> texture_base_path,
+    const OGRSpatialReference &mesh_srs);
 }
 
 #endif

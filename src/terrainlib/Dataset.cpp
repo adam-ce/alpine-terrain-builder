@@ -33,10 +33,13 @@
 #include "init.h"
 #include "log.h"
 
-Dataset::Dataset(const std::string& path)
-{
+Dataset::Dataset(const std::string &path) {
     initialize_gdal_once();
-    m_gdal_dataset.reset(static_cast<GDALDataset*>(GDALOpen(path.c_str(), GA_ReadOnly)));
+    const auto gdal_dataset = GDALOpenEx(
+        path.c_str(),
+        GDAL_OF_READONLY | GDAL_OF_THREAD_SAFE | GDAL_OF_RASTER | GDAL_OF_INTERNAL,
+        nullptr, nullptr, nullptr);
+    m_gdal_dataset.reset(static_cast<GDALDataset *>(gdal_dataset));
     if (!m_gdal_dataset) {
         LOG_ERROR("Couldn't open dataset {}.\n", path);
         throw Exception("");
@@ -87,6 +90,21 @@ radix::tile::SrsBounds Dataset::bounds() const {
     const double eastX = adfGeoTransform[0] + (widthInPixels() * adfGeoTransform[1]);
     const double northY = adfGeoTransform[3];
     return { {westX, southY}, {eastX, northY} };
+}
+
+radix::tile::SrsAndHeightBounds Dataset::bounds3d() const {
+    const auto band = this->m_gdal_dataset->GetRasterBand(1);
+
+    glm::dvec2 height_range;
+    if (!band->GetStatistics(1, 0, &height_range.x, &height_range.y, nullptr, nullptr)) {
+        throw std::runtime_error("Could not determine dataset height bounds");
+    }
+
+    const auto bounds2d = this->bounds();
+    radix::tile::SrsAndHeightBounds bounds3d;
+    bounds3d.min = glm::dvec3(bounds2d.min, height_range[0]);
+    bounds3d.max = glm::dvec3(bounds2d.max, height_range[1]);
+    return bounds3d;
 }
 
 radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) const {

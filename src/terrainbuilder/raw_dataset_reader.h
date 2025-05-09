@@ -35,6 +35,12 @@ public:
         return this->dataset;
     }
 
+    double get_no_data_value() {
+        assert(this->dataset->GetRasterCount() >= 1);
+        GDALRasterBand *height_band = this->dataset->GetRasterBand(1);
+        return height_band->GetNoDataValue();
+    }
+
     glm::uvec2 dataset_size() {
         GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
         return glm::uvec2(heights_band->GetXSize(), heights_band->GetYSize());
@@ -54,7 +60,7 @@ public:
         assert(glm::all(glm::lessThan(bounds.max, glm::ivec2(this->dataset_size()))));
 
         assert(this->dataset->GetRasterCount() >= 1);
-        GDALRasterBand *heights_band = this->dataset->GetRasterBand(1); // non-owning pointer
+        GDALRasterBand *height_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
         // Initialize the HeightData for reading
         raster::HeightMap height_data(bounds.width(), bounds.height());
@@ -68,7 +74,7 @@ public:
         }
 
         // Read data from the heights band into heights_data
-        const int read_result = heights_band->RasterIO(
+        const int read_result = height_band->RasterIO(
             GF_Read, bounds.min.x, bounds.min.y, bounds.width(), bounds.height(),
             static_cast<void *>(height_data.data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
 

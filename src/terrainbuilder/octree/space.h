@@ -7,6 +7,7 @@
 namespace octree {
 using Bounds = radix::geometry::Aabb3d;
 
+// TODO: add srs to this?
 class Space {
 public:
     const Bounds bounds;
@@ -42,7 +43,7 @@ public:
         }
 
         Id current_smallest_encompassing_node = root;
-        while (true) {
+        while (current_smallest_encompassing_node.has_children()) {
             const std::array<Id, 8> children = current_smallest_encompassing_node.children().value();
             std::optional<Id> next_smallest;
 

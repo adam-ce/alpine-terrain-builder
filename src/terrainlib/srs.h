@@ -20,11 +20,14 @@
 
 #include "Exception.h"
 #include <cstddef>
+#include <fmt/format.h>
 #include <glm/detail/qualifier.hpp>
 #include <glm/glm.hpp>
 #include <memory>
 #include <ogr_spatialref.h>
 #include <radix/tile.h>
+#include <string>
+#include <tl/expected.hpp>
 #include <vector>
 
 namespace srs {
@@ -284,29 +287,35 @@ inline radix::geometry::Aabb3d encompassing_bounds_transfer(
     return target_bounds;
 }
 
-inline OGRSpatialReference from_epsg(uint32_t epsg) {
+inline tl::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg) {
     OGRSpatialReference srs;
-    srs.importFromEPSG(epsg);
+    if (srs.importFromEPSG(epsg) != OGRERR_NONE) {
+        return tl::unexpected(fmt::format("Failed to import spatial reference from EPSG code: {}", epsg));
+    }
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }
-inline OGRSpatialReference from_user_input(const std::string& user_input) {
+
+inline tl::expected<OGRSpatialReference, std::string> from_user_input(const std::string &user_input) {
     OGRSpatialReference srs;
-    srs.SetFromUserInput(user_input.c_str());
+    if (srs.SetFromUserInput(user_input.c_str()) != OGRERR_NONE) {
+        return tl::unexpected(fmt::format("Failed to set spatial reference from user input: {}", user_input));
+    }
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }
+
 inline OGRSpatialReference ecef() {
-    return from_epsg(4978);
+    return from_epsg(4978).value();
 }
 inline OGRSpatialReference webmercator() {
-    return from_epsg(3857);
+    return from_epsg(3857).value();
 }
 inline OGRSpatialReference wgs84() {
-    return from_epsg(4326);
+    return from_epsg(4326).value();
 }
 inline OGRSpatialReference mgi() {
-    return from_epsg(4312);
+    return from_epsg(4312).value();
 }
 
 }

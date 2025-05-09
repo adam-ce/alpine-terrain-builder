@@ -43,14 +43,13 @@ private:
     std::filesystem::path base_path;
 };
 
-void build(
+TerrainMesh build(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
     const std::optional<std::filesystem::path> texture_base_path,
-    const OGRSpatialReference &mesh_srs,
-    const std::filesystem::path &output_path) {
+    const OGRSpatialReference &mesh_srs) {
     const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
 
@@ -79,10 +78,12 @@ void build(
                       "}}",
                       dataset_bounds.min.x, dataset_bounds.min.y, dataset_bounds.width(), dataset_bounds.height(),
                       target_bounds.min.x, target_bounds.min.y, target_bounds.size().x, target_bounds.size().y);
-            exit(1);
+            // TODO: exit(1);
+            return {};
         } else if (error == mesh::BuildError::EmptyRegion) {
             LOG_WARN("Target bounds are inside dataset, but the region is empty");
-            exit(0);
+            // TODO: exit(0);
+            return {};
         }
     }
     TerrainMesh mesh = mesh_result.value();
@@ -101,12 +102,32 @@ void build(
         mesh.texture = texture;
         LOG_DEBUG("Assembling mesh texture took {}s", format_secs_since(start));
         LOG_INFO("Finished assembling mesh texture");
-
     } else {
         LOG_INFO("Skipped assembling texture");
     }
+    
+    return mesh;
+}
+
+void build_and_save(
+    Dataset &dataset,
+    const OGRSpatialReference &target_bounds_srs,
+    const radix::geometry::Aabb3d &target_bounds,
+    const OGRSpatialReference &texture_srs,
+    const std::optional<std::filesystem::path> texture_base_path,
+    const OGRSpatialReference &mesh_srs,
+    const std::filesystem::path &output_path) {
+    const TerrainMesh mesh = build(
+        dataset,
+        target_bounds_srs,
+        target_bounds,
+        texture_srs,
+        texture_base_path,
+        mesh_srs);
 
     LOG_INFO("Writing mesh to output path {}", output_path.string());
+
+    std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
     // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
@@ -129,4 +150,5 @@ void build(
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
     LOG_INFO("Done", output_path.string());
 }
+
 }

@@ -52,6 +52,12 @@ void Camera::set_far(float far) {
 	m_far_plane = far;
 }
 
+void Camera::set_aspect_ratio(float new_aspect_ratio) {
+	m_projection_matrix_cache.reset();
+
+	m_aspect_ratio = new_aspect_ratio;
+}
+
 float Camera::get_near() {
 	return m_near_plane;
 }

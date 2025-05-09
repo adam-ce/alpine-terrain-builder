@@ -24,7 +24,7 @@ Application::Application(std::string title, int width, int height)
         .width = 1280,
         .height = 720,
         .title = "Alpenite Browser",
-        .resizeable = false,
+        .resizeable = true,
         .msaa_samples = 4,
         .opengl_version = {4, 6},
         .opengl_core_profile = true
@@ -116,6 +116,14 @@ void Application::run() {
 
     U_projection.set(m_camera->projection_matrix());
     U_view.set(m_camera->view_matrix());
+
+    m_window->register_framebuffer_resize_event([this, &U_projection](glm::ivec2 new_size) {
+        m_camera->set_aspect_ratio((float)new_size.x / (float)new_size.y);
+
+        glViewport(0, 0, new_size.x, new_size.y);
+
+        U_projection.set(m_camera->projection_matrix());
+    });
 
     LOG_INFO("Setting up lines");
 

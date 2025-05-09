@@ -36,6 +36,7 @@ Window::Window(WindowConfig config) : m_width(config.width), m_height(config.hei
     glfwSetMouseButtonCallback(m_handle, mouse_button_callback);
     glfwSetCursorPosCallback(m_handle, cursor_position_callback);
     glfwSetScrollCallback(m_handle, scroll_callback);
+    glfwSetFramebufferSizeCallback(m_handle, framebuffer_size_callback);
 
     // Initialize current and last cursor positions
     glfwGetCursorPos(m_handle, &m_current_unfetched_cursor_pos.x, &m_current_unfetched_cursor_pos.y);
@@ -153,6 +154,10 @@ void Window::register_scroll_event(std::function<void(glm::dvec2)> callback) {
     m_scroll_callbacks.push_back(callback);
 }
 
+void Window::register_framebuffer_resize_event(std::function<void(glm::ivec2)> callback) {
+    m_framebuffer_resize_callbacks.push_back(callback);
+}
+
 float Window::getAspectRatio() {
     return (float)m_width / (float)m_height;
 }
@@ -211,6 +216,17 @@ void Window::scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 
     for (auto callback : w->m_scroll_callbacks) {
         callback(glm::dvec2(xoffset, yoffset));
+    }
+}
+
+void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    Window* w = (Window*)glfwGetWindowUserPointer(window);
+
+    w->m_width = width;
+    w->m_height = height;
+
+    for (auto callback : w->m_framebuffer_resize_callbacks) {
+        callback(glm::dvec2(width, height));
     }
 }
 

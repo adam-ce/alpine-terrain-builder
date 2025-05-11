@@ -43,6 +43,7 @@ function(_alp_build_and_install NAME SRC_DIR BUILD_DIR INSTALL_DIR)
         COMMAND ${CMAKE_COMMAND}
                 --build ${BUILD_DIR}
                 --config ${CMAKE_BUILD_TYPE}
+                --parallel
                 --target install
         RESULT_VARIABLE _bld_res)
 

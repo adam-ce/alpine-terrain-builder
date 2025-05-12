@@ -6,10 +6,10 @@
 
 #include "id.h"
 #include "mesh/io.h"
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 
 namespace octree {
-using Node = TerrainMesh;
+using Node = SimpleMesh;
 
 class Storage {
     public:
@@ -17,7 +17,7 @@ class Storage {
 
         std::optional<Node> load_node(const Id &id) const {
             const auto node_path = this->get_node_path(id);
-            const auto result = io::load_mesh_from_path(node_path);
+            const auto result = mesh::io::load_from_path(node_path);
             if (result.has_value()) {
                 return result.value();
             } else {
@@ -27,7 +27,7 @@ class Storage {
 
         bool save_node(const Id &id, const Node &node) const {
             const auto node_path = this->get_node_path(id);
-            const auto result = io::save_mesh_to_path(node_path, node);
+            const auto result = mesh::io::save_to_path(node, node_path);
             return result.has_value();
         }
 

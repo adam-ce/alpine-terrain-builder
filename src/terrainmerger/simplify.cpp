@@ -20,6 +20,7 @@
 #include "simplify.h"
 #include "uv_map.h"
 #include "validate.h"
+#include "mesh/utils.h"
 
 using namespace simplify;
 
@@ -117,8 +118,8 @@ static double measure_max_absolute_error(const SurfaceMesh &original, const Surf
     return error + bound_on_error;
 }
 
-static radix::geometry::Aabb<3, double> calculate_bounds(const SurfaceMesh &mesh) {
-    radix::geometry::Aabb<3, double> bounds;
+static radix::geometry::Aabb3d calculate_bounds(const SurfaceMesh &mesh) {
+    radix::geometry::Aabb3d bounds;
     bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
     bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
 
@@ -449,7 +450,7 @@ static size_t _simplify_mesh(
 
     throw std::invalid_argument("invalid algorithm specified");
 }
-Result simplify::simplify_mesh(const TerrainMesh &mesh, std::span<const StopCondition> stop_conditions, Options options) {
+Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondition> stop_conditions, Options options) {
     // simplification fails with large numerical values so we normalize the values here.
     // EPECK is way too slow
     const size_t vertex_count = mesh.positions.size();
@@ -458,7 +459,7 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, std::span<const StopCond
         average_position += mesh.positions[i] / static_cast<double>(vertex_count);
     }
 
-    TerrainMesh normalized_mesh = mesh;
+    SimpleMesh normalized_mesh = mesh;
     for (size_t i = 0; i < vertex_count; i++) {
         const glm::vec3 normalized_position = mesh.positions[i] - average_position;
         normalized_mesh.positions[i] = normalized_position;
@@ -483,7 +484,7 @@ Result simplify::simplify_mesh(const TerrainMesh &mesh, std::span<const StopCond
         LOG_WARN("Failed to remove self intersections after simplification");
     }
 
-    TerrainMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
+    SimpleMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
     simplified_mesh.uvs.resize(simplified_mesh.vertex_count());
     for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
         simplified_mesh.uvs[i] = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(i)]);
@@ -508,7 +509,7 @@ cv::Mat simplify::simplify_texture(const cv::Mat &texture, glm::uvec2 target_res
     return simplified_texture;
 }
 
-void simplify::simplify_mesh_texture(TerrainMesh &mesh, glm::uvec2 target_resolution) {
+void simplify::simplify_mesh_texture(SimpleMesh &mesh, glm::uvec2 target_resolution) {
     if (mesh.texture.has_value()) {
         mesh.texture = simplify_texture(mesh.texture.value(), target_resolution);
     }

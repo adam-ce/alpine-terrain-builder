@@ -54,13 +54,13 @@ tl::expected<UvMap, UvParameterizationError> parameterize_mesh(
     Border border);
 
 tl::expected<UvMap, UvParameterizationError> parameterize_mesh(
-    const TerrainMesh &mesh,
+    const SimpleMesh &mesh,
     Algorithm algorithm,
     Border border);
 
 Texture merge_textures(
-    const std::span<const TerrainMesh> original_meshes,
-    const TerrainMesh& merged_mesh,
+    const std::span<const SimpleMesh> original_meshes,
+    const SimpleMesh& merged_mesh,
     const merge::VertexMapping &mapping,
     const UvMap& uv_map,
     const glm::uvec2 merged_texture_size);

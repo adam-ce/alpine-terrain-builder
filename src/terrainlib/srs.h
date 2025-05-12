@@ -18,24 +18,25 @@
 
 #pragma once
 
-#include "Exception.h"
 #include <cstddef>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include <fmt/format.h>
 #include <glm/detail/qualifier.hpp>
 #include <glm/glm.hpp>
-#include <memory>
 #include <ogr_spatialref.h>
-#include <radix/tile.h>
-#include <string>
+#include <radix/geometry.h>
 #include <tl/expected.hpp>
-#include <vector>
+#include <radix/tile.h>
 
 namespace srs {
 
 inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs) {
     auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
     if (!transformer) {
-        throw Exception("Couldn't create SRS transformation");
+        throw std::runtime_error("Couldn't create SRS transformation");
     }
     return transformer;
 }
@@ -43,13 +44,13 @@ inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpat
 template <typename T>
 inline glm::tvec2<T> transform_point(OGRCoordinateTransformation *transform, glm::tvec2<T> p) {
     if (!transform->Transform(1, &p.x, &p.y))
-        throw Exception("srs::transform_point(glm::tvec2<T>) failed");
+        throw std::runtime_error("srs::transform_point(glm::tvec2<T>) failed");
     return p;
 }
 template <typename T>
 inline glm::tvec3<T> transform_point(OGRCoordinateTransformation *transform, glm::tvec3<T> p) {
     if (!transform->Transform(1, &p.x, &p.y, &p.z))
-        throw Exception("srs::transform_point(glm::tvec3<T>) failed");
+        throw std::runtime_error("srs::transform_point(glm::tvec3<T>) failed");
     return p;
 }
 
@@ -75,7 +76,7 @@ inline void transform_points_inplace(OGRCoordinateTransformation *transform, std
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data())) {
-        throw Exception("srs::transform_points_inplace(std::array<glm::tvec2<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_inplace(std::array<glm::tvec2<T>, n>) failed");
     }
 
     for (size_t i = 0; i < points.size(); ++i) {
@@ -93,7 +94,7 @@ inline void transform_points_inplace(OGRCoordinateTransformation *transform, std
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data())) {
-        throw Exception("srs::transform_points_inplace(std::vector<glm::tvec2<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec2<T>, n>) failed");
     }
 
     for (size_t i = 0; i < points.size(); ++i) {
@@ -114,7 +115,7 @@ inline void transform_points_inplace(OGRCoordinateTransformation *transform, std
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw Exception("srs::transform_points_inplace(std::array<glm::tvec3<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_inplace(std::array<glm::tvec3<T>, n>) failed");
     }
 
     for (size_t i = 0; i < points.size(); ++i) {
@@ -138,7 +139,7 @@ inline void transform_points_inplace(OGRCoordinateTransformation *transform, std
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw Exception("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
     }
 
     for (size_t i = 0; i < points.size(); ++i) {
@@ -172,7 +173,7 @@ inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransforma
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw Exception("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
     }
 
     std::vector<glm::tvec2<T>> transformed;
@@ -189,7 +190,7 @@ inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsB
     std::array xs = {bounds.min.x, bounds.max.x};
     std::array ys = {bounds.min.y, bounds.max.y};
     if (!transform->Transform(2, xs.data(), ys.data())) {
-        throw Exception("srs::non_exact_bounds_transform failed");
+        throw std::runtime_error("srs::non_exact_bounds_transform failed");
     }
     return {{xs[0], ys[0]}, {xs[1], ys[1]}};
 }
@@ -200,7 +201,7 @@ inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry:
     std::array ys = {bounds.min.y, bounds.max.y};
     std::array zs = {bounds.min.z, bounds.max.z};
     if (!transform->Transform(2, xs.data(), ys.data(), zs.data())) {
-        throw Exception("srs::non_exact_bounds_transform failed");
+        throw std::runtime_error("srs::non_exact_bounds_transform failed");
     }
     return {{xs[0], ys[0], zs[0]}, {xs[1], ys[1], zs[1]}};
 }

@@ -25,8 +25,6 @@
 #include <string>
 #include <thread>
 
-#include "Exception.h"
-
 class ProgressIndicator {
     const size_t m_n_steps;
     std::atomic<size_t> m_step = 0;
@@ -34,10 +32,10 @@ class ProgressIndicator {
 public:
     ProgressIndicator(size_t n_steps);
 
-    void taskFinished();
-    [[nodiscard]] std::jthread startMonitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progressBar() const;
-    [[nodiscard]] std::string xOfYDoneMessagE() const;
+    void task_finished();
+    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
+    [[nodiscard]] std::string progress_bar() const;
+    [[nodiscard]] std::string x_of_y_done_message() const;
 };
 
 #endif // PROGRESSINDICATOR_H

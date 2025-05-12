@@ -15,7 +15,7 @@ Point2 convert::glm2cgal(glm::dvec2 point) {
     return Point2(point[0], point[1]);
 }
 
-SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
+SurfaceMesh convert::mesh2cgal(const SimpleMesh &mesh) {
     SurfaceMesh cgal_mesh;
 
     for (const glm::dvec3 &position : mesh.positions) {
@@ -34,8 +34,8 @@ SurfaceMesh convert::mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 
-TerrainMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
-    TerrainMesh mesh;
+SimpleMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
+    SimpleMesh mesh;
 
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
     const size_t face_count = CGAL::num_faces(cgal_mesh);

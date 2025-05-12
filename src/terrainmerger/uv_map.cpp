@@ -98,7 +98,7 @@ tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(SurfaceMe
     return uv_uhm;
 }
 
-tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(const TerrainMesh &mesh, Algorithm algorithm, Border border) {
+tl::expected<UvMap, UvParameterizationError> uv_map::parameterize_mesh(const SimpleMesh &mesh, Algorithm algorithm, Border border) {
     SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
     return parameterize_mesh(cgal_mesh, algorithm, border);
 }
@@ -160,12 +160,12 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
 
 // TODO: reproject triangles
 Texture uv_map::merge_textures(
-    const std::span<const TerrainMesh> original_meshes,
-    const TerrainMesh &merged_mesh,
+    const std::span<const SimpleMesh> original_meshes,
+    const SimpleMesh &merged_mesh,
     const merge::VertexMapping &mapping,
     const UvMap &uv_map,
     const glm::uvec2 merged_texture_size) {
-    for (const TerrainMesh& mesh : original_meshes) {
+    for (const SimpleMesh& mesh : original_meshes) {
         assert(mesh.has_texture());
     }
 
@@ -182,7 +182,7 @@ Texture uv_map::merge_textures(
 
         const merge::TriangleInMesh source_mesh_and_triangle = mapping.find_source_triangle(mapped_triangle);
         const size_t source_mesh_index = source_mesh_and_triangle.mesh_index;
-        const TerrainMesh &source_mesh = original_meshes[source_mesh_index];
+        const SimpleMesh &source_mesh = original_meshes[source_mesh_index];
         const glm::uvec3 source_triangle = source_mesh_and_triangle.triangle;
 
         std::array<cv::Point2f, 3> source_uv_triangle;

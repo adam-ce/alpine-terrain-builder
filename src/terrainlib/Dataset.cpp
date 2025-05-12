@@ -27,44 +27,45 @@
 
 #include <gdal_priv.h>
 
-#include "Exception.h"
 #include "ctb/Grid.hpp"
-#include "srs.h"
 #include "init.h"
 #include "log.h"
+#include "srs.h"
 
 Dataset::Dataset(const std::string &path) {
     initialize_gdal_once();
-    const auto gdal_dataset = GDALOpenEx(
-        path.c_str(),
-        GDAL_OF_READONLY | GDAL_OF_THREAD_SAFE | GDAL_OF_RASTER | GDAL_OF_INTERNAL,
-        nullptr, nullptr, nullptr);
-    m_gdal_dataset.reset(static_cast<GDALDataset *>(gdal_dataset));
+    m_gdal_dataset.reset(static_cast<GDALDataset *>(GDALOpen(path.c_str(), GA_ReadOnly)));
     if (!m_gdal_dataset) {
         LOG_ERROR("Couldn't open dataset {}.\n", path);
-        throw Exception("");
+        throw std::runtime_error("");
     }
+    m_path = path;
     m_name = std::regex_replace(path, std::regex("^.*/"), "");
     m_name = std::regex_replace(m_name, std::regex(R"(\.\w+$)"), "");
 }
 
-Dataset::Dataset(GDALDataset* dataset)
-{
+Dataset::Dataset(GDALDataset *dataset) {
     initialize_gdal_once();
     m_gdal_dataset.reset(dataset);
     if (!m_gdal_dataset) {
         LOG_ERROR("Dataset is null.\n");
-        throw Exception("Dataset is null.");
+        throw std::runtime_error("Dataset is null.");
     }
 }
 
-DatasetPtr Dataset::make_shared(const std::string& path)
-{
+DatasetPtr Dataset::make_shared(const std::string &path) {
     return std::make_shared<Dataset>(path);
 }
 
-std::string Dataset::name() const
-{
+Dataset Dataset::clone() {
+    if (!m_path.has_value()) {
+        LOG_ERROR("Cannot clone dataset.\n");
+        throw std::runtime_error("Cannot clone dataset.");
+    }
+    return Dataset(this->m_path.value());
+}
+
+std::string Dataset::name() const {
     return m_name;
 }
 
@@ -73,7 +74,7 @@ Dataset::~Dataset() = default;
 radix::tile::SrsBounds Dataset::bounds() const {
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
-        throw Exception("Could not get transformation information from source dataset");
+        throw std::runtime_error("Could not get transformation information from source dataset");
 
     // https://gdal.org/user/raster_data_model.html
     // gdal has a row/column raster format, where row 0 is the top most row.
@@ -82,14 +83,14 @@ radix::tile::SrsBounds Dataset::bounds() const {
 
     // we don't support sheering or rotation for now
     if (adfGeoTransform[2] != 0.0 || adfGeoTransform[4] != 0.0)
-        throw Exception("Dataset geo transform contains sheering or rotation. This is not supported!");
+        throw std::runtime_error("Dataset geo transform contains sheering or rotation. This is not supported!");
 
     const double westX = adfGeoTransform[0];
     const double southY = adfGeoTransform[3] + (heightInPixels() * adfGeoTransform[5]);
 
     const double eastX = adfGeoTransform[0] + (widthInPixels() * adfGeoTransform[1]);
     const double northY = adfGeoTransform[3];
-    return { {westX, southY}, {eastX, northY} };
+    return {{westX, southY}, {eastX, northY}};
 }
 
 radix::tile::SrsAndHeightBounds Dataset::bounds3d() const {
@@ -114,7 +115,6 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     const auto north = l_bounds.max.y;
     const auto south = l_bounds.min.y;
 
-
     const auto data_srs = srs();
     if (targetSrs.IsSame(&data_srs))
         return l_bounds;
@@ -131,14 +131,14 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 
     const auto deltaX = l_bounds.width() / 2000.0;
     if (deltaX <= 0.0)
-        throw Exception("west coordinate > east coordinate. This is not supported.");
+        throw std::runtime_error("west coordinate > east coordinate. This is not supported.");
     for (double s = west; s < east; s += deltaX) {
         addCoordinate(s, south);
         addCoordinate(s, north);
     }
     const auto deltaY = (north - south) / 2000.0;
     if (deltaY <= 0.0)
-        throw Exception("south coordinate > north coordinate. This is not supported.");
+        throw std::runtime_error("south coordinate > north coordinate. This is not supported.");
     for (double s = south; s < north; s += deltaY) {
         addCoordinate(west, s);
         addCoordinate(east, s);
@@ -157,26 +157,23 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     const double target_maxX = *std::max_element(x.begin(), x.end());
     const double target_minY = *std::min_element(y.begin(), y.end());
     const double target_maxY = *std::max_element(y.begin(), y.end());
-    return { {target_minX, target_minY}, {target_maxX, target_maxY} };
+    return {{target_minX, target_minY}, {target_maxX, target_maxY}};
 }
 
-OGRSpatialReference Dataset::srs() const
-{
-    const char* srcWKT = m_gdal_dataset->GetProjectionRef();
+OGRSpatialReference Dataset::srs() const {
+    const char *srcWKT = m_gdal_dataset->GetProjectionRef();
     if (!strlen(srcWKT))
-        throw Exception("The source dataset does not have a spatial reference system assigned");
+        throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
     auto srs = OGRSpatialReference(srcWKT);
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }
 
-unsigned Dataset::widthInPixels() const
-{
+unsigned Dataset::widthInPixels() const {
     return ctb::i_pixel(m_gdal_dataset->GetRasterXSize());
 }
 
-unsigned Dataset::heightInPixels() const
-{
+unsigned Dataset::heightInPixels() const {
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
@@ -188,32 +185,27 @@ double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSp
     return bounds.height() / pixelHeightIn(bounds_srs);
 }
 
-unsigned Dataset::n_bands() const
-{
+unsigned Dataset::n_bands() const {
     const auto n = m_gdal_dataset->GetRasterCount();
     assert(n >= 0);
     return unsigned(n);
 }
 
-GDALDataset* Dataset::gdalDataset()
-{
+GDALDataset *Dataset::gdalDataset() {
     return m_gdal_dataset.get();
 }
 
-double Dataset::gridResolution(const OGRSpatialReference& target_srs) const
-{
+double Dataset::gridResolution(const OGRSpatialReference &target_srs) const {
     return std::min(pixelWidthIn(target_srs), pixelHeightIn(target_srs));
 }
 
-double Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
-{
+double Dataset::pixelWidthIn(const OGRSpatialReference &target_srs) const {
     const auto b0 = bounds();
     const auto b1 = srs::non_exact_bounds_transform(b0, srs(), target_srs);
     return b1.width() / widthInPixels();
 }
 
-double Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
-{
+double Dataset::pixelHeightIn(const OGRSpatialReference &target_srs) const {
     const auto b = srs::non_exact_bounds_transform(bounds(), srs(), target_srs);
     return b.height() / heightInPixels();
 }

@@ -18,6 +18,7 @@
  *****************************************************************************/
 
 #include <opencv2/opencv.hpp>
+#include <fmt/core.h>
 
 #include "../catch2_helpers.h"
 #include "mesh/io.h"
@@ -49,7 +50,7 @@ bool mat_equals(const cv::Mat mat1, const cv::Mat mat2) {
 TEST_CASE("io roundtrip") {
     for (const auto& format : {"glb", "gltf"}) {
         DYNAMIC_SECTION(format) {
-            TerrainMesh mesh;
+            SimpleMesh mesh;
 
             mesh.positions.push_back(glm::dvec3(0, 0, 0));
             mesh.positions.push_back(glm::dvec3(1, 0, 0));
@@ -67,19 +68,19 @@ TEST_CASE("io roundtrip") {
             mesh.texture = cv::Mat3b(100, 100);
             cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
 
-            const std::filesystem::path mesh_path = fmt::format("./unittest_tiles/mesh.{}", format);
+            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
             REQUIRE(!std::filesystem::exists(mesh_path));
 
-            io::save_mesh_to_path(mesh_path, mesh, io::SaveOptions {.texture_format = ".png"});
+            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
             REQUIRE(std::filesystem::exists(mesh_path));
 
-            const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
+            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
             std::filesystem::remove(mesh_path);
-            const TerrainMesh roundtrip_mesh = result.value();
+            const SimpleMesh roundtrip_mesh = result.value();
             REQUIRE(roundtrip_mesh.positions == mesh.positions);
             REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
             REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
@@ -90,9 +91,9 @@ TEST_CASE("io roundtrip") {
 }
 
 TEST_CASE("io roundtrip high precision") {
-    for (const auto& format : {"tile"}) {
+    for (const auto& format : {"terrain"}) {
         DYNAMIC_SECTION(format) {
-            TerrainMesh mesh;
+            SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
             REQUIRE((double)(float)pi != pi);
@@ -110,19 +111,19 @@ TEST_CASE("io roundtrip high precision") {
             mesh.texture = cv::Mat3b(100, 100);
             cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
 
-            const std::filesystem::path mesh_path = fmt::format("./unittest_tiles/mesh.{}", format);
+            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
             REQUIRE(!std::filesystem::exists(mesh_path));
 
-            io::save_mesh_to_path(mesh_path, mesh, io::SaveOptions {.texture_format = ".png"});
+            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
             REQUIRE(std::filesystem::exists(mesh_path));
 
-            const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
+            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
             std::filesystem::remove(mesh_path);
-            const TerrainMesh roundtrip_mesh = result.value();
+            const SimpleMesh roundtrip_mesh = result.value();
             REQUIRE(roundtrip_mesh.positions == mesh.positions);
             REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
             REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
@@ -133,9 +134,9 @@ TEST_CASE("io roundtrip high precision") {
 }
 
 TEST_CASE("io roundtrip no texture") {
-    for (const auto &format : {"gltf", "glb", "tile"}) {
+    for (const auto &format : {"gltf", "glb", "terrain"}) {
         DYNAMIC_SECTION(format) {
-            TerrainMesh mesh;
+            SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
             REQUIRE((double)(float)pi != pi);
@@ -153,19 +154,19 @@ TEST_CASE("io roundtrip no texture") {
             mesh.uvs.push_back(glm::dvec2(0, 1));
             mesh.uvs.push_back(glm::dvec2(1, 1));
 
-            const std::filesystem::path mesh_path = fmt::format("./unittest_tiles/mesh.{}", format);
+            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
             REQUIRE(!std::filesystem::exists(mesh_path));
 
-            io::save_mesh_to_path(mesh_path, mesh);
+            mesh::io::save_to_path(mesh, mesh_path);
             REQUIRE(std::filesystem::exists(mesh_path));
 
-            const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
+            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
             // std::filesystem::remove(mesh_path);
-            const TerrainMesh roundtrip_mesh = result.value();
+            const SimpleMesh roundtrip_mesh = result.value();
             REQUIRE(roundtrip_mesh.positions == mesh.positions);
             REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
             REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
@@ -175,9 +176,9 @@ TEST_CASE("io roundtrip no texture") {
 }
 
 TEST_CASE("io roundtrip no texture and uvs") {
-    for (const auto &format : {"gltf", "glb", "tile"}) {
+    for (const auto &format : {"gltf", "glb", "terrain"}) {
         DYNAMIC_SECTION(format) {
-            TerrainMesh mesh;
+            SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
             REQUIRE((double)(float)pi != pi);
@@ -190,19 +191,19 @@ TEST_CASE("io roundtrip no texture and uvs") {
             mesh.triangles.push_back(glm::uvec3(0, 2, 1));
             mesh.triangles.push_back(glm::uvec3(1, 2, 3));
 
-            const std::filesystem::path mesh_path = fmt::format("./unittest_tiles/mesh.{}", format);
+            const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
             REQUIRE(!std::filesystem::exists(mesh_path));
 
-            io::save_mesh_to_path(mesh_path, mesh);
+            mesh::io::save_to_path(mesh, mesh_path);
             REQUIRE(std::filesystem::exists(mesh_path));
 
-            const tl::expected<TerrainMesh, io::LoadMeshError> result = io::load_mesh_from_path(mesh_path);
+            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
             std::filesystem::remove(mesh_path);
-            const TerrainMesh roundtrip_mesh = result.value();
+            const SimpleMesh roundtrip_mesh = result.value();
             REQUIRE(roundtrip_mesh.positions == mesh.positions);
             REQUIRE(!roundtrip_mesh.has_uvs());
             REQUIRE(roundtrip_mesh.triangles == mesh.triangles);

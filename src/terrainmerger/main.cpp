@@ -7,8 +7,8 @@
 #include "uv_map.h"
 #include "validate.h"
 
-std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
-    std::vector<TerrainMesh> meshes;
+std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
+    std::vector<SimpleMesh> meshes;
     meshes.reserve(paths.size());
     for (const std::filesystem::path &path : paths) {
         auto result = io::load_mesh_from_path(path);
@@ -20,7 +20,7 @@ std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::
             exit(EXIT_FAILURE);
         }
 
-        const TerrainMesh mesh = std::move(result.value());
+        const SimpleMesh mesh = std::move(result.value());
         validate_mesh(mesh);
         validate_mesh(convert::mesh2cgal(mesh));
         meshes.push_back(mesh);
@@ -29,7 +29,7 @@ std::vector<TerrainMesh> load_meshes_from_path(std::span<const std::filesystem::
     return meshes;
 }
 
-uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
+uv_map::UvMap parameterize_mesh(SimpleMesh &mesh) {
     const tl::expected<uv_map::UvMap, uv_map::UvParameterizationError> result =
         uv_map::parameterize_mesh(mesh, uv_map::Algorithm::DiscreteConformalMap, uv_map::Border::Circle);
     if (result) {
@@ -41,9 +41,9 @@ uv_map::UvMap parameterize_mesh(TerrainMesh &mesh) {
     }
 }
 
-TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs &args) {
+SimpleMesh simplify_mesh(const SimpleMesh &mesh, const cli::SimplificationArgs &args) {
     const simplify::Result result = simplify::simplify_mesh(mesh, args.stop_condition);
-    const TerrainMesh &simplified_mesh = result.mesh;
+    const SimpleMesh &simplified_mesh = result.mesh;
 
     const size_t initial_vertex_count = mesh.positions.size();
     const size_t initial_face_count = mesh.triangles.size();
@@ -59,10 +59,10 @@ TerrainMesh simplify_mesh(const TerrainMesh &mesh, const cli::SimplificationArgs
 
 void run(const cli::Args &args) {
     LOG_INFO("Loading meshes...");
-    std::vector<TerrainMesh> meshes = load_meshes_from_path(args.input_paths);
+    std::vector<SimpleMesh> meshes = load_meshes_from_path(args.input_paths);
 
-    const bool meshes_have_uvs = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_uvs(); });
-    const bool meshes_have_textures = std::all_of(meshes.begin(), meshes.end(), [](const TerrainMesh &mesh) { return mesh.has_texture(); });
+    const bool meshes_have_uvs = std::all_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) { return mesh.has_uvs(); });
+    const bool meshes_have_textures = std::all_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) { return mesh.has_texture(); });
     
     const std::optional<glm::uvec2> texture_size = (!meshes.empty() && meshes[0].texture.has_value())
                                                        ? std::optional<glm::uvec2>{convert::cv2glm(meshes[0].texture.value().size())}
@@ -72,7 +72,7 @@ void run(const cli::Args &args) {
 
     LOG_INFO("Merging meshes...");
     merge::VertexMapping vertex_mapping;
-    TerrainMesh merged_mesh = merge::merge_meshes(meshes, vertex_mapping);
+    SimpleMesh merged_mesh = merge::merge_meshes(meshes, vertex_mapping);
     if (args.save_intermediate_meshes) {
         const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
         LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path.string());
@@ -96,7 +96,7 @@ void run(const cli::Args &args) {
         }
     }
 
-    TerrainMesh simplified_mesh;
+    SimpleMesh simplified_mesh;
     if (args.simplification) {
         LOG_INFO("Simplifying merged mesh...");
         simplified_mesh = simplify_mesh(merged_mesh, args.simplification.value());

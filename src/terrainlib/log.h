@@ -1,5 +1,4 @@
-#ifndef LOG_H
-#define LOG_H
+#pragma once
 
 #ifndef SPDLOG_FMT_EXTERNAL
 #define SPDLOG_FMT_EXTERNAL
@@ -32,24 +31,19 @@ public:
         LOG_ERROR(__VA_ARGS__); \
         exit(1);                \
     } while (false)
-#if defined(__GNUC__) || defined(__clang__)
-#define UNREACHABLE()                                                       \
-    do {                                                                    \
-        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
-        __builtin_unreachable();                                            \
-    } while (0)
+    
+#if __cplusplus >= 202302L
+#define _UNREACHABLE() std::unreachable()
+#elif defined(__GNUC__) || defined(__clang__)
+#define _UNREACHABLE() __builtin_unreachable()
 #elif defined(_MSC_VER)
-#define UNREACHABLE()                                                       \
-    do {                                                                    \
-        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
-        __assume(false);                                                    \
-    } while (0)
+#define _UNREACHABLE() __assume(false)
 #else
-#define UNREACHABLE()                                                       \
-    do {                                                                    \
-        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
-        std::abort();                                                       \
-    } while (0)
+#define _UNREACHABLE() std::abort()
 #endif
 
-#endif
+#define UNREACHABLE()                                                       \
+    do {                                                                    \
+        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
+        _UNREACHABLE();                                                     \
+    } while (0)

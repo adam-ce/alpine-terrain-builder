@@ -1,10 +1,11 @@
 #include <random>
 #include <ranges>
 
-#include "terrain_mesh.h"
+#include "SimpleMesh.h"
+#include "utils.h"
 
-radix::geometry::Aabb<3, double> calculate_bounds(const TerrainMesh &mesh) {
-    radix::geometry::Aabb<3, double> bounds;
+radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh) {
+    radix::geometry::Aabb3d bounds;
     bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
     bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
     for (unsigned int j = 0; j < mesh.positions.size(); j++) {
@@ -14,12 +15,12 @@ radix::geometry::Aabb<3, double> calculate_bounds(const TerrainMesh &mesh) {
     return bounds;
 }
 
-radix::geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> meshes) {
-    radix::geometry::Aabb<3, double> bounds;
+radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes) {
+    radix::geometry::Aabb3d bounds;
     bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
     bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
     for (unsigned int i = 0; i < meshes.size(); i++) {
-        const TerrainMesh &mesh = meshes[i];
+        const SimpleMesh &mesh = meshes[i];
         for (unsigned int j = 0; j < mesh.positions.size(); j++) {
             const auto &position = mesh.positions[j];
             bounds.expand_by(position);
@@ -28,7 +29,7 @@ radix::geometry::Aabb<3, double> calculate_bounds(std::span<const TerrainMesh> m
     return bounds;
 }
 
-std::optional<double> estimate_average_edge_length(const TerrainMesh &mesh, const size_t sample_size) {
+std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size) {
     const auto &triangles = mesh.triangles;
     if (triangles.empty()) {
         return std::nullopt;
@@ -64,7 +65,7 @@ std::optional<double> estimate_average_edge_length(const TerrainMesh &mesh, cons
     return total_length / edge_count;
 }
 
-std::optional<double> calculate_max_edge_length(const TerrainMesh &mesh) {
+std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
     if (mesh.face_count() == 0) {
         return std::nullopt;
     }
@@ -84,7 +85,7 @@ std::optional<double> calculate_max_edge_length(const TerrainMesh &mesh) {
     return max_length;
 }
 
-std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {
+std::vector<size_t> find_isolated_vertices(const SimpleMesh& mesh) {
     std::vector<bool> connected;
     connected.resize(mesh.vertex_count());
     std::fill(connected.begin(), connected.end(), false);
@@ -104,7 +105,7 @@ std::vector<size_t> find_isolated_vertices(const TerrainMesh& mesh) {
     return isolated;
 }
 
-size_t remove_isolated_vertices(TerrainMesh& mesh) {
+size_t remove_isolated_vertices(SimpleMesh& mesh) {
     const bool has_uvs = mesh.has_uvs();
     const std::vector<size_t> isolated = find_isolated_vertices(mesh);
 
@@ -130,7 +131,7 @@ size_t remove_isolated_vertices(TerrainMesh& mesh) {
     return isolated.size();
 }
 
-size_t remove_triangles_of_negligible_size(TerrainMesh& mesh, const double threshold_percentage_of_average) {
+size_t remove_triangles_of_negligible_size(SimpleMesh& mesh, const double threshold_percentage_of_average) {
     std::vector<double> areas;
     areas.reserve(mesh.triangles.size());
     for (glm::uvec3 &triangle : mesh.triangles) {
@@ -215,14 +216,14 @@ bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1, const g
     return std::is_permutation(&t1.x, &t1.z + 1, &t2.x);
 }
 
-void remove_duplicate_triangles(TerrainMesh &mesh, bool ignore_orientation) {
+void remove_duplicate_triangles(SimpleMesh &mesh, bool ignore_orientation) {
     remove_duplicate_triangles(mesh.triangles, ignore_orientation);
 }
 void remove_duplicate_triangles(std::vector<glm::uvec3> &triangles, bool ignore_orientation) {
     triangles.erase(find_duplicate_triangles(triangles, ignore_orientation), triangles.end());
 }
 
-std::unordered_map<glm::uvec2, std::vector<size_t>> create_edge_to_triangle_index_mapping(const TerrainMesh &mesh) {
+std::unordered_map<glm::uvec2, std::vector<size_t>> create_edge_to_triangle_index_mapping(const SimpleMesh &mesh) {
     std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles;
     for (size_t i = 0; i < mesh.face_count(); i++) {
         glm::uvec3 triangle = mesh.triangles[i];
@@ -242,7 +243,7 @@ std::unordered_map<glm::uvec2, std::vector<size_t>> create_edge_to_triangle_inde
     return edges_to_triangles;
 }
 
-std::vector<size_t> count_vertex_adjacent_triangles(const TerrainMesh& mesh) {
+std::vector<size_t> count_vertex_adjacent_triangles(const SimpleMesh& mesh) {
     std::vector<size_t> adjacent_triangle_count(mesh.vertex_count(), 0);
 
     for (const glm::uvec3& triangle : mesh.triangles) {
@@ -254,7 +255,7 @@ std::vector<size_t> count_vertex_adjacent_triangles(const TerrainMesh& mesh) {
     return adjacent_triangle_count;
 }
 
-std::vector<glm::uvec2> find_non_manifold_edges(const TerrainMesh& mesh) {
+std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh& mesh) {
     std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles = create_edge_to_triangle_index_mapping(mesh);
     std::vector<glm::uvec2> non_manifold_edges;
 
@@ -270,7 +271,7 @@ std::vector<glm::uvec2> find_non_manifold_edges(const TerrainMesh& mesh) {
     return non_manifold_edges;
 }
 
-std::vector<size_t> find_single_non_manifold_triangle_indices(const TerrainMesh &mesh) {
+std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh) {
     const std::vector<size_t> adjacent_triangle_count = count_vertex_adjacent_triangles(mesh);
     const std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles = create_edge_to_triangle_index_mapping(mesh);
 
@@ -304,7 +305,7 @@ std::vector<size_t> find_single_non_manifold_triangle_indices(const TerrainMesh 
     return non_manifold_triangles;
 }
 
-void remove_single_non_manifold_triangles(TerrainMesh& mesh) {
+void remove_single_non_manifold_triangles(SimpleMesh& mesh) {
     std::vector<size_t> non_manifold_triangles = find_single_non_manifold_triangle_indices(mesh);
 
     std::sort(non_manifold_triangles.begin(), non_manifold_triangles.end(), std::greater<size_t>());
@@ -316,7 +317,7 @@ void remove_single_non_manifold_triangles(TerrainMesh& mesh) {
     remove_isolated_vertices(mesh);
 }
 
-void sort_and_normalize_triangles(TerrainMesh& mesh) {
+void sort_and_normalize_triangles(SimpleMesh& mesh) {
     sort_and_normalize_triangles(mesh.triangles);
 }
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
@@ -329,7 +330,7 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
     std::sort(triangles.begin(), triangles.end(), compare_triangles);
 }
 
-static void validate_sorted_normalized_mesh(const TerrainMesh &mesh) {
+static void validate_sorted_normalized_mesh(const SimpleMesh &mesh) {
     // check correct count of uvs
     assert(!mesh.has_uvs() || mesh.positions.size() == mesh.uvs.size());
 
@@ -372,11 +373,11 @@ static void validate_sorted_normalized_mesh(const TerrainMesh &mesh) {
     assert(find_isolated_vertices(mesh).empty());
 }
 
-void validate_mesh(const TerrainMesh &mesh) {
+void validate_mesh(const SimpleMesh &mesh) {
 #if NDEBUG
     return;
 #endif
-    TerrainMesh sorted(mesh);
+    SimpleMesh sorted(mesh);
     sort_and_normalize_triangles(sorted);
     validate_sorted_normalized_mesh(sorted);
 }

@@ -10,12 +10,13 @@
 #include <glm/gtx/norm.hpp>
 
 #include "Dataset.h"
-#include "mesh/terrain_mesh.h"
-#include "srs.h"
-#include "raster.h"
 #include "log.h"
+#include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
+#include "raster.h"
 #include "raw_dataset_reader.h"
+#include "srs.h"
+#include "mesh/utils.h"
 
 namespace terrainbuilder::mesh {
 
@@ -59,12 +60,12 @@ glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixe
     return coords_source;
 }
 
-TerrainMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster::Mask& mask) {
+SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster::Mask& mask) {
     // Compact the vertex grid into a list of valid ones.
     const size_t valid_vertex_count = std::reduce(mask.begin(), mask.end(), 0);
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
     if (valid_vertex_count == 0) {
-        return TerrainMesh();
+        return SimpleMesh();
     }
 
     std::vector<glm::dvec3> positions;
@@ -105,11 +106,11 @@ TerrainMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raste
     }
     assert(triangles.size() <= max_triangle_count);
 
-    return TerrainMesh(triangles, positions);
+    return SimpleMesh(triangles, positions);
 }
 
-TerrainMesh transform_mesh(const TerrainMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
-    TerrainMesh target_mesh;
+SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
+    SimpleMesh target_mesh;
     target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
     target_mesh.triangles = source_mesh.triangles;
     target_mesh.uvs = source_mesh.uvs;
@@ -117,7 +118,7 @@ TerrainMesh transform_mesh(const TerrainMesh &source_mesh, const OGRSpatialRefer
     return target_mesh;
 }
 
-TerrainMesh reindex_mesh(const TerrainMesh &mesh) {
+SimpleMesh reindex_mesh(const SimpleMesh &mesh) {
     std::vector<glm::dvec3> new_positions;
     new_positions.reserve(mesh.vertex_count());
     std::vector<glm::uvec3> new_triangles;
@@ -143,7 +144,7 @@ TerrainMesh reindex_mesh(const TerrainMesh &mesh) {
         new_triangles.push_back(new_triangle_indices);
     }
 
-    return TerrainMesh(new_triangles, new_positions);
+    return SimpleMesh(new_triangles, new_positions);
 }
 
 namespace {
@@ -165,7 +166,7 @@ namespace {
     };
 }
 
-TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bounds) {
+SimpleMesh clip_mesh(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
         return {};
     }
@@ -259,7 +260,7 @@ TerrainMesh clip_mesh(const TerrainMesh &mesh, const radix::geometry::Aabb3d &bo
     }
 
     // TODO: derive new_positions from seen_vertices
-    return reindex_mesh(TerrainMesh(new_triangles, new_positions));
+    return reindex_mesh(SimpleMesh(new_triangles, new_positions));
 }
 
 std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
@@ -280,7 +281,7 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
     return radix::geometry::Aabb3d(min, max);
 }
 
-tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
+tl::expected<SimpleMesh, BuildError> build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, const radix::tile::SrsBounds &tile_bounds,
@@ -288,7 +289,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_tile(
     return build_reference_mesh_patch(dataset, mesh_srs, tile_srs, extend_bounds_to_3d(tile_bounds), texture_srs, texture_bounds);
 }
 
-tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
+tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
@@ -328,15 +329,15 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
     });
 
     LOG_TRACE("Generating triangles");
-    const TerrainMesh mesh_in_source_srs = meshify(source_points, valid_mask);
+    const SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
     if (mesh_in_source_srs.vertex_count() == 0 || mesh_in_source_srs.face_count() == 0) {
         return tl::unexpected(BuildError::EmptyRegion);
     }
 
     LOG_TRACE("Clipping mesh based on target bounds");
-    const TerrainMesh mesh_in_clip_srs = transform_mesh(mesh_in_source_srs, source_srs, clip_srs);
-    TerrainMesh clipped_mesh = clip_mesh(mesh_in_clip_srs, clip_bounds);
+    const SimpleMesh mesh_in_clip_srs = transform_mesh(mesh_in_source_srs, source_srs, clip_srs);
+    SimpleMesh clipped_mesh = clip_mesh(mesh_in_clip_srs, clip_bounds);
     // Check if there are any vertices left
     if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
         return tl::unexpected(BuildError::EmptyRegion);
@@ -347,7 +348,7 @@ tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
     clipped_mesh.uvs = generate_uv_space(clipped_mesh.positions, clip_srs, texture_srs, texture_bounds);
 
     LOG_TRACE("Transforming mesh into output srs");
-    TerrainMesh target_mesh = transform_mesh(clipped_mesh, clip_srs, mesh_srs);
+    SimpleMesh target_mesh = transform_mesh(clipped_mesh, clip_srs, mesh_srs);
     
     remove_isolated_vertices(target_mesh); // TODO: is this still required?
     validate_mesh(target_mesh);

@@ -150,15 +150,15 @@ public:
         std::vector<std::unordered_map<size_t, size_t>> backward;
 };
 
-TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes);
-TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, VertexMapping &mapping);
-TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon);
-TerrainMesh merge_meshes(std::span<const TerrainMesh> meshes, double distance_epsilon, VertexMapping &mapping);
+SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes);
+SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes, VertexMapping &mapping);
+SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon);
+SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon, VertexMapping &mapping);
 
-TerrainMesh apply_mapping(std::span<const TerrainMesh> meshes, const VertexMapping &mapping);
+SimpleMesh apply_mapping(std::span<const SimpleMesh> meshes, const VertexMapping &mapping);
 
-VertexMapping create_merge_mapping(std::span<const TerrainMesh> meshes);
-VertexMapping create_merge_mapping(std::span<const TerrainMesh> meshes, double distance_epsilon);
+VertexMapping create_merge_mapping(std::span<const SimpleMesh> meshes);
+VertexMapping create_merge_mapping(std::span<const SimpleMesh> meshes, double distance_epsilon);
 
 
 }

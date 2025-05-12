@@ -1,9 +1,8 @@
 *.tif
 *.tif.aux.xml
 /CMakeLists.txt.user
-/3rdparty/*
 build/
 .vscode
-unittest_tiles
+/unittests/output
 .vs
 /extern/*

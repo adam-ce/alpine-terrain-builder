@@ -6,7 +6,7 @@
 #include "Dataset.h"
 #include "srs.h"
 
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 #include "border.h"
 
 namespace terrainbuilder::mesh {
@@ -18,7 +18,7 @@ enum class BuildError {
 std::ostream &operator<<(std::ostream &os, BuildError error);
 
 /// Builds a mesh from the given height dataset.
-tl::expected<TerrainMesh, BuildError> build_reference_mesh_patch(
+tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,

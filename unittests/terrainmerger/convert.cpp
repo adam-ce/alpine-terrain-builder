@@ -5,7 +5,7 @@
 #include "cgal.h"
 
 TEST_CASE("convert rountrip keeps precision") {
-    TerrainMesh mesh;
+    SimpleMesh mesh;
 
     const double pi = std::numbers::pi_v<double>;
     REQUIRE((double)(float)pi != pi);
@@ -17,7 +17,7 @@ TEST_CASE("convert rountrip keeps precision") {
     mesh.triangles.push_back(glm::uvec3(0, 2, 1));
 
     const SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
-    TerrainMesh roundtrip_mesh = convert::cgal2mesh(cgal_mesh);
+    SimpleMesh roundtrip_mesh = convert::cgal2mesh(cgal_mesh);
 
     sort_and_normalize_triangles(mesh.triangles);
     sort_and_normalize_triangles(roundtrip_mesh.triangles);

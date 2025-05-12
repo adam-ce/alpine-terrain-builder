@@ -12,7 +12,7 @@ typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMa
 
 cv::Mat simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution);
 
-void simplify_mesh_texture(TerrainMesh& mesh, glm::uvec2 target_resolution);
+void simplify_mesh_texture(SimpleMesh& mesh, glm::uvec2 target_resolution);
 
 enum class Algorithm {
     GarlandHeckbert,
@@ -43,12 +43,12 @@ struct Options {
 };
 
 struct Result {
-    TerrainMesh mesh;
+    SimpleMesh mesh;
     double max_absolute_error;
 };
 
-Result simplify_mesh(const TerrainMesh &mesh, std::span<const StopCondition> stop_conditions, Options options = Options());
-inline Result simplify_mesh(const TerrainMesh &mesh, const StopCondition& stop_condition, Options options = Options()) {
+Result simplify_mesh(const SimpleMesh &mesh, std::span<const StopCondition> stop_conditions, Options options = Options());
+inline Result simplify_mesh(const SimpleMesh &mesh, const StopCondition& stop_condition, Options options = Options()) {
     return simplify_mesh(mesh, std::span<const StopCondition>{&stop_condition, 1}, options);
 }
 }

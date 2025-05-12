@@ -11,12 +11,12 @@
 
 void run(const cli::Args& args) {
     LOG_INFO("Loading input mesh...");
-    const tl::expected<TerrainMesh, io::LoadMeshError> load_result = io::load_mesh_from_path(args.input_path);
+    const tl::expected<SimpleMesh, io::LoadMeshError> load_result = io::load_mesh_from_path(args.input_path);
     if (!load_result.has_value()) {
         LOG_ERROR("Failed to load mesh: {}", load_result.error().description());
         return;
     }
-    TerrainMesh mesh = load_result.value();
+    SimpleMesh mesh = load_result.value();
 
     if (args.texture_resolution.has_value()) {
         if (mesh.texture.has_value()) {

@@ -12,7 +12,7 @@
 
 #include "log.h"
 #include "mesh/io.h"
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
 #include "terrainbuilder.h"
 #include "texture_assembler.h"
@@ -22,12 +22,14 @@
 
 namespace terrainbuilder {
 
+namespace {
 std::string format_secs_since(const std::chrono::high_resolution_clock::time_point &start) {
     const auto duration = std::chrono::high_resolution_clock::now() - start;
     const double seconds = std::chrono::duration<double>(duration).count();
     std::stringstream ss;
     ss << std::fixed << std::setprecision(2) << seconds;
     return ss.str();
+}
 }
 
 class BasemapSchemeTilePathProvider : public TilePathProvider {
@@ -43,7 +45,7 @@ private:
     std::filesystem::path base_path;
 };
 
-TerrainMesh build(
+SimpleMesh build(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
@@ -56,7 +58,7 @@ TerrainMesh build(
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
     LOG_INFO("Building mesh...");
-    tl::expected<TerrainMesh, mesh::BuildError> mesh_result = mesh::build_reference_mesh_patch(
+    tl::expected<SimpleMesh, mesh::BuildError> mesh_result = mesh::build_reference_mesh_patch(
         dataset,
         mesh_srs,
         target_bounds_srs, target_bounds,
@@ -86,7 +88,7 @@ TerrainMesh build(
             return {};
         }
     }
-    TerrainMesh mesh = mesh_result.value();
+    SimpleMesh mesh = mesh_result.value();
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
     LOG_INFO("Finished building mesh geometry");
 
@@ -117,7 +119,7 @@ void build_and_save(
     const std::optional<std::filesystem::path> texture_base_path,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_path) {
-    const TerrainMesh mesh = build(
+    const SimpleMesh mesh = build(
         dataset,
         target_bounds_srs,
         target_bounds,
@@ -143,7 +145,7 @@ void build_and_save(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
         texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
     */
-    if (!io::save_mesh_to_path(output_path, mesh, io::SaveOptions{.metadata = metadata}).has_value()) {
+    if (!::mesh::io::save_to_path(mesh, output_path, ::mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
         LOG_ERROR("Failed to save mesh to file {}", output_path.string());
         exit(2);
     }

@@ -32,13 +32,14 @@
 #include "../catch2_helpers.h"
 #include "Dataset.h"
 #include "merge.h"
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
+#include "mesh/io.h"
+#include "mesh/utils.h"
 #include "octree/id.h"
 #include "octree/space.h"
 #include "srs.h"
 
-#include "mesh/io.h"
 
 using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
 using Point3 = Kernel::Point_3;
@@ -56,7 +57,7 @@ Point3 glm2cgal(glm::dvec3 point) {
     return Point3(point[0], point[1], point[2]);
 }
 
-SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
+SurfaceMesh mesh2cgal(const SimpleMesh &mesh) {
     SurfaceMesh cgal_mesh;
 
     for (const glm::dvec3 &position : mesh.positions) {
@@ -76,7 +77,7 @@ SurfaceMesh mesh2cgal(const TerrainMesh &mesh) {
     return cgal_mesh;
 }
 
-void check_mesh_basics(const TerrainMesh &mesh) {
+void check_mesh_basics(const SimpleMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     CHECK(cgal_mesh.is_valid(true));
     CHECK(CGAL::is_triangle_mesh(cgal_mesh));
@@ -84,7 +85,7 @@ void check_mesh_basics(const TerrainMesh &mesh) {
     CHECK_FALSE(CGAL::Polygon_mesh_processing::does_self_intersect(cgal_mesh));
 }
 
-void check_no_holes(const TerrainMesh &mesh) {
+void check_no_holes(const SimpleMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     std::vector<HalfedgeDescriptor> border_cycles;
     CGAL::Polygon_mesh_processing::extract_boundary_cycles(cgal_mesh, std::back_inserter(border_cycles));
@@ -92,7 +93,7 @@ void check_no_holes(const TerrainMesh &mesh) {
     CHECK(nb_holes == 0);
 }
 
-size_t count_connected_components(const TerrainMesh &mesh) {
+size_t count_connected_components(const SimpleMesh &mesh) {
     const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
     using CcMap = CGAL::Unique_hash_map<FaceDescriptor, size_t>;
     using CcPropertyMap = boost::associative_property_map<CcMap>;
@@ -103,7 +104,7 @@ size_t count_connected_components(const TerrainMesh &mesh) {
     return num;
 }
 
-void check_uvs(const TerrainMesh &mesh) {
+void check_uvs(const SimpleMesh &mesh) {
     REQUIRE(mesh.uvs.size() == mesh.positions.size());
 
     for (const glm::dvec2 uv : mesh.uvs) {
@@ -112,7 +113,7 @@ void check_uvs(const TerrainMesh &mesh) {
     }
 }
 
-void check_non_empty(const TerrainMesh &mesh) {
+void check_non_empty(const SimpleMesh &mesh) {
     REQUIRE(mesh.positions.size() > 0);
     REQUIRE(mesh.triangles.size() > 0);
 }
@@ -227,7 +228,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
             if (!result) {
                 FAIL("Failed to build mesh: " << result.error());
             }
-            const TerrainMesh mesh = result.value();
+            const SimpleMesh mesh = result.value();
 
             SECTION("Basic mesh properties") {
                 check_non_empty(mesh);
@@ -280,7 +281,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                         filtered_triangles.push_back(tri);
                     }
                 }
-                TerrainMesh inside_flat_mesh;
+                SimpleMesh inside_flat_mesh;
                 inside_flat_mesh.positions = flat_positions_in_ecef_srs;
                 inside_flat_mesh.triangles = filtered_triangles;
 
@@ -310,7 +311,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
     Dataset dataset(dataset_path);
 
-    std::vector<TerrainMesh> node_meshes;
+    std::vector<SimpleMesh> node_meshes;
     for (const octree::Id &node : nodes) {
         const octree::Bounds node_bounds = space.get_node_bounds(node);
         radix::tile::SrsBounds output_texture_bounds;
@@ -322,12 +323,12 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
         if (!result.has_value()) {
             continue;
         }
-        const TerrainMesh mesh = result.value();
+        const SimpleMesh mesh = result.value();
         node_meshes.push_back(mesh);
     }
     CHECK(node_meshes.size() >= 3);
 
-    const TerrainMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-6);
+    const SimpleMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-6);
     check_mesh_basics(merged_mesh);
     check_non_empty(merged_mesh);
     check_no_holes(merged_mesh);

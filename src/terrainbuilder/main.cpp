@@ -8,11 +8,14 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/task_group.h>
 
 #include "srs.h"
 #include "Dataset.h"
 #include "terrainbuilder.h"
 #include "log.h"
+#include "ProgressIndicator.h"
 
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/GlobalGeodetic.hpp"
@@ -136,25 +139,6 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
-void update_progress_bar(std::atomic<uint32_t> &completed_tasks, uint32_t total_tasks) {
-    const uint32_t progress = static_cast<uint32_t>((static_cast<double>(completed_tasks) / total_tasks) * 100);
-
-    std::cout << "\rProgress: [";
-    uint32_t bar_width = 50;
-    uint32_t pos = bar_width * progress / 100;
-    for (uint32_t i = 0; i < bar_width; ++i) {
-        if (i < pos) {
-            std::cout << "=";
-        } else if (i == pos) {
-            std::cout << ">";
-        } else {
-            std::cout << " ";
-        }
-    }
-    std::cout << "] " << progress << "% (" << completed_tasks.load() << "/" << total_tasks << ")";
-    std::cout.flush();
-}
-
 template <typename T>
 T expect(const std::optional<T> &opt, const std::string &msg) {
     if (!opt) {
@@ -162,6 +146,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
     }
     return *opt;
 }
+
 
 void batch_build(
     Dataset &dataset,
@@ -184,46 +169,55 @@ void batch_build(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
         "Dataset is outside the octree root node.");
 
-    std::vector<octree::Id> stack = {root_node};
-    std::vector<octree::Id> target_nodes;
-    while (!stack.empty()) {
-        const octree::Id node = stack.back();
-        stack.pop_back();
+    tbb::concurrent_vector<octree::Id> concurrent_targets;
 
+    tbb::task_group tg;
+    std::function<void(octree::Id)> process_node;
+
+    process_node = [&](octree::Id node) {
         const auto node_bounds = space.get_node_bounds(node);
         const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(ecef_srs, dataset_srs, node_bounds);
-        fmt::println("{}", node);
+
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
-            continue;
+            return;
         }
 
         if (node.level() < target_level) {
-            const auto children = node.children();
-            if (children.has_value()) {
-                std::copy(children->begin(), children->end(), std::back_inserter(stack));
+            if (auto children = node.children(); children.has_value()) {
+                for (const auto &child : *children) {
+                    tg.run([=] { process_node(child); });
+                }
             }
         } else if (node.level() == target_level) {
-            fmt::println("{}", target_nodes.size());
-            target_nodes.push_back(node);
+            concurrent_targets.push_back(node);
         }
-    }
+    };
 
-    std::atomic<uint32_t> nodes_built(0);
+    tg.run([&] { process_node(root_node); });
+    tg.wait(); // Wait for all tasks
+
+    std::vector<octree::Id> target_nodes;
+    target_nodes.assign(concurrent_targets.begin(), concurrent_targets.end());
+
+    ProgressIndicator progress(target_nodes.size());
+    std::jthread progress_thread = progress.start_monitoring();
+
     std::for_each(std::execution::par, target_nodes.begin(), target_nodes.end(), [&](const auto &node) {
         const auto node_bounds = space.get_node_bounds(node);
-        const TerrainMesh mesh = terrainbuilder::build(
-            dataset,
+        auto local_dataset = dataset.clone();
+        const SimpleMesh mesh = terrainbuilder::build(
+            local_dataset,
             ecef_srs,
             node_bounds,
             texture_srs,
             texture_base_path,
             mesh_srs);
+
         if (!mesh.is_empty()) {
             storage.save_node(node, mesh);
         }
 
-        nodes_built++;
-        update_progress_bar(nodes_built, target_nodes.size());
+        progress.task_finished();
     });
 }
 

@@ -41,7 +41,8 @@ public:
     Dataset(const std::string& path);
     Dataset(GDALDataset* dataset); // takes over ownership
     ~Dataset();
-    static DatasetPtr make_shared(const std::string& path);
+    static DatasetPtr make_shared(const std::string &path);
+    Dataset clone();
 
     [[nodiscard]] std::string name() const;
 
@@ -49,20 +50,21 @@ public:
     [[nodiscard]] radix::tile::SrsAndHeightBounds bounds3d() const;
     [[nodiscard]] radix::tile::SrsBounds bounds(const OGRSpatialReference &targetSrs) const;
     [[nodiscard]] OGRSpatialReference srs() const;
-    [[nodiscard]] unsigned widthInPixels() const;
-    [[nodiscard]] unsigned heightInPixels() const;
-    [[nodiscard]] double widthInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-    [[nodiscard]] double heightInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-    [[nodiscard]] unsigned n_bands() const;
-    [[nodiscard]] GDALDataset* gdalDataset();
+    [[nodiscard]] unsigned int widthInPixels() const;
+    [[nodiscard]] unsigned int heightInPixels() const;
+    [[nodiscard]] double widthInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const;
+    [[nodiscard]] double heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const;
+    [[nodiscard]] unsigned int n_bands() const;
+    [[nodiscard]] GDALDataset *gdalDataset();
 
-    [[nodiscard]] double gridResolution(const OGRSpatialReference& target_srs) const;
-    [[nodiscard]] double pixelWidthIn(const OGRSpatialReference& target_srs) const;
-    [[nodiscard]] double pixelHeightIn(const OGRSpatialReference& target_srs) const;
+    [[nodiscard]] double gridResolution(const OGRSpatialReference &target_srs) const;
+    [[nodiscard]] double pixelWidthIn(const OGRSpatialReference &target_srs) const;
+    [[nodiscard]] double pixelHeightIn(const OGRSpatialReference &target_srs) const;
 
 private:
     std::unique_ptr<GDALDataset> m_gdal_dataset;
+    std::optional<std::string> m_path;
     std::string m_name;
-};
+    };
 
 #endif

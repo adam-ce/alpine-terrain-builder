@@ -1,7 +1,7 @@
-#include "log.h"
-
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+
+#include "log.h"
 
 std::shared_ptr<spdlog::logger> Log::logger;
 

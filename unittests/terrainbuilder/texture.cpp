@@ -29,7 +29,7 @@
 #include "ctb/Grid.hpp"
 #include "srs.h"
 
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 #include "texture_assembler.h"
 
 TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {

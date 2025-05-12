@@ -23,23 +23,23 @@
 
 TEST_CASE("terrainmerger") {
     SECTION("two tris") {
-        TerrainMesh mesh1;
+        SimpleMesh mesh1;
         mesh1.positions.push_back(glm::dvec3(0, 0, 0));
         mesh1.positions.push_back(glm::dvec3(1, 1, 0));
         mesh1.positions.push_back(glm::dvec3(1, 0, 0));
         mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        TerrainMesh mesh2;
+        SimpleMesh mesh2;
         mesh2.positions.push_back(glm::dvec3(1, 0, 0));
         mesh2.positions.push_back(glm::dvec3(1, 1, 0));
         mesh2.positions.push_back(glm::dvec3(0, 1, 0));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        std::array<TerrainMesh, 2> meshes = { std::move(mesh1), std::move(mesh2) };
+        std::array<SimpleMesh, 2> meshes = { std::move(mesh1), std::move(mesh2) };
 
-        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
 
-        TerrainMesh expected;
+        SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
         expected.positions.push_back(glm::dvec3(1, 1, 0));
         expected.positions.push_back(glm::dvec3(1, 0, 0));
@@ -56,7 +56,7 @@ TEST_CASE("terrainmerger") {
     }
 
     SECTION("two tris with uvs") {
-        TerrainMesh mesh1;
+        SimpleMesh mesh1;
         mesh1.positions.push_back(glm::dvec3(0, 0, 0));
         mesh1.positions.push_back(glm::dvec3(1, 1, 0));
         mesh1.positions.push_back(glm::dvec3(1, 0, 0));
@@ -65,7 +65,7 @@ TEST_CASE("terrainmerger") {
         mesh1.uvs.push_back(glm::dvec2(1, 0));
         mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        TerrainMesh mesh2;
+        SimpleMesh mesh2;
         mesh2.positions.push_back(glm::dvec3(1, 0, 0));
         mesh2.positions.push_back(glm::dvec3(1, 1, 0));
         mesh2.positions.push_back(glm::dvec3(0, 1, 0));
@@ -74,11 +74,11 @@ TEST_CASE("terrainmerger") {
         mesh2.uvs.push_back(glm::dvec2(0, 1));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        std::array<TerrainMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
+        std::array<SimpleMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
 
-        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
 
-        TerrainMesh expected;
+        SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
         expected.positions.push_back(glm::dvec3(1, 1, 0));
         expected.positions.push_back(glm::dvec3(1, 0, 0));
@@ -99,7 +99,7 @@ TEST_CASE("terrainmerger") {
     }
 
     SECTION("distance epsilon") {
-        TerrainMesh mesh1;
+        SimpleMesh mesh1;
         mesh1.positions.push_back(glm::dvec3(0, 0, 0));
         mesh1.positions.push_back(glm::dvec3(1, 0, 0));
         mesh1.positions.push_back(glm::dvec3(0, 1, 0));
@@ -107,7 +107,7 @@ TEST_CASE("terrainmerger") {
         mesh1.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh1.triangles.push_back(glm::uvec3(1, 2, 3));
 
-        TerrainMesh mesh2;
+        SimpleMesh mesh2;
         mesh2.positions.push_back(glm::dvec3(0.91, 0, 0));
         mesh2.positions.push_back(glm::dvec3(2, 0, 0));
         mesh2.positions.push_back(glm::dvec3(1.11, 1, 0));
@@ -115,11 +115,11 @@ TEST_CASE("terrainmerger") {
         mesh2.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh2.triangles.push_back(glm::uvec3(1, 2, 3));
 
-        std::array<TerrainMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
+        std::array<SimpleMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
 
-        TerrainMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
 
-        TerrainMesh expected;
+        SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
         expected.positions.push_back(glm::dvec3(0.91, 0, 0));
         expected.positions.push_back(glm::dvec3(0, 1, 0));

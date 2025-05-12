@@ -13,4 +13,4 @@
 #include <tl/expected.hpp>
 
 #include "cgal.h"
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"

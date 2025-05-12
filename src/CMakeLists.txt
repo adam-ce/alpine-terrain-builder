@@ -59,37 +59,32 @@ target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 add_library(terrainlib
-    terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
-
-    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
-    terrainlib/mesh/raw_gltf.h terrainlib/mesh/raw_gltf.cpp
-    terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
-    terrainlib/mesh/non_copyable.h
-    terrainlib/log.h
-    terrainlib/log.cpp
-
-    terrainlib/Dataset.h terrainlib/Dataset.cpp
-    terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
-    terrainlib/depth_first_tile_traverser.h
-    terrainlib/Exception.h
-    terrainlib/Image.h terrainlib/Image.cpp
-    terrainlib/ParallelTileGenerator.h terrainlib/ParallelTileGenerator.cpp
-    terrainlib/ParallelTiler.h terrainlib/ParallelTiler.cpp
-    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
-    terrainlib/srs.h
-    terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
-    terrainlib/Tiler.h terrainlib/Tiler.cpp
-    terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
+
+    terrainlib/mesh/io/error.h
+    terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
+    terrainlib/mesh/io/options.h
+    terrainlib/mesh/io/terrain.h terrainlib/mesh/io/terrain.cpp
+    terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
+    terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
+
+    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/SimpleMesh.h
+    terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
+
+    terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/init.h terrainlib/init.cpp
+    terrainlib/log.h terrainlib/log.cpp
+    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
+    terrainlib/srs.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

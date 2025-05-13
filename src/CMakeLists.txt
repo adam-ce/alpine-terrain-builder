@@ -77,6 +77,11 @@ add_library(terrainlib
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
 
+    terrainlib/octree/id.h
+    terrainlib/octree/storage.h
+    terrainlib/octree/space.h
+    terrainlib/octree/utils.h
+
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/init.h terrainlib/init.cpp
     terrainlib/log.h terrainlib/log.cpp
@@ -100,9 +105,6 @@ add_library(terrainbuilderlib
     terrainbuilder/raster.h
     terrainbuilder/terrainbuilder.h
     terrainbuilder/terrainbuilder.cpp
-    terrainbuilder/octree/id.h
-    terrainbuilder/octree/storage.h
-    terrainbuilder/octree/space.h
 )
 target_include_directories(terrainbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainbuilder)
 target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)

@@ -170,7 +170,6 @@ private:
 
 } // namespace octree
 
-#include <fmt/core.h>
 #include <fmt/format.h>
 template <>
 struct fmt::formatter<octree::Id> {
@@ -192,7 +191,7 @@ struct fmt::formatter<octree::Id> {
 
 #include <fmt/ostream.h>
 #include <iostream>
-namespace octree{
+namespace octree {
 inline std::string to_string(const octree::Id &id) {
     return fmt::format("{}", id);
 }

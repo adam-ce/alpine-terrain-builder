@@ -2,12 +2,8 @@
 
 #include <filesystem>
 
-namespace mesh {
-namespace io {
-namespace utils {
+namespace mesh::io::utils {
 
 std::filesystem::path create_parent_directories(const std::filesystem::path &path);
 
-} // namespace utils
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::utils

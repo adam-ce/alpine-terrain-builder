@@ -10,9 +10,7 @@
 #include "mesh/io/options.h"
 #include "mesh/io/texture.h"
 
-namespace mesh {
-namespace io {
-namespace terrain {
+namespace mesh::io::terrain {
 
 tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions &options = {});
 tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> buffer, const LoadOptions &options = {});
@@ -20,9 +18,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const u
 tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std::filesystem::path &path, const SaveOptions &options = {});
 tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions &options = {});
 
-} // namespace terrain
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::terrain
 
 // custom serialization
 namespace zpp::bits {

@@ -11,9 +11,7 @@
 #include "mesh/io/error.h"
 #include "mesh/io/options.h"
 
-namespace mesh {
-namespace io {
-namespace gltf {
+namespace mesh::io::gltf {
 
 using RawMesh = std::unique_ptr<cgltf_data, decltype(&cgltf_free)>;
 
@@ -32,6 +30,4 @@ tl::expected<void, SaveMeshError> save_to_path(
 
 tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path);
 
-} // namespace gltf
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::gltf

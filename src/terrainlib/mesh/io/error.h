@@ -2,8 +2,7 @@
 
 #include <string>
 
-namespace mesh {
-namespace io {
+namespace mesh::io {
 
 enum class LoadMeshErrorKind {
     UnsupportedFormat,
@@ -98,5 +97,4 @@ private:
     SaveMeshErrorKind kind;
 };
 
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io

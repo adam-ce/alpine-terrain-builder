@@ -6,9 +6,7 @@
 
 using namespace mesh::io::utils;
 
-namespace mesh {
-namespace io {
-namespace terrain {
+namespace mesh::io::terrain {
 
 namespace {
 tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
@@ -142,6 +140,4 @@ tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std
     return write_bytes_to_path(bytes, path);
 }
 
-} // namespace terrain
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::terrain

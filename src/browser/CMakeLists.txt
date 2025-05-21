@@ -134,6 +134,7 @@ add_executable(alpenite-browser
 
     core/octree/id.h
     core/octree/space.h
+    "core/octree/rendering/OctreeRenderManager.cpp"
 )
 target_link_libraries(alpenite-browser PRIVATE glad_gl_core_46 glfw glm resources-lib spdlog radix imgui)
 target_include_directories(alpenite-browser PRIVATE .)

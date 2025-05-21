@@ -145,8 +145,8 @@ glm::mat4 Camera::view_matrix() {
 void Camera::update_view_matrix() {
 	if (!m_view_matrix_cache.has_value()) {
 		glm::mat4 rotation = glm::mat4_cast(m_rotation);
-		glm::mat4 translation = glm::translate(glm::dmat4(1.0f), m_position); //TODO: Use camera re-centering to mitigate precision losses at large values
-		m_view_matrix_cache.emplace(glm::inverse(translation * rotation));
+		//glm::mat4 translation = glm::translate(glm::dmat4(1.0f), m_position); //TODO: Use camera re-centering to mitigate precision losses at large values
+		m_view_matrix_cache.emplace(glm::inverse(/*translation */ rotation));
 	}
 }
 

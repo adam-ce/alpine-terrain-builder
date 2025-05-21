@@ -29,12 +29,18 @@ private:
 
   bool m_nav_mode;
 
+  float m_refining_factor;
+
+  size_t m_last_draw_amount;
+
   void toggle_nav_mode();
 
   void init_glad();
   void init_gl();
 
-  void draw_camera_settings_window();
+  void draw_settings_window();
+  void draw_camera_settings_section();
+  void draw_octree_settings_section();
 
   static void gl_debug_callback(GLenum source, GLenum type, GLuint id,
                                           GLenum severity, GLsizei length,

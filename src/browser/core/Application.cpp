@@ -16,6 +16,7 @@
 #include "Camera.h"
 #include "geometry/UnitCube.h"
 #include "octree/space.h"
+#include "octree/rendering/OctreeRenderManager.h"
 
 CMRC_DECLARE(res);
 
@@ -23,6 +24,8 @@ Application::Application(std::string title, int width, int height)
     : m_title(title), m_width(width), m_height(height) {
 
     m_nav_mode = false;
+
+    m_refining_factor = 0.5f;
 
     WindowConfig c = {
         .width = 1280,
@@ -66,29 +69,14 @@ void Application::run() {
     LOG_INFO("Setting up key event callbacks");
     m_window->register_key_event(GLFW_PRESS, GLFW_KEY_TAB, [this]() {
         toggle_nav_mode();
-    
-        ImGuiIO& io = ImGui::GetIO();
-
-        if (m_nav_mode) {
-            LOG_DEBUG("Entering Nav Mode");
-
-            io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
-            io.ConfigFlags |= ImGuiConfigFlags_NoKeyboard;
-
-            m_window->set_capture_mouse(true);
-            m_window->clear_accumulated_cursor_delta();
-        } else {
-            LOG_DEBUG("Exiting Nav Mode");
-
-            io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
-            io.ConfigFlags &= ~ImGuiConfigFlags_NoKeyboard;
-
-            m_window->set_capture_mouse(false);
-        }
     });
 
     m_window->register_key_event(GLFW_PRESS, GLFW_KEY_ESCAPE, [this]() {
-        m_window->set_should_close(true);
+        if (m_nav_mode) {
+            toggle_nav_mode();
+        } else {
+            m_window->set_should_close(true);
+        }
     });
 
     m_window->register_scroll_event([this](glm::dvec2 scroll) {
@@ -154,7 +142,7 @@ void Application::run() {
     std::vector<glm::vec3> vertices = UnitCube::vertices();
     std::vector<unsigned int> indices = UnitCube::line_indices();
 
-    octree::Space space = octree::Space::earth();
+    octree::OctreeRenderManager octree_render_manager(octree::Space::earth());
 
     unsigned int VAO;
     glGenVertexArrays(1, &VAO);
@@ -214,6 +202,8 @@ void Application::run() {
     glDepthFunc(GL_LESS);
     glClearColor(0.f, 0.f, 0.f, 1.f);
 
+    m_last_draw_amount = 0;
+
     while (!m_window->should_close()) {
 
         m_window->poll_events();
@@ -227,11 +217,13 @@ void Application::run() {
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
-        draw_camera_settings_window();
+        draw_settings_window();
 
         update_camera(frame_delta_time, U_view);
 
-        octree::OctreeRenderIntent rendering_intent = space.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false);
+        octree::OctreeRenderIntent rendering_intent = octree_render_manager.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false, m_refining_factor);
+
+        m_last_draw_amount = rendering_intent.instance_count;
 
         cube_instance_active_buffer.set_data(rendering_intent.instances_active);
         cube_instance_model_buffer.set_data(rendering_intent.instances_model_mats);
@@ -341,6 +333,30 @@ Application::~Application() {
 
 void Application::toggle_nav_mode() {
     m_nav_mode = !m_nav_mode;
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    if (m_nav_mode && io.WantCaptureKeyboard) {
+        // When Dear ImGui wants to capture the keyboard, do not switch to nav mode
+        m_nav_mode = false;
+    }
+
+    if (m_nav_mode) {
+        LOG_DEBUG("Entering Nav Mode");
+
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+        io.ConfigFlags |= ImGuiConfigFlags_NoKeyboard;
+
+        m_window->set_capture_mouse(true);
+        m_window->clear_accumulated_cursor_delta();
+    } else {
+        LOG_DEBUG("Exiting Nav Mode");
+
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoKeyboard;
+
+        m_window->set_capture_mouse(false);
+    }
 }
 
 void Application::init_glad() {
@@ -364,38 +380,57 @@ void Application::init_gl() {
   glViewport(0, 0, m_width, m_height);
 }
 
-void Application::draw_camera_settings_window() {
+void Application::draw_settings_window() {
     const ImGuiViewport* main_viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(200, 400), ImGuiCond_FirstUseEver);
 
-    if (!ImGui::Begin("Camera Settings")) {
+    float window_width = glm::clamp(main_viewport->Size.x * 0.2f, 250.0f, 350.0f);
+    float window_height = main_viewport->Size.y;
+
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(window_width, window_height), ImGuiCond_Always);
+
+    ImGuiWindowFlags flags = 0;
+    flags |= ImGuiWindowFlags_NoMove;
+    flags |= ImGuiWindowFlags_NoResize;
+
+    if (!ImGui::Begin("Settings", NULL, flags)) {
         ImGui::End();
         return;
     }
 
-    if (ImGui::CollapsingHeader("Position")) {
+    draw_octree_settings_section();
+    draw_camera_settings_section();
+
+    ImGui::End();
+}
+
+void Application::draw_camera_settings_section() {
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (!ImGui::CollapsingHeader("Camera")) {
+        return;
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Position")) {
         bool cam_pos_edited = false;
         glm::dvec3 cam_pos = m_camera->get_position();
 
+        ImGui::PushItemWidth(-80);
 
-        float double_input_width = ImGui::CalcTextSize("#########.#########").x;
-
-        ImGui::SetNextItemWidth(double_input_width);
         ImGui::InputDouble("X", &cam_pos.x);
 
         if (ImGui::IsItemEdited()) {
             cam_pos_edited = true;
         }
 
-        ImGui::SetNextItemWidth(double_input_width);
+        //ImGui::SetNextItemWidth(double_input_width);
         ImGui::InputDouble("Y", &cam_pos.y);
 
         if (ImGui::IsItemEdited()) {
             cam_pos_edited = true;
         }
 
-        ImGui::SetNextItemWidth(double_input_width);
+        //ImGui::SetNextItemWidth(double_input_width);
         ImGui::InputDouble("Z", &cam_pos.z);
 
         if (ImGui::IsItemEdited() || cam_pos_edited) {
@@ -403,66 +438,64 @@ void Application::draw_camera_settings_window() {
 
             m_camera->set_position(cam_pos);
         }
+
+        ImGui::TreePop();
     }
 
-    if (ImGui::CollapsingHeader("Orientation")) {
-        ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
-        if (ImGui::TreeNode("Euler Angles")) {
-            bool euler_edited = false;
-            glm::vec3 euler = glm::degrees(m_camera->get_rotation_euler());
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Orientation")) {
+        ImGui::SeparatorText("Euler Angles");
+        bool euler_edited = false;
+        glm::vec3 euler = glm::degrees(m_camera->get_rotation_euler());
 
-            ImGui::SliderFloat("Pitch (X)", &euler.x, -180.0f, 180.0f);
-            if (ImGui::IsItemEdited()) {
-                euler_edited = true;
-            }
-
-            ImGui::SliderFloat("Yaw (Y)", &euler.y, -90.0f, 90.0f);
-            if (ImGui::IsItemEdited()) {
-                euler_edited = true;
-            }
-
-            ImGui::SliderFloat("Roll (Z)", &euler.z, -180.0f, 180.0f);
-            if (ImGui::IsItemEdited() || euler_edited) {
-                euler_edited = true;
-
-                m_camera->set_rotation_euler(glm::radians(euler));
-            }
-
-            ImGui::TreePop();
+        ImGui::SliderFloat("Pitch (X)", &euler.x, -180.0f, 180.0f);
+        if (ImGui::IsItemEdited()) {
+            euler_edited = true;
         }
 
-        ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
-        if (ImGui::TreeNode("Quaternion")) {
-            bool quat_edited = false;
-            glm::quat quat = m_camera->get_rotation_quat();
-
-            ImGui::SliderFloat("X", &quat.x, -1.0, 1.0);
-            if (ImGui::IsItemEdited()) {
-                quat_edited = true;
-            }
-
-            ImGui::SliderFloat("Y", &quat.y, -1.0, 1.0);
-            if (ImGui::IsItemEdited()) {
-                quat_edited = true;
-            }
-
-            ImGui::SliderFloat("Z", &quat.z, -1.0, 1.0);
-            if (ImGui::IsItemEdited()) {
-                quat_edited = true;
-            }
-
-            ImGui::SliderFloat("W", &quat.w, -1.0, 1.0);
-            if (ImGui::IsItemEdited() || quat_edited) {
-                quat_edited = true;
-
-                m_camera->set_rotation_quat(glm::normalize(quat));
-            }
-
-            ImGui::TreePop();
+        ImGui::SliderFloat("Yaw (Y)", &euler.y, -90.0f, 90.0f);
+        if (ImGui::IsItemEdited()) {
+            euler_edited = true;
         }
+
+        ImGui::SliderFloat("Roll (Z)", &euler.z, -180.0f, 180.0f);
+        if (ImGui::IsItemEdited() || euler_edited) {
+            euler_edited = true;
+
+            m_camera->set_rotation_euler(glm::radians(euler));
+        }
+
+        ImGui::SeparatorText("Quaternion");
+        bool quat_edited = false;
+        glm::quat quat = m_camera->get_rotation_quat();
+
+        ImGui::SliderFloat("X", &quat.x, -1.0, 1.0);
+        if (ImGui::IsItemEdited()) {
+            quat_edited = true;
+        }
+
+        ImGui::SliderFloat("Y", &quat.y, -1.0, 1.0);
+        if (ImGui::IsItemEdited()) {
+            quat_edited = true;
+        }
+
+        ImGui::SliderFloat("Z", &quat.z, -1.0, 1.0);
+        if (ImGui::IsItemEdited()) {
+            quat_edited = true;
+        }
+
+        ImGui::SliderFloat("W", &quat.w, -1.0, 1.0);
+        if (ImGui::IsItemEdited() || quat_edited) {
+            quat_edited = true;
+
+            m_camera->set_rotation_quat(glm::normalize(quat));
+        }
+
+        ImGui::TreePop();
     }
 
-    if (ImGui::CollapsingHeader("Projection")) {
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Projection")) {
         float fov = m_camera->get_fov();
 
         ImGui::SliderFloat("FOV", &fov, 0.1f, 120.0f);
@@ -485,9 +518,62 @@ void Application::draw_camera_settings_window() {
         }
 
         ImGui::Separator();
+
+        ImGui::TreePop();
+    }
+}
+
+void Application::draw_octree_settings_section() {
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (!ImGui::CollapsingHeader("Octree")) {
+        return;
     }
 
-    ImGui::End();
+    ImGui::PushItemWidth(-80);
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Stats")) {
+
+        ImGui::Text("Nodes Rendered: %d", m_last_draw_amount);
+
+        ImGui::TreePop();
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Filtering")) {
+
+        ImGui::TreePop();
+    }
+
+    ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
+    if (ImGui::TreeNode("Refining")) {
+        std::array<std::string, 3> metrics = { "Distance", "Level", "DGNSDNFOL"};
+        size_t selected_idx = 0;
+
+        if (ImGui::BeginCombo("Metric", metrics[selected_idx].c_str())) {
+            for (int i = 0; i < metrics.size(); i++) {
+                bool selected = selected_idx == i;
+
+                if (ImGui::Selectable(metrics[i].c_str(), selected)) {
+                    selected_idx = i;
+                    selected = true;
+                }
+
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        if (ImGui::SliderFloat("Factor", &m_refining_factor, 0.0f, 2.0f)) {
+
+        }
+
+        ImGui::TreePop();
+    }
+
+    ImGui::PopItemWidth();
 }
 
 void Application::gl_debug_callback(GLenum source, GLenum type,

@@ -682,7 +682,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     if (binary_output) {
         gltf_options.type = cgltf_file_type_glb;
     }
-    if (cgltf_write_file(&gltf_options, path.c_str(), &data) != cgltf_result_success) {
+    if (cgltf_write_file(&gltf_options, path.string().c_str(), &data) != cgltf_result_success) {
         throw std::runtime_error("Failed to save GLTF file");
     }
 

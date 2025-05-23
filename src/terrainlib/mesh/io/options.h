@@ -3,8 +3,8 @@
 #include <string>
 #include <unordered_map>
 
-namespace mesh {
-namespace io {
+
+namespace mesh::io {
     
 struct LoadOptions {
 };
@@ -15,5 +15,4 @@ struct SaveOptions {
     std::unordered_map<std::string, std::string> metadata = {};
 };
 
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io

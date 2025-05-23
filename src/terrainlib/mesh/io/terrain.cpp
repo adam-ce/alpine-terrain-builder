@@ -6,17 +6,16 @@
 
 using namespace mesh::io::utils;
 
-namespace mesh {
-namespace io {
-namespace terrain {
+namespace mesh::io::terrain {
 
 namespace {
-tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
-    LOG_TRACE("Writing bytes to path {}", path.string());
+tl::expected<void, SaveMeshError> write_bytes_to_path(
+    const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
+    LOG_TRACE("Writing bytes to path {}", path);
 
     std::ofstream ofs(path, std::ios::out | std::ios::binary);
     if (!ofs.is_open()) {
-        LOG_ERROR("Failed to open file {}", path.string());
+        LOG_ERROR("Failed to open file {}", path);
         return tl::unexpected(SaveMeshErrorKind::OpenFile);
     }
 
@@ -25,7 +24,7 @@ tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint
     ofs.write(reinterpret_cast<const char *>(bytes.data()), data_size);
 
     if (!ofs.good()) {
-        LOG_ERROR("Failed to write to file {}", path.string());
+        LOG_ERROR("Failed to write to file {}", path);
         ofs.close();
         return tl::unexpected(SaveMeshErrorKind::WriteFile);
     }
@@ -36,11 +35,11 @@ tl::expected<void, SaveMeshError> write_bytes_to_path(const std::span<const uint
 }
 
 tl::expected<std::vector<uint8_t>, LoadMeshError> read_bytes_from_path(const std::filesystem::path &path) {
-    LOG_TRACE("Reading bytes from path {}", path.string());
+    LOG_TRACE("Reading bytes from path {}", path);
 
     std::ifstream ifs(path, std::ios::in | std::ios::binary);
     if (!ifs.is_open()) {
-        LOG_ERROR("Failed to open file {}", path.string());
+        LOG_ERROR("Failed to open file {}", path);
         return tl::unexpected(LoadMeshErrorKind::FileNotFound);
     }
 
@@ -80,7 +79,7 @@ tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMes
     auto result = out(mesh);
     if (zpp::bits::failure(result)) {
         std::error_code error_code = std::make_error_code(result);
-        LOG_ERROR("Error while writing tile: {}", error_code.message());
+        LOG_ERROR("Error while writing mesh: {}", error_code.message());
 
         switch (result) {
         case std::errc::no_buffer_space:
@@ -142,6 +141,4 @@ tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std
     return write_bytes_to_path(bytes, path);
 }
 
-} // namespace terrain
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::terrain

@@ -17,8 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef PROGRESSINDICATOR_H
-#define PROGRESSINDICATOR_H
+#pragma once
 
 #include <atomic>
 #include <cassert>
@@ -37,5 +36,3 @@ public:
     [[nodiscard]] std::string progress_bar() const;
     [[nodiscard]] std::string x_of_y_done_message() const;
 };
-
-#endif // PROGRESSINDICATOR_H

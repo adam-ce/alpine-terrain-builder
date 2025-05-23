@@ -18,7 +18,7 @@
 #include "texture_assembler.h"
 #include "tile_provider.h"
 
-#include "octree/space.h"
+#include "octree/Space.h"
 
 namespace terrainbuilder {
 
@@ -127,7 +127,7 @@ void build_and_save(
         texture_base_path,
         mesh_srs);
 
-    LOG_INFO("Writing mesh to output path {}", output_path.string());
+    LOG_INFO("Writing mesh to output path {}", output_path);
 
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
@@ -146,11 +146,11 @@ void build_and_save(
         texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
     */
     if (!::mesh::io::save_to_path(mesh, output_path, ::mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
-        LOG_ERROR("Failed to save mesh to file {}", output_path.string());
+        LOG_ERROR("Failed to save mesh to file {}", output_path);
         exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
-    LOG_INFO("Done", output_path.string());
+    LOG_INFO("Done", output_path);
 }
 
 }

@@ -2,7 +2,7 @@
 
 #include "../catch2_helpers.h"
 
-#include "octree/id.h"
+#include "octree/Id.h"
 
 using namespace octree;
 

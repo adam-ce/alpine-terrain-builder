@@ -16,9 +16,7 @@
 
 using namespace mesh::io::utils;
 
-namespace mesh {
-namespace io {
-namespace gltf {
+namespace mesh::io::gltf {
 
 namespace {
 const int GL_NEAREST = 0x2600;
@@ -697,6 +695,4 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::pa
     return load_mesh_from_raw(*raw_mesh, options);
 }
 
-} // namespace gltf
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io::gltf

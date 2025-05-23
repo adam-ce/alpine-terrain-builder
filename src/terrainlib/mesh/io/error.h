@@ -2,8 +2,9 @@
 
 #include <string>
 
-namespace mesh {
-namespace io {
+namespace mesh::io {
+
+// TODO: use same setup as with NodeStatus here
 
 enum class LoadMeshErrorKind {
     UnsupportedFormat,
@@ -98,5 +99,4 @@ private:
     SaveMeshErrorKind kind;
 };
 
-} // namespace io
-} // namespace mesh
+} // namespace mesh::io

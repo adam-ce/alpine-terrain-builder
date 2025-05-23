@@ -2,7 +2,7 @@
 
 #include <radix/geometry.h>
 
-#include "id.h"
+#include "octree/Id.h"
 
 namespace octree {
 using Bounds = radix::geometry::Aabb3d;

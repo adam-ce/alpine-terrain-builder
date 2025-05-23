@@ -5,18 +5,21 @@
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
+#include <functional>
 
 #include <glm/glm.hpp>
 
-namespace octree {
+#include "hash_utils.h"
 
-using Level = uint32_t;
-using Coord = uint32_t;
-using Coords = glm::tvec3<Coord>;
-using Index = uint64_t;
+namespace octree {
 
 class Id {
 public:
+    using Level = uint8_t;
+    using Coord = uint32_t;
+    using Coords = glm::tvec3<Coord>;
+    using Index = uint64_t;
+
     [[nodiscard]] static constexpr Level max_level() {
         return (sizeof(Index) * 8) / 3;
     }
@@ -27,6 +30,7 @@ public:
         return (1ull << (3 * level)) - 1;
     }
 
+    constexpr Id() = default; // zpp::bits requires a default constructor
     constexpr Id(const Level level, const Coords coords)
         : Id(level, interleave3(coords)) {
     }
@@ -34,6 +38,25 @@ public:
         : _level(level), _index(index) {
         assert(level <= Id::max_level());
         assert(index <= Id::max_index_on_level(this->_level));
+    }
+
+    [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords) {
+        if (level > Id::max_level()) {
+            return std::nullopt;
+        }
+        if (glm::any(glm::greaterThan(coords, Coords(max_coord_on_level(level))))) {
+            return std::nullopt;
+        }
+        return Id(level, coords);
+    }
+    [[nodiscard]] static std::optional<Id> try_make(const Level level, const Index index) {
+        if (level > Id::max_level()) {
+            return std::nullopt;
+        }
+        if (index > Id::max_index_on_level(level)) {
+            return std::nullopt;
+        }
+        return Id(level, index);
     }
 
     [[nodiscard]] constexpr Level level() const {
@@ -129,6 +152,9 @@ public:
     bool operator==(const Id &other) const {
         return this->_level == other._level && this->_index == other._index;
     }
+    bool operator!=(const Id &other) const {
+        return !(*this == other);
+    }
 
 private:
     Level _level;
@@ -198,5 +224,42 @@ inline std::string to_string(const octree::Id &id) {
 inline std::ostream &operator<<(std::ostream &os, const octree::Id &id) {
     fmt::print(os, "{}", id);
     return os;
+}
+}
+
+namespace std {
+template <>
+struct hash<octree::Id> {
+    std::size_t operator()(const octree::Id &id) const noexcept {
+        return hash_combine(id.level(), id.index_on_level());
+    }
+};
+} // namespace std
+
+#include <zpp_bits.h>
+namespace zpp::bits {
+namespace {
+constexpr zpp::bits::errc success() {
+    return zpp::bits::errc(std::errc());
+}
+}
+constexpr auto serialize(auto &archive, octree::Id &id) {
+    octree::Id::Level level;
+    octree::Id::Index index;
+    auto result = archive(level, index);
+    if (failure(result)) {
+        return result;
+    }
+
+    auto maybe_id = octree::Id::try_make(level, index);
+    if (!maybe_id) {
+        return zpp::bits::errc(std::errc::bad_message);
+    }
+
+    id = *maybe_id;
+    return success();
+}
+constexpr auto serialize(auto &archive, const octree::Id &id) {
+    return archive(id.level(), id.index_on_level());
 }
 }

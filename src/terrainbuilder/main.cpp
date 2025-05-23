@@ -8,22 +8,26 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+
 #include <tbb/concurrent_vector.h>
+#include <tbb/enumerable_thread_specific.h>
+#include <tbb/parallel_for.h>
 #include <tbb/task_group.h>
 
-#include "srs.h"
 #include "Dataset.h"
-#include "terrainbuilder.h"
-#include "log.h"
 #include "ProgressIndicator.h"
+#include "log.h"
+#include "srs.h"
+#include "terrainbuilder.h"
 
-#include "ctb/GlobalMercator.hpp"
 #include "ctb/GlobalGeodetic.hpp"
+#include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
 
-#include "octree/id.h"
-#include "octree/storage.h"
-#include "octree/space.h"
+#include "octree/Id.h"
+#include "octree/Space.h"
+#include "octree/Storage.h"
+#include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
 #include "octree/utils.h"
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
@@ -102,13 +106,13 @@ radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data
         LOG_ERROR_AND_EXIT("Only ECEF (EPSG:4978) supported for --node.");
     }
 
-    const uint32_t zoom_level = data[0];
+    const octree::Id::Level zoom_level = data[0];
     octree::Id target_node = octree::Id::root();
 
     if (data.size() == 2) {
         target_node = {zoom_level, data[1]};
     } else if (data.size() == 4) {
-        const glm::uvec3 coords(data[1], data[2], data[3]);
+        const octree::Id::Coords coords(data[1], data[2], data[3]);
         target_node = {zoom_level, coords};
     } else {
         LOG_ERROR_AND_EXIT("Invalid number of args for --node. Expected 2 or 4.");
@@ -147,16 +151,18 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
     return *opt;
 }
 
-
 void batch_build(
     Dataset &dataset,
-    const octree::Level target_level,
+    const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
     const std::optional<std::filesystem::path> &texture_base_path,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
     const std::string &output_format) {
-    const octree::Storage storage(output_base_path);
+    const octree::Storage storage = octree::open_folder(
+        output_base_path,
+        octree::disk::layout::strategy::make_default(),
+        output_format);
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d();
@@ -174,9 +180,17 @@ void batch_build(
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
+    tbb::enumerable_thread_specific<std::unique_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
+        auto local_ecef_srs = ecef_srs;
+        auto local_dataset_srs = dataset_srs;
+        auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
+        return transform;
+    });
+
     process_node = [&](octree::Id node) {
         const auto node_bounds = space.get_node_bounds(node);
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(ecef_srs, dataset_srs, node_bounds);
+        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
+            &*transform_ecef_dataset.local(), node_bounds);
 
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
             return;
@@ -185,7 +199,7 @@ void batch_build(
         if (node.level() < target_level) {
             if (auto children = node.children(); children.has_value()) {
                 for (const auto &child : *children) {
-                    tg.run([=] { process_node(child); });
+                    tg.run([&, child] { process_node(child); });
                 }
             }
         } else if (node.level() == target_level) {
@@ -202,11 +216,32 @@ void batch_build(
     ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
-    std::for_each(std::execution::par, target_nodes.begin(), target_nodes.end(), [&](const auto &node) {
+    tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
+        return dataset.clone();
+    });
+    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_ecef_srs([&]() {
+        return srs::clone(ecef_srs);
+    });
+    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_texture_srs([&]() {
+        return srs::clone(texture_srs);
+    });
+    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_mesh_srs([&]() {
+        return srs::clone(mesh_srs);
+    });
+    tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
+        const auto &node = target_nodes[i];
+        if (storage.has_node(node)) {
+            return;
+        }
+
+        auto &dataset = local_dataset.local();
+        auto &ecef_srs = *local_ecef_srs.local();
+        auto &texture_srs = *local_texture_srs.local();
+        auto &mesh_srs = *local_mesh_srs.local();
+
         const auto node_bounds = space.get_node_bounds(node);
-        auto local_dataset = dataset.clone();
         const SimpleMesh mesh = terrainbuilder::build(
-            local_dataset,
+            dataset,
             ecef_srs,
             node_bounds,
             texture_srs,
@@ -214,11 +249,14 @@ void batch_build(
             mesh_srs);
 
         if (!mesh.is_empty()) {
-            storage.save_node(node, mesh);
+            storage.write_node(node, mesh);
         }
 
         progress.task_finished();
     });
+
+    progress_thread.join();
+    storage.save_index();
 }
 
 int run(std::span<char *> args) {
@@ -274,7 +312,7 @@ int run(std::span<char *> args) {
         ->expected(2, 4);
     target->require_option(1);
 
-    single->add_option("--output", output_path, "Output path were the mesh is written to (.tile, .gltf or .glb)")
+    single->add_option("--output", output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
         ->required();
 
     std::map<std::string, radix::tile::Scheme> scheme_str_map{
@@ -303,7 +341,7 @@ int run(std::span<char *> args) {
     auto *batch = app.add_subcommand("batch", "Build all nodes for a dataset at a given level")
                       ->fallthrough();
 
-    octree::Level target_level;
+    octree::Id::Level target_level;
     batch->add_option("--target-level", target_level, "Level of detail for batch generation")
         ->required();
     std::filesystem::path output_base_path;
@@ -311,14 +349,14 @@ int run(std::span<char *> args) {
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
-        ->check(CLI::IsMember({"glb", "gltf", "tile"}))
-        ->default_val("glb");
+        ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
+        ->default_val(".glb");
 
     CLI11_PARSE(app, argc, argv);
 
     Log::init(log_level);
 
-    Dataset dataset(dataset_path);
+    Dataset dataset(dataset_path.string());
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
     OGRSpatialReference texture_srs = srs::webmercator();
 

@@ -33,6 +33,11 @@
 
 namespace srs {
 
+inline std::unique_ptr<OGRSpatialReference> clone(const OGRSpatialReference &srs) {
+    auto cloned = srs.Clone();
+    return std::unique_ptr<OGRSpatialReference>(cloned);
+}
+
 inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs) {
     auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
     if (!transformer) {
@@ -209,14 +214,9 @@ inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry:
 /// Transforms bounds from one srs to another,
 /// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
 /// But there can be points inside the new bounds that were not present in the original ones.
-inline radix::tile::SrsBounds encompassing_bounds_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const radix::tile::SrsBounds &source_bounds) {
-    if (source_srs.IsSame(&target_srs)) {
-        return source_bounds;
-    }
-
-    const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
+inline radix::tile::SrsBounds encompassing_bounds_transfer(OGRCoordinateTransformation *transform, const radix::tile::SrsBounds &source_bounds) {
     radix::tile::SrsBounds target_bounds;
-    const int result = transformation->TransformBounds(
+    const int result = transform->TransformBounds(
         source_bounds.min.x, source_bounds.min.y, source_bounds.max.x, source_bounds.max.y,
         &target_bounds.min.x, &target_bounds.min.y, &target_bounds.max.x, &target_bounds.max.y,
         21);
@@ -225,17 +225,20 @@ inline radix::tile::SrsBounds encompassing_bounds_transfer(const OGRSpatialRefer
     }
     return target_bounds;
 }
-
-inline radix::geometry::Aabb3d encompassing_bounds_transfer(
-    const OGRSpatialReference &source_srs,
-    const OGRSpatialReference &target_srs,
-    const radix::geometry::Aabb3d &source_bounds,
-    const uint32_t intermediate_points_edges = 21,
-    const uint32_t intermediate_points_faces = 5) {
+inline radix::tile::SrsBounds encompassing_bounds_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const radix::tile::SrsBounds &source_bounds) {
     if (source_srs.IsSame(&target_srs)) {
         return source_bounds;
     }
 
+    const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
+    return encompassing_bounds_transfer(transformation.get(), source_bounds);
+}
+
+inline radix::geometry::Aabb3d encompassing_bounds_transfer(
+    OGRCoordinateTransformation *transform,
+    const radix::geometry::Aabb3d &source_bounds,
+    const uint32_t intermediate_points_edges = 21,
+    const uint32_t intermediate_points_faces = 5) {
     std::vector<glm::dvec3> points;
 
     // Add corner points
@@ -274,8 +277,7 @@ inline radix::geometry::Aabb3d encompassing_bounds_transfer(
     }
 
     // Transform all collected points
-    const auto transform = srs::transformation(source_srs, target_srs);
-    transform_points_inplace(transform.get(), points);
+    transform_points_inplace(transform, points);
 
     // Compute bounds from transformed points
     radix::geometry::Aabb3d target_bounds;
@@ -286,6 +288,19 @@ inline radix::geometry::Aabb3d encompassing_bounds_transfer(
     }
 
     return target_bounds;
+}
+inline radix::geometry::Aabb3d encompassing_bounds_transfer(
+    const OGRSpatialReference &source_srs,
+    const OGRSpatialReference &target_srs,
+    const radix::geometry::Aabb3d &source_bounds,
+    const uint32_t intermediate_points_edges = 21,
+    const uint32_t intermediate_points_faces = 5) {
+    if (source_srs.IsSame(&target_srs)) {
+        return source_bounds;
+    }
+
+    const auto transform = srs::transformation(source_srs, target_srs);
+    return encompassing_bounds_transfer(transform.get(), source_bounds, intermediate_points_edges, intermediate_points_faces);
 }
 
 inline tl::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg) {

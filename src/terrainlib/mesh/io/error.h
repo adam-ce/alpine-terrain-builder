@@ -4,6 +4,8 @@
 
 namespace mesh::io {
 
+// TODO: use same setup as with NodeStatus here
+
 enum class LoadMeshErrorKind {
     UnsupportedFormat,
     FileNotFound,

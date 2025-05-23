@@ -229,7 +229,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
         if (tile_image.empty()) {
             const std::optional<std::filesystem::path> tile_path = try_get_tile_path(tile, tile_provider);
             if (tile_path.has_value()) {
-                LOG_ERROR("Failed to load image from path {}", tile_path.value().string());
+                LOG_ERROR("Failed to load image from path {}", tile_path.value());
             } else {
                 LOG_ERROR("Failed to load tile texture");
             }

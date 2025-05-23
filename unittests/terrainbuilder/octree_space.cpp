@@ -2,8 +2,8 @@
 
 #include "../catch2_helpers.h"
 
-#include "octree/id.h"
-#include "octree/space.h"
+#include "octree/Id.h"
+#include "octree/Space.h"
 
 using namespace octree;
 

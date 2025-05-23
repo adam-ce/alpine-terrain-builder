@@ -66,6 +66,11 @@ add_library(terrainlib
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
 
+    terrainlib/io/bytes.h terrainlib/io/bytes.cpp
+    terrainlib/io/Error.h
+    terrainlib/io/serialize.h
+    terrainlib/io/utils.h terrainlib/io/utils.cpp
+
     terrainlib/mesh/io/error.h
     terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
     terrainlib/mesh/io/options.h
@@ -77,16 +82,27 @@ add_library(terrainlib
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
 
-    terrainlib/octree/id.h
-    terrainlib/octree/storage.h
-    terrainlib/octree/space.h
+    terrainlib/octree/disk/layout/strategy/Flat.h
+    terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
+    terrainlib/octree/disk/layout/Strategy.h
+    terrainlib/octree/disk/layout/StrategyRegister.h
+    terrainlib/octree/disk/IndexFile.h
+    terrainlib/octree/disk/Layout.h
+    terrainlib/octree/Id.h
+    terrainlib/octree/Storage.h terrainlib/octree/Storage.cpp
+    terrainlib/octree/IndexMap.h
+    terrainlib/octree/NodeStatus.h
+    terrainlib/octree/Space.h
+    terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 
     terrainlib/Dataset.h terrainlib/Dataset.cpp
+    terrainlib/hash_utils.h
     terrainlib/init.h terrainlib/init.cpp
     terrainlib/log.h terrainlib/log.cpp
     terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
     terrainlib/srs.h
+    terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)

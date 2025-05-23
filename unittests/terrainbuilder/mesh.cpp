@@ -36,8 +36,8 @@
 #include "mesh_builder.h"
 #include "mesh/io.h"
 #include "mesh/utils.h"
-#include "octree/id.h"
-#include "octree/space.h"
+#include "octree/Id.h"
+#include "octree/Space.h"
 #include "srs.h"
 
 

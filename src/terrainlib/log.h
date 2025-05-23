@@ -47,3 +47,5 @@ public:
         LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
         _UNREACHABLE();                                                     \
     } while (0)
+
+#include "log_path.h"

@@ -19,7 +19,7 @@ std::optional<T> from_chars(std::basic_string_view<CharT> sv) {
         return value;
     } else {
         std::string utf8(sv.begin(), sv.end());
-        return from_chars<T>(utf8);
+        return from_chars<T>(std::string_view(utf8));
     }
 }
 

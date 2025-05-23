@@ -1,6 +1,8 @@
 #include "Application.h"
-#include "utils/log/Log.h"
 #include <sstream>
+
+#include <log.h>
+
 #include <glm/glm.hpp>
 
 // CMRC Resource Compiler
@@ -16,7 +18,7 @@
 #include "Camera.h"
 #include "geometry/UnitCube.h"
 #include "octree/space.h"
-#include "octree/rendering/OctreeRenderManager.h"
+#include "rendering/OctreeRenderManager.h"
 
 CMRC_DECLARE(res);
 
@@ -363,11 +365,11 @@ void Application::init_glad() {
     // Load OpenGL functions, gladLoadGL returns the loaded version, 0 on error.
     int version = gladLoadGL(glfwGetProcAddress);
     if (version == 0) {
-        LOG_GL_FATAL_AND_EXIT("Failed to initialize OpenGL context");
+        LOG_ERROR_AND_EXIT("Failed to initialize OpenGL context");
     }
 
     // Successfully loaded OpenGL
-    LOG_GL_INFO("Loaded OpenGL {0}.{1}", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
+    LOG_INFO("Loaded OpenGL {0}.{1}", GLAD_VERSION_MAJOR(version), GLAD_VERSION_MINOR(version));
 }
 
 void Application::init_gl() {
@@ -679,23 +681,23 @@ void Application::gl_debug_callback(GLenum source, GLenum type,
 
   switch (severity) {
   case GL_DEBUG_SEVERITY_HIGH: {
-    LOG_GL_ERROR(stringStream.str());
+    LOG_ERROR(stringStream.str());
     break;
   }
   case GL_DEBUG_SEVERITY_MEDIUM: {
-    LOG_GL_WARN(stringStream.str());
+    LOG_WARN(stringStream.str());
     break;
   }
   case GL_DEBUG_SEVERITY_LOW: {
-    LOG_GL_INFO(stringStream.str());
+    LOG_INFO(stringStream.str());
     break;
   }
   case GL_DEBUG_SEVERITY_NOTIFICATION: {
-    LOG_GL_DEBUG(stringStream.str());
+    LOG_DEBUG(stringStream.str());
     break;
   }
   default: {
-    LOG_GL_TRACE(stringStream.str());
+    LOG_TRACE(stringStream.str());
     break;
   }
   }

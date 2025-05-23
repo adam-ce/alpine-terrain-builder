@@ -1,6 +1,6 @@
 #include "ShaderProgram.h"
 #include <glad/gl.h>
-#include <utils/log/Log.h>
+#include <log.h>
 
 ShaderProgram::ShaderProgram() {
 	m_handle = glCreateProgram();
@@ -8,14 +8,14 @@ ShaderProgram::ShaderProgram() {
 
 void ShaderProgram::attach(Shader shader) {
 	if (!handle_valid()) {
-		LOG_GL_FATAL_AND_EXIT("Tried attaching Shader to ShaderProgram with invalid handle!");
+		LOG_ERROR_AND_EXIT("Tried attaching Shader to ShaderProgram with invalid handle!");
 	}
 	glAttachShader(m_handle, shader.handle());
 }
 
 void ShaderProgram::link() {
 	if (!handle_valid()) {
-		LOG_GL_FATAL_AND_EXIT("Tried linking ShaderProgram with invalid handle!");
+		LOG_ERROR_AND_EXIT("Tried linking ShaderProgram with invalid handle!");
 	}
 
 	glLinkProgram(m_handle);
@@ -33,7 +33,7 @@ void ShaderProgram::link() {
 		message.resize(log_size);
 		glGetProgramInfoLog(m_handle, log_size, nullptr, &message[0]);
 
-		LOG_GL_FATAL_AND_EXIT(message);
+		LOG_ERROR_AND_EXIT(message);
 	}
 
 	// load all uniform locations
@@ -75,7 +75,7 @@ GLuint ShaderProgram::handle() {
 GLint ShaderProgram::get_uniform_location(std::string name) {
 	const auto result = m_uniform_locations.find(name);
 	if (result == m_uniform_locations.end()) {
-		LOG_GL_FATAL_AND_EXIT("Could not find Uniform '{}'", name);
+		LOG_ERROR_AND_EXIT("Could not find Uniform '{}'", name);
 	} else {
 		return result->second;
 	}
@@ -83,14 +83,14 @@ GLint ShaderProgram::get_uniform_location(std::string name) {
 
 void ShaderProgram::use() {
 	if (!handle_valid()) {
-		LOG_GL_FATAL_AND_EXIT("Tried using ShaderProgram with invalid handle!");
+		LOG_ERROR_AND_EXIT("Tried using ShaderProgram with invalid handle!");
 	}
 	glUseProgram(m_handle);
 }
 
 ShaderProgram::~ShaderProgram() {
 	if (!handle_valid()) {
-		LOG_GL_FATAL_AND_EXIT("Tried destructing ShaderProgram with invalid handle!");
+		LOG_ERROR_AND_EXIT("Tried destructing ShaderProgram with invalid handle!");
 	}
 	glDeleteProgram(m_handle);
 }

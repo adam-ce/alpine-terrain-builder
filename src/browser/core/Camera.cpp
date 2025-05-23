@@ -1,5 +1,5 @@
 #include "Camera.h"
-#include <utils/log/Log.h>
+#include <log.h>
 
 Camera::Camera(CameraConfig config) : 
 	m_fov_deg(config.fov_deg), 

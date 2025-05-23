@@ -19,7 +19,7 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph'")
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
 find_package(Boost CONFIG REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
@@ -57,6 +57,39 @@ add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
+
+# Don't build glfw docs, tests and examples
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+if (UNIX)
+	# Enable Wayland and X11 on Unix builds
+	set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
+	set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+endif (UNIX)
+alp_add_git_repository(glfw URL https://github.com/glfw/glfw.git COMMITISH e7ea71be039836da3a98cea55ae5569cb5eb885c NOT_SYSTEM)
+
+alp_add_git_repository(glad URL https://github.com/Dav1dde/glad.git COMMITISH 431786d8126e4f383a81e36f47b61a5d52a1c20d DO_NOT_ADD_SUBPROJECT)
+add_subdirectory("${glad_SOURCE_DIR}/cmake" glad_cmake)
+glad_add_library(glad_gl_core_46 REPRODUCIBLE API gl:core=4.6)
+
+alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237 NOT_SYSTEM)
+add_subdirectory(browser/res)
+
+alp_add_git_repository(imgui URL https://github.com/ocornut/imgui.git COMMITISH 5f0acadf7db1b6d469f0771284e2e3f7818443ce DO_NOT_ADD_SUBPROJECT)
+add_library(imgui STATIC
+   ${imgui_SOURCE_DIR}/imgui.cpp
+   ${imgui_SOURCE_DIR}/imgui_draw.cpp
+   ${imgui_SOURCE_DIR}/imgui_tables.cpp
+   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+)
+target_include_directories(imgui PUBLIC
+   ${imgui_SOURCE_DIR}
+   ${imgui_SOURCE_DIR}/backends
+)
+target_link_libraries(imgui PUBLIC glfw)
 
 add_library(terrainlib
     terrainlib/ctb/CTBException.hpp
@@ -146,3 +179,27 @@ add_executable(terrainconvert
     terrainconvert/main.cpp
 )
 target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(browser
+    # browser/main2.cpp
+
+    browser/main.cpp
+
+    browser/core/Application.cpp
+    browser/core/window/Window.cpp
+    browser/core/shader/Shader.cpp
+    browser/core/shader/ShaderProgram.cpp
+    browser/core/shader/Uniform.h
+    browser/core/shader/GLUniformAbstractions.h
+    browser/core/Buffer.cpp
+    browser/core/Camera.cpp
+
+    browser/core/geometry/UnitCube.h
+
+    browser/core/rendering/OctreeRenderManager.cpp
+)
+
+#target_compile_features(browser PRIVATE cxx_std_20)
+#target_compile_options(browser PRIVATE /utf-8)
+target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
+target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)

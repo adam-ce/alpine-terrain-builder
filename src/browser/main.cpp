@@ -1,16 +1,17 @@
 #include "core/Application.h"
-#include "utils/log/Log.h"
+#include <log.h>
 
-int main() {
+int main()
+{
 #ifdef DEBUG
-  Log::Init(spdlog::level::trace);
+    Log::init(spdlog::level::trace);
 #else
-  Log::Init(spdlog::level::info);
+    Log::init(spdlog::level::info);
 #endif
 
-  Application app("Alpenite Browser", 1280, 720);
+    Application app("Alpenite Browser", 1280, 720);
 
-  app.run();
+    app.run();
 
-  return 0;
+    return 0;
 }

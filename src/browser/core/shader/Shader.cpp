@@ -1,5 +1,5 @@
 #include "Shader.h"
-#include <utils/log/Log.h>
+#include <log.h>
 
 Shader::Shader(GLenum type) : m_type(type) {
 	m_handle = glCreateShader(m_type);
@@ -7,7 +7,7 @@ Shader::Shader(GLenum type) : m_type(type) {
 
 void Shader::compile(std::string_view code) {
     if (!handle_valid()) {
-        LOG_GL_FATAL_AND_EXIT("Tried compiling source for Shader with invalid handle!");
+        LOG_ERROR_AND_EXIT("Tried compiling source for Shader with invalid handle!");
     }
 
     const char* code_ptr = code.data();
@@ -28,13 +28,13 @@ void Shader::compile(std::string_view code) {
         message.resize(log_size);
         glGetShaderInfoLog(m_handle, log_size, nullptr, &message[0]);
 
-        LOG_GL_FATAL_AND_EXIT(message);
+        LOG_ERROR_AND_EXIT(message);
     }
 }
 
 GLuint Shader::handle() {
     if (!handle_valid()) {
-		LOG_GL_FATAL_AND_EXIT("Tried getting handle of Shader with invalid handle!");
+		LOG_ERROR_AND_EXIT("Tried getting handle of Shader with invalid handle!");
 	}
 
     return m_handle;

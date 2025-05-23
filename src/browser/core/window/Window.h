@@ -4,6 +4,7 @@
 #include <map>
 #include <atomic>
 #include <GLFW/glfw3.h>
+#include <functional>
 #include <glm/glm.hpp>
 
 struct WindowConfig {

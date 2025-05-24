@@ -21,7 +21,10 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
+#include <array>
+#include <stdexcept>
 
 #include <fmt/format.h>
 #include <glm/detail/qualifier.hpp>
@@ -70,85 +73,54 @@ inline glm::tvec3<T> transform_point(const OGRSpatialReference &source_srs, cons
     return transform_point(transform.get(), p);
 }
 
-template <typename T, std::size_t n>
-inline void transform_points_inplace(OGRCoordinateTransformation *transform, std::array<glm::tvec2<T>, n> &points) {
-    std::array<T, n> xs;
-    std::array<T, n> ys;
+template <typename Container>
+inline void transform_points_inplace(OGRCoordinateTransformation *transform, Container &points) {
+    using PointType = typename Container::value_type;
+    using T = typename PointType::value_type;
+    constexpr bool is_3d = (PointType::length() == 3);
+    constexpr bool is_array = std::is_array_v<Container>;
 
-    for (size_t i = 0; i < points.size(); i++) {
+    const size_t size = points.size();
+
+    constexpr std::size_t array_size = is_array ? points.size() : 0;
+    using OutputContainer = std::conditional_t<is_array, std::array<T, array_size>, std::vector<T>>;
+
+    OutputContainer xs, ys;
+    std::conditional_t<is_3d, OutputContainer, int> zs;
+    
+    if constexpr (!is_array) {
+        xs.resize(size);
+        ys.resize(size);
+        if constexpr (PointType::length() == 3) {
+            zs.resize(size);
+        }
+    }
+
+    for (size_t i = 0; i < size; i++) {
         xs[i] = points[i].x;
         ys[i] = points[i].y;
+        if constexpr (is_3d) {
+            zs[i] = points[i].z;
+        }
     }
 
-    if (!transform->Transform(points.size(), xs.data(), ys.data())) {
-        throw std::runtime_error("srs::transform_points_inplace(std::array<glm::tvec2<T>, n>) failed");
+    bool success;
+    if constexpr (is_3d) {
+        success = transform->Transform(size, xs.data(), ys.data(), zs.data());
+    } else {
+        success = transform->Transform(size, xs.data(), ys.data());
     }
 
-    for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = {xs[i], ys[i]};
-    }
-}
-template <typename T>
-inline void transform_points_inplace(OGRCoordinateTransformation *transform, std::vector<glm::tvec2<T>> &points) {
-    std::vector<T> xs;
-    std::vector<T> ys;
-
-    for (size_t i = 0; i < points.size(); i++) {
-        xs[i] = points[i].x;
-        ys[i] = points[i].y;
+    if (!success) {
+        throw std::runtime_error("srs::transform_points_inplace failed");
     }
 
-    if (!transform->Transform(points.size(), xs.data(), ys.data())) {
-        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec2<T>, n>) failed");
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = {xs[i], ys[i]};
-    }
-}
-
-template <typename T, std::size_t n>
-inline void transform_points_inplace(OGRCoordinateTransformation *transform, std::array<glm::tvec3<T>, n> &points) {
-    std::array<T, n> xs;
-    std::array<T, n> ys;
-    std::array<T, n> zs;
-
-    for (size_t i = 0; i < points.size(); i++) {
-        xs[i] = points[i].x;
-        ys[i] = points[i].y;
-        zs[i] = points[i].z;
-    }
-
-    if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw std::runtime_error("srs::transform_points_inplace(std::array<glm::tvec3<T>, n>) failed");
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = {xs[i], ys[i], zs[i]};
-    }
-}
-template <typename T>
-inline void transform_points_inplace(OGRCoordinateTransformation *transform, std::vector<glm::tvec3<T>> &points) {
-    std::vector<T> xs;
-    std::vector<T> ys;
-    std::vector<T> zs;
-
-    xs.resize(points.size());
-    ys.resize(points.size());
-    zs.resize(points.size());
-
-    for (size_t i = 0; i < points.size(); i++) {
-        xs[i] = points[i].x;
-        ys[i] = points[i].y;
-        zs[i] = points[i].z;
-    }
-
-    if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
-    }
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = {xs[i], ys[i], zs[i]};
+    for (size_t i = 0; i < size; i++) {
+        if constexpr (is_3d) {
+            points[i] = PointType(xs[i], ys[i], zs[i]);
+        } else {
+            points[i] = PointType(xs[i], ys[i]);
+        }
     }
 }
 

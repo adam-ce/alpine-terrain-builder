@@ -38,7 +38,7 @@ public:
         : base_path(base_path) {}
 
     std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile_id) const override {
-        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.generic_string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
+        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
     }
 
 private:
@@ -67,10 +67,6 @@ SimpleMesh build(
         const mesh::BuildError error = mesh_result.error();
         if (error == mesh::BuildError::OutOfBounds) {
             const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
-            // const radix::tile::Id dataset_largest_tile = grid.findLargestContainedTile(dataset_bounds).value().to(radix::tile::Scheme::SlippyMap);
-            // const radix::tile::Id dataset_encompassing_tile = grid.findSmallestEncompassingTile(dataset_bounds).value().to(radix::tile::Scheme::SlippyMap);
-            // const radix::tile::Id target_largest_tile = grid.findLargestContainedTile(tile_bounds).value().to(radix::tile::Scheme::SlippyMap);
-            // const radix::tile::Id target_encompassing_tile = grid.findSmallestEncompassingTile(tile_bounds).value().to(radix::tile::Scheme::SlippyMap);
             LOG_ERROR("Target bounds are fully outside of dataset region\n"
                       "Dataset {{\n"
                       "\t x={}, y={}, w={}, h={}.\n"
@@ -133,18 +129,15 @@ void build_and_save(
     start = std::chrono::high_resolution_clock::now();
     // TODO: use a JSON libary instead
     std::unordered_map<std::string, std::string> metadata;
-    // TODO: redo
-    /*/
     metadata["mesh_srs"] = mesh_srs.GetAuthorityCode(nullptr);
-    metadata["bounds_srs"] = tile_srs.GetAuthorityCode(nullptr);
+    metadata["bounds_srs"] = target_bounds_srs.GetAuthorityCode(nullptr);
     metadata["texture_srs"] = texture_srs.GetAuthorityCode(nullptr);
-    metadata["tile_bounds"] = fmt::format(
+    metadata["bounds"] = fmt::format(
         "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
-        tile_bounds.min.x, tile_bounds.min.y, tile_bounds.max.x, tile_bounds.max.y);
-    metadata["texture_bounds"] = fmt::format(
-        "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
-        texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    */
+        target_bounds.min.x, target_bounds.min.y, target_bounds.max.x, target_bounds.max.y);
+    // metadata["texture_bounds"] = fmt::format(
+    //     "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
+    //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
     if (!::mesh::io::save_to_path(mesh, output_path, ::mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
         LOG_ERROR("Failed to save mesh to file {}", output_path);
         exit(2);

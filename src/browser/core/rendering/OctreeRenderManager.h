@@ -1,6 +1,6 @@
 #pragma once
-#include "octree/id.h"
-#include "octree/space.h"
+#include "octree/Id.h"
+#include "octree/Space.h"
 #include <any>
 #include <glm/glm.hpp>
 

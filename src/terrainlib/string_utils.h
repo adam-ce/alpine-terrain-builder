@@ -1,14 +1,13 @@
 #pragma once
 
 #include <charconv>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
 
 template <typename T, typename CharT>
-std::optional<T> from_chars(std::basic_string_view<CharT> sv) {
+std::optional<T> from_chars(const std::basic_string_view<CharT> sv) {
     static_assert(std::is_integral_v<T>, "T must be an integral type");
 
     if constexpr (std::is_same_v<CharT, char>) {

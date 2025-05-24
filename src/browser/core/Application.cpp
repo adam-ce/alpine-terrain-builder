@@ -17,7 +17,7 @@
 #include "Buffer.h"
 #include "Camera.h"
 #include "geometry/UnitCube.h"
-#include "octree/space.h"
+#include "octree/Space.h"
 #include "rendering/OctreeRenderManager.h"
 
 CMRC_DECLARE(res);

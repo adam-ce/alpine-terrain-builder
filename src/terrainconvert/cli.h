@@ -1,5 +1,4 @@
-#ifndef TERRAINCONVERT_CLI_H
-#define TERRAINCONVERT_CCLI_H
+#pragma once
 
 #include <filesystem>
 #include <optional>
@@ -18,4 +17,3 @@ namespace cli {
     Args parse(int argc, const char *const *argv);
 }
 
-#endif

@@ -4,14 +4,14 @@
 #include <opencv2/opencv.hpp>
 #include <tl/expected.hpp>
 
-#include "mesh/terrain_mesh.h"
+#include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
 #include "log.h"
 #include "cli.h"
 
 void run(const cli::Args& args) {
     LOG_INFO("Loading input mesh...");
-    const tl::expected<SimpleMesh, io::LoadMeshError> load_result = io::load_mesh_from_path(args.input_path);
+    const tl::expected<SimpleMesh, mesh::io::LoadMeshError> load_result = mesh::io::load_from_path(args.input_path);
     if (!load_result.has_value()) {
         LOG_ERROR("Failed to load mesh: {}", load_result.error().description());
         return;
@@ -30,7 +30,7 @@ void run(const cli::Args& args) {
     }
 
     LOG_INFO("Writing output mesh...");
-    const tl::expected<void, io::SaveMeshError> save_result = io::save_mesh_to_path(args.output_path, mesh);
+    const tl::expected<void, mesh::io::SaveMeshError> save_result = mesh::io::save_to_path(mesh, args.output_path);
     if (!save_result.has_value()) {
         LOG_ERROR("Failed to save mesh: {}", save_result.error().description());
         return;

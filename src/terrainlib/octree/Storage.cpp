@@ -177,6 +177,15 @@ Storage open_folder(
     bool save_index) {
     LOG_TRACE("Opening storage folder {}", base_path);
 
+    if (!std::filesystem::is_directory(base_path)) {
+        if (std::filesystem::exists(base_path)) {
+            LOG_ERROR_AND_EXIT("Base path {} exists but is not a directory", base_path);
+        }
+        
+        LOG_TRACE("Base path {} does not exist, creating it", base_path);
+        std::filesystem::create_directories(base_path);
+    }
+
     const std::filesystem::path index_path = base_path / disk::v1::index_file_name();
     auto storage_opt = load_index(index_path);
     if (storage_opt.has_value()) {

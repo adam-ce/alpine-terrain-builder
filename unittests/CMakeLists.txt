@@ -34,6 +34,9 @@ add_executable(unittests_terrainlib
     terrainlib/grid.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/index_map.cpp
+    terrainlib/octree_id.cpp
+    terrainlib/octree_space.cpp
+    terrainlib/mesh_io.cpp
 )
     
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
@@ -65,10 +68,7 @@ target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2
 
 add_executable(unittests_terrainbuilder
     catch2_helpers.h
-    terrainbuilder/octree_id.cpp
-    terrainbuilder/octree_space.cpp
     terrainbuilder/mesh.cpp
-    terrainbuilder/mesh_io.cpp
     terrainbuilder/texture.cpp
 )
 

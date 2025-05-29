@@ -26,6 +26,7 @@ public:
     bool has_node(const Id &id) const;
     std::filesystem::path get_node_path(const Id &id) const;
     
+    const IndexMap* index() const;
     bool save_index() const;
 
 private:
@@ -33,7 +34,7 @@ private:
     disk::Layout _layout;
 };
 
-std::optional<Storage> open_index(const std::filesystem::path &index_path);
+std::optional<Storage> load_index(const std::filesystem::path &index_path);
 Storage open_folder(
     const std::filesystem::path &base_path,
     std::unique_ptr<disk::layout::Strategy> default_layout_strategy = disk::layout::strategy::make_default(),

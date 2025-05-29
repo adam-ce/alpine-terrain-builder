@@ -74,6 +74,14 @@ std::filesystem::path Storage::get_node_path(const Id &id) const {
     return this->_layout.get_node_path(id);
 }
 
+const IndexMap* Storage::index() const {
+    if (this->_index.has_value()) {
+        return &this->_index.value();
+    } else {
+        return nullptr;
+    }
+}
+
 bool Storage::save_index() const {
     const auto index_path = this->_layout.base_path() / disk::v1::index_file_name();
     LOG_TRACE("Saving octree storage index to {}", index_path);

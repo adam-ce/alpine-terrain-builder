@@ -20,6 +20,7 @@
 #define CATCH_CONFIG_MAIN
 #include <catch2/catch_test_macros.hpp>
 #include "merge.h"
+#include "mesh/utils.h"
 
 TEST_CASE("terrainmerger") {
     SECTION("two tris") {

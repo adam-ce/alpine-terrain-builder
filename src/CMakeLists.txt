@@ -124,9 +124,9 @@ add_library(terrainlib
     terrainlib/octree/disk/Layout.h
     terrainlib/octree/Id.h
     terrainlib/octree/Storage.h terrainlib/octree/Storage.cpp
-    terrainlib/octree/IndexMap.h
+    terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
     terrainlib/octree/NodeStatus.h
-    terrainlib/octree/Space.h
+    terrainlib/octree/Space.h terrainlib/octree/Space.cpp
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 

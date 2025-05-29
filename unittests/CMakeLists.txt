@@ -34,6 +34,7 @@ add_executable(unittests_terrainlib
     terrainlib/grid.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/index_map.cpp
+    terrainlib/index_traverse.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/mesh_io.cpp

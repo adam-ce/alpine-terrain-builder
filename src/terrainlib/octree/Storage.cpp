@@ -21,6 +21,12 @@ Storage::Storage(IndexMap map, disk::Layout layout)
     : _index(std::move(map)), _layout(std::move(layout)) {}
 
 std::optional<Node> Storage::read_node(const Id &id) const {
+    if (this->_index.has_value()) {
+        const auto& index = this->_index.value();
+        if (index.is_absent(id)) {
+            return std::nullopt;
+        }
+    }
     const auto node_path = this->get_node_path(id);
     const auto result = mesh::io::load_from_path(node_path);
     if (result.has_value()) {
@@ -30,10 +36,30 @@ std::optional<Node> Storage::read_node(const Id &id) const {
     }
 }
 
-bool Storage::write_node(const Id &id, const Node &node) const {
+bool Storage::write_node(const Id &id, const Node &node) {
     const auto node_path = this->get_node_path(id);
     const auto result = mesh::io::save_to_path(node, node_path);
+    if (result.has_value() && this->_index.has_value()) {
+        auto& index = this->_index.value();
+        index.add(id);
+    }
     return result.has_value();
+}
+
+bool Storage::remove_node(const Id &id) {
+    if (this->_index.has_value()) {
+        const auto& index = this->_index.value();
+        if (index.is_absent(id)) {
+            return false;
+        }
+    }
+    const auto node_path = this->get_node_path(id);
+    const bool result = std::filesystem::remove(node_path);
+    if (this->_index.has_value()) {
+        auto& index = this->_index.value();
+        index.remove(id);
+    }
+    return result;
 }
 
 bool Storage::has_node(const Id &id) const {
@@ -147,7 +173,7 @@ void update_index(IndexMap &index, const disk::Layout &layout) {
         }
 
         const Id id = *id_opt;
-        index.set(id, NodeStatus::Leaf);
+        index.set_raw(id, NodeStatus::Leaf);
     }
 
     std::unordered_set<Id> visited;
@@ -160,9 +186,9 @@ void update_index(IndexMap &index, const disk::Layout &layout) {
             visited.insert(*parent);
 
             if (index.get(*parent)) {
-                index.set(*parent, NodeStatus::Inner);
+                index.set_raw(*parent, NodeStatus::Inner);
             } else {
-                index.set(*parent, NodeStatus::Virtual);
+                index.set_raw(*parent, NodeStatus::Virtual);
             }
             parent = parent->parent();
         }

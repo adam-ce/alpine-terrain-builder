@@ -54,7 +54,7 @@ void hash_combine_core(std::size_t &seed, const T &v, const Rest &...rest) {
 
 template <typename... Rest>
 size_t hash_combine(const Rest &...rest) {
-    size_t h;
+    size_t h = 0x9e3779b9;
     (hash_combine_core(h, rest), ...);
     return h;
 }

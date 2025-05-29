@@ -17,24 +17,40 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef CATCH2_HELPERS_H
-#define CATCH2_HELPERS_H
+#pragma once
+
+#include <optional>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
-
 #include <glm/gtx/string_cast.hpp>
 
-namespace Catch {
+#include "octree/NodeStatus.h"
 
-// template<>
+namespace Catch {
 template <glm::length_t s, typename T>
 struct StringMaker<glm::vec<s, T>> {
-    static std::string convert(const glm::vec<s, T>& value)
-    {
+    static std::string convert(const glm::vec<s, T>& value) {
         return glm::to_string(value);
     }
 };
-}
 
-#endif // CATCH2_HELPERS_H
+template<>
+struct StringMaker<octree::NodeStatus> {
+    static std::string convert(const octree::NodeStatus& status) {
+        return status.to_string();
+    }
+};
+
+template <typename T>
+struct StringMaker<std::optional<T>> {
+    static std::string convert(const std::optional<T>& opt) {
+        if (opt.has_value()) {
+            return StringMaker<std::remove_cv_t<std::remove_reference_t<T>>>::convert(opt.value());
+        } else {
+            return "nullopt";
+        }
+    }
+};
+
+}

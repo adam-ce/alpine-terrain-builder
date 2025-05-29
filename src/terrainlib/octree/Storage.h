@@ -21,7 +21,8 @@ public:
     explicit Storage(IndexMap map, disk::Layout layout);
 
     std::optional<Node> read_node(const Id &id) const;
-    bool write_node(const Id &id, const Node &node) const;
+    bool write_node(const Id &id, const Node &node);
+    bool remove_node(const Id &id);
     bool has_node(const Id &id) const;
     std::filesystem::path get_node_path(const Id &id) const;
     

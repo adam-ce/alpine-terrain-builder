@@ -33,6 +33,7 @@ add_executable(unittests_terrainlib
     terrainlib/dataset.cpp
     terrainlib/grid.cpp
     terrainlib/progress_indicator_test.cpp
+    terrainlib/index_map.cpp
 )
     
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)

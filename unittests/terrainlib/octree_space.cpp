@@ -10,7 +10,7 @@ using namespace octree;
 TEST_CASE("find_smallest_node_encompassing_bounds includes full space", "[octree::Space]") {
     Space space = Space::earth();
 
-    auto full_space_id = space.find_smallest_node_encompassing_bounds(space.bounds);
+    auto full_space_id = space.find_smallest_node_encompassing_bounds(space.bounds());
     REQUIRE(full_space_id.has_value());
     CHECK(full_space_id.value() == Id::root());
 }
@@ -19,8 +19,8 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns more specific child", 
     Space space = Space::earth();
 
     Bounds inner_box{
-        space.bounds.min,
-        space.bounds.min + space.bounds.size() /  2.0
+        space.bounds().min,
+        space.bounds().min + space.bounds().size() /  2.0
     };
 
     auto id = space.find_smallest_node_encompassing_bounds(inner_box);
@@ -31,11 +31,11 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns more specific child", 
 
 TEST_CASE("find_smallest_node_encompassing_bounds returns nullopt for out-of-bounds", "[octree::Space]") {
     Space space = Space::earth();
-    glm::dvec3 offset = space.bounds.size() * 2.0;
+    glm::dvec3 offset = space.bounds().size() * 2.0;
 
     Bounds far_away{
-        space.bounds.min + offset,
-        space.bounds.min + offset + glm::dvec3(1.0)
+        space.bounds().min + offset,
+        space.bounds().min + offset + glm::dvec3(1.0)
     };
 
     auto id = space.find_smallest_node_encompassing_bounds(far_away);
@@ -55,12 +55,12 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", 
     Space space = Space::earth();
 
     // Pick a very small bounds somewhere inside the root
-    glm::dvec3 offset = space.bounds.size() * 0.1;
-    glm::dvec3 size = space.bounds.size() * 0.001;
+    glm::dvec3 offset = space.bounds().size() * 0.1;
+    glm::dvec3 size = space.bounds().size() * 0.001;
 
     Bounds target{
-        space.bounds.min + offset,
-        space.bounds.min + offset + size};
+        space.bounds().min + offset,
+        space.bounds().min + offset + size};
 
     auto maybe_id = space.find_smallest_node_encompassing_bounds(target);
     REQUIRE(maybe_id.has_value());

@@ -169,6 +169,18 @@ add_executable(tilebuilder
 target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
 
 
+add_library(terrainmergerlib
+    terrainmerger/cli.h
+)
+target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(terrainmerger
+    terrainmerger/main.cpp
+    terrainmerger/cli.h terrainmerger/cli.cpp
+)
+target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+
+
 add_library(terrainbuilderlib
     terrainbuilder/tile_provider.h
     terrainbuilder/mesh_builder.h
@@ -187,27 +199,28 @@ add_executable(terrainbuilder
 )
 target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
-add_library(terrainmergerlib
-    terrainmerger/cli.h
-    terrainmerger/cli.cpp
-    terrainmerger/merge.h
-    terrainmerger/merge.cpp
-    terrainmerger/simplify.h
-    terrainmerger/simplify.cpp
-    terrainmerger/uv_map.h
-    terrainmerger/uv_map.cpp
-    terrainmerger/cgal.h
-    terrainmerger/convert.h
-    terrainmerger/convert.cpp
-    terrainmerger/validate.h
+
+add_library(terrainsimplifylib
+    terrainsimplify/cli.h
+    terrainsimplify/cli.cpp
+    terrainsimplify/merge.h
+    terrainsimplify/merge.cpp
+    terrainsimplify/simplify.h
+    terrainsimplify/simplify.cpp
+    terrainsimplify/uv_map.h
+    terrainsimplify/uv_map.cpp
+    terrainsimplify/cgal.h
+    terrainsimplify/convert.h
+    terrainsimplify/convert.cpp
+    terrainsimplify/validate.h
 )
-target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
-target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
-add_executable(terrainmerger
-    terrainmerger/main.cpp
+target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)
+target_precompile_headers(terrainsimplifylib PRIVATE terrainsimplify/pch.h)
+target_link_libraries(terrainsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
+add_executable(terrainsimplify
+    terrainsimplify/main.cpp
 )
-target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+target_link_libraries(terrainsimplify PUBLIC terrainsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp

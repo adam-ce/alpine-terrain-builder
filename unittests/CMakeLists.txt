@@ -54,13 +54,13 @@ add_executable(unittests_tilebuilder
 target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
 
-add_executable(unittests_terrainmerger
+add_executable(unittests_terrainsimplify
     catch2_helpers.h
-    terrainmerger/convert.cpp
-    terrainmerger/merge.cpp
+    terrainsimplify/convert.cpp
+    terrainsimplify/merge.cpp
 )
 
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2WithMain)
+target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainbuilder
@@ -72,5 +72,5 @@ add_executable(unittests_terrainbuilder
     terrainbuilder/texture.cpp
 )
 
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2WithMain)
+target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")

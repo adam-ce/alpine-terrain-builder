@@ -12,6 +12,7 @@ find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
+
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
 
@@ -143,6 +144,30 @@ target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt z
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
+
+
+add_library(tilebuilderlib
+    tilebuilder/alpine_raster.h tilebuilder/alpine_raster.cpp
+    tilebuilder/DatasetReader.h tilebuilder/DatasetReader.cpp
+    tilebuilder/depth_first_tile_traverser.h
+    tilebuilder/Exception.h
+    tilebuilder/Image.h tilebuilder/Image.cpp
+    tilebuilder/ParallelTileGenerator.h tilebuilder/ParallelTileGenerator.cpp
+    tilebuilder/ParallelTiler.h tilebuilder/ParallelTiler.cpp
+    tilebuilder/srs.h
+    tilebuilder/TileHeightsGenerator.h tilebuilder/TileHeightsGenerator.cpp
+    tilebuilder/Tiler.h tilebuilder/Tiler.cpp
+    tilebuilder/TopDownTiler.h tilebuilder/TopDownTiler.cpp
+    tilebuilder/algorithms/primitives.h
+    tilebuilder/algorithms/raster_triangle_scanline.h
+)
+target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tilebuilder)
+target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
+add_executable(tilebuilder
+    tilebuilder/main.cpp
+)
+target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
+
 
 add_library(terrainbuilderlib
     terrainbuilder/tile_provider.h

@@ -10,36 +10,47 @@ if (NOT TARGET Catch2)
     alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.5.1)
 endif()
 
-add_executable(unittests_terrainlib
-    alpine_raster_format.cpp
-    catch2_helpers.h
 
-    dataset.cpp
-    dataset_reading.cpp
-    depth_first_tile_traverser.cpp
-    grid.cpp
-    image.cpp
-    main.cpp
-    parallel_tile_generator.cpp
-    parallel_tiler.cpp
-    progress_indicator_test.cpp
-    tile_heights_generator.cpp
-    top_down_tiler.cpp
+add_compile_definitions(
+    ATB_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+    ATB_UNITTESTS_AUSTRIA_HIGHRES="${ATB_UNITTESTS_AUSTRIA_HIGHRES}"
+)
+
+if (ATB_UNITTESTS_EXTENDED)
+    add_compile_definitions(ATB_UNITTESTS_EXTENDED=true)
+else()
+    add_compile_definitions(ATB_UNITTESTS_EXTENDED=false)
+endif()
+
+if (ATB_UNITTESTS_DEBUG_IMAGES)
+    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=true)
+else()
+    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=false)
+endif()
+
+add_executable(unittests_terrainlib
+    catch2_helpers.h
+    terrainlib/dataset.cpp
+    terrainlib/grid.cpp
+    terrainlib/progress_indicator_test.cpp
 )
     
-target_compile_definitions(unittests_terrainlib PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
-target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_AUSTRIA_HIGHRES=\"${ATB_UNITTESTS_AUSTRIA_HIGHRES}\"")
-if (ATB_UNITTESTS_EXTENDED)
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_EXTENDED=true")
-else()
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_EXTENDED=false")
-endif()
-if (ATB_UNITTESTS_DEBUG_IMAGES)
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=true")
-else()
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=false")
-endif()
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
+
+
+add_executable(unittests_tilebuilder
+    catch2_helpers.h
+    tilebuilder/alpine_raster_format.cpp
+    tilebuilder/dataset_reading.cpp
+    tilebuilder/depth_first_tile_traverser.cpp
+    tilebuilder/image.cpp
+    tilebuilder/parallel_tile_generator.cpp
+    tilebuilder/parallel_tiler.cpp
+    tilebuilder/tile_heights_generator.cpp
+    tilebuilder/top_down_tiler.cpp
+)
+    
+target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainmerger

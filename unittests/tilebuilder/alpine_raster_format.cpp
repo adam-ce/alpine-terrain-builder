@@ -30,9 +30,9 @@
 
 using namespace radix;
 
-tile::Border testTypeValue2Border(bool v)
+radix::tile::Border testTypeValue2Border(bool v)
 {
-    return v ? tile::Border::Yes : tile::Border::No;
+    return v ? radix::tile::Border::Yes : radix::tile::Border::No;
 }
 
 TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::false_type)
@@ -41,15 +41,15 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("raste write")
     {
-        const auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, tile::Border::Yes);
-        generator.write(tile::Descriptor { {0, glm::uvec2(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        const auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes);
+        generator.write(radix::tile::Descriptor { {0, glm::uvec2(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
-        generator.write(tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // check that a second write doesn't crash
-        generator.write(tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // in the best case, we would read back the data and check it. but that's too much work for now.
@@ -58,12 +58,12 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("process all tiles")
     {
-        auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 0, 7 });
         const auto tiles = generator.tiler().generateTiles({ 0, 7 });
 
-        const auto check = [](const tile::Descriptor& t) {
+        const auto check = [](const radix::tile::Descriptor& t) {
             return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.id.zoom_level, t.id.coords.x, t.id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
@@ -71,12 +71,12 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 #if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
     SECTION("process all tiles with max zoom")
     {
-        auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 4, 8 });
         const auto tiles = generator.tiler().generateTiles({ 4, 8 });
 
-        const auto check = [](const tile::Descriptor& t) {
+        const auto check = [](const radix::tile::Descriptor& t) {
             return std::filesystem::exists(fmt::format("./unittest_tiles/{}/{}/{}.png", t.id.zoom_level, t.id.coords.x, t.id.coords.y));
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);

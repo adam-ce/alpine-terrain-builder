@@ -27,12 +27,12 @@
 using namespace radix;
 
 namespace {
-void compare_tile_lists(const std::vector<tile::Descriptor>& a_tiles, std::vector<tile::Descriptor> b_tiles)
+void compare_tile_lists(const std::vector<radix::tile::Descriptor>& a_tiles, std::vector<radix::tile::Descriptor> b_tiles)
 {
     CHECK(a_tiles.size() == b_tiles.size());
 
     for (const auto& tile : a_tiles) {
-        const auto matching_tile_iter = std::find_if(b_tiles.begin(), b_tiles.end(), [&](const tile::Descriptor& t) {
+        const auto matching_tile_iter = std::find_if(b_tiles.begin(), b_tiles.end(), [&](const radix::tile::Descriptor& t) {
             return t.id == tile.id;
         });
         REQUIRE(matching_tile_iter != b_tiles.end());
@@ -51,16 +51,16 @@ void compare_tile_lists(const std::vector<tile::Descriptor>& a_tiles, std::vecto
 
 TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::false_type)
 {
-    const auto scheme = TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap;
+    const auto scheme = TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap;
 
     SECTION("mercator / level 0 all")
     {
         const auto grid = ctb::GlobalMercator();
-        const auto tiler = TopDownTiler(grid, grid.getExtent(), tile::Border::No, scheme);
+        const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No, scheme);
 
         const auto tiles = tiler.generateTiles({0, { 0, 0 }, scheme});
         REQUIRE(tiles.size() == 4);
-        const auto parallel_tiler = ParallelTiler(grid, grid.getExtent(), tile::Border::No, scheme);
+        const auto parallel_tiler = ParallelTiler(grid, grid.getExtent(), radix::tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
@@ -69,22 +69,22 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalMercator();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto bounds = dataset->bounds(grid.getSRS());
-        const auto tiler = TopDownTiler(grid, bounds, tile::Border::No, scheme);
+        const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, scheme);
 
         const auto tiles = tiler.generateTiles({0, { 0, 0 }, scheme});
         REQUIRE(tiles.size() == 1);
-        const auto parallel_tiler = ParallelTiler(grid, bounds, tile::Border::No, scheme);
+        const auto parallel_tiler = ParallelTiler(grid, bounds, radix::tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
     SECTION("geodetic / level 0 east half")
     {
         const auto grid = ctb::GlobalGeodetic();
-        const auto tiler = TopDownTiler(grid, grid.getExtent(), tile::Border::No, scheme);
+        const auto tiler = TopDownTiler(grid, grid.getExtent(), radix::tile::Border::No, scheme);
 
         const auto tiles = tiler.generateTiles({0, { 1, 0 }, scheme});
         REQUIRE(tiles.size() == 4);
-        const auto parallel_tiler = ParallelTiler(grid, {{0, -90}, {180, 90}}, tile::Border::No, scheme);
+        const auto parallel_tiler = ParallelTiler(grid, {{0, -90}, {180, 90}}, radix::tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 
@@ -93,11 +93,11 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
         const auto grid = ctb::GlobalGeodetic();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
         const auto bounds = dataset->bounds(grid.getSRS());
-        const auto tiler = TopDownTiler(grid, bounds, tile::Border::No, scheme);
+        const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, scheme);
 
         const auto tiles = tiler.generateTiles({0, { 1, 0 }, scheme});
         REQUIRE(tiles.size() == 1);
-        const auto parallel_tiler = ParallelTiler(grid, bounds, tile::Border::No, scheme);
+        const auto parallel_tiler = ParallelTiler(grid, bounds, radix::tile::Border::No, scheme);
         compare_tile_lists(tiles, parallel_tiler.generateTiles(1));
     }
 }

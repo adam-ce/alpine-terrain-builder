@@ -1,7 +1,6 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
- * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
+ * Copyright (C) 2022 madam
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,26 +16,24 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <chrono>
-#include <cmath>
-#include <limits>
+#pragma once
 
-#define CATCH_CONFIG_MAIN
-#include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <string>
 
-#ifdef NDEBUG
-constexpr bool asserts_are_enabled = false;
-#else
-constexpr bool asserts_are_enabled = true;
-#endif
+#include "ctb/Grid.hpp"
+#include <radix/tile.h>
 
-TEST_CASE("check that asserts are enabled")
+
+class TileHeightsGenerator
 {
-    CHECK(asserts_are_enabled);
-}
+    std::string m_input_data_path;
+    ctb::Grid::Srs m_srs;
+    radix::tile::Scheme m_scheme;
+    radix::tile::Border m_border;
+    std::filesystem::path m_output_path;
+public:
+    TileHeightsGenerator(std::string  input_data_path, ctb::Grid::Srs srs, radix::tile::Scheme scheme, radix::tile::Border border, std::filesystem::path output_path);
+    void run(unsigned max_zoom_level) const;
+};
 
-TEST_CASE("check that NaNs are enabled (-ffast-math removes support, -fno-finite-math-only puts it back in)")
-{
-    CHECK(std::isnan(std::numeric_limits<float>::quiet_NaN() * float(std::chrono::system_clock::now().time_since_epoch().count())));
-    CHECK(std::isnan(double(std::numeric_limits<float>::quiet_NaN() * float(std::chrono::system_clock::now().time_since_epoch().count()))));
-}

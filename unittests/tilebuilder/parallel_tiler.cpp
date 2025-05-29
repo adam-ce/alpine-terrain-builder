@@ -19,7 +19,7 @@
 
 #include "Dataset.h"
 #include "ParallelTiler.h"
-#include "catch2_helpers.h"
+#include "../catch2_helpers.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include <catch2/catch_approx.hpp>
@@ -35,11 +35,11 @@ using namespace radix;
 
 TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::false_type)
 {
-    //  const auto bounds = tile::SrsBounds(1'000'000, 6'000'000, 2'000'000, 6'700'000); // in m
+    //  const auto bounds = radix::tile::SrsBounds(1'000'000, 6'000'000, 2'000'000, 6'700'000); // in m
     SECTION("mercator / level 0")
     {
         const auto grid = ctb::GlobalMercator();
-        const auto tiler = ParallelTiler(grid, grid.getExtent(), tile::Border::No, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, grid.getExtent(), radix::tile::Border::No, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(0).coords == glm::uvec2(0, 0));
         CHECK(tiler.southWestTile(0).coords == glm::uvec2(0, 0));
@@ -63,7 +63,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
     {
         const auto grid = ctb::GlobalMercator();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), tile::Border::No, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), radix::tile::Border::No, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(1).coords == glm::uvec2(1, TestType::value ? 1 : 0));
         CHECK(tiler.southWestTile(1).coords == glm::uvec2(1, TestType::value ? 1 : 0));
@@ -106,7 +106,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
     SECTION("geodetic tms / level 0")
     {
         const auto grid = ctb::GlobalGeodetic(64);
-        const auto tiler = ParallelTiler(grid, grid.getExtent(), tile::Border::Yes, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, grid.getExtent(), radix::tile::Border::Yes, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(0).coords == glm::uvec2(1, 0));
         CHECK(tiler.southWestTile(0).coords == glm::uvec2(0, 0));
@@ -144,7 +144,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
     {
         const auto grid = ctb::GlobalGeodetic(64);
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), tile::Border::Yes, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), radix::tile::Border::Yes, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(1).coords == glm::uvec2(2, TestType::value ? 1 : 0));
         CHECK(tiler.southWestTile(1).coords == glm::uvec2(2, TestType::value ? 1 : 0));
@@ -190,7 +190,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
     {
         const auto grid = ctb::GlobalMercator();
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
-        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), tile::Border::No, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), radix::tile::Border::No, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(1).coords == glm::uvec2(0, TestType::value ? 0 : 1));
         CHECK(tiler.southWestTile(1).coords == glm::uvec2(0, TestType::value ? 0 : 1));
@@ -234,7 +234,7 @@ TEMPLATE_TEST_CASE("ParallelTiler, using tms scheme", "", std::true_type, std::f
     {
         const auto grid = ctb::GlobalGeodetic(64);
         auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/capehorn/small.tif");
-        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), tile::Border::Yes, TestType::value ? tile::Scheme::Tms : tile::Scheme::SlippyMap);
+        const auto tiler = ParallelTiler(grid, dataset->bounds(grid.getSRS()), radix::tile::Border::Yes, TestType::value ? radix::tile::Scheme::Tms : radix::tile::Scheme::SlippyMap);
 
         CHECK(tiler.northEastTile(1).coords == glm::uvec2(1, TestType::value ? 0 : 1));
         CHECK(tiler.southWestTile(1).coords == glm::uvec2(1, TestType::value ? 0 : 1));
@@ -281,7 +281,7 @@ TEST_CASE("ParallelTiler returns tiles for several zoom levels")
 {
     const auto dataset = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto grid = ctb::GlobalMercator(256);
-    const auto tiler = ParallelTiler(grid, dataset.bounds(grid.getSRS()), tile::Border::Yes, tile::Scheme::Tms);
+    const auto tiler = ParallelTiler(grid, dataset.bounds(grid.getSRS()), radix::tile::Border::Yes, radix::tile::Scheme::Tms);
 
     SECTION("generate from 0 to 7")
     {
@@ -301,7 +301,7 @@ TEST_CASE("ParallelTiler returns tiles for several zoom levels")
         CHECK(n_tiles[6] == 6);
         CHECK(n_tiles[7] == 12);
 
-        const auto check = [](const tile::Descriptor& t) {
+        const auto check = [](const radix::tile::Descriptor& t) {
             return t.tileSize == 257 && t.gridSize == 256;
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);
@@ -320,7 +320,7 @@ TEST_CASE("ParallelTiler returns tiles for several zoom levels")
         CHECK(n_tiles[5] == 4);
         CHECK(n_tiles[6] == 6);
 
-        const auto check = [](const tile::Descriptor& t) {
+        const auto check = [](const radix::tile::Descriptor& t) {
             return t.tileSize == 257 && t.gridSize == 256;
         };
         CHECK(std::transform_reduce(tiles.begin(), tiles.end(), true, std::logical_and<>(), check) == true);

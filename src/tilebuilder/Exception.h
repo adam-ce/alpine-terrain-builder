@@ -1,7 +1,7 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg dot tuwien dot ac dot at>
  * Copyright (C) 2022 alpinemaps.org
+ * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +17,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#pragma once
+#ifndef EXCEPTION_H
+#define EXCEPTION_H
 
-#include <atomic>
-#include <cassert>
-#include <string>
-#include <thread>
+#include <stdexcept>
 
-class ProgressIndicator {
-    const size_t m_n_steps;
-    std::atomic<size_t> m_step = 0;
-
+/// This represents a CTB runtime error
+class Exception : public std::runtime_error {
 public:
-    ProgressIndicator(size_t n_steps);
-
-    void task_finished();
-    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
-    [[nodiscard]] std::string x_of_y_done_message() const;
+    Exception(const std::string& message)
+        : std::runtime_error(message)
+    {
+        while (false) { }
+    }
 };
+
+#endif // EXCEPTION_H

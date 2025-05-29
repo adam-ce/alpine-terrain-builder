@@ -22,6 +22,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <cmath>
 
 #include <fmt/core.h>
 
@@ -64,17 +65,19 @@ std::jthread ProgressIndicator::start_monitoring() const {
     return thread;
 }
 
-std::string ProgressIndicator::progress_bar() const {
-    const auto bar_width = 50;
-    const auto progress = uint32_t(bar_width * (double(m_step) / double(m_n_steps)) + 0.5);
+std::string ProgressIndicator::progress_bar(const uint32_t bar_width) const {
+    assert(bar_width >= 2);
+    const auto inner_bar_width = bar_width - 2;
+    const auto step = m_step.load();
+    const auto progress = step > 0 ? inner_bar_width * step / m_n_steps : 0;
     assert(progress <= bar_width);
 
     std::ostringstream oss;
     oss << "[";
-    for (uint32_t i = 0; i < bar_width; ++i) {
-        if (i < progress) {
+    for (uint32_t i = 0; i < inner_bar_width; i++) {
+        if (i < progress || step == m_n_steps) {
             oss << "=";
-        } else if (i == progress) {
+        } else if (i == progress && step != 0) {
             oss << ">";
         } else {
             oss << " ";

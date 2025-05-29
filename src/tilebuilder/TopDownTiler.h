@@ -1,7 +1,6 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg dot tuwien dot ac dot at>
- * Copyright (C) 2022 alpinemaps.org
+ * Copyright (C) 2022 Adam Celarek
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,21 +17,14 @@
  *****************************************************************************/
 
 #pragma once
+#include <array>
+#include "Tiler.h"
+#include "ctb/Grid.hpp"
+#include <radix/tile.h>
 
-#include <atomic>
-#include <cassert>
-#include <string>
-#include <thread>
-
-class ProgressIndicator {
-    const size_t m_n_steps;
-    std::atomic<size_t> m_step = 0;
-
+class TopDownTiler : public Tiler {
 public:
-    ProgressIndicator(size_t n_steps);
+    TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme);
 
-    void task_finished();
-    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
-    [[nodiscard]] std::string x_of_y_done_message() const;
+    [[nodiscard]] std::vector<radix::tile::Descriptor> generateTiles(const radix::tile::Id& parent_id) const;
 };

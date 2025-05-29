@@ -1,7 +1,6 @@
 /*****************************************************************************
  * Alpine Terrain Builder
- * Copyright (C) 2022 Adam Celarek <last name at cg dot tuwien dot ac dot at>
- * Copyright (C) 2022 alpinemaps.org
+ * Copyright (C) 2022 Adam Celarek
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#pragma once
+#include "TopDownTiler.h"
 
-#include <atomic>
-#include <cassert>
-#include <string>
-#include <thread>
+TopDownTiler::TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme)
+    : Tiler(grid, bounds, border, scheme)
+{
+}
 
-class ProgressIndicator {
-    const size_t m_n_steps;
-    std::atomic<size_t> m_step = 0;
+std::vector<radix::tile::Descriptor> TopDownTiler::generateTiles(const radix::tile::Id& parent_id) const
+{
+    assert(parent_id.scheme == scheme());
+    const auto tile_ids = parent_id.to(scheme()).children();
+    std::vector<radix::tile::Descriptor> tiles;
+    for (const auto& tile_id : tile_ids) {
+        radix::tile::Descriptor t = tile_for(tile_id);
+        if (intersect(bounds(), t.srsBounds))
+            tiles.push_back(std::move(t));
+    }
 
-public:
-    ProgressIndicator(size_t n_steps);
-
-    void task_finished();
-    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
-    [[nodiscard]] std::string x_of_y_done_message() const;
-};
+    return tiles;
+}

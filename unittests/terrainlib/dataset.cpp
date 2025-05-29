@@ -29,7 +29,7 @@
 using namespace radix;
 using Catch::Approx;
 
-void checkBounds(const tile::SrsBounds& a, const tile::SrsBounds& b)
+void checkBounds(const radix::tile::SrsBounds& a, const radix::tile::SrsBounds& b)
 {
     REQUIRE(a.height() > 0);
     REQUIRE(a.width() > 0);

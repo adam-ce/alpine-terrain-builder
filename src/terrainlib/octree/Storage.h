@@ -6,6 +6,7 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
+#include "OnceCell.h"
 #include "octree/Id.h"
 #include "octree/IndexMap.h"
 #include "octree/disk/Layout.h"
@@ -27,10 +28,12 @@ public:
     std::filesystem::path get_node_path(const Id &id) const;
     
     const IndexMap* index() const;
+    bool has_index() const;
     bool save_index() const;
+    const IndexMap& ensure_indexed() const;
 
 private:
-    std::optional<IndexMap> _index;
+    OnceCell<IndexMap> _index;
     disk::Layout _layout;
 };
 

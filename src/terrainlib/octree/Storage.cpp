@@ -21,9 +21,8 @@ Storage::Storage(IndexMap map, disk::Layout layout)
     : _index(std::move(map)), _layout(std::move(layout)) {}
 
 std::optional<Node> Storage::read_node(const Id &id) const {
-    if (this->_index.has_value()) {
-        const auto& index = this->_index.value();
-        if (index.is_absent(id)) {
+    if (const auto* index = this->_index.get()) {
+        if (index->is_absent(id)) {
             return std::nullopt;
         }
     }
@@ -39,32 +38,31 @@ std::optional<Node> Storage::read_node(const Id &id) const {
 bool Storage::write_node(const Id &id, const Node &node) {
     const auto node_path = this->get_node_path(id);
     const auto result = mesh::io::save_to_path(node, node_path);
-    if (result.has_value() && this->_index.has_value()) {
-        auto& index = this->_index.value();
-        index.add(id);
+    if (result.has_value()) {
+        if (auto* index = this->_index.get()) {
+            index->add(id);
+        }
     }
     return result.has_value();
 }
 
 bool Storage::remove_node(const Id &id) {
-    if (this->_index.has_value()) {
-        const auto& index = this->_index.value();
-        if (index.is_absent(id)) {
+    if (const auto* index = this->_index.get()) {
+        if (index->is_absent(id)) {
             return false;
         }
     }
     const auto node_path = this->get_node_path(id);
     const bool result = std::filesystem::remove(node_path);
-    if (this->_index.has_value()) {
-        auto& index = this->_index.value();
-        index.remove(id);
+    if (auto* index = this->_index.get()) {
+        index->remove(id);
     }
     return result;
 }
 
 bool Storage::has_node(const Id &id) const {
-    if (this->_index.has_value()) {
-        return this->_index->is_present(id);
+    if (const auto* index = this->_index.get()) {
+        return index->is_present(id);
     } else {
         return std::filesystem::exists(this->get_node_path(id));
     }
@@ -75,11 +73,11 @@ std::filesystem::path Storage::get_node_path(const Id &id) const {
 }
 
 const IndexMap* Storage::index() const {
-    if (this->_index.has_value()) {
-        return &this->_index.value();
-    } else {
-        return nullptr;
-    }
+    return this->_index.get();
+}
+
+bool Storage::has_index() const {
+    return this->_index.is_initialized();
 }
 
 bool Storage::save_index() const {
@@ -87,8 +85,8 @@ bool Storage::save_index() const {
     LOG_TRACE("Saving octree storage index to {}", index_path);
 
     disk::v1::IndexFile index_file;
-    if (this->_index.has_value()) {
-        index_file.map = this->_index.value();
+    if (const auto* index = this->_index.get()) {
+        index_file.map = *index;
     }
     index_file.preferred_extension = this->_layout.extension_with_dot();
     index_file.layout_strategy_id = disk::layout::StrategyRegister::instance().get_id(this->_layout.strategy());
@@ -247,6 +245,18 @@ Storage open_folder(
     }
 
     return storage;
+}
+
+const IndexMap& Storage::ensure_indexed() const {
+    if (const auto* index = this->_index.get()) {
+        return *index;
+    }
+
+    LOG_TRACE("Index not present, creating empty index");
+    IndexMap index;
+    update_index(index, this->_layout);
+    LOG_TRACE("Index created with {} entries", index.size());
+    return this->_index.set(std::move(index));
 }
 
 } // namespace octree

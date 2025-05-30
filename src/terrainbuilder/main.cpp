@@ -159,6 +159,13 @@ void batch_build(
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
     const std::string &output_format) {
+    if (!std::filesystem::exists(output_base_path)) {
+        LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
+        std::filesystem::create_directories(output_base_path);
+    } else if (!std::filesystem::is_directory(output_base_path)) {
+        LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
+    }
+
     octree::Storage storage = octree::open_folder(
         output_base_path,
         octree::disk::layout::strategy::make_default(),
@@ -230,7 +237,7 @@ void batch_build(
     });
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (storage.has_node(node)) {
+        if (storage.has_node(node)) { // TODO: correctly handle virtual nodes
             return;
         }
 

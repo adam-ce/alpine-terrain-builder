@@ -30,11 +30,13 @@ void traverse(
     if (order == TraversalOrder::DepthFirst) {
         std::function<void(const Id&)> dfs;
         dfs = [&](const Id& current) {
-            if (!index.is_present(current)) {
+            auto current_status_opt = index.get(current);
+            if (!current_status_opt) {
                 return;
             }
-
-            visit_fn(current);
+            const auto current_status = current_status_opt.value();
+            
+            visit_fn(current, current_status);
 
             if (current.has_children() && refine_fn(current)) {
                 const auto children = current.children().value();
@@ -52,11 +54,13 @@ void traverse(
             Id current = queue.front();
             queue.pop();
 
-            if (!index.is_present(current)) {
-                continue;
+            auto current_status_opt = index.get(current);
+            if (!current_status_opt) {
+                return;
             }
+            const auto current_status = current_status_opt.value();
 
-            visit_fn(current);
+            visit_fn(current, current_status);
 
             if (current.has_children() && refine_fn(current)) {
                 const auto children = current.children().value();

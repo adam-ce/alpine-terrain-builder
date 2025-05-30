@@ -159,7 +159,7 @@ void batch_build(
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
     const std::string &output_format) {
-    const octree::Storage storage = octree::open_folder(
+    octree::Storage storage = octree::open_folder(
         output_base_path,
         octree::disk::layout::strategy::make_default(),
         output_format);

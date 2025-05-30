@@ -28,6 +28,12 @@ public:
     constexpr bool operator!=(NodeStatus other) const {
         return !(*this == other);
     }
+    constexpr bool operator==(Value other_value) const {
+        return this->_value == other_value;
+    }
+    constexpr bool operator!=(Value other_value) const {
+        return this->_value != other_value;
+    }
 
     std::string to_string() const;
 

@@ -7,6 +7,8 @@
 #include <glm/gtx/hash.hpp>
 #include <radix/geometry.h>
 
+// TODO: put in mesh namespace
+
 radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh);
 radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes);
 
@@ -45,3 +47,6 @@ void sort_and_normalize_triangles(SimpleMesh& mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 
 void validate_mesh(const SimpleMesh &mesh);
+
+SimpleMesh reindex_mesh(const SimpleMesh &mesh);
+SimpleMesh clip_mesh_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds);

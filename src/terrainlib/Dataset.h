@@ -47,7 +47,7 @@ public:
     [[nodiscard]] std::string name() const;
 
     [[nodiscard]] radix::tile::SrsBounds bounds() const;
-    [[nodiscard]] radix::tile::SrsAndHeightBounds bounds3d() const;
+    [[nodiscard]] radix::tile::SrsAndHeightBounds bounds3d(bool approx_ok = false) const;
     [[nodiscard]] radix::tile::SrsBounds bounds(const OGRSpatialReference &targetSrs) const;
     [[nodiscard]] OGRSpatialReference srs() const;
     [[nodiscard]] unsigned int widthInPixels() const;

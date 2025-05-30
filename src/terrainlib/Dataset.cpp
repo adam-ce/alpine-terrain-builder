@@ -93,11 +93,11 @@ radix::tile::SrsBounds Dataset::bounds() const {
     return {{westX, southY}, {eastX, northY}};
 }
 
-radix::tile::SrsAndHeightBounds Dataset::bounds3d() const {
+radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
     glm::dvec2 height_range;
-    if (!band->GetStatistics(1, 0, &height_range.x, &height_range.y, nullptr, nullptr)) {
+    if (!band->GetStatistics(approx_ok, true, &height_range.x, &height_range.y, nullptr, nullptr)) {
         throw std::runtime_error("Could not determine dataset height bounds");
     }
 

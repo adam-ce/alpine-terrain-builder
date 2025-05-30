@@ -3,6 +3,7 @@
 #include "log.h"
 #include "merge.h"
 #include "mesh/io.h"
+#include "mesh/utils.h"
 #include "simplify.h"
 #include "uv_map.h"
 #include "validate.h"
@@ -11,9 +12,9 @@ std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::p
     std::vector<SimpleMesh> meshes;
     meshes.reserve(paths.size());
     for (const std::filesystem::path &path : paths) {
-        auto result = io::load_mesh_from_path(path);
+        auto result = mesh::io::load_from_path(path);
         if (!result.has_value()) {
-            const io::LoadMeshError error = result.error();
+            const mesh::io::LoadMeshError error = result.error();
             if (print_errors) {
                 LOG_ERROR("Failed to load mesh from {}: {}", path, error.description());
             }
@@ -76,7 +77,7 @@ void run(const cli::Args &args) {
     if (args.save_intermediate_meshes) {
         const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
         LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path);
-        io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions{.name = "merged"});
+        mesh::io::save_to_path(merged_mesh, merged_mesh_path, mesh::io::SaveOptions{.name = "merged"});
     }
 
     if (meshes_have_uvs) {
@@ -91,7 +92,7 @@ void run(const cli::Args &args) {
             if (args.save_intermediate_meshes) {
                 const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".textured.glb");
                 LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path);
-                io::save_mesh_to_path(merged_mesh_path, merged_mesh, io::SaveOptions{.name = "textured"});
+                mesh::io::save_to_path(merged_mesh, merged_mesh_path, mesh::io::SaveOptions{.name = "textured"});
             }
         }
     }
@@ -109,14 +110,14 @@ void run(const cli::Args &args) {
         if (args.save_intermediate_meshes) {
             const std::filesystem::path simplified_mesh_path = std::filesystem::path(args.output_path).replace_extension(".simplified.glb");
             LOG_DEBUG("Saving simplified mesh to {}", simplified_mesh_path.string());
-            io::save_mesh_to_path(simplified_mesh_path, simplified_mesh, io::SaveOptions{.name = "simplified"});
+            mesh::io::save_to_path(simplified_mesh, simplified_mesh_path, mesh::io::SaveOptions{.name = "simplified"});
         }
     } else {
         simplified_mesh = merged_mesh;
     }
 
     LOG_INFO("Saving final mesh...");
-    io::save_mesh_to_path(args.output_path, simplified_mesh);
+    mesh::io::save_to_path(simplified_mesh, args.output_path);
 
     LOG_INFO("Done");
 }

@@ -75,7 +75,7 @@ add_subdirectory("${glad_SOURCE_DIR}/cmake" glad_cmake)
 glad_add_library(glad_gl_core_46 REPRODUCIBLE API gl:core=4.6)
 
 alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237 NOT_SYSTEM)
-add_subdirectory(browser/res)
+add_subdirectory(browser/res resources-lib)
 
 alp_add_git_repository(imgui URL https://github.com/ocornut/imgui.git COMMITISH 5f0acadf7db1b6d469f0771284e2e3f7818443ce DO_NOT_ADD_SUBPROJECT)
 add_library(imgui STATIC

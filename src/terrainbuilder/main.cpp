@@ -172,7 +172,7 @@ void batch_build(
         output_format);
 
     const auto dataset_srs = dataset.srs();
-    const auto dataset_bounds = dataset.bounds3d();
+    const auto dataset_bounds = dataset.bounds3d(true);
 
     const auto ecef_srs = srs::ecef();
     const auto ecef_bounds = srs::encompassing_bounds_transfer(

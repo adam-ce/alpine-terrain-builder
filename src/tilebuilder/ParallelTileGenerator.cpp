@@ -46,7 +46,7 @@ ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_
     const std::string& output_data_path,
     unsigned grid_resolution)
 {
-    const auto dataset = Dataset::make_shared(input_data_path);
+    const auto dataset = std::make_shared<Dataset>(std::filesystem::path(input_data_path));
     ctb::Grid grid = ctb::GlobalGeodetic(grid_resolution);
     if (srs == ctb::Grid::Srs::SphericalMercator)
         grid = ctb::GlobalMercator(grid_resolution);

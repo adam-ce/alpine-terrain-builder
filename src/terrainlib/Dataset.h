@@ -17,32 +17,36 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef DATASET_H
-#define DATASET_H
+#pragma once
 
 #include <memory>
 #include <string>
+#include <optional>
+#include <filesystem>
 
 #include <radix/tile.h>
 
 class GDALDataset;
 class OGRSpatialReference;
-class OGRCoordinateTransformation;
-
-namespace ctb {
-class Grid;
-}
 
 class Dataset;
 using DatasetPtr = std::shared_ptr<Dataset>;
 
 class Dataset {
 public:
-    Dataset(const std::string& path);
+    Dataset(std::filesystem::path path);
     Dataset(GDALDataset* dataset); // takes over ownership
     ~Dataset();
-    static DatasetPtr make_shared(const std::string &path);
+    static std::optional<Dataset> open_raster(std::filesystem::path path);
+    static std::optional<Dataset> open_vector(std::filesystem::path path);
+    static std::optional<std::shared_ptr<Dataset>> open_shared_raster(std::filesystem::path path);
     Dataset clone();
+
+    Dataset(Dataset &&) noexcept = default;
+    Dataset &operator=(Dataset &&) noexcept = default;
+
+    Dataset(const Dataset &) = delete;
+    Dataset &operator=(const Dataset &) = delete;
 
     [[nodiscard]] std::string name() const;
 
@@ -62,9 +66,8 @@ public:
     [[nodiscard]] double pixelHeightIn(const OGRSpatialReference &target_srs) const;
 
 private:
-    std::unique_ptr<GDALDataset> m_gdal_dataset;
-    std::optional<std::string> m_path;
-    std::string m_name;
-    };
+    Dataset(const std::filesystem::path path, GDALDataset *dataset);
 
-#endif
+    std::unique_ptr<GDALDataset> m_gdal_dataset;
+    std::optional<std::filesystem::path> m_path;
+};

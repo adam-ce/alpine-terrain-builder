@@ -44,7 +44,7 @@ void TileHeightsGenerator::run(unsigned max_zoom_level) const
         std::pair<float, float> min_max = std::make_pair(0, 9000);
     };
 
-    const auto dataset = Dataset::make_shared(m_input_data_path);
+    const auto dataset = std::make_shared<Dataset>(std::filesystem::path(m_input_data_path));
 
     ctb::Grid grid = ctb::GlobalGeodetic(64);
     if (m_srs == ctb::Grid::Srs::SphericalMercator)

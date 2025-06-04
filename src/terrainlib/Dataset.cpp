@@ -32,29 +32,53 @@
 #include "log.h"
 #include "srs.h"
 
-Dataset::Dataset(const std::string &path) {
+static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigned int flags) {
     initialize_gdal_once();
-    m_gdal_dataset.reset(static_cast<GDALDataset *>(GDALOpen(path.c_str(), GA_ReadOnly)));
-    if (!m_gdal_dataset) {
-        LOG_ERROR("Couldn't open dataset {}.\n", path);
-        throw std::runtime_error("");
+    const std::string path_str = path.string();
+    return static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags, nullptr, nullptr, nullptr));
+}
+
+std::optional<Dataset> Dataset::open_raster(std::filesystem::path path) {
+    if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
+        return std::optional<Dataset>(Dataset(path, dataset));
     }
-    m_path = path;
-    m_name = std::regex_replace(path, std::regex("^.*/"), "");
-    m_name = std::regex_replace(m_name, std::regex(R"(\.\w+$)"), "");
+    LOG_ERROR("Couldn't open raster dataset {}.\n", path);
+    return std::nullopt;
+}
+std::optional<Dataset> Dataset::open_vector(std::filesystem::path path) {
+    if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_VECTOR)) {
+        return std::optional<Dataset>(Dataset(path, dataset));
+    }
+    LOG_ERROR("Couldn't open vector dataset {}.\n", path);
+    return std::nullopt;
+}
+std::optional<std::shared_ptr<Dataset>> Dataset::open_shared_raster(std::filesystem::path path) {
+    if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER | GDAL_OF_SHARED | GDAL_OF_THREAD_SAFE)) {
+        return std::make_shared<Dataset>(Dataset(path, dataset));
+    }
+    LOG_ERROR("Couldn't open shared raster dataset {}.\n", path);
+    return std::nullopt;
+}
+
+Dataset::Dataset(std::filesystem::path path) {
+    if (GDALDataset *dataset = open_gdal_dataset(path, 0)) {
+        m_path = path;
+        m_gdal_dataset.reset(dataset);
+    } else {
+        LOG_ERROR("Failed to open dataset at path: {}\n", path.string());
+        throw std::runtime_error("Failed to open dataset at path: " + path.string());
+    }
 }
 
 Dataset::Dataset(GDALDataset *dataset) {
-    initialize_gdal_once();
     m_gdal_dataset.reset(dataset);
     if (!m_gdal_dataset) {
         LOG_ERROR("Dataset is null.\n");
         throw std::runtime_error("Dataset is null.");
     }
 }
-
-DatasetPtr Dataset::make_shared(const std::string &path) {
-    return std::make_shared<Dataset>(path);
+Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset) : Dataset(dataset) {
+    m_path = path;
 }
 
 Dataset Dataset::clone() {
@@ -66,7 +90,19 @@ Dataset Dataset::clone() {
 }
 
 std::string Dataset::name() const {
-    return m_name;
+    if (m_path.has_value()) {
+        return m_path->filename().string();
+    }
+    if (m_gdal_dataset) {
+        const char *name = m_gdal_dataset->GetDescription();
+        if (name && strlen(name) > 0) {
+            return std::string(name);
+        }
+        else {
+            return "Anonymous";
+        }
+    }
+    UNREACHABLE();
 }
 
 Dataset::~Dataset() = default;
@@ -97,8 +133,11 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
     glm::dvec2 height_range;
-    if (!band->GetStatistics(approx_ok, true, &height_range.x, &height_range.y, nullptr, nullptr)) {
-        throw std::runtime_error("Could not determine dataset height bounds");
+    if (!band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr)) {
+        const char *unit = band->GetUnitType();
+        assert(unit != nullptr);
+        assert(strcmp(unit, "m") || strcmp(unit, "meters"));
+        height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
     }
 
     const auto bounds2d = this->bounds();

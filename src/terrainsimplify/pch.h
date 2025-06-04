@@ -12,5 +12,5 @@
 #include <radix/geometry.h>
 #include <tl/expected.hpp>
 
-#include "cgal.h"
+#include "mesh/cgal.h"
 #include "mesh/SimpleMesh.h"

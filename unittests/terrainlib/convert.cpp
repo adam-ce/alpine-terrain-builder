@@ -2,7 +2,7 @@
 #include <opencv2/opencv.hpp>
 #include "mesh/io.h"
 #include "mesh/utils.h"
-#include "convert.h"
+#include "mesh/convert.h"
 #include "cgal.h"
 
 TEST_CASE("convert rountrip keeps precision") {

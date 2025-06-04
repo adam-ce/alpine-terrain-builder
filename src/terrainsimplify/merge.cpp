@@ -1,7 +1,7 @@
 #include <numeric>
 #include <unordered_map>
 
-#include "convert.h"
+#include "mesh/convert.h"
 #include "log.h"
 #include "merge.h"
 #include "mesh/SimpleMesh.h"

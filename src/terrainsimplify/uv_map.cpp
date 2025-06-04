@@ -9,7 +9,7 @@
 #include <CGAL/Surface_mesh_parameterization/Error_code.h>
 #include <CGAL/Unique_hash_map.h>
 
-#include "convert.h"
+#include "mesh/convert.h"
 #include "merge.h"
 #include "uv_map.h"
 

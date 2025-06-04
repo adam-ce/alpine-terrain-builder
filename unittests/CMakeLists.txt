@@ -30,6 +30,7 @@ endif()
 
 add_executable(unittests_terrainlib
     catch2_helpers.h
+    terrainlib/convert.cpp
     terrainlib/dataset.cpp
     terrainlib/grid.cpp
     terrainlib/progress_indicator_test.cpp
@@ -60,7 +61,6 @@ target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2
 
 add_executable(unittests_terrainsimplify
     catch2_helpers.h
-    terrainsimplify/convert.cpp
     terrainsimplify/merge.cpp
 )
 

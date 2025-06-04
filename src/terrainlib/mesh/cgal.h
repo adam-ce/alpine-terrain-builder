@@ -5,6 +5,7 @@
 #include <CGAL/Exact_predicates_exact_constructions_kernel.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 
+namespace cgal {
 #define DEFINE_KERNEL(K) \
     using Kernel = K; \
     using Point2 = Kernel::Point_2; \
@@ -32,3 +33,5 @@ namespace simple {
 DEFINE_KERNEL(CGAL::Exact_predicates_inexact_constructions_kernel)
 
 #undef DEFINE_KERNEL
+
+} // namespace cgal

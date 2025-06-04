@@ -1,7 +1,8 @@
 #include "convert.h"
 #include "log.h"
-#include "validate.h"
-    
+
+using namespace cgal;
+
 glm::dvec3 convert::cgal2glm(Point3 point) {
     return glm::dvec3(CGAL::to_double(point[0]), CGAL::to_double(point[1]), CGAL::to_double(point[2]));
 }
@@ -15,7 +16,7 @@ Point2 convert::glm2cgal(glm::dvec2 point) {
     return Point2(point[0], point[1]);
 }
 
-SurfaceMesh convert::mesh2cgal(const SimpleMesh &mesh) {
+SurfaceMesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
     SurfaceMesh cgal_mesh;
 
     for (const glm::dvec3 &position : mesh.positions) {
@@ -34,7 +35,7 @@ SurfaceMesh convert::mesh2cgal(const SimpleMesh &mesh) {
     return cgal_mesh;
 }
 
-SimpleMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
+SimpleMesh convert::to_simple_mesh(const SurfaceMesh &cgal_mesh) {
     SimpleMesh mesh;
 
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
@@ -58,12 +59,4 @@ SimpleMesh convert::cgal2mesh(const SurfaceMesh &cgal_mesh) {
     }
 
     return mesh;
-}
-
-glm::uvec2 convert::cv2glm(const cv::Size size) {
-    return glm::uvec2(size.width, size.height);
-}
-
-cv::Size convert::glm2cv(const glm::uvec2 size) {
-    return cv::Size(size.x, size.y);
 }

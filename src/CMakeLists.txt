@@ -112,6 +112,9 @@ add_library(terrainlib
     terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
+    terrainlib/mesh/cgal.h
+    terrainlib/mesh/convert.h
+    terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
@@ -209,9 +212,6 @@ add_library(terrainsimplifylib
     terrainsimplify/simplify.cpp
     terrainsimplify/uv_map.h
     terrainsimplify/uv_map.cpp
-    terrainsimplify/cgal.h
-    terrainsimplify/convert.h
-    terrainsimplify/convert.cpp
     terrainsimplify/validate.h
 )
 target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)

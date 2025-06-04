@@ -527,3 +527,4 @@ SimpleMesh clip_mesh_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aa
     // TODO: derive new_positions from seen_vertices
     return reindex_mesh(SimpleMesh(new_triangles, new_positions));
 }
+

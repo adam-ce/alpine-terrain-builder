@@ -170,7 +170,7 @@ target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
 
 
 add_library(terrainmergerlib
-    terrainmerger/cli.h
+    terrainmerger/merge.h
 )
 target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)

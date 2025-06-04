@@ -16,7 +16,7 @@ Args cli::parse(int argc, const char * const * argv) {
     app.add_option("--input", input_paths, "Paths to datasets that should be merged")
         ->required()
         ->expected(-1)
-        ->check(CLI::ExistingFile);
+        ->check(CLI::ExistingDirectory);
 
     std::filesystem::path output_path;
     app.add_option("--output", output_path, "Path to output write the merged dataset to")
@@ -39,7 +39,6 @@ Args cli::parse(int argc, const char * const * argv) {
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }
-    
     Args args;
     args.input_paths = input_paths;
     args.output_path = output_path;

@@ -19,8 +19,8 @@ template <
     typename RefineFn = std::function<bool(const Id &)>>
 void traverse(
     const IndexMap& index,
-    VisitFn visit_fn,
-    RefineFn refine_fn = [](const Id &) { return true; },
+    VisitFn&& visit_fn,
+    RefineFn&& refine_fn = [](const Id &) { return true; },
     const Id &root = Id::root(),
     TraversalOrder order = TraversalOrder::DepthFirst) {
     if (!index.is_present(root)) {

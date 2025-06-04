@@ -16,6 +16,18 @@
 namespace octree {
 using Node = SimpleMesh;
 
+struct NodeAndId {
+    Id id;
+    Node node;
+
+    NodeAndId() = default;
+    NodeAndId(Id id, Node node) : id(std::move(id)), node(std::move(node)) {}
+    
+    operator Node() const {
+        return std::move(node);
+    }
+};
+
 class Storage {
 public:
     explicit Storage(disk::Layout layout);
@@ -26,6 +38,8 @@ public:
     bool remove_node(const Id &id);
     bool has_node(const Id &id) const;
     std::filesystem::path get_node_path(const Id &id) const;
+
+    
     
     const IndexMap* index() const;
     bool has_index() const;

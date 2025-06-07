@@ -6,6 +6,7 @@ option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
 
+add_compile_definitions(CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
 if (NOT TARGET Catch2)
     alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.5.1)
 endif()

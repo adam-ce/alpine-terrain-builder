@@ -17,8 +17,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
+#include "../catch2_helpers.h"
+
 #include <catch2/catch_approx.hpp>
-#include <catch2/catch_test_macros.hpp>
 
 #include "Dataset.h"
 #include "ctb/GlobalGeodetic.hpp"
@@ -29,8 +30,7 @@
 using namespace radix;
 using Catch::Approx;
 
-void checkBounds(const radix::tile::SrsBounds& a, const radix::tile::SrsBounds& b)
-{
+void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &b) {
     REQUIRE(a.height() > 0);
     REQUIRE(a.width() > 0);
     REQUIRE(b.height() > 0);
@@ -43,8 +43,7 @@ void checkBounds(const radix::tile::SrsBounds& a, const radix::tile::SrsBounds& 
     REQUIRE(widthErrorIn < 0.001);
 }
 
-TEST_CASE("datasets are as expected")
-{
+TEST_CASE("datasets are as expected") {
     auto d_mgi = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     auto d_wgs84 = Dataset(ATB_TEST_DATA_DIR "/austria/at_wgs84.tif");
 
@@ -56,22 +55,19 @@ TEST_CASE("datasets are as expected")
     wgs84.importFromEPSG(4326);
     wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    SECTION("file name")
-    {
+    SECTION("file name") {
         CHECK(d_mgi.name() == "at_mgi");
         CHECK(d_wgs84.name() == "at_wgs84");
     }
 
-    SECTION("SRS")
-    {
+    SECTION("SRS") {
         REQUIRE_FALSE(d_mgi.srs().IsEmpty());
         REQUIRE_FALSE(d_wgs84.srs().IsEmpty());
         const auto wgs84 = d_wgs84.srs();
         REQUIRE_FALSE(d_mgi.srs().IsSame(&wgs84));
     }
 
-    SECTION("bounds")
-    {
+    SECTION("bounds") {
         {
             //      fmt::print("webmercator: \n");
             checkBounds(d_mgi.bounds(webmercator), d_wgs84.bounds(webmercator));
@@ -88,8 +84,7 @@ TEST_CASE("datasets are as expected")
         //      checkBounds(d_mgi.bounds(d_mgi.srs()), d_wgs84.bounds(d_mgi.srs()));
         //    }
     }
-    SECTION("resolution")
-    {
+    SECTION("resolution") {
         CHECK(d_mgi.widthInPixels() == 620);
         CHECK(d_mgi.heightInPixels() == 350);
         CHECK(d_mgi.n_bands() == 1);
@@ -111,8 +106,7 @@ TEST_CASE("datasets are as expected")
     }
 }
 
-TEST_CASE("bbox width pixels")
-{
+TEST_CASE("bbox width pixels") {
     auto d_mgi = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
     auto d_wgs84 = Dataset(ATB_TEST_DATA_DIR "/austria/at_wgs84.tif");
 
@@ -128,8 +122,8 @@ TEST_CASE("bbox width pixels")
     auto adjust_bounds = [](auto bounds) {
         const auto unadjusted_width = bounds.width();
         const auto unadjusted_height = bounds.height();
-        bounds.min += glm::dvec2{ unadjusted_width * 0.2, unadjusted_height * 0.3 };
-        bounds.max -= glm::dvec2{ unadjusted_width * 0.1, unadjusted_height * 0.2 };
+        bounds.min += glm::dvec2{unadjusted_width * 0.2, unadjusted_height * 0.3};
+        bounds.max -= glm::dvec2{unadjusted_width * 0.1, unadjusted_height * 0.2};
         return bounds;
     };
 

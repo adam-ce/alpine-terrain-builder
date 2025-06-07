@@ -1,6 +1,11 @@
-#include <catch2/catch_test_macros.hpp>
+#include "../catch2_helpers.h"
+
+#include <numbers>
+
 #include <opencv2/opencv.hpp>
-#include "mesh/io.h"
+#include <glm/glm.hpp>
+
+#include "mesh/SimpleMesh.h"
 #include "mesh/utils.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"

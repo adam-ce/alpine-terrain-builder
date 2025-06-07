@@ -17,8 +17,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -30,10 +30,8 @@
 
 using Catch::Approx;
 
-TEST_CASE("grid")
-{
-    SECTION("epsg codes")
-    {
+TEST_CASE("grid") {
+    SECTION("epsg codes") {
         const auto geodetic = ctb::GlobalGeodetic(256);
         CHECK(geodetic.getEpsgCode() == 4326);
 
@@ -43,8 +41,7 @@ TEST_CASE("grid")
         CHECK(!geodetic.getSRS().IsSame(&webmercator.getSRS()));
     }
 
-    SECTION("bounds")
-    {
+    SECTION("bounds") {
         const auto geodetic = ctb::GlobalGeodetic(256);
         CHECK(geodetic.getExtent().min.x == Approx(-180.0));
         CHECK(geodetic.getExtent().max.x == Approx(180.0));

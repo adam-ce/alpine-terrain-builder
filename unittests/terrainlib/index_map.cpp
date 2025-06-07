@@ -4,7 +4,6 @@
 
 using namespace octree;
 
-
 TEST_CASE("IndexMap basic operations") {
     IndexMap index;
 

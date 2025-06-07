@@ -24,13 +24,12 @@ TEST_CASE("octree::traverse basic") {
         std::vector<Id> visited;
         traverse(
             index,
-            [&](const Id& id) {
+            [&](const Id &id, const NodeStatus &) {
                 visited.push_back(id);
             },
-            [](const Id&) { return true; }, // refine always
+            [](const Id &) { return true; }, // refine always
             root,
-            TraversalOrder::DepthFirst
-        );
+            TraversalOrder::DepthFirst);
 
         CHECK(visited.front() == root);
         CHECK(visited.size() == 9); // root + 8 children
@@ -43,13 +42,12 @@ TEST_CASE("octree::traverse basic") {
         std::vector<Id> visited;
         traverse(
             index,
-            [&](const Id& id) {
+            [&](const Id &id, const NodeStatus &) {
                 visited.push_back(id);
             },
-            [](const Id&) { return false; }, // don't refine
+            [](const Id &) { return false; }, // don't refine
             root,
-            TraversalOrder::DepthFirst
-        );
+            TraversalOrder::DepthFirst);
 
         CHECK(visited.size() == 1);
         CHECK(visited.front() == root);
@@ -61,7 +59,7 @@ TEST_CASE("octree::traverse basic") {
 
         traverse(
             empty,
-            [&](const Id&) {
+            [&](const Id&, const NodeStatus&) {
                 visited = true;
             },
             [](const Id&) { return true; },
@@ -99,7 +97,7 @@ TEST_CASE("octree::traverse with depth") {
         std::vector<Id> visited;
         traverse(
             index,
-            [&](const Id& id) {
+            [&](const Id& id, const NodeStatus&) {
                 visited.push_back(id);
             },
             [](const Id&) { return true; },
@@ -118,13 +116,12 @@ TEST_CASE("octree::traverse with depth") {
         std::vector<Id> visited;
         traverse(
             index,
-            [&](const Id& id) {
+            [&](const Id &id, const NodeStatus &) {
                 visited.push_back(id);
             },
-            [](const Id&) { return true; },
+            [](const Id &) { return true; },
             root,
-            TraversalOrder::BreadthFirst
-        );
+            TraversalOrder::BreadthFirst);
 
         REQUIRE(visited.size() == 6);
 

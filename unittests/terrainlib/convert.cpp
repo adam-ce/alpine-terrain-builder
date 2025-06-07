@@ -3,7 +3,7 @@
 #include "mesh/io.h"
 #include "mesh/utils.h"
 #include "mesh/convert.h"
-#include "cgal.h"
+#include "mesh/cgal.h"
 
 TEST_CASE("convert rountrip keeps precision") {
     SimpleMesh mesh;
@@ -17,8 +17,8 @@ TEST_CASE("convert rountrip keeps precision") {
 
     mesh.triangles.push_back(glm::uvec3(0, 2, 1));
 
-    const SurfaceMesh cgal_mesh = convert::mesh2cgal(mesh);
-    SimpleMesh roundtrip_mesh = convert::cgal2mesh(cgal_mesh);
+    const cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
+    SimpleMesh roundtrip_mesh = convert::to_simple_mesh(cgal_mesh);
 
     sort_and_normalize_triangles(mesh.triangles);
     sort_and_normalize_triangles(roundtrip_mesh.triangles);

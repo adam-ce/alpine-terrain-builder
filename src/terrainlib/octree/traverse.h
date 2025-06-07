@@ -56,7 +56,7 @@ void traverse(
 
             auto current_status_opt = index.get(current);
             if (!current_status_opt) {
-                return;
+                continue;
             }
             const auto current_status = current_status_opt.value();
 

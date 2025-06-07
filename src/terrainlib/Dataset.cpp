@@ -91,7 +91,7 @@ Dataset Dataset::clone() {
 
 std::string Dataset::name() const {
     if (m_path.has_value()) {
-        return m_path->filename().string();
+        return m_path->stem().string();
     }
     if (m_gdal_dataset) {
         const char *name = m_gdal_dataset->GetDescription();

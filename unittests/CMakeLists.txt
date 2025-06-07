@@ -8,7 +8,7 @@ set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian 
 
 add_compile_definitions(CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
 if (NOT TARGET Catch2)
-    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.5.1)
+    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.8.1)
 endif()
 
 

@@ -75,7 +75,9 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", 
     }
 
     // Now check that no child of this node fully contains the target
-    for (const auto &child_id : id.children().value()) {
+    REQUIRE(id.has_children());
+    const auto children = id.children().value();
+    for (const auto &child_id : children) {
         Bounds child_bounds = space.get_node_bounds(child_id);
         bool all_corners_inside = true;
         for (const auto &corner : radix::geometry::corners(target)) {

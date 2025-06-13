@@ -579,6 +579,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     // Create the node hierachy.
     // We create parent nodes to offset the position by the average calculate above.
     // We need multiple parents to ensure that we dont lose our double precision accurary.
+    // TODO: dont create this hierachy if the translation is 0
     char *node_name = const_cast<char *>(options.name.data());
     std::array<cgltf_node, 3> nodes;
     cgltf_node &mesh_node = nodes[2] = {};

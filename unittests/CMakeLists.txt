@@ -42,6 +42,8 @@ add_executable(unittests_terrainlib
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/mesh_io.cpp
+    terrainlib/mesh_utils.cpp
+    terrainlib/mesh_clip.cpp
 )
     
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)

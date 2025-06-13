@@ -15,7 +15,7 @@ public:
 
 	inline static std::shared_ptr<spdlog::logger>& get_logger() {
         if (Log::logger == nullptr) {
-            Log::init(spdlog::level::level_enum::trace);
+            Log::init(spdlog::level::level_enum::info);
         }
 		return Log::logger;
 	}
@@ -48,4 +48,4 @@ public:
         _UNREACHABLE();                                                     \
     } while (0)
 
-#include "log_path.h"
+#include "log_impls.h"

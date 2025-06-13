@@ -46,7 +46,7 @@ public:
     }
 
     bool has_uvs() const {
-        return this->positions.size() == this->uvs.size();
+        return this->uvs.size() > 0;
     }
     bool has_texture() const {
         return this->texture.has_value();

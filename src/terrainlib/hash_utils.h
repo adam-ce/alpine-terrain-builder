@@ -1,3 +1,5 @@
+#pragma once
+
 namespace {
 // from https://github.com/boostorg/container_hash/blob/ee5285bfa64843a11e29700298c83a37e3132fcd/include/boost/container_hash/detail/hash_mix.hpp#L17
 template <std::size_t Bits>

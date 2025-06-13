@@ -23,12 +23,27 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_tostring.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <radix/geometry.h>
+#include <fmt/format.h>
+
+#include "type_utils.h"
 
 namespace Catch {
-template <glm::length_t s, typename T>
-struct StringMaker<glm::vec<s, T>> {
-    static std::string convert(const glm::vec<s, T> &value) {
+template <glm::length_t N, typename T>
+struct StringMaker<glm::vec<N, T>> {
+    static std::string convert(const glm::vec<N, T> &value) {
         return glm::to_string(value);
+    }
+};
+
+template <glm::length_t N, typename T>
+struct StringMaker<radix::geometry::Aabb<N, T>> {
+    static std::string convert(const radix::geometry::Aabb<N, T> &value) {
+        return fmt::format("Aabb{}{}(({}, {}, {}) - ({}, {}, {}))", 
+            N,
+            type_name<T>()[0], 
+            value.min.x, value.min.y, value.min.z,
+            value.max.x, value.max.y, value.max.z);
     }
 };
 }

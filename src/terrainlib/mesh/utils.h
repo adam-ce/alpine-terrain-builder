@@ -48,5 +48,6 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 
 void validate_mesh(const SimpleMesh &mesh);
 
+void reindex_mesh(SimpleMesh &mesh);
 SimpleMesh reindex_mesh(const SimpleMesh &mesh);
 SimpleMesh clip_mesh_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds);

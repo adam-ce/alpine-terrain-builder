@@ -113,10 +113,12 @@ add_library(terrainlib
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
     terrainlib/mesh/cgal.h
+    terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
     terrainlib/mesh/convert.h
     terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/SimpleMesh.h
+    terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
 
     terrainlib/octree/disk/layout/strategy/Flat.h

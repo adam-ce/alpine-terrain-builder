@@ -21,31 +21,8 @@
 #include <fmt/core.h>
 
 #include "../catch2_helpers.h"
+#include "../opencv_helpers.h"
 #include "mesh/io.h"
-
-// modified from https://stackoverflow.com/a/32440830/6304917
-bool mat_equals(const cv::Mat mat1, const cv::Mat mat2) {
-    if (mat1.dims != mat2.dims ||
-        mat1.size != mat2.size ||
-        mat1.elemSize() != mat2.elemSize()) {
-        return false;
-    }
-
-    if (mat1.isContinuous() && mat2.isContinuous()) {
-        return std::memcmp(mat1.ptr(), mat2.ptr(), mat1.total() * mat1.elemSize()) == 0;
-    } else {
-        const cv::Mat *arrays[] = {&mat1, &mat2, 0};
-        uchar *ptrs[2];
-        cv::NAryMatIterator it(arrays, ptrs, 2);
-        for (unsigned int p = 0; p < it.nplanes; p++, ++it) {
-            if (memcmp(it.ptrs[0], it.ptrs[1], it.size * mat1.elemSize()) != 0) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-}
 
 TEST_CASE("io roundtrip") {
     for (const auto& format : {"glb", "gltf"}) {
@@ -81,11 +58,11 @@ TEST_CASE("io roundtrip") {
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
-            REQUIRE(roundtrip_mesh.positions == mesh.positions);
-            REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
-            REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
-            REQUIRE(roundtrip_mesh.texture.has_value());
-            REQUIRE(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+            CHECK(roundtrip_mesh.positions == mesh.positions);
+            CHECK(roundtrip_mesh.uvs == mesh.uvs);
+            CHECK(roundtrip_mesh.triangles == mesh.triangles);
+            CHECK(roundtrip_mesh.texture.has_value());
+            CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
         }
     }
 }
@@ -124,11 +101,11 @@ TEST_CASE("io roundtrip high precision") {
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
-            REQUIRE(roundtrip_mesh.positions == mesh.positions);
-            REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
-            REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
-            REQUIRE(roundtrip_mesh.texture.has_value());
-            REQUIRE(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+            CHECK(roundtrip_mesh.positions == mesh.positions);
+            CHECK(roundtrip_mesh.uvs == mesh.uvs);
+            CHECK(roundtrip_mesh.triangles == mesh.triangles);
+            CHECK(roundtrip_mesh.texture.has_value());
+            CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
         }
     }
 }
@@ -167,10 +144,10 @@ TEST_CASE("io roundtrip no texture") {
             }
             // std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
-            REQUIRE(roundtrip_mesh.positions == mesh.positions);
-            REQUIRE(roundtrip_mesh.uvs == mesh.uvs);
-            REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
-            REQUIRE(!roundtrip_mesh.texture.has_value());
+            CHECK(roundtrip_mesh.positions == mesh.positions);
+            CHECK(roundtrip_mesh.uvs == mesh.uvs);
+            CHECK(roundtrip_mesh.triangles == mesh.triangles);
+            CHECK(!roundtrip_mesh.texture.has_value());
         }
     }
 }
@@ -204,10 +181,10 @@ TEST_CASE("io roundtrip no texture and uvs") {
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
-            REQUIRE(roundtrip_mesh.positions == mesh.positions);
-            REQUIRE(!roundtrip_mesh.has_uvs());
-            REQUIRE(roundtrip_mesh.triangles == mesh.triangles);
-            REQUIRE(!roundtrip_mesh.texture.has_value());
+            CHECK(roundtrip_mesh.positions == mesh.positions);
+            CHECK(!roundtrip_mesh.has_uvs());
+            CHECK(roundtrip_mesh.triangles == mesh.triangles);
+            CHECK(!roundtrip_mesh.texture.has_value());
         }
     }
 }

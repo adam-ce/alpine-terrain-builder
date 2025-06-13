@@ -31,6 +31,8 @@ endif()
 
 add_executable(unittests_terrainlib
     catch2_helpers.h
+    opencv_helpers.h
+    
     terrainlib/convert.cpp
     terrainlib/dataset.cpp
     terrainlib/grid.cpp

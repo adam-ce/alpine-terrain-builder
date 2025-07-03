@@ -1,11 +1,13 @@
-#ifndef MERGE_H
-#define MERGE_H
+#pragma once
+
+#include <unordered_map>
+#include <span>
+#include <optional>
+#include <vector>
 
 #include "pch.h"
 
-#include <unordered_map>
-
-namespace merge {
+namespace mesh::merge {
 
 struct VertexId {
     size_t mesh_index;
@@ -100,7 +102,7 @@ public:
                 return std::nullopt;
             }
 
-            assert(this->map(VertexId { .mesh_index = mesh_index, .vertex_index = source_vertex.value() }) == mapped_vertex_index);
+            DEBUG_ASSERT(this->map(VertexId { .mesh_index = mesh_index, .vertex_index = source_vertex.value() }) == mapped_vertex_index);
         }
 
         return source_triangle;
@@ -127,20 +129,20 @@ public:
 
     void validate() const {
         for (size_t i = 0; i < this->mesh_count(); i++) {
-            assert(this->forward[i].size() == this->backward[i].size());
+            DEBUG_ASSERT(this->forward[i].size() == this->backward[i].size());
 
             for (size_t j = 0; j < this->forward[i].size(); j++) {
                 const size_t mapped = this->map(VertexId { .mesh_index = i, .vertex_index = j });
                 const std::optional<size_t> inv_mapped = this->map_inverse(i, mapped);
-                assert(inv_mapped.has_value());
-                assert(inv_mapped.value() == j);
+                DEBUG_ASSERT(inv_mapped.has_value());
+                DEBUG_ASSERT(inv_mapped.value() == j);
             }
 
             for (const std::pair<unsigned int, unsigned int> e : this->backward[i]) {
                 const std::optional<size_t> inv_mapped = this->map_inverse(i, e.first);
-                assert(inv_mapped.has_value());
+                DEBUG_ASSERT(inv_mapped.has_value());
                 const size_t mapped = this->map(VertexId{.mesh_index = i, .vertex_index = inv_mapped.value()});
-                assert(mapped == e.first);
+                DEBUG_ASSERT(mapped == e.first);
             }
         }
     }
@@ -150,6 +152,8 @@ public:
         std::vector<std::unordered_map<size_t, size_t>> backward;
 };
 
+// TODO: fix namespace and naming
+// TODO: accept refs
 SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes);
 SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes, VertexMapping &mapping);
 SimpleMesh merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon);
@@ -160,7 +164,15 @@ SimpleMesh apply_mapping(std::span<const SimpleMesh> meshes, const VertexMapping
 VertexMapping create_merge_mapping(std::span<const SimpleMesh> meshes);
 VertexMapping create_merge_mapping(std::span<const SimpleMesh> meshes, double distance_epsilon);
 
+// TODO:
+inline SimpleMesh merge_meshes(const SimpleMesh &mesh1, const SimpleMesh &mesh2) {
+    std::array<const SimpleMesh, 2> meshes = {mesh1, mesh2};
+    return merge_meshes(meshes);
+}
+inline SimpleMesh merge_meshes(const SimpleMesh& mesh1, const SimpleMesh& mesh2, const SimpleMesh& mesh3) {
+    std::array<const SimpleMesh, 3> meshes = {mesh1, mesh2, mesh3};
+    return merge_meshes(meshes);
+}
 
 }
 
-#endif

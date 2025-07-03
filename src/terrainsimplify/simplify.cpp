@@ -19,7 +19,7 @@
 #include "log.h"
 #include "simplify.h"
 #include "uv_map.h"
-#include "validate.h"
+#include "mesh/validate.h"
 #include "mesh/utils.h"
 
 using namespace simplify;
@@ -134,7 +134,7 @@ static std::pair<bool, double> check_condition(const VertexRatio &vertex_ratio, 
     const double modified_vertex_count = modified.number_of_vertices();
     const double current_ratio = static_cast<double>(modified_vertex_count) / original.num_vertices();
     // LOG_TRACE("Current vertex ratio is {:g}% with target {:g}%", current_ratio * 100, vertex_ratio.ratio * 100);
-    assert(current_ratio >= 0 && current_ratio <= 1);
+    DEBUG_ASSERT(current_ratio >= 0 && current_ratio <= 1);
     const bool fulfilled = current_ratio <= vertex_ratio.ratio;
     return {fulfilled, current_ratio};
 }
@@ -142,7 +142,7 @@ static std::pair<bool, double> check_condition(const EdgeRatio &edge_ratio, cons
     const double modified_edge_count = modified.number_of_edges();
     const double current_ratio = static_cast<double>(modified_edge_count) / original.num_edges();
     // LOG_TRACE("Current edge ratio is {:g}% with target {:g}%", current_ratio * 100, edge_ratio.ratio * 100);
-    assert(current_ratio >= 0 && current_ratio <= 1);
+    DEBUG_ASSERT(current_ratio >= 0 && current_ratio <= 1);
     const bool fulfilled = current_ratio <= edge_ratio.ratio;
     return {fulfilled, current_ratio};
 }
@@ -150,7 +150,7 @@ static std::pair<bool, double> check_condition(const FaceRatio &face_ratio, cons
     const double modified_face_count = modified.number_of_faces();
     const double current_ratio = static_cast<double>(modified_face_count) / original.num_faces();
     // LOG_TRACE("Current face ratio is {:g}% with target {:g}%", current_ratio * 100, face_ratio.ratio * 100);
-    assert(current_ratio >= 0 && current_ratio <= 1);
+    DEBUG_ASSERT(current_ratio >= 0 && current_ratio <= 1);
     const bool fulfilled = current_ratio <= face_ratio.ratio;
     return {fulfilled, current_ratio};
 }
@@ -495,8 +495,8 @@ Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondit
 
     remove_isolated_vertices(simplified_mesh);
 
-    validate_mesh(simplified_mesh);
-    validate_mesh(convert::mesh2cgal(simplified_mesh));
+    mesh::validate(simplified_mesh);
+    mesh::validate(convert::mesh2cgal(simplified_mesh));
 
     return Result{
         .mesh = simplified_mesh,

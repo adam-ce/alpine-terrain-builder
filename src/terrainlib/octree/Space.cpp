@@ -3,7 +3,7 @@
 namespace octree {
 
 Space::Space(Bounds bounds) : _bounds(bounds) {
-    assert(glm::all(glm::greaterThan(this->_bounds.size(), glm::dvec3(0))));
+    DEBUG_ASSERT(glm::all(glm::greaterThan(this->_bounds.size(), glm::dvec3(0))));
 }
 
 Space Space::earth() {
@@ -68,7 +68,7 @@ std::optional<Id> Space::find_smallest_node_encompassing_bounds(const Bounds &ta
 }
 
 std::optional<Id> Space::find_node_at_level_containing_point(const glm::dvec3& point, const uint32_t target_level, const Id root) const {
-    assert(target_level <= Id::max_level());
+    DEBUG_ASSERT(target_level <= Id::max_level());
 
     Id current = root;
     const Bounds root_bounds = this->get_node_bounds(current);

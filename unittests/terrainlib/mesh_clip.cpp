@@ -14,6 +14,7 @@
 #include "mesh/convert.h"
 #include "mesh/io.h"
 #include "mesh/utils.h"
+#include "mesh/validate.h"
 #include "octree/Space.h"
 #include "octree/Id.h"
 
@@ -34,11 +35,17 @@ TEST_CASE("single triangle in bounds") {
         glm::dvec3(1, 0, 0),
         glm::dvec3(0, 1, 0),
     };
+    mesh.uvs = {
+        glm::dvec2(0, 0),
+        glm::dvec2(1, 0),
+        glm::dvec2(0, 1),
+    };
     mesh.triangles = {
         glm::uvec3(0, 1, 2)};
     const radix::geometry::Aabb3d bounds(glm::dvec3(-1, -1, -1), glm::dvec3(1, 1, 1));
     const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
     CHECK(mesh.positions == clipped_mesh.positions);
+    CHECK(mesh.uvs == clipped_mesh.uvs);
     CHECK(mesh.triangles == clipped_mesh.triangles);
 }
 
@@ -49,11 +56,17 @@ TEST_CASE("single triangle out of bounds") {
         glm::dvec3(1, 0, 0),
         glm::dvec3(0, 1, 0),
     };
+    mesh.uvs = {
+        glm::dvec2(0, 0),
+        glm::dvec2(1, 0),
+        glm::dvec2(0, 1),
+    };
     mesh.triangles = {
         glm::uvec3(0, 1, 2)};
     const radix::geometry::Aabb3d bounds(glm::dvec3(-1, -1, -1), glm::dvec3(-0.1, -0.1, -0.1));
     const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
     CHECK(clipped_mesh.positions == std::vector<glm::dvec3>{});
+    CHECK(clipped_mesh.uvs == std::vector<glm::dvec2>{});
     CHECK(clipped_mesh.triangles == std::vector<glm::uvec3>{});
 }
 
@@ -64,11 +77,17 @@ TEST_CASE("single triangle touching bounds in point") {
         glm::dvec3(1, 0, 0),
         glm::dvec3(0, 1, 0),
     };
+    mesh.uvs = {
+        glm::dvec2(0, 0),
+        glm::dvec2(1, 0),
+        glm::dvec2(0, 1),
+    };
     mesh.triangles = {
         glm::uvec3(0, 1, 2)};
     const radix::geometry::Aabb3d bounds(glm::dvec3(-1, -1, -1), glm::dvec3(0, 0, 0));
     const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
     CHECK(clipped_mesh.positions == std::vector<glm::dvec3>{});
+    CHECK(clipped_mesh.uvs == std::vector<glm::dvec2>{});
     CHECK(clipped_mesh.triangles == std::vector<glm::uvec3>{});
 }
 
@@ -160,7 +179,7 @@ TEST_CASE("single triangle with two vertices in bounds") {
 }
 
 void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const radix::geometry::Aabb3d &bounds) {
-    validate_mesh(clipped_mesh);
+    mesh::validate(clipped_mesh);
 
     // Check that no vertices are outside the bounds
     for (const auto &position : clipped_mesh.positions) {
@@ -248,7 +267,7 @@ TEST_CASE("mesh::clip_on_bounds") {
         glm::uvec3(1, 2, 6),
         glm::uvec3(1, 6, 5)};
 
-    validate_mesh(mesh);
+    mesh::validate(mesh);
 
     const std::array<radix::geometry::Aabb3d, 11> bounds_array = {
         radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, -2.0), glm::dvec3(2.0, 2.0, 2.0)),

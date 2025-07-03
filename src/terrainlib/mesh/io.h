@@ -8,8 +8,7 @@
 #include "mesh/io/options.h"
 #include "mesh/io/error.h"
 
-namespace mesh {
-namespace io {
+namespace mesh::io {
 
 tl::expected<SimpleMesh, LoadMeshError> load_from_path(
     const std::filesystem::path &path,
@@ -20,5 +19,4 @@ tl::expected<void, SaveMeshError> save_to_path(
     const std::filesystem::path &path,
     const SaveOptions& options = {});
 
-}
 }

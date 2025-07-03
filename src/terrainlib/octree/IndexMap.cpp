@@ -1,3 +1,5 @@
+#include <libassert/assert.hpp>
+
 #include "octree/IndexMap.h"
 #include "log.h"
 
@@ -12,30 +14,29 @@ std::optional<NodeStatus> IndexMap::get(Id id) const {
     }
 }
 
-void IndexMap::add(Id id) {
+bool IndexMap::add(Id id) {
     NodeStatus* status = this->get_raw(id);
     if (status != nullptr) {
         switch (*status) {
             case NodeStatus::Inner:
             case NodeStatus::Leaf:
                 // Nothing to do
-                break;
+                return false;
             case NodeStatus::Virtual:
                 this->set_raw(id, NodeStatus::Inner);
-                break;
+                return true;
         }
-        return;
     }
 
     const auto parent_opt = id.parent();
     if (!parent_opt.has_value()) {
-        assert(id.is_root());
+        DEBUG_ASSERT(id.is_root());
         if (this->empty()) {
             this->set_raw(id, NodeStatus::Leaf);
-            return;
+            return true;
         } else {
             UNREACHABLE();
-            return;
+            return true;
         }
     }
     
@@ -45,7 +46,7 @@ void IndexMap::add(Id id) {
         this->add(parent);
         this->set_raw(parent, NodeStatus::Virtual);
         this->set_raw(id, NodeStatus::Leaf);
-        return;
+        return true;
     }
 
     switch (*parent_status) {
@@ -58,6 +59,8 @@ void IndexMap::add(Id id) {
             this->set_raw(id, NodeStatus::Leaf);
             break;
     }
+
+    return true;
 }
 
 bool IndexMap::remove(Id id) {
@@ -144,10 +147,10 @@ void IndexMap::update_parent_after_remove(Id id) {
     
     const auto parent = parent_opt.value();
     NodeStatus* parent_status = this->get_raw(parent);
-    assert(parent_status != nullptr);
+    DEBUG_ASSERT(parent_status != nullptr);
 
     // We know there are children since we just removed one
-    assert(parent.has_children());
+    DEBUG_ASSERT(parent.has_children());
     const auto siblings = parent.children().value();
     for (const auto& sibling : siblings) {
         if (this->is_present(sibling) && sibling != id) {

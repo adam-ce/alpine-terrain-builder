@@ -5,7 +5,7 @@
 using namespace cli;
 
 Args cli::parse(int argc, const char * const* argv) {
-    assert(argc >= 0);
+    DEBUG_ASSERT(argc >= 0);
     CLI::App app{"terrainconvert"};
     
     std::filesystem::path input_path;

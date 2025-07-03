@@ -1,35 +1,43 @@
-#include "convert.h"
+#include <libassert/assert.hpp>
+
+#include "mesh/convert.h"
 #include "log.h"
+#include "mesh/validate.h"
 
 using namespace cgal;
 
-glm::dvec3 convert::cgal2glm(Point3 point) {
-    return glm::dvec3(CGAL::to_double(point[0]), CGAL::to_double(point[1]), CGAL::to_double(point[2]));
-}
-glm::dvec2 convert::cgal2glm(Point2 point) {
-    return glm::dvec2(CGAL::to_double(point[0]), CGAL::to_double(point[1]));
-}
-Point3 convert::glm2cgal(glm::dvec3 point) {
-    return Point3(point[0], point[1], point[2]);
-}
-Point2 convert::glm2cgal(glm::dvec2 point) {
-    return Point2(point[0], point[1]);
-}
+using UvMap = SurfaceMesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
 SurfaceMesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
     SurfaceMesh cgal_mesh;
+    const size_t approx_num_edges = (mesh.face_count() * 3) / 2;
+    cgal_mesh.reserve(mesh.vertex_count(), approx_num_edges, mesh.face_count());
 
-    for (const glm::dvec3 &position : mesh.positions) {
-        const CGAL::SM_Vertex_index vertex = cgal_mesh.add_vertex(glm2cgal(position));
-        assert(vertex != SurfaceMesh::null_vertex());
+    UvMap uv_map;
+    if (mesh.has_uvs()) {
+        auto [map, inserted] = cgal_mesh.add_property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
+        DEBUG_ASSERT(inserted);
+        uv_map = std::move(map);
     }
+
+    for (size_t index = 0; index < mesh.positions.size(); ++index) {
+        const glm::dvec3 &position = mesh.positions[index];
+        const cgal::VertexIndex vertex = cgal_mesh.add_vertex(to_cgal_point<Kernel>(position));
+        DEBUG_ASSERT(vertex != SurfaceMesh::null_vertex());
+        if (mesh.has_uvs()) {
+            const glm::dvec2 &uv = mesh.uvs[index];
+            uv_map[vertex] = uv;
+        }
+    }
+
+    mesh::validate(mesh);
 
     for (const glm::uvec3 &triangle : mesh.triangles) {
         const CGAL::SM_Face_index face = cgal_mesh.add_face(
-            CGAL::SM_Vertex_index(triangle.x),
-            CGAL::SM_Vertex_index(triangle.y),
-            CGAL::SM_Vertex_index(triangle.z));
-        assert(face != SurfaceMesh::null_face());
+            cgal::VertexIndex(triangle.x),
+            cgal::VertexIndex(triangle.y),
+            cgal::VertexIndex(triangle.z));
+        DEBUG_ASSERT(face != SurfaceMesh::null_face());
     }
 
     return cgal_mesh;
@@ -38,14 +46,28 @@ SurfaceMesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
 SimpleMesh convert::to_simple_mesh(const SurfaceMesh &cgal_mesh) {
     SimpleMesh mesh;
 
+    auto uv_map_opt = cgal_mesh.property_map<SurfaceMesh::Vertex_index, glm::dvec2>("v:uv");
+    const bool has_uvs = uv_map_opt.has_value();
+    UvMap uv_map;
+    if (has_uvs) {
+        uv_map = std::move(uv_map_opt.value());
+    }   
+
     const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
     const size_t face_count = CGAL::num_faces(cgal_mesh);
     mesh.positions.resize(vertex_count);
+    if (has_uvs) {
+        mesh.uvs.resize(vertex_count);
+    }
     mesh.triangles.reserve(face_count);
 
     for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
         const Point3 &position = cgal_mesh.point(vertex_index);
-        mesh.positions[vertex_index] = cgal2glm(position);
+        mesh.positions[vertex_index] = to_glm_point(position);
+        if (has_uvs) {
+            const glm::dvec2 &uv = uv_map[vertex_index];
+            mesh.uvs[vertex_index] = uv;
+        }
     }
 
     for (const CGAL::SM_Face_index face_index : cgal_mesh.faces()) {

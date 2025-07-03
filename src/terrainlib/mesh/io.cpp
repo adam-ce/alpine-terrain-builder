@@ -2,9 +2,9 @@
 #include "log.h"
 #include "mesh/io/gltf.h"
 #include "mesh/io/terrain.h"
+#include "mesh/validate.h"
 
-namespace mesh {
-namespace io {
+namespace mesh::io {
 
 tl::expected<SimpleMesh, LoadMeshError> load_from_path(
     const std::filesystem::path &path,
@@ -25,6 +25,8 @@ tl::expected<void, SaveMeshError> save_to_path(
     const SaveOptions &options) {
     LOG_TRACE("Saving mesh to path {}", path);
 
+    mesh::validate(mesh);
+
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
         return gltf::save_to_path(mesh, path, options);
@@ -35,5 +37,4 @@ tl::expected<void, SaveMeshError> save_to_path(
     }
 }
 
-}
 }

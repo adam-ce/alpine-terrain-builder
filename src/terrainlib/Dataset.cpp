@@ -26,6 +26,7 @@
 #include <stdexcept>
 
 #include <gdal_priv.h>
+#include <libassert/assert.hpp>
 
 #include "ctb/Grid.hpp"
 #include "init.h"
@@ -40,21 +41,21 @@ static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigne
 
 std::optional<Dataset> Dataset::open_raster(std::filesystem::path path) {
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
-        return std::optional<Dataset>(Dataset(path, dataset));
+        return std::optional<Dataset>(std::move(Dataset(path, dataset)));
     }
     LOG_ERROR("Couldn't open raster dataset {}.\n", path);
     return std::nullopt;
 }
 std::optional<Dataset> Dataset::open_vector(std::filesystem::path path) {
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_VECTOR)) {
-        return std::optional<Dataset>(Dataset(path, dataset));
+        return std::optional<Dataset>(std::move(Dataset(path, dataset)));
     }
     LOG_ERROR("Couldn't open vector dataset {}.\n", path);
     return std::nullopt;
 }
 std::optional<std::shared_ptr<Dataset>> Dataset::open_shared_raster(std::filesystem::path path) {
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER | GDAL_OF_SHARED | GDAL_OF_THREAD_SAFE)) {
-        return std::make_shared<Dataset>(Dataset(path, dataset));
+        return std::make_shared<Dataset>(std::move(Dataset(path, dataset)));
     }
     LOG_ERROR("Couldn't open shared raster dataset {}.\n", path);
     return std::nullopt;
@@ -82,8 +83,9 @@ Dataset::Dataset(const std::filesystem::path path, GDALDataset *dataset) : Datas
 }
 
 Dataset Dataset::clone() {
+    LOG_TRACE("Cloning dataset {}.", m_path.has_value() ? m_path->string() : "unknown");
     if (!m_path.has_value()) {
-        LOG_ERROR("Cannot clone dataset.\n");
+        LOG_ERROR("Cannot clone dataset.");
         throw std::runtime_error("Cannot clone dataset.");
     }
     return Dataset(this->m_path.value());
@@ -135,8 +137,8 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     glm::dvec2 height_range;
     if (!band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr)) {
         const char *unit = band->GetUnitType();
-        assert(unit != nullptr);
-        assert(strcmp(unit, "m") || strcmp(unit, "meters"));
+        DEBUG_ASSERT(unit != nullptr);
+        DEBUG_ASSERT(strcmp(unit, "m") || strcmp(unit, "meters"));
         height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
     }
 
@@ -190,8 +192,8 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
         throw std::string("Could not transform dataset bounds to target SRS");
     }
 
-    assert(!x.empty());
-    assert(!y.empty());
+    DEBUG_ASSERT(!x.empty());
+    DEBUG_ASSERT(!y.empty());
     const double target_minX = *std::min_element(x.begin(), x.end());
     const double target_maxX = *std::max_element(x.begin(), x.end());
     const double target_minY = *std::min_element(y.begin(), y.end());
@@ -201,8 +203,9 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 
 OGRSpatialReference Dataset::srs() const {
     const char *srcWKT = m_gdal_dataset->GetProjectionRef();
-    if (!strlen(srcWKT))
+    if (!strlen(srcWKT)) {
         throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
+    }
     auto srs = OGRSpatialReference(srcWKT);
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
@@ -226,7 +229,7 @@ double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSp
 
 unsigned Dataset::n_bands() const {
     const auto n = m_gdal_dataset->GetRasterCount();
-    assert(n >= 0);
+    DEBUG_ASSERT(n >= 0);
     return unsigned(n);
 }
 

@@ -4,6 +4,7 @@
 #include <vector>
 #include <ranges>
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 namespace raster {
 
@@ -25,8 +26,8 @@ public:
         return this->_height;
     }
     [[nodiscard]] decltype(auto) pixel(const Coords &coords) {
-        assert(coords.x < this->_width);
-        assert(coords.y < this->_height);
+        DEBUG_ASSERT(coords.x < this->_width);
+        DEBUG_ASSERT(coords.y < this->_height);
         const Index pixel_index = this->index(coords);
         if constexpr (std::is_same_v<T, bool>) {
             return static_cast<bool>(this->_data[pixel_index]);
@@ -35,8 +36,8 @@ public:
         }
     }
     [[nodiscard]] decltype(auto) pixel(const Coords &coords) const {
-        assert(coords.x < this->_width);
-        assert(coords.y < this->_height);
+        DEBUG_ASSERT(coords.x < this->_width);
+        DEBUG_ASSERT(coords.y < this->_height);
         const Index pixel_index = this->index(coords);
         if constexpr (std::is_same_v<T, bool>) {
             return static_cast<bool>(this->_data[pixel_index]);

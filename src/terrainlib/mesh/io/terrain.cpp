@@ -1,5 +1,7 @@
 #include <fstream>
 
+#include <libassert/assert.hpp>
+
 #include "log.h"
 #include "mesh/io/terrain.h"
 #include "mesh/io/utils.h"
@@ -70,7 +72,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::pa
     return load_from_buffer(bytes, options);
 }
 
-tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& options) {
+tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& /* options */) {
     LOG_TRACE("Serializing mesh to buffer");
 
     // TODO: this ignores the texture format in SaveOptions
@@ -96,7 +98,7 @@ tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMes
     return data;
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions &options) {
+tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions & /* options */) {
     LOG_TRACE("Deserializing mesh from buffer");
 
     zpp::bits::in in(bytes);

@@ -1,5 +1,4 @@
-#ifndef BORDER_H
-#define BORDER_H
+#pragma once
 
 #include <ostream>
 
@@ -88,6 +87,5 @@ inline void add_border_to_aabb(radix::geometry::Aabb2<T1> &bounds, const Border<
     bounds.max.x = saturating_add(bounds.max.x, border.right);
     bounds.max.y = saturating_add(bounds.max.y, border.bottom);
 }
-}
 
-#endif
+}

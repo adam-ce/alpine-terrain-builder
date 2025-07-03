@@ -4,6 +4,7 @@
 #define SPDLOG_FMT_EXTERNAL
 #define FMT_HEADER_ONLY
 #endif
+#include "log_impls.h"
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
@@ -11,8 +12,7 @@ class Log {
 private:
 	static std::shared_ptr<spdlog::logger> logger;
 public:
-	static void init(spdlog::level::level_enum logLevel);
-
+	static void init(spdlog::level::level_enum level);
 	inline static std::shared_ptr<spdlog::logger>& get_logger() {
         if (Log::logger == nullptr) {
             Log::init(spdlog::level::level_enum::info);
@@ -31,7 +31,8 @@ public:
         LOG_ERROR(__VA_ARGS__); \
         exit(1);                \
     } while (false)
-    
+
+/*
 #if __cplusplus >= 202302L
 #define _UNREACHABLE() std::unreachable()
 #elif defined(__GNUC__) || defined(__clang__)
@@ -47,5 +48,4 @@ public:
         LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
         _UNREACHABLE();                                                     \
     } while (0)
-
-#include "log_impls.h"
+*/

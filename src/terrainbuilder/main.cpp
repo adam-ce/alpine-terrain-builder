@@ -9,26 +9,15 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include <tbb/concurrent_vector.h>
-#include <tbb/enumerable_thread_specific.h>
-#include <tbb/parallel_for.h>
-#include <tbb/task_group.h>
-
 #include "Dataset.h"
-#include "ProgressIndicator.h"
 #include "log.h"
 #include "srs.h"
 #include "terrainbuilder.h"
+#include "octree/Space.h"
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
-
-#include "octree/Id.h"
-#include "octree/Space.h"
-#include "octree/Storage.h"
-#include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
-#include "octree/utils.h"
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
     const auto result = srs::from_user_input(user_input);
@@ -143,129 +132,6 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
-template <typename T>
-T expect(const std::optional<T> &opt, const std::string &msg) {
-    if (!opt) {
-        LOG_ERROR_AND_EXIT(msg);
-    }
-    return *opt;
-}
-
-void batch_build(
-    Dataset &dataset,
-    const octree::Id::Level target_level,
-    const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> &texture_base_path,
-    const OGRSpatialReference &mesh_srs,
-    const std::filesystem::path &output_base_path,
-    const std::string &output_format) {
-    if (!std::filesystem::exists(output_base_path)) {
-        LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
-        std::filesystem::create_directories(output_base_path);
-    } else if (!std::filesystem::is_directory(output_base_path)) {
-        LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
-    }
-
-    octree::Storage storage = octree::open_folder(
-        output_base_path,
-        octree::disk::layout::strategy::make_default(),
-        output_format);
-
-    const auto dataset_srs = dataset.srs();
-    const auto dataset_bounds = dataset.bounds3d(true);
-
-    const auto ecef_srs = srs::ecef();
-    const auto ecef_bounds = srs::encompassing_bounds_transfer(
-        dataset_srs, ecef_srs, dataset_bounds);
-    const auto space = octree::Space::earth();
-    const auto root_node = expect(
-        space.find_smallest_node_encompassing_bounds(ecef_bounds),
-        "Dataset is outside the octree root node.");
-
-    tbb::concurrent_vector<octree::Id> concurrent_targets;
-
-    tbb::task_group tg;
-    std::function<void(octree::Id)> process_node;
-
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
-        auto local_ecef_srs = ecef_srs;
-        auto local_dataset_srs = dataset_srs;
-        auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
-        return transform;
-    });
-
-    process_node = [&](octree::Id node) {
-        const auto node_bounds = space.get_node_bounds(node);
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds);
-
-        if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
-            return;
-        }
-
-        if (node.level() < target_level) {
-            if (auto children = node.children(); children.has_value()) {
-                for (const auto &child : *children) {
-                    tg.run([&, child] { process_node(child); });
-                }
-            }
-        } else if (node.level() == target_level) {
-            concurrent_targets.push_back(node);
-        }
-    };
-
-    tg.run([&] { process_node(root_node); });
-    tg.wait(); // Wait for all tasks
-
-    std::vector<octree::Id> target_nodes;
-    target_nodes.assign(concurrent_targets.begin(), concurrent_targets.end());
-
-    ProgressIndicator progress(target_nodes.size());
-    std::jthread progress_thread = progress.start_monitoring();
-
-    tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
-        return dataset.clone();
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_ecef_srs([&]() {
-        return srs::clone(ecef_srs);
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_texture_srs([&]() {
-        return srs::clone(texture_srs);
-    });
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRSpatialReference>> local_mesh_srs([&]() {
-        return srs::clone(mesh_srs);
-    });
-    tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
-        const auto &node = target_nodes[i];
-        if (storage.has_node(node)) { // TODO: correctly handle virtual nodes
-            return;
-        }
-
-        auto &dataset = local_dataset.local();
-        auto &ecef_srs = *local_ecef_srs.local();
-        auto &texture_srs = *local_texture_srs.local();
-        auto &mesh_srs = *local_mesh_srs.local();
-
-        const auto node_bounds = space.get_node_bounds(node);
-        const SimpleMesh mesh = terrainbuilder::build(
-            dataset,
-            ecef_srs,
-            node_bounds,
-            texture_srs,
-            texture_base_path,
-            mesh_srs);
-
-        if (!mesh.is_empty()) {
-            storage.write_node(node, mesh);
-        }
-
-        progress.task_finished();
-    });
-
-    progress_thread.join();
-    storage.save_index();
-}
-
 int run(std::span<char *> args) {
     int argc = args.size();
     char **argv = args.data();
@@ -376,7 +242,7 @@ int run(std::span<char *> args) {
             target_tile_scheme,
             target_srs);
 
-        terrainbuilder::build_and_save(
+        terrainbuilder::build_and_save_patch(
             dataset,
             target_srs,
             target_bounds,
@@ -387,7 +253,7 @@ int run(std::span<char *> args) {
     }
 
     if (*batch) {
-        batch_build(
+        terrainbuilder::build_all_patches(
             dataset,
             target_level,
             texture_srs,

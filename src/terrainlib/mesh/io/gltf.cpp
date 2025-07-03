@@ -1,6 +1,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
+#include <libassert/assert.hpp>
 
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
@@ -242,7 +243,7 @@ LoadMeshError map_cgltf_error(cgltf_result result) {
     case cgltf_result::cgltf_result_out_of_memory:
         return LoadMeshErrorKind::OutOfMemory;
     default:
-        assert(false);
+        UNREACHABLE();
         break;
     }
 }
@@ -283,7 +284,7 @@ tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::pa
     return RawMesh(data, cgltf_free);
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, const LoadOptions& options) {
+tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
     LOG_TRACE("Loading mesh from gltf data");
 
     const cgltf_data &data = *raw;
@@ -610,7 +611,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     std::copy(glm::value_ptr(parent_offset), glm::value_ptr(parent_offset) + parent_offset.length(), parent_node.translation);
     std::copy(glm::value_ptr(mesh_offset), glm::value_ptr(mesh_offset) + mesh_offset.length(), mesh_node.translation);
     const glm::dvec3 full_error = (glm::dvec3(parent_parent_offset) + glm::dvec3(parent_offset) + glm::dvec3(mesh_offset)) - average_position;
-    // assert(glm::length(full_error) == 0);
+    // DEBUG_ASSERT(glm::length(full_error) == 0);
     if (full_error != glm::dvec3(0)) {
         LOG_ERROR("Float transform trick failed (error: {})", glm::length(full_error));
     }

@@ -19,7 +19,7 @@ public:
     }
 
     std::optional<Id> get_id_from_relative_node_path(const std::filesystem::path &relative_path) const override {
-        assert(relative_path.is_relative());
+        DEBUG_ASSERT(relative_path.is_relative());
 
         const std::string _filestem = relative_path.stem().string();
         const std::string_view filestem = _filestem;

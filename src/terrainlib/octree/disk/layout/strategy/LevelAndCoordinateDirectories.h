@@ -19,7 +19,7 @@ public:
         return fmt::format("{}/{}/{}/{}{}", id.level(), coords.x, coords.y, coords.z, extension_with_dot);
     }
     std::optional<Id> get_id_from_relative_node_path(const std::filesystem::path &relative_path) const override {
-        assert(relative_path.is_relative());
+        DEBUG_ASSERT(relative_path.is_relative());
 
         auto it = relative_path.begin();
         if (std::distance(it, relative_path.end()) < 4) {

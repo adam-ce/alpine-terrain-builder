@@ -36,16 +36,15 @@ add_executable(unittests_terrainlib
     terrainlib/convert.cpp
     terrainlib/dataset.cpp
     terrainlib/grid.cpp
-    terrainlib/progress_indicator_test.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
-    terrainlib/octree_id.cpp
-    terrainlib/octree_space.cpp
+    terrainlib/mesh_clip.cpp
     terrainlib/mesh_io.cpp
     terrainlib/mesh_utils.cpp
-    terrainlib/mesh_clip.cpp
+    terrainlib/octree_id.cpp
+    terrainlib/octree_space.cpp
+    terrainlib/progress_indicator_test.cpp
 )
-    
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
 
@@ -59,8 +58,7 @@ add_executable(unittests_tilebuilder
     tilebuilder/parallel_tiler.cpp
     tilebuilder/tile_heights_generator.cpp
     tilebuilder/top_down_tiler.cpp
-)
-    
+)  
 target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
 
@@ -68,7 +66,6 @@ add_executable(unittests_terrainsimplify
     catch2_helpers.h
     terrainsimplify/merge.cpp
 )
-
 target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 
 
@@ -77,6 +74,12 @@ add_executable(unittests_terrainbuilder
     terrainbuilder/mesh.cpp
     terrainbuilder/texture.cpp
 )
-
 target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+
+
+add_executable(unittests_terrainmerger
+    catch2_helpers.h
+    terrainmerger/mask.cpp
+)
+target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)

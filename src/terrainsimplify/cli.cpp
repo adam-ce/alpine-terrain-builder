@@ -6,7 +6,7 @@
 using namespace cli;
 
 Args cli::parse(int argc, const char * const * argv) {
-    assert(argc >= 0);
+    DEBUG_ASSERT(argc >= 0);
 
     CLI::App app{"terrainsimplify"};
     app.allow_windows_style_options();

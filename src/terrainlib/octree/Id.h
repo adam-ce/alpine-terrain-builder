@@ -8,6 +8,7 @@
 #include <functional>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "hash_utils.h"
 
@@ -36,8 +37,8 @@ public:
     }
     constexpr Id(const Level level, const Index index)
         : _level(level), _index(index) {
-        assert(level <= Id::max_level());
-        assert(index <= Id::max_index_on_level(this->_level));
+        DEBUG_ASSERT(level <= Id::max_level());
+        DEBUG_ASSERT(index <= Id::max_index_on_level(this->_level));
     }
 
     [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords) {
@@ -149,24 +150,35 @@ public:
         return Id(0, 0);
     }
 
-    bool operator==(const Id &other) const {
+    constexpr bool operator==(const Id &other) const {
         return this->_level == other._level && this->_index == other._index;
     }
-    bool operator!=(const Id &other) const {
+    constexpr bool operator!=(const Id &other) const {
         return !(*this == other);
     }
+    constexpr std::strong_ordering operator<=>(const Id &other) const {
+        if (this->_level < other._level) {
+            return std::strong_ordering::less;
+        }
+        if (this->_level > other._level) {
+            return std::strong_ordering::greater;
+        }
+        return this->_index <=> other._index;
+    }
+
+    std::string to_string() const;
 
 private:
     Level _level;
     Index _index;
 
     [[nodiscard]] constexpr Id _child(const uint32_t child_index) const {
-        assert(child_index <= 7);
+        DEBUG_ASSERT(child_index <= 7);
         return Id(this->level() + 1, (this->index_on_level() << 3) | child_index);
     }
 
     [[nodiscard]] static constexpr Index interleave3(const Coords &coords) {
-        assert(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
+        DEBUG_ASSERT(glm::all(glm::lessThanEqual(coords, Coords(Id::max_coord_on_level(Id::max_level())))));
 
         const Index x = coords.x;
         const Index y = coords.y;
@@ -218,8 +230,8 @@ struct fmt::formatter<octree::Id> {
 #include <fmt/ostream.h>
 #include <iostream>
 namespace octree {
-inline std::string to_string(const octree::Id &id) {
-    return fmt::format("{}", id);
+inline std::string octree::Id::to_string() const {
+    return fmt::format("{}", *this);
 }
 inline std::ostream &operator<<(std::ostream &os, const octree::Id &id) {
     fmt::print(os, "{}", id);
@@ -231,7 +243,7 @@ namespace std {
 template <>
 struct hash<octree::Id> {
     std::size_t operator()(const octree::Id &id) const noexcept {
-        return hash_combine(id.level(), id.index_on_level());
+        return ::hash::combine(id.level(), id.index_on_level());
     }
 };
 } // namespace std

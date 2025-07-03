@@ -7,28 +7,29 @@
 #include <radix/geometry.h>
 #include <zpp_bits.h>
 
-class SimpleMesh {
+template <glm::length_t dimensions = 3, typename T = double>
+class SimpleMesh_ {
 public:
     using Triangle = glm::uvec3;
     using Edge = glm::uvec2;
-    using Position = glm::dvec3;
-    using Uv = glm::dvec2;
+    using Position = glm::vec<dimensions, T>;
+    using Uv = glm::vec<2, T>;
     using Texture = cv::Mat;
     using serialize = zpp::bits::members<4>;
 
-    SimpleMesh(std::vector<Triangle> triangles, std::vector<Position> positions) 
-        : SimpleMesh(triangles, positions, {}) {}
-    SimpleMesh(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs) 
-        : SimpleMesh(triangles, positions, uvs, std::nullopt) {}
-    SimpleMesh(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, Texture texture)
-        : SimpleMesh(triangles, positions, uvs, std::optional<Texture>(std::move(texture))) {}
-    SimpleMesh(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, std::optional<Texture> texture)
+    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions) 
+        : SimpleMesh_(triangles, positions, {}) {}
+    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs) 
+        : SimpleMesh_(triangles, positions, uvs, std::nullopt) {}
+    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, Texture texture)
+        : SimpleMesh_(triangles, positions, uvs, std::optional<Texture>(std::move(texture))) {}
+    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, std::optional<Texture> texture)
         : triangles(triangles), positions(positions), uvs(uvs), texture(std::move(texture)) {}
-    SimpleMesh() = default;
-    SimpleMesh(SimpleMesh &&) = default;
-    SimpleMesh &operator=(SimpleMesh &&) = default;
-    SimpleMesh(const SimpleMesh &) = default;
-    SimpleMesh &operator=(const SimpleMesh &) = default;
+    SimpleMesh_() = default;
+    SimpleMesh_(SimpleMesh_ &&) = default;
+    SimpleMesh_ &operator=(SimpleMesh_ &&) = default;
+    SimpleMesh_(const SimpleMesh_ &) = default;
+    SimpleMesh_ &operator=(const SimpleMesh_ &) = default;
 
     std::vector<Triangle> triangles;
     std::vector<Position> positions;
@@ -52,3 +53,8 @@ public:
         return this->texture.has_value();
     }
 };
+
+using SimpleMesh3d = SimpleMesh_<3, double>;
+using SimpleMesh2d = SimpleMesh_<2, double>;
+
+using SimpleMesh = SimpleMesh3d;

@@ -1,5 +1,4 @@
-#ifndef TEXTUREASSEMBLER_H
-#define TEXTUREASSEMBLER_H
+#pragma once
 
 #include <chrono>
 #include <filesystem>
@@ -19,7 +18,7 @@
 #include "tile_provider.h"
 #include "log.h"
 
-namespace terrainbuilder::texture {
+namespace terrainbuilder {
 
 /// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
 [[nodiscard]] unsigned int estimate_zoom_level(
@@ -29,7 +28,7 @@ namespace terrainbuilder::texture {
     const glm::dvec2 relative_size = reference_tile_bounds.size() / target_bounds.size();
     const double relative_factor = (relative_size.x + relative_size.y) / 2;
     const int zoom_level_change = std::rint(std::log2(relative_factor));
-    assert(static_cast<int>(reference_zoom_level) + zoom_level_change >= 0);
+    DEBUG_ASSERT(static_cast<int>(reference_zoom_level) + zoom_level_change >= 0);
     return reference_zoom_level + zoom_level_change;
 }
 
@@ -208,7 +207,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     for (const radix::tile::Id &tile : tiles_to_splatter) {
         max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
     }
-    assert(max_zoom_level >= root_tile.zoom_level);
+    DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
     const unsigned int zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
     // Choose any tile to load infer like tile size and format to allocate our texture buffer accordingly.
@@ -247,7 +246,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
 
         // Pixel bounds of this image relative to the root tile.
         const radix::geometry::Aabb2ui pixel_tile_bounds = calculate_pixel_tile_bounds(tile, root_tile, tile_image_size, max_zoom_level);
-        assert(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), current_tile_image_size)));
+        DEBUG_ASSERT(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), current_tile_image_size)));
 
         // Pixel bounds relative to the target image texture region.
         const glm::ivec2 tile_target_position = glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.min);
@@ -285,8 +284,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
     const radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(radix::tile::Scheme::SlippyMap);
-    LOG_TRACE("Smallest encompassing tile for texture bounds is [{}, ({}, {})]",
-        smallest_encompassing_tile.zoom_level, smallest_encompassing_tile.coords.x, smallest_encompassing_tile.coords.y);
+    LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
         return std::nullopt;
@@ -306,6 +304,5 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     // Splatter tiles into texture buffer
     return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter);
 }
-}
 
-#endif
+}

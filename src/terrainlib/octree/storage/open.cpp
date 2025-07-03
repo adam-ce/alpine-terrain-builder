@@ -1,0 +1,87 @@
+#include <algorithm>
+#include <filesystem>
+#include <memory>
+#include <unordered_set>
+#include <vector>
+
+#include "io/serialize.h"
+#include "log.h"
+#include "mesh/io.h"
+#include "octree/disk/IndexFile.h"
+#include "octree/disk/layout/StrategyRegister.h"
+#include "octree/storage/IndexedStorage.h"
+#include "octree/storage/helpers.h"
+#include "octree/storage/open.h"
+
+namespace octree {
+
+tl::expected<IndexedStorage, io::Error> open_index(const std::filesystem::path &index_path) {
+    LOG_TRACE("Opening storage index {}", index_path);
+
+    const auto result = io::read_from_path<disk::v1::IndexFile>(index_path);
+    if (!result.has_value()) {
+        LOG_TRACE("Failed to open storage index due to {}", result.error());
+        return tl::unexpected(result.error());
+    }
+    auto index_file = result.value();
+    LOG_TRACE("Successfully read storage index with {} entries.", index_file.map.size());
+    auto index_map = std::move(index_file.map);
+    const auto base_path = index_path.parent_path();
+    auto layout_strategy = disk::layout::StrategyRegister::instance().create(index_file.layout_strategy_id);
+    disk::Layout layout(base_path, std::move(layout_strategy), index_file.preferred_extension);
+    RawStorage raw_storage(std::move(layout));
+    return IndexedStorage(std::move(raw_storage), std::move(index_map));
+}
+
+Storage open_folder(
+    const std::filesystem::path &base_path,
+    std::unique_ptr<disk::layout::Strategy> default_layout_strategy,
+    const std::string extension_with_dot,
+    bool create_index) {
+    LOG_TRACE("Opening storage folder {}", base_path);
+
+    if (!std::filesystem::is_directory(base_path)) {
+        if (std::filesystem::exists(base_path)) {
+            LOG_ERROR_AND_EXIT("Base path {} exists but is not a directory", base_path);
+        }
+
+        LOG_TRACE("Base path {} does not exist, creating it", base_path);
+        std::filesystem::create_directories(base_path);
+    }
+
+    const std::filesystem::path index_path = base_path / disk::v1::index_file_name();
+    auto storage_opt = open_index(index_path);
+    if (storage_opt.has_value()) {
+        LOG_TRACE("Loaded existing index");
+        return Storage(std::move(storage_opt.value()));
+    }
+
+    auto layout_strategy_opt = helpers::guess_layout_strategy(base_path);
+    if (layout_strategy_opt) {
+        LOG_TRACE("Guessed layout of dataset as {}",
+                  disk::layout::StrategyRegister::instance().get_id(**layout_strategy_opt));
+    } else {
+        LOG_WARN("Unable to determine layout of dataset, using default which is {}",
+                 disk::layout::StrategyRegister::instance().get_id(*default_layout_strategy));
+        layout_strategy_opt = std::move(default_layout_strategy);
+    }
+
+    disk::Layout layout(base_path, std::move(*layout_strategy_opt), extension_with_dot);
+    if (!create_index) {
+        return Storage(RawStorage(std::move(layout)));
+    }
+
+    IndexMap map;
+    helpers::update_index_map(map, layout);
+    helpers::save_index_map(map, layout);
+    return Storage(RawStorage(std::move(layout)), std::move(map));
+}
+
+IndexedStorage open_folder_indexed(
+    const std::filesystem::path &base_path,
+    std::unique_ptr<disk::layout::Strategy> default_layout_strategy,
+    const std::string extension_with_dot) {
+    return IndexedStorage(open_folder(base_path, std::move(default_layout_strategy), extension_with_dot, true));
+}
+
+} // namespace octree

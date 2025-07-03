@@ -4,6 +4,8 @@
 #include <vector>
 #include <span>
 
+#include <tl/expected.hpp>
+
 #include "io/Error.h"
 
 namespace io {

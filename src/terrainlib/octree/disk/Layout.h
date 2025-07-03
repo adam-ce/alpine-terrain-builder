@@ -5,6 +5,8 @@
 #include <string_view>
 #include <string>
 
+#include <libassert/assert.hpp>
+
 #include "octree/Id.h"
 #include "octree/disk/layout/Strategy.h"
 
@@ -14,7 +16,7 @@ class Layout {
 public:
     Layout(std::filesystem::path base_path, std::unique_ptr<layout::Strategy> strategy, std::string extension_with_dot = ".terrain")
         : _base_path(std::move(base_path)), _strategy(std::move(strategy)), _extension_with_dot(std::move(extension_with_dot)) {
-        assert(!_extension_with_dot.empty() && _extension_with_dot[0] == '.');
+        DEBUG_ASSERT(!_extension_with_dot.empty() && _extension_with_dot[0] == '.');
     }
 
     std::filesystem::path get_node_path(Id id) const {

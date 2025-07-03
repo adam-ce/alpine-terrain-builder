@@ -8,24 +8,31 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 #include <glm/gtx/norm.hpp>
+#include <libassert/assert.hpp>
 
 #include "Dataset.h"
 #include "log.h"
 #include "mesh/SimpleMesh.h"
+#include "mesh/utils.h"
 #include "mesh_builder.h"
 #include "raster.h"
 #include "raw_dataset_reader.h"
 #include "srs.h"
-#include "mesh/utils.h"
+#include "mesh/clip.h"
+#include "mesh/validate.h"
 
-namespace terrainbuilder::mesh {
+// TODO: remove
+#include "raster_to_image.h"
 
-std::ostream &operator<<(std::ostream &os, BuildError error) {
+// TODO: fix namespace
+namespace terrainbuilder {
+
+std::ostream &operator<<(std::ostream &os, BuildMeshError error) {
     switch (error) {
-    case BuildError::OutOfBounds:
+    case BuildMeshError::OutOfBounds:
         os << "out of bounds";
         break;
-    case BuildError::EmptyRegion:
+    case BuildMeshError::EmptyRegion:
         os << "empty region";
         break;
     default:
@@ -35,22 +42,18 @@ std::ostream &operator<<(std::ostream &os, BuildError error) {
     return os;
 }
 
+namespace {
+using PixelBounds = radix::geometry::Aabb2i;
+    
 template <typename T>
-static glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
+glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
     glm::dvec2 result;
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
     return result;
 }
 
-using PixelBounds = radix::geometry::Aabb2i;
-
 // TODO:: write documentation
 // TODO: use referencedBounds
-
-bool is_valid(float height) {
-    return !isnan(height) && !isinf(height)      /* <- invalid values */
-           && height > -20000 && height < 20000; /* <- padding */
-}
 
 glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
@@ -76,15 +79,15 @@ SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster
         positions.push_back(point);
         return index;
     });
-    assert(positions.size() == valid_vertex_count);
+    DEBUG_ASSERT(positions.size() == valid_vertex_count);
 
     // Allocate triangle vector
     const size_t max_triangle_count = (source_points.width() - 1) * (source_points.height() - 1) * 2;
     std::vector<glm::uvec3> triangles;
     triangles.reserve(max_triangle_count);
 
-    for (size_t x = 0; x < source_points.width() - 1; x++) {
-        for (size_t y = 0; y < source_points.height() - 1; y++) {
+    for (size_t y = 0; y < source_points.height() - 1; y++) {
+        for (size_t x = 0; x < source_points.width() - 1; x++) {
             const std::array<raster::Coords, 4> quad {
                 raster::Coords{x, y},
                 raster::Coords{x + 1, y},
@@ -104,11 +107,16 @@ SimpleMesh meshify(const raster::Raster<glm::dvec3>& source_points, const raster
             }
         }
     }
-    assert(triangles.size() <= max_triangle_count);
+    DEBUG_ASSERT(triangles.size() <= max_triangle_count);
 
     return SimpleMesh(triangles, positions);
 }
 
+SimpleMesh transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs) {
+    const auto transform = srs::transformation(source_srs, target_srs);
+    srs::transform_points_inplace(transform.get(), source_mesh.positions);
+    return source_mesh;
+}
 SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
     SimpleMesh target_mesh;
     target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
@@ -135,8 +143,9 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
     const glm::dvec3 max(bounds2d.max, infinity);
     return radix::geometry::Aabb3d(min, max);
 }
+}
 
-tl::expected<SimpleMesh, BuildError> build_reference_mesh_tile(
+tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_tile(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &tile_srs, const radix::tile::SrsBounds &tile_bounds,
@@ -144,7 +153,7 @@ tl::expected<SimpleMesh, BuildError> build_reference_mesh_tile(
     return build_reference_mesh_patch(dataset, mesh_srs, tile_srs, extend_bounds_to_3d(tile_bounds), texture_srs, texture_bounds);
 }
 
-tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
+tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
@@ -165,9 +174,9 @@ tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(target_bounds_in_source_srs);
     add_border_to_aabb(pixel_bounds, Border(1));
     LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
-    const std::optional<raster::HeightMap> read_result = reader.read_data_in_pixel_bounds(pixel_bounds, true);
+    const std::optional<raster::HeightMap> read_result = reader.read_data_in_pixel_bounds_clamped(pixel_bounds);
     if (!read_result.has_value() || read_result->size() == 0) {
-        return tl::unexpected(BuildError::OutOfBounds);
+        return tl::unexpected(BuildMeshError::OutOfBounds);
     }
     const raster::HeightMap height_map = read_result.value();
 
@@ -176,7 +185,6 @@ tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     const raster::Mask valid_mask = raster::transform(height_map, [=](const float height) {
         return height != no_data_value;
     });
-    // const raster::Mask valid_mask = raster::transform(height_map, is_valid);
 
     LOG_TRACE("Transforming pixels to vertices");
     const raster::Raster<glm::dvec3> source_points = raster::transform(height_map, valid_mask, [&](const float height, const raster::Coords& coords) {
@@ -184,18 +192,18 @@ tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     });
 
     LOG_TRACE("Generating triangles");
-    const SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
+    SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
     // Check if we even have any valid vertices. Can happen if all of the region is padding.
     if (mesh_in_source_srs.vertex_count() == 0 || mesh_in_source_srs.face_count() == 0) {
-        return tl::unexpected(BuildError::EmptyRegion);
+        return tl::unexpected(BuildMeshError::EmptyRegion);
     }
 
     LOG_TRACE("Clipping mesh based on target bounds");
-    const SimpleMesh mesh_in_clip_srs = transform_mesh(mesh_in_source_srs, source_srs, clip_srs);
-    SimpleMesh clipped_mesh = clip_mesh_on_bounds(mesh_in_clip_srs, clip_bounds);
+    const SimpleMesh mesh_in_clip_srs = transform_mesh(std::move(mesh_in_source_srs), source_srs, clip_srs);
+    SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh_in_clip_srs, clip_bounds);
     // Check if there are any vertices left
     if (clipped_mesh.vertex_count() == 0 || clipped_mesh.face_count() == 0) {
-        return tl::unexpected(BuildError::EmptyRegion);
+        return tl::unexpected(BuildMeshError::EmptyRegion);
     }
 
     // TODO: move this to another function?
@@ -203,11 +211,11 @@ tl::expected<SimpleMesh, BuildError> build_reference_mesh_patch(
     clipped_mesh.uvs = generate_uv_space(clipped_mesh.positions, clip_srs, texture_srs, texture_bounds);
 
     LOG_TRACE("Transforming mesh into output srs");
-    SimpleMesh target_mesh = transform_mesh(clipped_mesh, clip_srs, mesh_srs);
+    SimpleMesh target_mesh = transform_mesh(std::move(clipped_mesh), clip_srs, mesh_srs);
     
     remove_isolated_vertices(target_mesh); // TODO: is this still required?
-    validate_mesh(target_mesh);
+    mesh::validate(target_mesh);
     return target_mesh;
 }
 
-} // namespace terrainbuilder::mesh
+}

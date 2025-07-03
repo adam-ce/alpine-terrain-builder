@@ -57,6 +57,8 @@ alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COM
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
+alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
+
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 # Don't build glfw docs, tests and examples
@@ -112,23 +114,36 @@ add_library(terrainlib
     terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
+    terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
     terrainlib/mesh/cgal.h
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
     terrainlib/mesh/convert.h
     terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/merge.h terrainlib/mesh/merge.cpp
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
+    terrainlib/mesh/validate.h
 
+    terrainlib/octree/disk/layout/strategy/Default.h
     terrainlib/octree/disk/layout/strategy/Flat.h
     terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
     terrainlib/octree/disk/layout/Strategy.h
     terrainlib/octree/disk/layout/StrategyRegister.h
     terrainlib/octree/disk/IndexFile.h
     terrainlib/octree/disk/Layout.h
+    terrainlib/octree/storage/cache/Dummy.h
+    terrainlib/octree/storage/cache/ICache.h
+    terrainlib/octree/storage/cache/LruCache.h
+    terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
+    terrainlib/octree/storage/IndexedStorage.h
+    terrainlib/octree/storage/IStorage.h
+    terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
+    terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
+    terrainlib/octree/storage/Storage.h
     terrainlib/octree/Id.h
-    terrainlib/octree/Storage.h terrainlib/octree/Storage.cpp
+    terrainlib/octree/Storage.h
     terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
     terrainlib/octree/NodeStatus.h
     terrainlib/octree/Space.h terrainlib/octree/Space.cpp
@@ -144,7 +159,7 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -176,6 +191,7 @@ target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
 
 add_library(terrainmergerlib
     terrainmerger/merge.h
+    terrainmerger/mask.h
 )
 target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
@@ -208,13 +224,10 @@ target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 add_library(terrainsimplifylib
     terrainsimplify/cli.h
     terrainsimplify/cli.cpp
-    terrainsimplify/merge.h
-    terrainsimplify/merge.cpp
     terrainsimplify/simplify.h
     terrainsimplify/simplify.cpp
     terrainsimplify/uv_map.h
     terrainsimplify/uv_map.cpp
-    terrainsimplify/validate.h
 )
 target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)
 target_precompile_headers(terrainsimplifylib PRIVATE terrainsimplify/pch.h)
@@ -259,3 +272,4 @@ add_executable(browser
 #target_compile_options(browser PRIVATE /utf-8)
 target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
 target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)
+

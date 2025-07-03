@@ -1,23 +1,26 @@
 #include <string>
+#include <vector>
+#include <filesystem>
 
 #include "log.h"
 #include "cli.h"
 #include "merge.h"
+#include "mask.h"
+#include "octree/Storage.h"
 
 void run(const cli::Args &args) {
     if (!std::filesystem::exists(args.output_path)) {
         std::filesystem::create_directories(args.output_path);
     }
 
-    octree::Storage output_storage = octree::open_folder(args.output_path);
-    std::vector<octree::Storage> input_storages;
+    octree::IndexedStorage output_storage = octree::open_folder_indexed(args.output_path);
+    std::vector<octree::IndexedStorage> input_storages;
     for (const auto &input_path : args.input_paths) {
         if (!std::filesystem::exists(input_path)) {
-            LOG_ERROR("Input path '{}' does not exist.", input_path.string());
+            LOG_ERROR("Input path '{}' does not exist.", input_path);
             return;
         }
-        auto input_storage = octree::open_folder(input_path);
-        input_storages.push_back(std::move(input_storage));
+        input_storages.emplace_back(octree::open_folder_indexed(input_path));
     }
 
     merge_datasets(output_storage, input_storages);

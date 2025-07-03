@@ -98,6 +98,7 @@ bool create_directories2(const std::filesystem::path& path) {
 
 class TileUrlBuilder {
 public:
+    virtual ~TileUrlBuilder() = default;
     virtual std::string build_url(const radix::tile::Id &tile_id) const = 0;
 };
 
@@ -124,7 +125,7 @@ private:
 // https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/11/710/1098.jpeg
 class GatakiTileUrlBuilder : public TileUrlBuilder {
 public:
-    GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> &_args) {}
+    GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> & /* args */) {}
 
     std::string build_url(const radix::tile::Id &tile_id) const {
         const radix::tile::Id google_tile_id = tile_id.to(radix::tile::Scheme::SlippyMap);
@@ -132,8 +133,6 @@ public:
             "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg",
             google_tile_id.zoom_level, google_tile_id.coords.y, google_tile_id.coords.x);
     }
-
-private:
 };
 
 static std::string format_tile(const radix::tile::Id tile) {
@@ -183,7 +182,7 @@ struct ProgressCallbackData {
     radix::tile::Id tile;
 };
 
-int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t _ultotal, curl_off_t _ulnow) {
+int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t /* ultotal */, curl_off_t /* ulnow */) {
     ProgressCallbackData &data = *static_cast<ProgressCallbackData *>(clientp);
 
     if (dltotal == 0) {
@@ -227,8 +226,7 @@ enum DownloadResult {
     Failed
 };
 
-class TileDownloader
-{
+class TileDownloader {
 public:
     TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
         this->url_builder = url_builder;

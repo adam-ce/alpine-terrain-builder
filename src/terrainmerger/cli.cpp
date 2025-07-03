@@ -6,7 +6,7 @@
 using namespace cli;
 
 Args cli::parse(int argc, const char * const * argv) {
-    assert(argc >= 0);
+    DEBUG_ASSERT(argc >= 0);
 
     CLI::App app{"terrainmerger"};
     app.allow_windows_style_options();
@@ -39,6 +39,7 @@ Args cli::parse(int argc, const char * const * argv) {
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }
+
     Args args;
     args.input_paths = input_paths;
     args.output_path = output_path;

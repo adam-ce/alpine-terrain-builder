@@ -1,14 +1,14 @@
 #include <numeric>
-#include <unordered_map>
+
+#include <libassert/assert.hpp>
 
 #include "mesh/convert.h"
 #include "log.h"
-#include "merge.h"
-#include "mesh/SimpleMesh.h"
+#include "mesh/merge.h"
 #include "mesh/utils.h"
-#include "validate.h"
+#include "mesh/validate.h"
 
-using namespace merge;
+using namespace mesh::merge;
 
 template <typename T>
 static T max_component(const glm::tvec3<T> &vector) {
@@ -20,6 +20,7 @@ static T min_component(const glm::tvec3<T> &vector) {
     return glm::min(glm::min(vector.x, vector.y), vector.z);
 }
 
+// TODO: rewrite using unordered_map?
 template <typename T>
 class Grid3d {
 public:
@@ -28,7 +29,7 @@ public:
         grid_data.resize(divisions.x * divisions.y * divisions.z);
     }
 
-    struct GridCellItem {
+    struct GridCellItem {                           
         glm::dvec3 point;
         T value;
     };
@@ -38,7 +39,7 @@ public:
     };
 
     std::optional<std::reference_wrapper<T>> find(const glm::dvec3 point, const double epsilon = 0.1f) {
-        assert(epsilon > 0);
+        DEBUG_ASSERT(epsilon > 0);
 
         if (!is_in_bounds(point)) {
             return std::nullopt;
@@ -54,7 +55,7 @@ public:
         }
 
         const glm::dvec3 distance_from_contained_cell_center = point - cell_size * (glm::dvec3(grid_index) + glm::dvec3(0.5));
-        if (glm::all(glm::lessThan(distance_from_contained_cell_center + epsilon, cell_size))) {
+        if (glm::all(glm::lessThan(distance_from_contained_cell_center + epsilon, cell_size))) { // TODO: shouldnt this be cell_size / 2?
             cell_radius = 0;
         }
 
@@ -64,12 +65,12 @@ public:
         for (int dx = -cell_radius; dx <= cell_radius; dx++) {
             for (int dy = -cell_radius; dy <= cell_radius; dy++) {
                 for (int dz = -cell_radius; dz <= cell_radius; dz++) {
-                    glm::ivec3 _neighbor_index = glm::ivec3(grid_index) + glm::ivec3(dx, dy, dz);
+                    const glm::ivec3 _neighbor_index = glm::ivec3(grid_index) + glm::ivec3(dx, dy, dz);
                     if (!this->is_valid_grid_index(_neighbor_index)) {
                         continue;
                     }
 
-                    glm::uvec3 neighbor_index(_neighbor_index);
+                    const glm::uvec3 neighbor_index(_neighbor_index);
                     const size_t cell_index = this->calculate_cell_index(neighbor_index);
                     GridCell &cell = this->grid_data[cell_index];
 
@@ -266,46 +267,6 @@ static double estimate_min_vertex_separation_between_meshes_after_merge(const st
     return std::sqrt(min_squared_distance);
 }
 
-static double estimate_average_vertex_separation(const SimpleMesh &mesh, const size_t sample_size = 1000) {
-    std::vector<glm::uvec3> triangles = mesh.triangles;
-    std::random_shuffle(triangles.begin(), triangles.end());
-
-    size_t count = std::min(triangles.size(), sample_size);
-    double average_distance = 0;
-    for (size_t i = 0; i < count; i++) {
-        const glm::uvec3 &triangle = triangles[i];
-
-        const size_t first_index_in_triangle = i % triangle.length();
-        const size_t first_index = triangle[first_index_in_triangle];
-        const size_t second_index = triangle[(first_index_in_triangle + 1) % triangle.length()];
-
-        const double distance2 = glm::distance(mesh.positions[first_index], mesh.positions[second_index]);
-        average_distance += distance2 / count;
-    }
-
-    return std::sqrt(average_distance);
-}
-
-static double estimate_average_vertex_seperation(const SimpleMesh &mesh, const size_t sample_size = 1000) {
-    std::vector<glm::uvec3> triangles = mesh.triangles;
-    std::random_shuffle(triangles.begin(), triangles.end());
-
-    size_t count = std::min(triangles.size(), sample_size);
-    double average_distance = 0;
-    for (size_t i = 0; i < count; i++) {
-        const glm::uvec3 &triangle = triangles[i];
-
-        const size_t first_index_in_triangle = i % triangle.length();
-        const size_t first_index = triangle[first_index_in_triangle];
-        const size_t second_index = triangle[(first_index_in_triangle + 1) % triangle.length()];
-
-        const double distance2 = glm::distance(mesh.positions[first_index], mesh.positions[second_index]);
-        average_distance += distance2 / count;
-    }
-
-    return std::sqrt(average_distance);
-}
-
 static double estimate_min_edge_length(const SimpleMesh &mesh) {
     std::vector<glm::uvec3> triangles = mesh.triangles;
     std::random_shuffle(triangles.begin(), triangles.end());
@@ -436,7 +397,7 @@ static bool are_all_meshes_merged(const VertexMapping &mapping) {
     return union_find.is_joint();
 }
 
-VertexMapping merge::create_merge_mapping(const std::span<const SimpleMesh> meshes) {
+VertexMapping mesh::merge::create_merge_mapping(const std::span<const SimpleMesh> meshes) {
     LOG_DEBUG("Finding shared vertices between {} meshes (epsilon=auto)", meshes.size());
 
     const double min_edge_length = std::transform_reduce(
@@ -445,6 +406,10 @@ VertexMapping merge::create_merge_mapping(const std::span<const SimpleMesh> mesh
         std::numeric_limits<double>::infinity(),
         [](const double a, const double b) { return std::min(a, b); },
         measure_min_edge_length); // XXX: use approximate_min_edge_length in Release?
+    if (min_edge_length == std::numeric_limits<double>::infinity()) {
+        return {};
+    }
+    DEBUG_ASSERT(min_edge_length > 0);
     double distance_epsilon = min_edge_length / 1000;
     LOG_TRACE("Starting with distance epsilon of {:g}", distance_epsilon);
 
@@ -458,7 +423,7 @@ VertexMapping merge::create_merge_mapping(const std::span<const SimpleMesh> mesh
 
             const double min_vertex_separation_after_merge = estimate_min_vertex_separation_between_meshes_after_merge(meshes, mapping);
             if (min_vertex_separation_after_merge > min_edge_length / 2) {
-                LOG_TRACE("Found vertices in merged mesh that are much closer than in the source meshes, suggesting and incomplete merge");
+                LOG_TRACE("Found vertices in merged mesh that are much closer than in the source meshes, suggesting an incomplete merge");
                 continue;
             }
 
@@ -507,7 +472,7 @@ static bool are_all_bounds_connected(const std::span<const SimpleMesh> meshes) {
     return true;
 }
 
-VertexMapping merge::create_merge_mapping(const std::span<const SimpleMesh> meshes, double distance_epsilon) {
+VertexMapping mesh::merge::create_merge_mapping(const std::span<const SimpleMesh> meshes, double distance_epsilon) {
     if (meshes.empty()) {
         return {};
     }
@@ -564,7 +529,7 @@ VertexMapping merge::create_merge_mapping(const std::span<const SimpleMesh> mesh
     return mapping;
 }
 
-SimpleMesh merge::apply_mapping(std::span<const SimpleMesh> meshes, const merge::VertexMapping &mapping) {
+SimpleMesh mesh::merge::apply_mapping(std::span<const SimpleMesh> meshes, const mesh::merge::VertexMapping &mapping) {
     LOG_TRACE("Merging meshes based on mapping");
     if (meshes.empty()) {
         return {};
@@ -599,7 +564,7 @@ SimpleMesh merge::apply_mapping(std::span<const SimpleMesh> meshes, const merge:
             max_vertex_index = std::max(max_vertex_index, mapped_index);
         }
     }
-    assert(max_vertex_index < max_combined_vertex_count || max_vertex_index == 0);
+    DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count || max_vertex_index == 0);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_vertex_index + 1);
@@ -630,18 +595,18 @@ SimpleMesh merge::apply_mapping(std::span<const SimpleMesh> meshes, const merge:
         LOG_WARN("Not all meshes were merged together");
     }
 
-    validate_mesh(merged_mesh);
-    validate_mesh(convert::mesh2cgal(merged_mesh));
+    mesh::validate(merged_mesh);
+    mesh::validate(convert::to_cgal_mesh(merged_mesh));
 
     return merged_mesh;
 }
 
-SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes) {
+SimpleMesh mesh::merge::merge_meshes(std::span<const SimpleMesh> meshes) {
     VertexMapping mapping;
-    return merge::merge_meshes(meshes, mapping);
+    return mesh::merge::merge_meshes(meshes, mapping);
 }
 
-SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes, merge::VertexMapping &mapping) {
+SimpleMesh mesh::merge::merge_meshes(std::span<const SimpleMesh> meshes, mesh::merge::VertexMapping &mapping) {
     switch (meshes.size()) {
     case 0:
         return {};
@@ -649,17 +614,17 @@ SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes, merge::Vertex
         mapping = VertexMapping::identity(meshes[0].vertex_count());
         return meshes[0];
     default:
-        mapping = merge::create_merge_mapping(meshes);
-        return merge::apply_mapping(meshes, mapping);
+        mapping = mesh::merge::create_merge_mapping(meshes);
+        return mesh::merge::apply_mapping(meshes, mapping);
     }
 }
 
-SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon) {
+SimpleMesh mesh::merge::merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon) {
     VertexMapping mapping;
-    return merge::merge_meshes(meshes, distance_epsilon, mapping);
+    return mesh::merge::merge_meshes(meshes, distance_epsilon, mapping);
 }
 
-SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon, merge::VertexMapping &mapping) {
+SimpleMesh mesh::merge::merge_meshes(std::span<const SimpleMesh> meshes, double distance_epsilon, mesh::merge::VertexMapping &mapping) {
     switch (meshes.size()) {
     case 0:
         return {};
@@ -667,7 +632,7 @@ SimpleMesh merge::merge_meshes(std::span<const SimpleMesh> meshes, double distan
         mapping = VertexMapping::identity(meshes[0].vertex_count());
         return meshes[0];
     default:
-        mapping = merge::create_merge_mapping(meshes, distance_epsilon);
-        return merge::apply_mapping(meshes, mapping);
+        mapping = mesh::merge::create_merge_mapping(meshes, distance_epsilon);
+        return mesh::merge::apply_mapping(meshes, mapping);
     }
 }

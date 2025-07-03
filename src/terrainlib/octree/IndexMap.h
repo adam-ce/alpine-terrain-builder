@@ -17,7 +17,7 @@ public:
     using const_iterator = Container::const_iterator;
 
     std::optional<NodeStatus> get(Id id) const;
-    void add(Id id);
+    bool add(Id id);
     bool remove(Id id);
 
     bool is_present(Id id) const;

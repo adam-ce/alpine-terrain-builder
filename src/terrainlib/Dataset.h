@@ -25,12 +25,10 @@
 #include <filesystem>
 
 #include <radix/tile.h>
+#include "log.h"
 
 class GDALDataset;
 class OGRSpatialReference;
-
-class Dataset;
-using DatasetPtr = std::shared_ptr<Dataset>;
 
 class Dataset {
 public:
@@ -67,7 +65,6 @@ public:
 
 private:
     Dataset(const std::filesystem::path path, GDALDataset *dataset);
-
     std::unique_ptr<GDALDataset> m_gdal_dataset;
     std::optional<std::filesystem::path> m_path;
 };

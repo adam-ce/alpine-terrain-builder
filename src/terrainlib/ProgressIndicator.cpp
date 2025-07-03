@@ -25,6 +25,7 @@
 #include <cmath>
 
 #include <fmt/core.h>
+#include <libassert/assert.hpp>
 
 using namespace std::literals;
 
@@ -66,11 +67,11 @@ std::jthread ProgressIndicator::start_monitoring() const {
 }
 
 std::string ProgressIndicator::progress_bar(const uint32_t bar_width) const {
-    assert(bar_width >= 2);
+    DEBUG_ASSERT(bar_width >= 2);
     const auto inner_bar_width = bar_width - 2;
     const auto step = m_step.load();
     const auto progress = step > 0 ? inner_bar_width * step / m_n_steps : 0;
-    assert(progress <= bar_width);
+    DEBUG_ASSERT(progress <= bar_width);
 
     std::ostringstream oss;
     oss << "[";

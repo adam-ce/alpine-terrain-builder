@@ -17,6 +17,31 @@ tl::expected<void, mesh::io::SaveMeshError> RawStorage::write_node(const Id &id,
     return mesh::io::save_to_path(node, node_path);
 }
 
+tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, const RawStorage &target) const noexcept {
+    const auto source_node_path = this->get_node_path(id);
+    if (!this->has_node(id)) {
+        return tl::unexpected(CopyMeshErrorKind::FileNotFound);
+    }
+    std::error_code ec;
+    const auto target_node_path = target.get_node_path(id);
+    if (std::filesystem::remove(target_node_path, ec)) {
+        if (ec) {
+            return tl::unexpected(CopyMeshErrorKind::RemoveOld);
+        }
+    }
+    std::filesystem::create_directories(target_node_path.parent_path(), ec);
+    if (ec) {
+        return tl::unexpected(CopyMeshErrorKind::CreateDirectories);
+    }
+    std::filesystem::create_hard_link(
+        source_node_path,
+        target_node_path,
+        ec);
+    if (ec) {
+        return tl::unexpected(CopyMeshErrorKind::CreateLink);
+    }
+    return {};
+}
 
 bool RawStorage::remove_node(const Id &id) const noexcept {
     const auto node_path = this->get_node_path(id);

@@ -3,6 +3,8 @@
 #include <span>
 #include <array>
 
+#include <libassert/assert.hpp>
+
 #include "mesh/SimpleMesh.h"
 #include "mesh/utils.h"
 #include "earth.h"
@@ -142,6 +144,7 @@ inline void merge_leaves(
         input_mesh,
         state.input_mask
     );
+    // TODO: use copy_node_to if the merged mesh is the same as the output mesh
     state.output.write_node(id, merged_mesh);
 }
 
@@ -227,19 +230,18 @@ inline void copy_subtree_to_output(
     DEBUG_ASSERT(!state.output.has_node(id));
 
     octree::traverse(
-        state.input.index(), 
-        [&](const octree::Id& child_id, const octree::NodeStatus& status) {
+        state.input.index(),
+        [&](const octree::Id &child_id, const octree::NodeStatus &status) {
             if (status == octree::NodeStatus::Virtual) {
                 return;
             }
             DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
             
-            const auto child_mesh = state.input.read_node(child_id).value();
-            state.output.write_node(child_id, child_mesh);
+            const auto result = state.input.copy_node_to(child_id, state.output);
+            DEBUG_ASSERT(result.has_value());
         },
         [](const octree::Id &) { return true; },
-        id
-    );
+        id);
 }
 
 inline void merge_node(

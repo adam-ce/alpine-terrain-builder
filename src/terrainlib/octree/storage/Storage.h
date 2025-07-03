@@ -136,6 +136,19 @@ public:
         return result;
     }
 
+    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, Storage &target) const {
+        if (!this->_index.contains(id, true)) {
+            return tl::unexpected(CopyMeshErrorKind::FileNotFound);
+        }
+
+        const auto result = this->_inner.copy_node_to(id, target._inner);
+        if (result.has_value() && target.is_indexed()) {
+            auto& index = target.index_mut().value();
+            index.add(id);
+            target.set_index_dirty();
+        }
+        return result;
+    }
 
     bool remove_node(const Id &id) noexcept {
         this->_cache.remove(id);

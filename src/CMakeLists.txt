@@ -138,7 +138,6 @@ add_library(terrainlib
     terrainlib/octree/storage/cache/LruCache.h
     terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
     terrainlib/octree/storage/IndexedStorage.h
-    terrainlib/octree/storage/IStorage.h
     terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
     terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
     terrainlib/octree/storage/Storage.h

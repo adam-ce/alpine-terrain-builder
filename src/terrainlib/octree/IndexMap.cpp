@@ -119,7 +119,6 @@ IndexMap::const_iterator IndexMap::cend() const {
     return this->_index.cend();
 }
 
-
 NodeStatus* IndexMap::get_raw(Id id) {
     if (auto it = this->_index.find(id); it != this->_index.end()) {
         return &it->second;

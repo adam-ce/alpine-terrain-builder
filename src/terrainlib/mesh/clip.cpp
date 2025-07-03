@@ -23,9 +23,19 @@ double significant_above_epsilon(double x, double epsilon) {
     return x - residual;
 }
 
-template <typename T>
-bool is_degenerate(const T& triangle) {
+bool is_degenerate(const glm::uvec3& triangle) {
     return triangle[0] == triangle[1] || triangle[1] == triangle[2] || triangle[2] == triangle[0];
+}
+template <typename T>
+bool epsilon_equal(const glm::tvec3<T>& a, const glm::tvec3<T>& b, const T epsilon) {
+    return glm::all(glm::epsilonEqual(a, b, epsilon));
+    // return glm::length2(a - b) < epsilon * epsilon;
+}
+template <typename T>
+bool is_degenerate(const std::array<glm::tvec3<T>, 3>& triangle, const T epsilon) {
+    return epsilon_equal(triangle[0], triangle[1], epsilon) ||
+        epsilon_equal(triangle[1], triangle[2], epsilon) ||
+        epsilon_equal(triangle[2], triangle[0], epsilon);
 }
 
 struct DVec3Hash {
@@ -43,7 +53,7 @@ struct DVec3Equal {
     const double epsilon;
 
     bool operator()(const glm::dvec3 &a, const glm::dvec3 &b) const {
-        return glm::all(glm::epsilonEqual(a, b, epsilon));
+        return epsilon_equal(a, b, epsilon);
     }
 };
 
@@ -74,6 +84,8 @@ Intersection<T> compute_intersection(const radix::geometry::Edge<3, T> &line, co
 } // namespace
 
 SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
+    mesh::validate(mesh);
+
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
         return {};
     }
@@ -267,7 +279,7 @@ SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::A
                         inside_uv,
                         intersection1_uv,
                         intersection2_uv};
-                    if (is_degenerate(new_vertices)) {
+                    if (is_degenerate(new_vertices, epsilon)) {
                         skip_triangle = true;
                         break;
                     }
@@ -326,15 +338,15 @@ SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::A
                         intersection2_uv,
                         intersection1_uv};
 
-                    if (is_degenerate(new_vertices2)) {
-                        if (is_degenerate(new_vertices1)) {
+                    if (is_degenerate(new_vertices2, epsilon)) {
+                        if (is_degenerate(new_vertices1, epsilon)) {
                             skip_triangle = true;
                             break;
                         } else {
                             current_triangle_and_vertices = {new_triangle1, new_vertices1, new_uvs1, static_cast<uint8_t>(plane_index + 1)};
                         }
                     } else {
-                        if (is_degenerate(new_vertices1)) {
+                        if (is_degenerate(new_vertices1, epsilon)) {
                             current_triangle_and_vertices = {new_triangle2, new_vertices2, new_uvs2, static_cast<uint8_t>(plane_index + 1)};
                         } else {
                             current_triangle_and_vertices = {new_triangle1, new_vertices1, new_uvs1, static_cast<uint8_t>(plane_index + 1)};
@@ -367,8 +379,17 @@ SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::A
                     vertex_index = add_original_vertex(original_vertex_index, vertex);
                 }
             }
-            DEBUG_ASSERT(!is_degenerate(indices));
-            new_triangles.push_back(indices);
+            if (is_degenerate(indices)) {
+                // It should not be possible to have a degenerate triangle that contains
+                // a new vertex here
+                for (uint32_t i = 0; i < 3; i++) {
+                    if (original_indices[i] == invalid_index) {
+                        DEBUG_ASSERT(indices[i] != new_positions.size() - 1);
+                    }
+                }
+            } else {
+                new_triangles.push_back(indices);
+            }
 
             // Continue with the next triangle if there are any left to clip
             if (triangles_left_to_clip.empty()) {

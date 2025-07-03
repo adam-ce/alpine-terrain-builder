@@ -3,7 +3,7 @@
 #include <optional>
 
 #include "octree/Id.h"
-#include "octree/storage/IStorage.h"
+#include "octree/storage/Node.h"
 
 namespace octree {
    

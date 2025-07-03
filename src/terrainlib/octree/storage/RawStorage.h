@@ -4,14 +4,15 @@
 
 #include <tl/expected.hpp>
 
-#include "octree/Id.h"
-#include "octree/storage/IStorage.h"
-#include "octree/disk/Layout.h"
 #include "mesh/io/error.h"
+#include "octree/Id.h"
+#include "octree/disk/Layout.h"
+#include "octree/storage/Node.h"
+#include "octree/storage/Error.h"
 
 namespace octree {
 
-class RawStorage : public IStorage {
+class RawStorage {
 public:
     explicit RawStorage(disk::Layout layout) noexcept;
     ~RawStorage() = default;
@@ -20,12 +21,12 @@ public:
     RawStorage(RawStorage&&) = default;
     RawStorage& operator=(RawStorage&&) = default;
 
-    tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept override;
-    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) noexcept override;
-    bool remove_node(const Id &id) noexcept override;
-    bool has_node(const Id &id) const noexcept override;
-    std::filesystem::path get_node_path(const Id &id) const noexcept override;
-    std::filesystem::path base_path() const noexcept override;
+    tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept;
+    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) const noexcept;
+    bool remove_node(const Id &id) const noexcept;
+    bool has_node(const Id &id) const noexcept;
+    std::filesystem::path get_node_path(const Id &id) const noexcept;
+    std::filesystem::path base_path() const noexcept;
 
     const disk::Layout& layout() const noexcept;
 

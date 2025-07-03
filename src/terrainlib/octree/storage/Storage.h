@@ -90,7 +90,7 @@ struct MaybeCache : public ICache {
 };
 }
 
-class Storage : public IStorage {
+class Storage {
 public:
     explicit Storage(RawStorage inner)
         : _inner(std::move(inner)) {}
@@ -102,7 +102,7 @@ public:
     Storage(Storage&&) = default;
     Storage& operator=(Storage&&) = default;
 
-    ~Storage() override {
+    virtual ~Storage() {
         if (this->_index.map.has_value() && this->_index.dirty) {
             auto result = helpers::save_index_map(this->_index.map.value(), this->_inner.layout());
             if (!result.has_value()) {
@@ -111,7 +111,7 @@ public:
         }
     }
 
-    tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept override {
+    tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept {
         if (const auto node_opt = this->_cache.get(id)) {
             return node_opt.value();
         }
@@ -127,7 +127,7 @@ public:
         return result;
     }
 
-    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) noexcept override {
+    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) noexcept {
         const auto result = this->_inner.write_node(id, node);
         if (result.has_value()) {
             this->_cache.put(id, node);
@@ -136,24 +136,25 @@ public:
         return result;
     }
 
-    bool remove_node(const Id &id) noexcept override {
+
+    bool remove_node(const Id &id) noexcept {
         this->_cache.remove(id);
         this->_index.remove(id);
         return this->_inner.remove_node(id);
     }
   
-    bool has_node(const Id &id) const noexcept override {
+    bool has_node(const Id &id) const noexcept {
         return 
             this->_cache.contains(id) ||
             this->_index.contains(id, false) ||
             this->_inner.has_node(id);
     }
 
-    std::filesystem::path get_node_path(const Id &id) const noexcept override {
+    std::filesystem::path get_node_path(const Id &id) const noexcept {
         return this->_inner.get_node_path(id);
     }
 
-    std::filesystem::path base_path() const noexcept override {
+    std::filesystem::path base_path() const noexcept {
         return this->_inner.base_path();
     }
 

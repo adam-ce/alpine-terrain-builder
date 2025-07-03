@@ -12,12 +12,13 @@ tl::expected<Node, mesh::io::LoadMeshError> RawStorage::read_node(const Id &id) 
     return mesh::io::load_from_path(node_path);
 }
 
-tl::expected<void, mesh::io::SaveMeshError> RawStorage::write_node(const Id &id, const Node &node) noexcept {
+tl::expected<void, mesh::io::SaveMeshError> RawStorage::write_node(const Id &id, const Node &node) const noexcept {
     const auto node_path = this->get_node_path(id);
     return mesh::io::save_to_path(node, node_path);
 }
 
-bool RawStorage::remove_node(const Id &id) noexcept {
+
+bool RawStorage::remove_node(const Id &id) const noexcept {
     const auto node_path = this->get_node_path(id);
     return std::filesystem::remove(node_path);
 }

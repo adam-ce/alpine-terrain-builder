@@ -198,14 +198,14 @@ void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, c
             const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
             const glm::dvec3 ecef_point = srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0));
             const glm::dvec2 projected_point = projector.project_point(ecef_point);
-            cgal_point = Point2(projected_point.x, projected_point.y);
+            cgal_point = convert::to_cgal_point<Kernel>(projected_point);
         }
         for (auto &hole : polygon.holes()) {
             for (auto &cgal_point : hole) {
                 const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
                 const glm::dvec3 ecef_point = srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0));
                 const glm::dvec2 projected_point = projector.project_point(ecef_point);
-                cgal_point = Point2(projected_point.x, projected_point.y);
+                cgal_point = convert::to_cgal_point<Kernel>(projected_point);
             }
         }
     }

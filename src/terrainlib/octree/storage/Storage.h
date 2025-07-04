@@ -222,11 +222,11 @@ public:
         return result;
     }
 
-protected:
     const octree::disk::Layout &layout() const noexcept {
         return this->_inner.layout();
     }
 
+protected:
     std::optional<IndexMap> &index_mut() noexcept {
         return this->_index.map;
     }

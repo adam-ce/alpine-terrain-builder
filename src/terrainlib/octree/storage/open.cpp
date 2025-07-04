@@ -73,7 +73,9 @@ Storage open_folder(
 
     IndexMap map;
     helpers::update_index_map(map, layout);
-    helpers::save_index_map(map, layout);
+    if (!map.empty()) {
+        helpers::save_index_map(map, layout);
+    }
     return Storage(RawStorage(std::move(layout)), std::move(map));
 }
 

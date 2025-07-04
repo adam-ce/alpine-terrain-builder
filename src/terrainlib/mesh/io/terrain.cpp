@@ -130,7 +130,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const u
 }
 
 tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std::filesystem::path &path, const SaveOptions& options) {
-    LOG_TRACE("Saving mesh as high precision mesh");
+    LOG_TRACE("Saving mesh as high precision terrain");
 
     const auto result = save_to_buffer(mesh, options);
     if (!result.has_value()) {

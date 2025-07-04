@@ -4,6 +4,10 @@ project(terrain_builder_src LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+# TODO: This is needed to avoid NDEBUG being undefined on Release
+if (CMAKE_BUILD_TYPE MATCHES Release)
+    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+endif()
 
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
@@ -11,7 +15,6 @@ option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with ne
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
-
 
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)

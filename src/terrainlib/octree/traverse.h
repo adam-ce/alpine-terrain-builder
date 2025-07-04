@@ -14,13 +14,17 @@ enum class TraversalOrder {
     BreadthFirst
 };
 
+constexpr bool always_refine(const Id &) {
+    return true;
+}
+
 template <
     typename VisitFn,
     typename RefineFn = std::function<bool(const Id &)>>
 void traverse(
-    const IndexMap& index,
-    VisitFn&& visit_fn,
-    RefineFn&& refine_fn = [](const Id &) { return true; },
+    const IndexMap &index,
+    VisitFn &&visit_fn,
+    RefineFn &&refine_fn = always_refine,
     const Id &root = Id::root(),
     TraversalOrder order = TraversalOrder::DepthFirst) {
     if (!index.is_present(root)) {
@@ -73,6 +77,5 @@ void traverse(
         UNREACHABLE();
     }
 }
-
 
 } // namespace octree

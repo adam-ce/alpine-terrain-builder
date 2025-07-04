@@ -8,6 +8,7 @@
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
+#include <tbb/global_control.h>
 
 #include "Dataset.h"
 #include "log.h"
@@ -224,6 +225,9 @@ int run(std::span<char *> args) {
     batch->add_option("--format", output_format, "Output mesh format")
         ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
         ->default_val(".glb");
+    uint32_t num_threads = 0;
+    batch->add_option("--threads", num_threads, "Number of threads to use")
+        ->check(CLI::PositiveNumber);
 
     CLI11_PARSE(app, argc, argv);
 
@@ -253,6 +257,12 @@ int run(std::span<char *> args) {
     }
 
     if (*batch) {
+        std::optional<tbb::global_control> tbb_control;
+        if (num_threads > 0) {
+            LOG_INFO("Using {} threads for batch processing.", num_threads);
+            tbb_control.emplace(tbb::global_control(tbb::global_control::max_allowed_parallelism, num_threads));
+        }
+
         terrainbuilder::build_all_patches(
             dataset,
             target_level,

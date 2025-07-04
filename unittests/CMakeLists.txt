@@ -80,6 +80,6 @@ target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"
 
 add_executable(unittests_terrainmerger
     catch2_helpers.h
-    terrainmerger/mask.cpp
+    terrainmerger/sphere_projector.cpp
 )
 target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)

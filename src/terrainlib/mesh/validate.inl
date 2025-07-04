@@ -88,24 +88,21 @@ void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
 
 template <glm::length_t n_dims, typename T>
 void validate(const SimpleMesh_<n_dims, T> &mesh) {
-#if NDEBUG
-    return;
-#endif
+#ifndef NDEBUG
     SimpleMesh_<n_dims, T> sorted(mesh);
     sort_and_normalize_triangles(sorted);
     validate_sorted_normalized_mesh(sorted);
+#endif
 }
 
 template<typename Point>
 inline void validate(const CGAL::Surface_mesh<Point> &mesh) {
-#if NDEBUG
-    return;
-#endif
-
+#ifndef NDEBUG
     DEBUG_ASSERT(mesh.is_valid()); 
     DEBUG_ASSERT(CGAL::is_triangle_mesh(mesh));
     DEBUG_ASSERT(CGAL::is_valid_polygon_mesh(mesh));
     DEBUG_ASSERT(!CGAL::Polygon_mesh_processing::does_self_intersect(mesh));
+#endif
 }
 
 }

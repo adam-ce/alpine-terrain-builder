@@ -128,6 +128,7 @@ public:
     }
 
     void validate() const {
+#ifndef NDEBUG
         for (size_t i = 0; i < this->mesh_count(); i++) {
             DEBUG_ASSERT(this->forward[i].size() == this->backward[i].size());
 
@@ -145,6 +146,7 @@ public:
                 DEBUG_ASSERT(mapped == e.first);
             }
         }
+#endif
     }
 
     private:

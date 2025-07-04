@@ -53,6 +53,34 @@ inline SimpleMesh merge_meshes(
     const SimpleMesh& base_mesh, // base mesh
     const SimpleMesh& new_mesh, // priority mesh
     const std::optional<mask::MeshMask> mask
+struct ClipResult {
+    bool was_clipped() const {
+        return std::holds_alternative<SimpleMesh>(this->value);
+    }
+    bool is_unchanged() const {
+        return std::holds_alternative<std::reference_wrapper<SimpleMesh>>(this->value);
+    }
+
+    const SimpleMesh &mesh() const {
+        return std::visit([](const auto &value) -> const SimpleMesh & {
+            return value;
+        }, this->value);
+    }
+
+    static ClipResult from_clipped(SimpleMesh mesh) {
+        return ClipResult(std::move(mesh));
+    }
+    static ClipResult from_input(const SimpleMesh &mesh) {
+        return ClipResult(std::reference_wrapper(mesh));
+    }
+
+    std::variant<std::reference_wrapper<SimpleMesh>, SimpleMesh> value;
+};
+
+inline ClipResult clip_on_mask(const SimpleMesh &mesh, const MeshMask &mask) {
+    const SimpleMesh clipped = mesh::clip_on_mesh(mesh, mask.mesh);
+    return ClipResult::from_clipped(std::move(clipped));
+}
 ) {
     // TODO: dont convert to SimpleMesh all the time
     if (mask.has_value()) {

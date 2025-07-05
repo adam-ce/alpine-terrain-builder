@@ -3,19 +3,19 @@
 #include <zpp_bits.h>
 
 #include "log.h"
-#include "octree/Id.h"
 
 namespace octree {
 
 class NodeStatus {
 public:
-    enum Value : uint8_t {
+    using Underlying = uint8_t;
+    enum Value : Underlying {
         Leaf = 0,
         Inner = 1,
         Virtual = 2 // not present on disk but has children
     };
 
-    NodeStatus() = default;
+    constexpr NodeStatus() = default;
     constexpr NodeStatus(Value value) : _value(value) {}
 
     constexpr operator Value() const {

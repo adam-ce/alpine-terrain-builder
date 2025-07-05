@@ -62,6 +62,9 @@ target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
 
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 
+alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
+
+alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 # Don't build glfw docs, tests and examples
@@ -161,7 +164,7 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -245,11 +248,16 @@ add_executable(tile-downloader
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 
 add_executable(terrainconvert
-    terrainconvert/cli.h
-    terrainconvert/cli.cpp
+    terrainconvert/cli.h terrainconvert/cli.cpp
     terrainconvert/main.cpp
 )
 target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(index_browser
+    index_browser/cli.h index_browser/cli.cpp
+    index_browser/main.cpp
+)
+target_link_libraries(index_browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_executable(browser
     # browser/main2.cpp

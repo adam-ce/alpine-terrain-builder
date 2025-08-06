@@ -3,8 +3,8 @@
 #include <optional>
 
 #include "octree/Id.h"
-#include "octree/RawStorage.h"
-#include "octree/cache/ICache.h"
+#include "octree/storage/RawStorage.h"
+#include "octree/storage/cache/ICache.h"
 
 namespace octree {
 

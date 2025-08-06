@@ -11,11 +11,21 @@ struct BaseArgs {
     spdlog::level::level_enum log_level;
 };
 
+/*
+enum class MergeAlgorithm {
+    Combine,
+    Masked,
+    Project
+};
+*/
+
 struct MergeArgs : public BaseArgs {
     std::filesystem::path base_path;
     std::filesystem::path new_path;
+    std::filesystem::path output_path;
     std::optional<std::filesystem::path> mask_path;
-    std::optional<std::filesystem::path> output_path;
+    // MergeAlgorithm algorihm;
+    bool overwrite_output;
 };
 
 struct CutArgs : public BaseArgs {

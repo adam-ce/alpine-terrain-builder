@@ -33,6 +33,24 @@ using PolygonWithHoles2 = CGAL::Polygon_with_holes_2<Kernel>;
 using PolygonSet2 = CGAL::Polygon_set_2<Kernel>;
 using MultipolygonWithHoles2 = CGAL::Multipolygon_with_holes_2<Kernel>;
 
+struct ReferencedPolygonMask {
+    MultipolygonWithHoles2 polygons;
+    OGRSpatialReference srs;
+};
+
+struct SpherePolygonMask {
+    MultipolygonWithHoles2 polygons;
+    SphereProjector projector;
+};
+
+struct SphereMeshMask {
+    SimpleMesh3d mesh;
+};
+
+struct MeshMask {
+    SimpleMesh3d mesh;
+};
+
 namespace mask {
 
 namespace {
@@ -87,24 +105,6 @@ public:
 
 private:
     LoadErrorKind kind;
-};
-
-struct ReferencedPolygonMask {
-    MultipolygonWithHoles2 polygons;
-    OGRSpatialReference srs;
-};
-
-struct SpherePolygonMask {
-    MultipolygonWithHoles2 polygons;
-    SphereProjector projector;
-};
-
-struct SphereMeshMask {
-    SimpleMesh3d mesh;
-};
-
-struct MeshMask {
-    SimpleMesh3d mesh;
 };
 
 namespace {
@@ -271,6 +271,7 @@ inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_datas
     // TODO: remove this try catch
     try {
         srs = mask_dataset.srs();
+        srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT); // TODO
     } catch (std::runtime_error &e) {
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
         srs = srs::wgs84();

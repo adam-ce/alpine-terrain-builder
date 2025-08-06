@@ -1,19 +1,19 @@
 #include "cli.h"
 
 #include <CLI/CLI.hpp>
-#include <spdlog/spdlog.h>
 #include <libassert/assert.hpp>
+#include <spdlog/spdlog.h>
 
 using namespace cli;
 
-Args cli::parse(int argc, const char * const * argv) {
+Args cli::parse(int argc, const char *const *argv) {
     DEBUG_ASSERT(argc >= 0);
 
     CLI::App app{"terrainmerger"};
     app.allow_windows_style_options();
     // argv = app.ensure_utf8(argv);
 
-    auto& merge = *app.add_subcommand("merge");
+    auto &merge = *app.add_subcommand("merge");
     MergeArgs merge_args;
     merge.add_option("--base", merge_args.base_path, "Path to base dataset")
         ->required()
@@ -26,11 +26,21 @@ Args cli::parse(int argc, const char * const * argv) {
     merge.add_option("--mask", merge_args.mask_path, "Path to a mask denoting the valid area of the new dataset")
         ->check(CLI::ExistingFile);
 
-    merge.add_option("--output", merge_args.output_path, "Path to output write the merged dataset to (defaults to --base)");
+    merge.add_option("--output", merge_args.output_path, "Path to output write the merged dataset to")
+        ->required();
+
+    merge.add_option("--overwrite", merge_args.overwrite_output, "Overwrite any data already in output");
+
+    /*
+    const std::map<std::string, MergeAlgorithm> method_names{
+        {"combine", MergeAlgorithm::Combine}, {"masked", MergeAlgorithm::Masked}, {"project", MergeAlgorithm::Project}};
+    merge.add_option("--method", merge_args.algorihm, "Method to use for merging")
+        ->transform(CLI::CheckedTransformer(method_names, CLI::ignore_case));
+    */
 
     merge.fallthrough();
 
-    auto& cut = *app.add_subcommand("cut");
+    auto &cut = *app.add_subcommand("cut");
     CutArgs cut_args;
     cut.add_option("--input", cut_args.input_path, "Path to dataset to cut")
         ->required()
@@ -59,7 +69,11 @@ Args cli::parse(int argc, const char * const * argv) {
     app.require_subcommand(1);
 
     try {
-        app.parse(argc, argv);
+        // app.parse(argc, argv);
+        // app.parse("--input ../../../meshes/innenstadt2 ../../../meshes/vienna2 --output ../../../meshes/out --verbosity trace");
+        // app.parse("merge --new ../../../meshes/innenstadt3 --base ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out --verbosity trace");
+        app.parse("cut --input ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out3 --verbosity trace");
+        std::filesystem::remove_all("../../../meshes/out3");
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }

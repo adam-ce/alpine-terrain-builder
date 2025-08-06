@@ -2,15 +2,16 @@
 #include <vector>
 #include <filesystem>
 
-#include "log.h"
 #include "cli.h"
-#include "merge.h"
-#include "mask.h"
 #include "cut.h"
+#include "log.h"
+#include "mask.h"
+#include "merge.h"
 #include "octree/Storage.h"
 #include "optional_utils.h"
+#include "earth.h"
 
-std::optional<mask::MeshMask> load_mask_from_path(const std::filesystem::path& path) {
+std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) {
         LOG_INFO("Loading mask file from {}", path);
         const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
@@ -37,19 +38,19 @@ void run(const cli::MergeArgs& args) {
     LOG_TRACE("Loading new dataset from {}", args.new_path);
     octree::IndexedStorage new_dataset = octree::open_folder_indexed(args.new_path);
 
-    std::optional<mask::MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
+    LOG_TRACE("Creating output dataset at {}", args.output_path);
+    std::filesystem::create_directories(args.output_path);
+    octree::Storage output_dataset = octree::open_folder(args.output_path);
 
-    if (args.output_path.has_value()) {
-        return merge_datasets(base_dataset, new_dataset, args.output_path.value(), mask);
-    } else {
-        return merge_datasets(base_dataset, new_dataset, mask);
-    }
+    std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
+
+    return merge_datasets(base_dataset, new_dataset, output_dataset, mask);
 }
 
 void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
     const octree::IndexedStorage input_dataset = octree::open_folder_indexed(args.input_path);
-    const mask::MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
+    const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
     cut_dataset(input_dataset, mask, args.output_path);
 }
 

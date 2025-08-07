@@ -127,8 +127,10 @@ add_library(terrainlib
     terrainlib/mesh/convert.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/merge.h terrainlib/mesh/merge.cpp
-    terrainlib/mesh/merge/Deduplicate.h
-    terrainlib/mesh/merge/VertexMapping.h
+    terrainlib/mesh/merging/VertexDeduplicate.h
+    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
+    terrainlib/mesh/merging/VertexMapping.h
+    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
@@ -157,10 +159,14 @@ add_library(terrainlib
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 
+    terrainlib/spatial_lookup/CellBased.h
+    terrainlib/spatial_lookup/CellBasedStorage.h
     terrainlib/spatial_lookup/Grid.h
+    terrainlib/spatial_lookup/GridStorage.h
+    terrainlib/spatial_lookup/Hashmap.h
+    terrainlib/spatial_lookup/HashmapStorage.h
     terrainlib/spatial_lookup/NDLoopHelper.h
     terrainlib/spatial_lookup/SpatialLookup.h
-    terrainlib/spatial_lookup/Hashmap.h
 
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/hash_utils.h

@@ -17,9 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#define CATCH_CONFIG_MAIN
-#include <catch2/catch_test_macros.hpp>
-#include "merge.h"
+#include <fmt/core.h>
+
+#include "../catch2_helpers.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/merge.h"
 #include "mesh/utils.h"
 
 TEST_CASE("terrainmerger") {
@@ -36,9 +38,7 @@ TEST_CASE("terrainmerger") {
         mesh2.positions.push_back(glm::dvec3(0, 1, 0));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        std::array<SimpleMesh, 2> meshes = { std::move(mesh1), std::move(mesh2) };
-
-        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -75,9 +75,7 @@ TEST_CASE("terrainmerger") {
         mesh2.uvs.push_back(glm::dvec2(0, 1));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        std::array<SimpleMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
-
-        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -116,9 +114,7 @@ TEST_CASE("terrainmerger") {
         mesh2.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh2.triangles.push_back(glm::uvec3(1, 2, 3));
 
-        std::array<SimpleMesh, 2> meshes = {std::move(mesh1), std::move(mesh2)};
-
-        SimpleMesh actual = merge::merge_meshes(meshes, 0.1);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));

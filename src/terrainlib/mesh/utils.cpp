@@ -62,7 +62,7 @@ std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const
     return total_length / triangle_sample_size;
 }
 
-std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
+std::optional<double> calculate_max_edge_length_squared(const SimpleMesh &mesh) {
     if (mesh.face_count() == 0) {
         return std::nullopt;
     }
@@ -73,13 +73,51 @@ std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
         const glm::dvec3 &b = mesh.positions[tri.y];
         const glm::dvec3 &c = mesh.positions[tri.z];
 
-        const double ab = glm::distance(a, b);
-        const double bc = glm::distance(b, c);
-        const double ca = glm::distance(c, a);
+        const double ab = glm::distance2(a, b);
+        const double bc = glm::distance2(b, c);
+        const double ca = glm::distance2(c, a);
 
         max_length = std::max({ab, bc, ca, max_length});
     }
     return max_length;
+}
+
+std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh) {
+    if (mesh.face_count() == 0) {
+        return std::nullopt;
+    }
+
+    double max_length = 0.0;
+    for (const auto &tri : mesh.triangles) {
+        const glm::dvec3 &a = mesh.positions[tri.x];
+        const glm::dvec3 &b = mesh.positions[tri.y];
+        const glm::dvec3 &c = mesh.positions[tri.z];
+
+        const double ab = glm::distance2(a, b);
+        const double bc = glm::distance2(b, c);
+        const double ca = glm::distance2(c, a);
+
+        max_length = std::min({ab, bc, ca, max_length});
+    }
+    return max_length;
+}
+
+std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
+    auto length_sq_opt = calculate_max_edge_length_squared(mesh);
+    if (length_sq_opt.has_value()) {
+        return std::sqrt(length_sq_opt.value());
+    } else {
+        return std::nullopt;
+    }
+}
+
+std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh) {
+    auto length_sq_opt = calculate_min_edge_length_squared(mesh);
+    if (length_sq_opt.has_value()) {
+        return std::sqrt(length_sq_opt.value());
+    } else {
+        return std::nullopt;
+    }
 }
 
 size_t remove_isolated_vertices(SimpleMesh &mesh) {

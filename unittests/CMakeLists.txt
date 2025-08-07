@@ -44,6 +44,9 @@ add_executable(unittests_terrainlib
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/progress_indicator_test.cpp
+    terrainlib/spatial_lookup.cpp
+    terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_merge.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
@@ -64,7 +67,6 @@ target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2
 
 add_executable(unittests_terrainsimplify
     catch2_helpers.h
-    terrainsimplify/merge.cpp
 )
 target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 

@@ -298,6 +298,7 @@ TEST_CASE("mesh::clip_on_bounds") {
     }
 }
 
+#ifdef NDEBUG
 TEST_CASE("mesh::clip_on_bounds benchmark") {
     BENCHMARK_ADVANCED("clip based on octree")(Catch::Benchmark::Chronometer meter) {
         const std::filesystem::path mesh_path = ATB_TEST_DATA_DIR "/meshes/6857.terrain";
@@ -329,3 +330,4 @@ TEST_CASE("mesh::clip_on_bounds benchmark") {
         });
     };
 }
+#endif

@@ -15,6 +15,9 @@ radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes);
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size = 1000);
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh);
+std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh);
+std::optional<double> calculate_max_edge_length_squared(const SimpleMesh &mesh);
+std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh);
 
 template <glm::length_t n_dims, typename T>
 std::vector<size_t> find_isolated_vertices(const SimpleMesh_<n_dims, T> &mesh);

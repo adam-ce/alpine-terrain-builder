@@ -5,6 +5,7 @@
 #include <optional>
 
 #include <CGAL/Polygon_mesh_processing/clip.h>
+#include <CGAL/Polygon_mesh_processing/remesh_planar_patches.h>
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
@@ -15,8 +16,8 @@
 #include "mesh/utils.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"
-
+#include "mesh/validate.h"  
+   
 namespace {
 double significant_above_epsilon(double x, double epsilon) {
     const double residual = std::fmod(x, epsilon);
@@ -83,11 +84,12 @@ Intersection<T> compute_intersection(const radix::geometry::Edge<3, T> &line, co
 
 } // namespace
 
-SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
+
+Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
     mesh::validate(mesh);
 
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
-        return {};
+        return Cow(SimpleMesh::empty());
     }
 
     if (mesh.has_uvs() && mesh.uvs.size() != mesh.vertex_count()) {
@@ -401,12 +403,96 @@ SimpleMesh mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::A
         }
     }
 
-    const SimpleMesh clipped_mesh(new_triangles, new_positions, new_uvs, mesh.texture);
+    SimpleMesh clipped_mesh(new_triangles, new_positions, new_uvs, mesh.texture);
     mesh::validate(clipped_mesh);
-    return clipped_mesh;
+    return Cow(std::move(clipped_mesh));
+}
+
+namespace { 
+template <typename TriangleMesh>
+struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinement::Default_visitor<TriangleMesh> {
+    using HalfedgeDescriptor = typename boost::graph_traits<TriangleMesh>::halfedge_descriptor;
+
+    bool has_intersections = false;
+
+    // called when a new intersection point is detected.
+    // The intersection is detected using a face of tm_f and an edge of tm_e. 
+    void intersection_point_detected(
+        size_t /*i_id*/, int /*sdim*/,
+        HalfedgeDescriptor /*h_e*/, HalfedgeDescriptor /*h_f*/, 
+        const TriangleMesh& /*tm_e*/, const TriangleMesh& /*tm_f*/, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
+        this->has_intersections = true;
+    }
+};
+}
+
+Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
+    ASSERT(!mesh.has_uvs());
+    cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
+
+    const CGAL::Iso_cuboid_3<cgal::Kernel> cgal_bounds(
+        convert::to_cgal_point<cgal::Kernel>(bounds.min),
+        convert::to_cgal_point<cgal::Kernel>(bounds.max));
+    HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
+    const auto clip_params = CGAL::Polygon_mesh_processing::parameters::clip_volume(true)
+        .visitor(visitor);
+    cgal::SurfaceMesh result_cgal_mesh;
+    const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
+    if (!success) {
+        throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+    }
+    if (!visitor.has_intersections) {
+        return Cow(mesh);
+    }
+
+    cgal_mesh.collect_garbage();
+
+    if (!remesh_planar_patches) {
+        return Cow(convert::to_simple_mesh(cgal_mesh));
+    }
+    
+    cgal::SurfaceMesh remeshed_cgal_mesh;
+    const auto remesh_params = CGAL::Polygon_mesh_processing::parameters::cosine_of_maximum_angle(0.999);
+    CGAL::Polygon_mesh_processing::remesh_planar_patches(cgal_mesh, remeshed_cgal_mesh, remesh_params);
+    remeshed_cgal_mesh.collect_garbage();
+    return Cow(convert::to_simple_mesh(remeshed_cgal_mesh));
 }
 
 namespace {
+template <glm::length_t n_dims, typename T>
+glm::vec<n_dims, T> compute_barycentric(
+    const glm::vec<n_dims, T> &point,
+    const glm::vec<n_dims, T> &a,
+    const glm::vec<n_dims, T> &b,
+    const glm::vec<n_dims, T> &c
+) {
+    using Vec = glm::vec<n_dims, T>;
+
+    Vec v0 = b - a;
+    Vec v1 = c - a;
+    Vec v2 = point - a;
+
+    T d00 = glm::dot(v0, v0);
+    T d01 = glm::dot(v0, v1);
+    T d11 = glm::dot(v1, v1);
+    T d20 = glm::dot(v2, v0);
+    T d21 = glm::dot(v2, v1);
+
+    T denom = d00 * d11 - d01 * d01;
+    ASSERT(denom != 0);
+    T inv_denom = 1 / denom;
+
+    T v = (d11 * d20 - d01 * d21) * inv_denom;
+    T w = (d00 * d21 - d01 * d20) * inv_denom;
+    T u = 1 - v - w;
+
+    return Vec(u, v, w);
+}
+template <glm::length_t n_dims, typename T>
+glm::vec<n_dims, T> compute_barycentric(const glm::vec<n_dims, T> &point, const std::array<glm::vec<n_dims, T>, 3>& triangle) {
+    return compute_barycentric(point, triangle[0], triangle[1], triangle[2]);
+}
+
 template <typename TriangleMesh, typename UvMap>
 struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinement::Default_visitor<TriangleMesh> {
     using HalfedgeDescriptor = typename boost::graph_traits<TriangleMesh>::halfedge_descriptor;
@@ -414,96 +500,120 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
     using VertexIndex = typename TriangleMesh::Vertex_index;
 
     UvMap& uv_map;
-    
-    UvInterpolatorVisitor(UvMap& uv_map) : uv_map(uv_map) {}
+    TriangleMesh &mesh;
 
-    std::vector<std::pair<bool, HalfedgeDescriptor>> intersection_uvs;
+    struct Vertex {
+        glm::dvec3 position;
+        glm::dvec2 uv;
+    };
 
-    /*
-    VertexDescriptor edge_split_source;
-    VertexDescriptor edge_split_target;
+    UvInterpolatorVisitor(UvMap& uv_map, TriangleMesh& mesh) : uv_map(uv_map), mesh(mesh) {}
 
-    // called before the edge of h in tm is split.
-    // Each subsequent call to edge_split() until the call to after_edge_split() will correspond to the split of that edge.
-    // If edge_split(h_i, tm) is called for i=1 to n, h_1, h_2, ... ,h_n, h is the sequence of halfedges representing the edge split (with the same initial orientation).
-    // There is only one call per edge.
-    void before_edge_split(HalfedgeDescriptor h, const TriangleMesh &tm) {
-        edge_split_source = tm.source(h);
-        edge_split_target = tm.target(h);
-    }
+    struct EdgeIntersection {
+        Vertex source;
+        Vertex target;
+    };
 
-    // called when a new split is done. The target of hnew is a new split vertex. There is only one call per edge.
-    void edge_split(HalfedgeDescriptor hnew, const TriangleMesh &tm) {
-        // Calculate t value for the split vertex
-        const auto old_source_position = tm.point(edge_split_source);
-        const auto old_target_position = tm.point(edge_split_target);
-        const auto new_position = tm.point(hnew);
-        const auto t = glm::distance(new_position, old_source_position) / glm::distance(old_target_position, old_source_position);
-
-        // Interpolate UVs for the split vertex based on the original vertices
-        const auto old_source_uv = uv_map[edge_split_source];
-        const auto old_target_uv = uv_map[edge_split_target];
-        const auto new_uv = glm::mix(old_source_uv, old_target_uv, t);
-        uv_map[tm.target(hnew)] = new_uv;
-    }*/
+    struct FaceIntersection {
+        std::array<Vertex, 3> vertices;
+    };
+    std::vector<std::variant<EdgeIntersection, FaceIntersection>> intersections;
 
     // called when a new intersection point is detected.
     // The intersection is detected using a face of tm_f and an edge of tm_e. 
     void intersection_point_detected(
-        size_t i_id, int sdim,
+        size_t i_id, int /*sdim*/,
         HalfedgeDescriptor h_e, HalfedgeDescriptor h_f, 
-        const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool is_target_coplanar, bool is_source_coplanar) {
-        DEBUG_ASSERT(i_id == intersection_uvs.size());
-        if (tm_e.template property_map<VertexIndex, glm::dvec2>("v:uv").has_value()) {
+        const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
+        DEBUG_ASSERT(i_id == intersections.size());
+        if (&mesh == &tm_e) {
             // The edge belongs to the mesh being clipped
-            intersection_uvs.emplace_back(true, h_e);
+            const auto source_vertex = mesh.source(h_e);
+            const auto target_vertex = mesh.target(h_e);
+            const auto source_position = convert::to_glm_point(mesh.point(source_vertex));
+            const auto target_position = convert::to_glm_point(mesh.point(target_vertex));
+            const auto source_uv = uv_map[source_vertex];
+            const auto target_uv = uv_map[target_vertex];
+            intersections.emplace_back(EdgeIntersection {
+                Vertex(source_position, source_uv),
+                Vertex(target_position, target_uv)
+            });
         } else {
-            // The edge belongs to the mesh that is clipping
-            intersection_uvs.emplace_back(false, h_f);
+            DEBUG_ASSERT(&mesh == &tm_f);
+            // The face belongs to the mesh that is being clipping
+            std::array<Vertex, 3> triangle;
+            unsigned int i = 0;
+            for (const cgal::VertexIndex vertex_index : CGAL::vertices_around_face(h_f, tm_f)) {
+                ASSERT(i < triangle.size());
+                const auto position = convert::to_glm_point(mesh.point(vertex_index));
+                const auto uv = uv_map[vertex_index];
+                triangle[i] = Vertex(position, uv);
+                i++;
+            }
+
+            intersections.emplace_back(FaceIntersection {
+                triangle
+            });
         }
     }
 
     void new_vertex_added(size_t i_id, VertexDescriptor vh, const TriangleMesh& tm) {
-        const auto [is_edge, halfedge] = intersection_uvs[i_id];
-        if (is_edge) {
-            // The vertex was created from an edge being split
-            const auto source_vertex = tm.source(halfedge);
-            const auto target_vertex = tm.target(halfedge);
-            // Calculate t value for the split vertex
-            const auto old_source_position = convert::to_glm_point(tm.point(source_vertex));
-            const auto old_target_position = convert::to_glm_point(tm.point(target_vertex));
-            const auto new_position = convert::to_glm_point(tm.point(vh));
-            const auto t = glm::distance(new_position, old_source_position) / glm::distance(old_target_position, old_source_position);
-            // Interpolate UVs for the split vertex based on the original vertices
-            const auto old_source_uv = uv_map[source_vertex];
-            const auto old_target_uv = uv_map[target_vertex];
-            const auto new_uv = glm::mix(old_source_uv, old_target_uv, t);
-            uv_map[vh] = new_uv;
-        } else {
-            // The vertex was created inside a face
-            // TODO:
+        DEBUG_ASSERT(i_id < intersections.size());
+        if (&tm != &mesh) {
+            return;
         }
+
+        const glm::dvec3 new_position = convert::to_glm_point(mesh.point(vh));
+        const glm::dvec2 new_uv = std::visit([&](const auto& intersection) {
+            using Intersection = std::decay_t<decltype(intersection)>;
+            if constexpr (std::is_same_v<Intersection, EdgeIntersection>) {
+                const double edge_length = glm::distance(intersection.source.position, intersection.target.position);
+                const double t = glm::distance(new_position, intersection.source.position) / edge_length;
+                return glm::mix(intersection.source.uv, intersection.target.uv, t);
+            } else {
+                const glm::dvec3 barycentric = compute_barycentric(
+                    new_position,
+                    intersection.vertices[0].position,
+                    intersection.vertices[1].position,
+                    intersection.vertices[2].position
+                );
+                // return glm::dvec2(1, 1);
+                return barycentric[0] * intersection.vertices[0].uv
+                    + barycentric[1] * intersection.vertices[1].uv
+                    + barycentric[2] * intersection.vertices[2].uv;
+            }
+        }, intersections[i_id]);
+        uv_map[vh] = new_uv;
     }
 };
-}
+} // namespace
 
-SimpleMesh mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh) {
+Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh) {
     using UvMap = cgal::SurfaceMesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
     cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
     cgal::SurfaceMesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
 
     bool success;
+    bool is_same_as_input;
     if (mesh.has_uvs()) {
         UvMap uv_map = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv").value();
-        const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(
-            UvInterpolatorVisitor<cgal::SurfaceMesh, UvMap>(uv_map));
+        UvInterpolatorVisitor<cgal::SurfaceMesh, UvMap> visitor(uv_map, cgal_mesh);
+        const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
+        is_same_as_input = visitor.intersections.empty();
     } else {
-        success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh);
+        HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
+        const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
+        success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
+        is_same_as_input = visitor.has_intersections;
     }
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
+    }
+
+    if (is_same_as_input) {
+        return Cow(mesh);
     }
 
     cgal_mesh.collect_garbage();
@@ -511,6 +621,6 @@ SimpleMesh mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mes
     if (mesh.has_texture()) {
         result.texture = mesh.texture.value();
     }
-    return result;
+    return Cow(std::move(result));
 }
 

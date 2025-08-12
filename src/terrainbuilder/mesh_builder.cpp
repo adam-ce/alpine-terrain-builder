@@ -21,9 +21,6 @@
 #include "mesh/clip.h"
 #include "mesh/validate.h"
 
-// TODO: remove
-#include "raster_to_image.h"
-
 // TODO: fix namespace
 namespace terrainbuilder {
 

@@ -186,8 +186,11 @@ void build_all_patches(
 
     octree::Storage storage = octree::open_folder(
         output_base_path,
-        octree::disk::layout::strategy::make_default(),
-        output_format);
+        false,
+        octree::OpenOptions {
+            .preferred_extension_with_dot = output_format
+        }
+    );
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d(true);

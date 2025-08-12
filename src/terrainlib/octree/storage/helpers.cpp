@@ -129,25 +129,7 @@ void update_index_map(IndexMap &index, const disk::Layout &layout) {
         }
 
         const Id id = *id_opt;
-        index.set_raw(id, NodeStatus::Leaf);
-    }
-
-    std::unordered_set<Id> visited;
-    for (const auto &[id, _] : index) {
-        auto parent = id.parent();
-        while (parent) {
-            if (visited.find(*parent) != visited.end()) {
-                break;
-            }
-            visited.insert(*parent);
-
-            if (index.get(*parent)) {
-                index.set_raw(*parent, NodeStatus::Inner);
-            } else {
-                index.set_raw(*parent, NodeStatus::Virtual);
-            }
-            parent = parent->parent();
-        }
+        index.add(id);
     }
 }
 

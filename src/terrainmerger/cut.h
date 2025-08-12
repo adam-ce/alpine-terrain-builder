@@ -87,16 +87,18 @@ inline void cut_node(
     const MeshMask& mask
 ) {
     if (mask.mesh.is_empty()) {
+        LOG_TRACE("Mesh was fully ouside the mask");
         return;
     }
 
     /*
     Uncomment to output masks
+    */
     const auto path = ctx.output.get_node_path(id);
     const auto new_path = path.parent_path() /
                           (path.stem().string() + "-mask" + path.extension().string());
     mesh::io::save_to_path(mask.mesh, new_path);
-    */
+    
 
     const auto status_opt = ctx.input.index().get(id);
     if (!status_opt.has_value()) {

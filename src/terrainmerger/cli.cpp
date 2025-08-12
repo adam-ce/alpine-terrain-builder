@@ -71,8 +71,8 @@ Args cli::parse(int argc, const char *const *argv) {
     try {
         // app.parse(argc, argv);
         // app.parse("--input ../../../meshes/innenstadt2 ../../../meshes/vienna2 --output ../../../meshes/out --verbosity trace");
-        // app.parse("merge --new ../../../meshes/innenstadt3 --base ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out --verbosity trace");
-        app.parse("cut --input ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out3 --verbosity trace");
+        app.parse("merge --new ../../../meshes/innenstadt3 --base ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out --verbosity trace");
+        // app.parse("cut --input ../../../meshes/vienna2 --mask ../../../meshes/mask.geojson --output ../../../meshes/out3 --verbosity trace");
         std::filesystem::remove_all("../../../meshes/out3");
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));

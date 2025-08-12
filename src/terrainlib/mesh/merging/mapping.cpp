@@ -14,6 +14,21 @@
 
 namespace mesh::merging {
 
+VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    if (meshes.empty()) {
+        return {};
+    }
+
+    const double average_edge_length_sum = std::accumulate(
+        meshes.begin(), meshes.end(), 0.0,
+        [](double sum, const std::reference_wrapper<const SimpleMesh> &mesh_ref) {
+            return sum + estimate_average_edge_length(mesh_ref.get()).value_or(0);
+        });
+    const double average_edge_length = average_edge_length_sum / meshes.size();
+    const double distance_epsilon = average_edge_length / 100;
+    return create_mapping(meshes, distance_epsilon);
+}
+
 VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, double distance_epsilon) {
     auto map = spatial_lookup::Hashmap3d<VertexId>(distance_epsilon * 3);
     auto deduplicate = EpsilonVertexDeduplicate(map, distance_epsilon);

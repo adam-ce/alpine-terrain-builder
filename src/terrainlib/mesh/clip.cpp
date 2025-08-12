@@ -89,7 +89,7 @@ Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::
     mesh::validate(mesh);
 
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
-        return Cow(SimpleMesh::empty());
+        return Cow(SimpleMesh());
     }
 
     if (mesh.has_uvs() && mesh.uvs.size() != mesh.vertex_count()) {
@@ -441,7 +441,12 @@ Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
     }
-    if (!visitor.has_intersections) {
+    LOG_TRACE("Clip result: original {} faces -> clipped {} faces. Intersections: {}",
+              mesh.face_count(), cgal_mesh.number_of_faces(), visitor.has_intersections);
+    if (cgal_mesh.number_of_faces() == 0) {
+        return Cow(SimpleMesh());
+    }
+    if (!visitor.has_intersections && cgal_mesh.number_of_faces() == mesh.face_count()) {
         return Cow(mesh);
     }
 
@@ -595,27 +600,29 @@ Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMes
     cgal::SurfaceMesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
 
     bool success;
-    bool is_same_as_input;
+    bool has_intersections;
     if (mesh.has_uvs()) {
         UvMap uv_map = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv").value();
         UvInterpolatorVisitor<cgal::SurfaceMesh, UvMap> visitor(uv_map, cgal_mesh);
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
-        is_same_as_input = visitor.intersections.empty();
+        has_intersections = visitor.intersections.empty();
     } else {
         HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
-        is_same_as_input = visitor.has_intersections;
+        has_intersections = visitor.has_intersections;
     }
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
     }
-
-    if (is_same_as_input) {
+    if (cgal_mesh.number_of_faces() == 0) {
+        return Cow(SimpleMesh());
+    }
+    if (!has_intersections && cgal_mesh.number_of_faces() == mesh.face_count()) {
         return Cow(mesh);
     }
-
+    
     cgal_mesh.collect_garbage();
     SimpleMesh result = convert::to_simple_mesh(cgal_mesh);
     if (mesh.has_texture()) {

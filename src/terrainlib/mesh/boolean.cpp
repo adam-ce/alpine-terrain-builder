@@ -1,13 +1,19 @@
 
 #include <CGAL/Polygon_mesh_processing/corefinement.h>
+#include <libassert/assert.hpp>
 
 #include "mesh/boolean.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
+#include "mesh/clip.h"
+#include "mesh/utils.h"
 
-using namespace mesh;
+namespace mesh {
 
-IntersectionAndDifference mesh::intersection_and_difference(const SimpleMesh &a, const SimpleMesh &b) {
+IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const SimpleMesh &b) {
+    ASSERT(!a.has_uvs());
+    ASSERT(!b.has_uvs());
+
     cgal::SurfaceMesh cgal_a = convert::to_cgal_mesh(a);
     cgal::SurfaceMesh cgal_b = convert::to_cgal_mesh(b);
 
@@ -29,4 +35,12 @@ IntersectionAndDifference mesh::intersection_and_difference(const SimpleMesh &a,
     result.intersection = convert::to_simple_mesh(cgal_intersection);
     result.difference = convert::to_simple_mesh(cgal_difference);   
     return result;
+}
+
+
+SimpleMesh difference(const SimpleMesh &a, const SimpleMesh &b) {
+    SimpleMesh b_inv(b.triangles, b.positions);
+    flip_orientation(b_inv);
+    return mesh::clip_on_mesh(a, b_inv);
+}
 }

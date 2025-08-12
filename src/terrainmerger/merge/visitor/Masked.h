@@ -64,7 +64,8 @@ public:
     Result visit(
         const octree::Id &,
         NodeData<LeftStatus> &left,
-        NodeData<RightStatus> &right) {
+        NodeData<RightStatus> &right,
+    ) {
 
         if constexpr (right.status() == Status::Missing) {
             return Unchanged{false};

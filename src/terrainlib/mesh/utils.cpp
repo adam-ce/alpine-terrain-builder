@@ -452,3 +452,12 @@ SimpleMesh reindex_mesh(const SimpleMesh &mesh) {
     new_mesh.texture = mesh.texture;
     return new_mesh;
 }
+
+void flip_triangle_orientation(glm::uvec3 &triangle) {
+    std::swap(triangle.z, triangle.x);
+}
+void flip_triangle_orientations(std::vector<glm::uvec3> &triangles) {
+    for (auto& triangle : triangles) {
+        flip_triangle_orientation(triangle);
+    }
+}

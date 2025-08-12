@@ -17,15 +17,34 @@
 #include "octree/disk/layout/StrategyRegister.h"
 
 namespace octree::helpers {
-std::optional<std::unique_ptr<disk::layout::Strategy>> guess_layout_strategy(
+namespace {
+template <typename Key, typename Value>
+std::optional<Key> find_max_key(const std::unordered_map<Key, Value>& map) {
+    if (map.empty()) {
+        return std::nullopt;
+    }
+
+    auto max_it = map.begin();
+    for (auto it = std::next(max_it); it != map.end(); it++) {
+        if (it->second > max_it->second) {
+            max_it = it;
+        }
+    }
+
+    return max_it->first;
+}
+}
+
+std::optional<LayoutWithoutBase> guess_layout_strategy(
     const std::filesystem::path &base_path,
-    size_t max_files_to_check ) {
+    size_t max_files_to_check) {
 
     if (!std::filesystem::is_directory(base_path)) {
         return std::nullopt;
     }
 
     std::vector<std::filesystem::path> candidate_paths;
+    std::unordered_map<std::string, size_t> extension_counters;
     for (const auto &entry : std::filesystem::recursive_directory_iterator(base_path)) {
         if (max_files_to_check == 0) {
             break;
@@ -35,25 +54,37 @@ std::optional<std::unique_ptr<disk::layout::Strategy>> guess_layout_strategy(
         }
 
         const auto ext = entry.path().extension();
-        // TODO: manage these somewhere else
-        if (ext != ".terrain" && ext != ".glb" && ext != ".gltf") {
+        if (ext == ".index") {
             continue;
         }
+        extension_counters[ext]++;
 
         candidate_paths.emplace_back(std::filesystem::relative(entry.path(), base_path));
         max_files_to_check--;
     }
+    std::optional<std::string> most_common_ext = find_max_key(extension_counters);
 
-    for (const auto &[_, make_strategy] : disk::layout::StrategyRegister::instance().factories()) {
-        auto strategy = make_strategy();
-        bool matches_all = std::all_of(candidate_paths.begin(), candidate_paths.end(),
-                                       [&](const auto &rel_path) {
-                                           return strategy->get_id_from_relative_node_path(rel_path).has_value();
-                                       });
+    std::unique_ptr<disk::layout::Strategy> best_strategy;
+    size_t best_match_count = 0;
+    const auto &factories = disk::layout::StrategyRegister::instance().factories();
+    for (const auto &[_, make_strategy] : factories) {
+        auto strategy = make_strategy(); // assume returns unique_ptr<Strategy>
 
-        if (matches_all) {
-            return strategy;
+        size_t match_count = 0;
+        for (const auto &rel_path : candidate_paths) {
+            if (strategy->get_id_from_relative_node_path(rel_path).has_value()) {
+                match_count++;
+            }
         }
+
+        if (match_count > best_match_count) {
+            best_match_count = match_count;
+            best_strategy = std::move(strategy);
+        }
+    }
+
+    if (best_strategy && most_common_ext.has_value()) {
+        return LayoutWithoutBase(std::move(best_strategy), most_common_ext.value());
     }
 
     return std::nullopt;

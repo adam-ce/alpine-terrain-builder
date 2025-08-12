@@ -24,6 +24,19 @@ tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, const R
     }
     std::error_code ec;
     const auto target_node_path = target.get_node_path(id);
+    if (source_node_path.extension() != target_node_path.extension()) {
+        // TODO: should this error instead?
+        const auto load_result = mesh::io::load_from_path(source_node_path);
+        if (!load_result.has_value()) {
+
+        }
+        const Node node = load_result.value();
+        const auto save_result = mesh::io::save_to_path(node, target_node_path);
+        if (!save_result.has_value()) {
+
+        }
+        return {};
+    }
     if (std::filesystem::remove(target_node_path, ec)) {
         if (ec) {
             return tl::unexpected(CopyMeshErrorKind::RemoveOld);

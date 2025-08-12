@@ -10,4 +10,6 @@ struct IntersectionAndDifference {
 };
 IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const SimpleMesh &b);
 
+SimpleMesh difference(const SimpleMesh &a, const SimpleMesh &b);
+
 }

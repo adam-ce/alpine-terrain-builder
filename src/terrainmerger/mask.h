@@ -271,10 +271,10 @@ inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_datas
     // TODO: remove this try catch
     try {
         srs = mask_dataset.srs();
-        srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT); // TODO
     } catch (std::runtime_error &e) {
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
         srs = srs::wgs84();
+        // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
     }
 
     return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};

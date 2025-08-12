@@ -35,9 +35,8 @@ tl::expected<IndexedStorage, io::Error> open_index(const std::filesystem::path &
 
 Storage open_folder(
     const std::filesystem::path &base_path,
-    std::unique_ptr<disk::layout::Strategy> default_layout_strategy,
-    const std::string extension_with_dot,
-    bool create_index) {
+    bool create_index,
+    OpenOptions options) {
     LOG_TRACE("Opening storage folder {}", base_path);
 
     if (!std::filesystem::is_directory(base_path)) {
@@ -56,17 +55,25 @@ Storage open_folder(
         return Storage(std::move(storage_opt.value()));
     }
 
-    auto layout_strategy_opt = helpers::guess_layout_strategy(base_path);
-    if (layout_strategy_opt) {
-        LOG_TRACE("Guessed layout of dataset as {}",
-                  disk::layout::StrategyRegister::instance().get_id(**layout_strategy_opt));
+    auto layout_info_opt = helpers::guess_layout_strategy(base_path);
+    if (layout_info_opt.has_value()) {
+        const octree::helpers::LayoutWithoutBase &layout_info = layout_info_opt.value();
+        LOG_TRACE("Guessed layout strategy of dataset as {} and extension as {}",
+                  disk::layout::StrategyRegister::instance().get_id(*layout_info.strategy),
+                  layout_info.extension_with_dot);
     } else {
-        LOG_WARN("Unable to determine layout of dataset, using default which is {}",
-                 disk::layout::StrategyRegister::instance().get_id(*default_layout_strategy));
-        layout_strategy_opt = std::move(default_layout_strategy);
+        auto default_layout_strategy = std::move(options.default_layout_strategy);
+        if (!default_layout_strategy) {
+            default_layout_strategy = disk::layout::strategy::make_default();
+        }
+        auto default_extension_with_dot = options.preferred_extension_with_dot.has_value() ? options.preferred_extension_with_dot.value() : ".terrain";
+        LOG_WARN("Unable to determine layout of dataset, using layout strategy {} and extension {}",
+                 disk::layout::StrategyRegister::instance().get_id(*default_layout_strategy),
+                 default_extension_with_dot);
+        layout_info_opt = std::move(octree::helpers::LayoutWithoutBase(std::move(default_layout_strategy), default_extension_with_dot));
     }
 
-    disk::Layout layout(base_path, std::move(*layout_strategy_opt), extension_with_dot);
+    disk::Layout layout(base_path, std::move(layout_info_opt->strategy), layout_info_opt->extension_with_dot);
     if (!create_index) {
         return Storage(RawStorage(std::move(layout)));
     }
@@ -81,9 +88,8 @@ Storage open_folder(
 
 IndexedStorage open_folder_indexed(
     const std::filesystem::path &base_path,
-    std::unique_ptr<disk::layout::Strategy> default_layout_strategy,
-    const std::string extension_with_dot) {
-    return IndexedStorage(open_folder(base_path, std::move(default_layout_strategy), extension_with_dot, true));
+    OpenOptions options) {
+    return IndexedStorage(open_folder(base_path, true, std::move(options)));
 }
 
 } // namespace octree

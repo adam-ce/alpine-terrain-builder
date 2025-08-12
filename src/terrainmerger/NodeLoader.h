@@ -19,7 +19,7 @@ public:
     NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache &cache)
         : _storage(storage), _cache(cache), _space(octree::Space::earth()) {
         if (storage.cache().has_value() && dynamic_cast<octree::cache::Dummy *>(&cache) != nullptr) {
-            LOG_WARN("Backing storage for NodeLoader instance is cached but another cache was provided leading to double caching.");
+            LOG_WARN("Backing storage for NodeLoader instance is cached, but another cache was provided leading to double caching.");
         }
     }
 

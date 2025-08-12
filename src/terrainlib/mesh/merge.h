@@ -11,7 +11,7 @@
 
 namespace mesh {
 
-// SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
+SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
 SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, double distance_epsilon);
 SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, merging::VertexDeduplicate<3, double, merging::VertexId> &deduplicate);
 

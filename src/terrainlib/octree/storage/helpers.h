@@ -14,7 +14,12 @@
 
 namespace octree::helpers {
 
-std::optional<std::unique_ptr<disk::layout::Strategy>> guess_layout_strategy(
+struct LayoutWithoutBase {
+    std::unique_ptr<disk::layout::Strategy> strategy;
+    std::string extension_with_dot;
+};
+
+std::optional<LayoutWithoutBase> guess_layout_strategy(
     const std::filesystem::path &base_path,
     size_t max_files_to_check = 100);
 tl::expected<void, io::Error> save_index_map(const IndexMap &index, const disk::Layout &layout);

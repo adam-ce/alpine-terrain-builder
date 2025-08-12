@@ -8,13 +8,13 @@
 #include "octree/RawStorage.h"
 #include "octree/cache/ICache.h"
 
-namespace octree {
+namespace octree::cache {
 
 // TODO: UNTESTED
 template <typename Key, typename Value>
-class LruCache : public ICache {
+class Lru : public ICache {
 public:
-    explicit LruCache(const size_t capacity) : _capacity(capacity) {}
+    explicit Lru(const size_t capacity) : _capacity(capacity) {}
 
     std::optional<Value> get(const Key& key) {
         auto it = this->_map.find(key);

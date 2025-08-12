@@ -14,23 +14,14 @@ struct Cow {
     using RefType = std::reference_wrapper<T>;
     std::variant<OwnedType, RefType> data;
 
-    // explicit Cow(T&& value)
-    //    : data(std::move(value)) {}
-    template <typename U = T, typename = std::enable_if_t<std::is_same_v<std::remove_reference_t<U>, T>>>
-    explicit Cow(U &&value) : data(std::forward<U>(value)) {}
-    explicit Cow(T &ref)
-        : data(std::ref(ref)) {}
-    template <typename U = T, typename = std::enable_if_t<!std::is_const_v<U>>>
-    Cow(Cow<OwnedType>&& other)
-        : data(std::visit([](auto &data) -> std::variant<OwnedType, RefType> {
-            return data;
-        }, other)) {}
+    explicit Cow(OwnedType&& value) : data(std::move(value)) {}
+    explicit Cow(T& ref) : data(std::ref(ref)) {}
 
-    static Cow<T> from_owned(T value) {
-        return Cow(std::move(value));
+    static Cow<T> from_owned(OwnedType &&value) {
+        return Cow<T>(std::move(value));
     }
-    static Cow<T> from_ref(T &ref) {
-        return Cow(ref);
+    static Cow<T> from_ref(RefType ref) {
+        return Cow<T>(ref);
     }
 
     Cow(const Cow &) = default;
@@ -73,11 +64,12 @@ struct Cow {
         return get();
     }
 
-    operator Cow<const T>() const {
+    operator Cow<const T>() & = delete;
+    operator Cow<const T>() && {
         if (is_owned()) {
-            return Cow<const T>(get());
+            return Cow<const T>::from_owned(std::move(std::get<OwnedType>(data)));
         } else {
-            return Cow<const T>(std::ref(get()));
+            return Cow<const T>::from_ref(std::ref(get()));
         }
     }
 };

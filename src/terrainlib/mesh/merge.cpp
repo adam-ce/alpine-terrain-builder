@@ -4,7 +4,6 @@
 
 namespace mesh {
 
-/*
 SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
     switch (meshes.size()) {
     case 0:
@@ -16,7 +15,6 @@ SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>>
         return merging::apply_mapping(meshes, mapping);
     }
 }
-    */
 
 SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, double distance_epsilon) {
     switch (meshes.size()) {

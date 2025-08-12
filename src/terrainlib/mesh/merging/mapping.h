@@ -10,6 +10,8 @@ namespace mesh::merging {
 
 // VertexMapping create_connecting_mapping(std::span<const SimpleMesh> meshes);
 VertexMapping create_mapping(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
+VertexMapping create_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     double distance_epsilon);
 VertexMapping create_mapping(

@@ -55,4 +55,9 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 void reindex_mesh(SimpleMesh &mesh);
 SimpleMesh reindex_mesh(const SimpleMesh &mesh);
 
+void flip_triangle_orientation(glm::uvec3 &triangle);
+void flip_triangle_orientations(std::vector<glm::uvec3> &triangles);
+template <glm::length_t n_dims, typename T>
+void flip_orientation(SimpleMesh_<n_dims, T> &mesh);
+
 #include "utils.inl"

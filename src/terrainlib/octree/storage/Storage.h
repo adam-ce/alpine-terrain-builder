@@ -52,7 +52,7 @@ struct MaybeIndex {
     }
 };
 
-struct MaybeCache : public ICache {
+struct MaybeCache : public cache::ICache {
     std::optional<std::unique_ptr<ICache>> cache;
 
     explicit MaybeCache()
@@ -127,7 +127,8 @@ public:
         return result;
     }
 
-    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) noexcept {
+    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node, const bool overwrite = false) noexcept {
+        // TODO: implement overwrite
         const auto result = this->_inner.write_node(id, node);
         if (result.has_value()) {
             this->_cache.put(id, node);
@@ -196,11 +197,11 @@ public:
         }
     }
 
-    std::optional<std::unique_ptr<ICache>>& cache() noexcept {
+    std::optional<std::unique_ptr<cache::ICache>> &cache() noexcept {
         return this->_cache.cache;
     }
-    
-    std::optional<std::reference_wrapper<const ICache>> cache() const noexcept {
+
+    std::optional<std::reference_wrapper<const cache::ICache>> cache() const noexcept {
         if (this->_cache.cache.has_value()) {
             return *this->_cache.cache.value();
         } else {

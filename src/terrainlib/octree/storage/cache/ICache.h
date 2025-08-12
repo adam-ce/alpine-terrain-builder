@@ -5,7 +5,7 @@
 #include "octree/Id.h"
 #include "octree/storage/Node.h"
 
-namespace octree {
+namespace octree::cache {
    
 class ICache {
 public:

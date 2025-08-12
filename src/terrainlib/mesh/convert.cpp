@@ -30,10 +30,8 @@ SurfaceMesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
         }
     }
 
-    mesh::validate(mesh);
-
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        const CGAL::SM_Face_index face = cgal_mesh.add_face(
+        const cgal::FaceIndex face = cgal_mesh.add_face(
             cgal::VertexIndex(triangle.x),
             cgal::VertexIndex(triangle.y),
             cgal::VertexIndex(triangle.z));
@@ -44,9 +42,11 @@ SurfaceMesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
 }
 
 SimpleMesh convert::to_simple_mesh(const SurfaceMesh &cgal_mesh) {
+    ASSERT(!cgal_mesh.has_garbage());
+    
     SimpleMesh mesh;
 
-    auto uv_map_opt = cgal_mesh.property_map<SurfaceMesh::Vertex_index, glm::dvec2>("v:uv");
+    auto uv_map_opt = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
     const bool has_uvs = uv_map_opt.has_value();
     UvMap uv_map;
     if (has_uvs) {
@@ -61,7 +61,7 @@ SimpleMesh convert::to_simple_mesh(const SurfaceMesh &cgal_mesh) {
     }
     mesh.triangles.reserve(face_count);
 
-    for (const CGAL::SM_Vertex_index vertex_index : cgal_mesh.vertices()) {
+    for (const cgal::VertexIndex vertex_index : cgal_mesh.vertices()) {
         const Point3 &position = cgal_mesh.point(vertex_index);
         mesh.positions[vertex_index] = to_glm_point(position);
         if (has_uvs) {
@@ -70,15 +70,17 @@ SimpleMesh convert::to_simple_mesh(const SurfaceMesh &cgal_mesh) {
         }
     }
 
-    for (const CGAL::SM_Face_index face_index : cgal_mesh.faces()) {
+    for (const cgal::FaceIndex face_index : cgal_mesh.faces()) {
         glm::uvec3 triangle;
         unsigned int i = 0;
-        for (const CGAL::SM_Vertex_index vertex_index : CGAL::vertices_around_face(cgal_mesh.halfedge(face_index), cgal_mesh)) {
+        for (const cgal::VertexIndex vertex_index : CGAL::vertices_around_face(cgal_mesh.halfedge(face_index), cgal_mesh)) {
             triangle[i] = vertex_index;
             i++;
         }
         mesh.triangles.push_back(triangle);
     }
+
+    mesh::validate(mesh);
 
     return mesh;
 }

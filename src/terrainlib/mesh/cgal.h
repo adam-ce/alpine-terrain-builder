@@ -11,7 +11,8 @@ namespace cgal {
     using Point2 = Kernel::Point_2;                                                   \
     using Point3 = Kernel::Point_3;                                                   \
     using SurfaceMesh = CGAL::Surface_mesh<Point3>;                                   \
-    using VertexIndex = SurfaceMesh::Vertex_index;     \
+    using VertexIndex = SurfaceMesh::Vertex_index;                                    \
+    using FaceIndex = SurfaceMesh::Face_index;                                        \
     using VertexDescriptor = boost::graph_traits<SurfaceMesh>::vertex_descriptor;     \
     using HalfedgeDescriptor = boost::graph_traits<SurfaceMesh>::halfedge_descriptor; \
     using EdgeDescriptor = boost::graph_traits<SurfaceMesh>::edge_descriptor;         \

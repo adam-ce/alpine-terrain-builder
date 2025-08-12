@@ -17,20 +17,31 @@
 #include "cli.h"
 
 namespace {
-struct DisplayNode {
+struct IndexNode {
     octree::Id id;
     octree::NodeStatusOrMissing status;
     bool expanded = false;
 };
+struct MeshNode {
+    octree::Id id;
+    size_t vertex_count;
+    size_t face_count;
+};
+struct ErrorNode {
+    octree::Id id;
+    std::string message;
+};
+
+using DisplayEntry = std::variant<IndexNode, MeshNode, ErrorNode>;
 
 class TreeView {
 public:
-    using iterator = std::list<DisplayNode>::iterator;
-    using const_iterator = std::list<DisplayNode>::const_iterator;
+    using iterator = std::list<DisplayEntry>::iterator;
+    using const_iterator = std::list<DisplayEntry>::const_iterator;
 
-    explicit TreeView(const octree::IndexMap &index, const octree::Id root) : root(root), _index(index) {
-        const octree::NodeStatusOrMissing status = this->_index.get(root);
-        this->_view.emplace_back(root, status, false);
+    explicit TreeView(const octree::IndexedStorage &storage, const octree::Id root) : root(root), _storage(storage) {
+        const octree::NodeStatusOrMissing status = this->_storage.index().get(root);
+        this->_view.emplace_back(IndexNode{root, status, false});
     }
 
     size_t size() const {
@@ -56,23 +67,43 @@ public:
         return expand_node(it);
     }
     void expand_node(iterator it) {
-        DisplayNode &parent = *it;
-        if (parent.expanded || !parent.id.has_children()) {
+        if (!std::holds_alternative<IndexNode>(*it)) {
+            return;
+        }
+        IndexNode &parent = std::get<IndexNode>(*it);
+        if (parent.expanded) {
+            return;
+        }
+        parent.expanded = true;
+
+        if (parent.status == octree::NodeStatusOrMissing::Leaf) {
+            auto result = this->_storage.read_node(parent.id);
+            DisplayEntry entry;
+            if (result.has_value()) {
+                const auto &mesh = result.value();
+                entry = MeshNode{parent.id, mesh.vertex_count(), mesh.face_count()};
+            } else {
+                entry = ErrorNode{parent.id, result.error().description()};
+            }
+            it++;
+            it = this->_view.emplace(it, entry);
             return;
         }
 
+        if (!parent.id.has_children()) {
+            return;
+        }
         const auto children = parent.id.children().value();
         for (const auto &child_id : children) {
-            auto status_opt = this->_index.get(child_id);
+            auto status_opt = this->_storage.index().get(child_id);
             if (!status_opt.has_value()) {
                 continue;
             }
             const octree::NodeStatus status = status_opt.value();
+            IndexNode child_node{child_id, status, false};
             it++;
-            it = this->_view.emplace(it, child_id, status, false);
+            it = this->_view.emplace(it, child_node);
         }
-
-        parent.expanded = true;
     }
 
     void collapse_node(const size_t display_index) {
@@ -81,37 +112,40 @@ public:
         return collapse_node(it);
     }
     void collapse_node(iterator it) {
-        DisplayNode &parent = *it;
+        if (!std::holds_alternative<IndexNode>(*it)) {
+            return;
+        }
+        IndexNode &parent = std::get<IndexNode>(*it);
         if (!parent.expanded) {
+            return;
+        }
+        parent.expanded = false;
+
+        if (parent.status == octree::NodeStatusOrMissing::Leaf) {
+            it++;
+            it = this->_view.erase(it);
             return;
         }
 
         it++;
         while (it != this->_view.end()) {
-            DisplayNode &node = *it;
-            if (node.id.parent() != parent.id) {
+            const octree::Id id = std::visit([](const auto &node) { return node.id; }, *it);
+            if (id.parent() != parent.id) {
                 break;
             }
 
-            if (node.expanded) {
-                this->collapse_node(it);
-            }
+            this->collapse_node(it);
             it = this->_view.erase(it);
         }
-
-        parent.expanded = false;
     }
 
     const octree::Id root;
 
 private:
-    std::list<DisplayNode> _view;
-    const octree::IndexMap &_index;
+    std::list<DisplayEntry> _view;
+    const octree::IndexedStorage& _storage;
 };
 
-//---------------------------------------------------------------------
-// Find the first non‑virtual node by BFS (may use octree::traverse)
-//---------------------------------------------------------------------
 const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::Id &root = octree::Id::root()) {
     switch (octree::NodeStatusOrMissing(index.get(root))) {
     case octree::NodeStatusOrMissing::Missing:
@@ -155,13 +189,27 @@ octree::IndexedStorage open_path_indexed(const std::filesystem::path& path) {
     }
 }
 
-ftxui::Element render_line(const DisplayNode &node, size_t base_level, bool is_selected) {
-    const size_t depth = node.id.level() - base_level;
+std::string render_line_content(const DisplayEntry &entry) {
+    return std::visit([](const auto &node) {
+        using NodeType = std::remove_cvref_t<decltype(node)>;
+        if constexpr (std::is_same_v<NodeType, IndexNode>) {
+            return fmt::format("{} [{}]", node.id, node.status);
+        } else if constexpr (std::is_same_v<NodeType, MeshNode>) {
+            return fmt::format("Mesh({} vertices, {} faces)", node.vertex_count, node.face_count);
+        } else if constexpr (std::is_same_v<NodeType, ErrorNode>) {
+            return fmt::format("Error({})", node.message);
+        }
+    }, entry);
+}
+ftxui::Element render_line(const DisplayEntry &entry, size_t base_level, bool is_selected) {
+    const octree::Id id = std::visit([](const auto &node) { return node.id; }, entry);
+    size_t depth = id.level() - base_level;
+    if (!std::holds_alternative<IndexNode>(entry)) {
+        depth += 1;
+    }
     const size_t indent = depth * 2;
-    auto text_line = ftxui::text(fmt::format("{:<{}} {} [{}]",
-                                             "", indent,
-                                             node.id,
-                                             node.status));
+    auto text_line = ftxui::text(fmt::format("{:<{}} {}",
+                                             "", indent, render_line_content(entry)));
     if (is_selected) {
         return text_line | ftxui::inverted;
     }
@@ -173,7 +221,7 @@ int run(const cli::Args &args) {
     const octree::IndexMap &index = storage.index();
     const octree::Id root_id = args.full_view ? octree::Id::root() : find_deepest_root(index);
 
-    TreeView tree_view(index, root_id);
+    TreeView tree_view(storage, root_id);
 
     size_t selected = 0;
     auto renderer = ftxui::Renderer([&] {

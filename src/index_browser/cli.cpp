@@ -18,6 +18,7 @@ Args cli::parse(int argc, const char * const * argv) {
         ->check(CLI::ExistingPath)
         ->required();
 
+    args.full_view = false;
     app.add_flag("--full", args.full_view, "Start at octree root instead of dataset root.");
 
     const std::map<std::string, spdlog::level::level_enum>
@@ -34,7 +35,8 @@ Args cli::parse(int argc, const char * const * argv) {
         ->default_val(spdlog::level::level_enum::info);
 
     try {
-        app.parse(argc, argv);
+        app.parse("--dataset ../../../meshes/innenstadt");
+        // app.parse(argc, argv);
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }

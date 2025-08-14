@@ -32,10 +32,9 @@ public:
 
     Merger(
         Visitor& visitor,
-        const NodeLoader &left,
-        const NodeLoader &right,
-        NodeWriter &output) : _visitor(visitor), _left(left), _right(right), _output(output) {
-
+        NodeLoader left,
+        NodeLoader right,
+        NodeWriter output) : _visitor(visitor), _left(left), _right(right), _output(output) {
     }
 
     void merge_node(const octree::Id &id) {
@@ -50,23 +49,27 @@ public:
         const Status right_status
     ) {
         if (this->_output.has_node(id)) {
-            return; // Already merged perviously
+            return; // Already merged previously
         }
 
         const auto merge_result = this->call_merge(id, left_status, right_status);
         std::visit([&](const auto &result) {
             using Result = std::decay_t<decltype(result)>;
             if constexpr (std::is_same_v<Result, merge::Recurse>) {
+                LOG_DEBUG("Node {} needs recusion", id);
                 DEBUG_ASSERT(id.has_children());
                 const auto children = id.children().value();
                 for (const auto &child_id : children) {
                     this->merge_node(child_id);
                 }
             } else if constexpr (std::is_same_v<Result, merge::Unchanged>) {
+                LOG_DEBUG("Node {} remains unchanged (same as {})", id, (result.is_left ? "left" : "right"));
                 this->_output.copy_subtree_to_output(id, result.is_left ? this->_left : this->_right);
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
+                LOG_DEBUG("Node {} was merged", id);
                 this->_output.write_node(id, result.mesh);
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
+                LOG_DEBUG("Node {} was ignored", id);
                 // do nothing
             }
         }, merge_result);
@@ -132,13 +135,14 @@ inline void merge_datasets(
         get_dataset_name(right_dataset),
         get_dataset_name(output_dataset));
 
+    octree::Space space = octree::Space::earth();
     octree::cache::Dummy left_cache;
-    NodeLoader left(left_dataset, left_cache);
+    NodeLoader left(left_dataset, left_cache, space);
     octree::cache::Dummy right_cache;
-    NodeLoader right(right_dataset, right_cache);
+    NodeLoader right(right_dataset, right_cache, space);
     NodeWriter output(output_dataset);
     if (mask.has_value()) {
-        merge::visitor::Masked visitor {mask.value()};
+        merge::visitor::Masked visitor {mask.value(), space};
         Merger<merge::visitor::Masked> merger(visitor, left, right, output);
         merger.merge_node(octree::Id::root());
     } else {

@@ -23,7 +23,8 @@ public:
 
     tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept;
     tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node) const noexcept;
-    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, const RawStorage &target) const noexcept;
+    tl::expected<void, CopyMeshError> copy_node_from(const Id &id, const RawStorage &target) noexcept;
+    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, RawStorage &target) const noexcept;
     bool remove_node(const Id &id) const noexcept;
     bool has_node(const Id &id) const noexcept;
     std::filesystem::path get_node_path(const Id &id) const noexcept;

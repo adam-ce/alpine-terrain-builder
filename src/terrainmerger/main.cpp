@@ -40,7 +40,7 @@ void run(const cli::MergeArgs& args) {
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
-    octree::Storage output_dataset = octree::open_folder(args.output_path);
+    octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = ".glb"});
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
@@ -51,7 +51,7 @@ void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
     const octree::IndexedStorage input_dataset = octree::open_folder_indexed(args.input_path);
     const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
-    cut_dataset(input_dataset, mask, args.output_path);
+    cut_dataset(input_dataset, mask, args.output_path, args.keep_inside);
 }
 
 void run(const cli::Args &args) {
@@ -69,6 +69,15 @@ int main(int argc, char **argv) {
                                                 });
     LOG_DEBUG("Running with: {}", arg_str);
 
+    // TODO: remove
+    std::filesystem::path source = "../../../meshes/out-merge";
+    std::filesystem::path destination = "/mnt/c/Users/Admin/Downloads/out-merge";
+    std::filesystem::remove_all(source);
     run(args);
+    std::filesystem::remove_all(destination);
+    std::filesystem::create_directories(destination);
+    std::filesystem::copy(source, destination,
+                std::filesystem::copy_options::recursive |
+                std::filesystem::copy_options::overwrite_existing);
 }
 

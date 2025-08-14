@@ -18,6 +18,6 @@ struct Merged {
     SimpleMesh mesh;
 };
 
-using Result = std::variant<Recurse, Unchanged, Merged>;
+using Result = std::variant<Recurse, Ignore, Unchanged, Merged>;
 
 } // namespace merge

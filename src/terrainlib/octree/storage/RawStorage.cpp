@@ -16,7 +16,7 @@ tl::expected<void, mesh::io::SaveMeshError> RawStorage::write_node(const Id &id,
     const auto node_path = this->get_node_path(id);
     return mesh::io::save_to_path(node, node_path);
 }
-
+/*
 tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, const RawStorage &target) const noexcept {
     const auto source_node_path = this->get_node_path(id);
     if (!this->has_node(id)) {
@@ -54,6 +54,54 @@ tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, const R
         return tl::unexpected(CopyMeshErrorKind::CreateLink);
     }
     return {};
+}
+*/
+tl::expected<void, CopyMeshError> RawStorage::copy_node_from(const Id &id, const RawStorage &source) noexcept {
+    if (!source.has_node(id)) {
+        return tl::unexpected(CopyMeshErrorKind::FileNotFound);
+    }
+
+    const auto source_node_path = source.get_node_path(id);
+    const auto target_node_path = this->get_node_path(id);
+    if (source_node_path.extension() != target_node_path.extension()) {
+        // TODO: should this error instead?
+        const auto load_result = mesh::io::load_from_path(source_node_path);
+        if (!load_result.has_value()) {
+            return tl::unexpected(CopyMeshErrorKind::Read);
+        }
+        const Node node = load_result.value();
+        const auto save_result = mesh::io::save_to_path(node, target_node_path);
+        if (!save_result.has_value()) {
+            return tl::unexpected(CopyMeshErrorKind::Write);
+        }
+        return {};
+    }
+
+    std::error_code ec;
+    if (std::filesystem::remove(target_node_path, ec)) {
+        if (ec) {
+            return tl::unexpected(CopyMeshErrorKind::RemoveOld);
+        }
+    }
+
+    std::filesystem::create_directories(target_node_path.parent_path(), ec);
+    if (ec) {
+        return tl::unexpected(CopyMeshErrorKind::CreateDirectories);
+    }
+
+    std::filesystem::create_hard_link(
+        source_node_path,
+        target_node_path,
+        ec);
+    if (ec) {
+        return tl::unexpected(CopyMeshErrorKind::CreateLink);
+    }
+
+    return {};
+}
+
+tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, RawStorage &target) const noexcept {
+    return target.copy_node_from(id, *this);
 }
 
 bool RawStorage::remove_node(const Id &id) const noexcept {

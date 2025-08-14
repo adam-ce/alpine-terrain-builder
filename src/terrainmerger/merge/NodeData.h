@@ -17,7 +17,7 @@ public:
     constexpr explicit NodeData(octree::Id id, const NodeLoader &loader) : _id(id), _loader(loader) {}
 
     const SimpleMesh &mesh() const {
-        static_assert(Status != octree::NodeStatusOrMissing::Missing, "Trying to access mesh from missing node.");
+        // static_assert(Status != octree::NodeStatusOrMissing::Missing, "Trying to access mesh from missing node.");
 
         if (!this->_mesh.has_value()) {
             auto result = this->_loader.load_node(this->_id);

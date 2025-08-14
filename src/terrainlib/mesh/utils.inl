@@ -27,3 +27,8 @@ template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh) {
     sort_and_normalize_triangles(mesh.triangles);
 }
+
+template <glm::length_t n_dims, typename T>
+void flip_orientation(SimpleMesh_<n_dims, T> &mesh) {
+    flip_triangle_orientations(mesh.triangles);
+}

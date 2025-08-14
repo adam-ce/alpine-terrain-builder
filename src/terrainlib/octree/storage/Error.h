@@ -9,7 +9,9 @@ enum class CopyMeshErrorKind {
     FileNotFound,
     CreateLink,
     CreateDirectories,
-    RemoveOld
+    RemoveOld,
+    Read,
+    Write
 };
 
 // TODO: store the std::error_code in the CopyMeshError

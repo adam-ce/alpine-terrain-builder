@@ -37,10 +37,4 @@ IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const
     return result;
 }
 
-
-SimpleMesh difference(const SimpleMesh &a, const SimpleMesh &b) {
-    SimpleMesh b_inv(b.triangles, b.positions);
-    flip_orientation(b_inv);
-    return mesh::clip_on_mesh(a, b_inv);
-}
 }

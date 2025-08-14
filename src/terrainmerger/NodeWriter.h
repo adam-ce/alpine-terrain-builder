@@ -37,7 +37,7 @@ public:
                 }
                 DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
 
-                DEBUG_ASSERT_VAL(loader.storage().copy_node_to(child_id, this->_storage));
+                DEBUG_ASSERT_VAL(this->_storage.copy_node_from(child_id, loader.storage()));
             },
             octree::always_refine,
             id);

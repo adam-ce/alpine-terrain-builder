@@ -32,6 +32,7 @@ struct CutArgs : public BaseArgs {
     std::filesystem::path input_path;
     std::filesystem::path output_path;
     std::filesystem::path mask_path;
+    bool keep_inside;
 };
 
 using Args = std::variant<MergeArgs, CutArgs>;

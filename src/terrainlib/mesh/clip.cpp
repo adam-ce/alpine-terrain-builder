@@ -593,7 +593,26 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
 };
 } // namespace
 
-Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh) {
+Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
+    // short circuit the empty mesh case
+    // this is a common case since we clip the mask in the terrainmerger on the octree node bounds
+    // which often results in empty masks
+    if (clip_mesh.face_count() == 0) {
+        if (keep_inside) {
+            return Cow<const SimpleMesh>::from_owned(SimpleMesh());
+        } else {
+            return Cow<const SimpleMesh>::from_ref(mesh);
+        }
+    }
+    
+    // If we want to keep everything outside the clip_mesh we simply invert it and recurse
+    if (!keep_inside) {
+        SimpleMesh clip_mesh_inv(clip_mesh.triangles, clip_mesh.positions);
+        flip_orientation(clip_mesh_inv);
+        return mesh::clip_on_mesh(mesh, clip_mesh_inv, !keep_inside);
+    }
+    
+    // Convert both meshes to cgal and use their clipping logic.
     using UvMap = cgal::SurfaceMesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
     cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
@@ -606,7 +625,7 @@ Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMes
         UvInterpolatorVisitor<cgal::SurfaceMesh, UvMap> visitor(uv_map, cgal_mesh);
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
-        has_intersections = visitor.intersections.empty();
+        has_intersections = !visitor.intersections.empty();
     } else {
         HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
@@ -630,4 +649,3 @@ Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMes
     }
     return Cow(std::move(result));
 }
-

@@ -137,18 +137,22 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, Storage &target) const {
-        if (!this->_index.contains(id, true)) {
+    tl::expected<void, CopyMeshError> copy_node_from(const Id &id, const Storage &source) noexcept {
+        if (!source._index.contains(id, true)) {
             return tl::unexpected(CopyMeshErrorKind::FileNotFound);
         }
-
-        const auto result = this->_inner.copy_node_to(id, target._inner);
-        if (result.has_value() && target.is_indexed()) {
-            auto& index = target.index_mut().value();
+        // TODO: check overwrite
+        const auto result = this->_inner.copy_node_from(id, source._inner);
+        if (result.has_value() && this->is_indexed()) {
+            auto& index = this->_index.map.value();
             index.add(id);
-            target.set_index_dirty();
+            this->set_index_dirty();
         }
         return result;
+    }
+
+    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, Storage &target) const noexcept {
+        return target.copy_node_from(id, *this);
     }
 
     bool remove_node(const Id &id) noexcept {

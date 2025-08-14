@@ -12,6 +12,6 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(
     const SimpleMesh &mesh,
     const radix::geometry::Aabb3d &bounds,
     const bool remesh_planar_patches = true);
-Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh& clip_mesh);
+Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh& clip_mesh, const bool keep_inside = true);
 
 }

@@ -18,6 +18,7 @@ struct Context {
     const octree::IndexedStorage& input;
     octree::Storage& output;
     const octree::Space space;
+    const bool keep_inside;
 };
 
 void cut_node(
@@ -35,10 +36,10 @@ inline void cut_leaf_node(
     const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.read_node(id)).value();
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles", 
         id, mask.mesh.vertex_count(), mask.mesh.face_count());
-    const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask);
+    const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        DEBUG_ASSERT_VAL(ctx.input.copy_node_to(id, ctx.output));
+        DEBUG_ASSERT_VAL(ctx.output.copy_node_from(id, ctx.input));
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
@@ -46,21 +47,9 @@ inline void cut_leaf_node(
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
             DEBUG_ASSERT_VAL(ctx.output.write_node(id, clipped_mesh));
         } else {
-            LOG_TRACE("Mesh was fully ouside the mask");
+            LOG_TRACE("Mesh was fully outside the mask");
         }
     }
-}
-
-namespace {
-template <glm::length_t n_dims, typename T>
-radix::geometry::Aabb<n_dims, T> pad_bounds(const radix::geometry::Aabb<n_dims, T> &bounds, const T factor) {
-    using Vec = glm::vec<n_dims, T>;
-    const Vec center = bounds.centre();
-    const Vec half_size = bounds.size() * (factor / T(2));
-    const Vec new_min = center - half_size;
-    const Vec new_max = center + half_size;
-    return radix::geometry::Aabb<n_dims, T>(new_min, new_max);
-}
 }
 
 inline void cut_virtual_node(
@@ -86,8 +75,8 @@ inline void cut_node(
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    if (mask.mesh.is_empty()) {
-        LOG_TRACE("Mesh was fully ouside the mask");
+    if (ctx.keep_inside && mask.mesh.is_empty()) {
+        LOG_TRACE("Mesh was fully outside the mask");
         return;
     }
 
@@ -122,7 +111,8 @@ inline void cut_node(
 inline void cut_dataset(
     const octree::IndexedStorage &input,
     const MeshMask& mask,
-    octree::Storage &output) {
+    octree::Storage &output,
+    const bool keep_inside) {
     Context ctx(input, output, octree::Space::earth());
     cut_node(ctx, octree::Id::root(), mask);
     output.save_or_create_index();
@@ -131,7 +121,8 @@ inline void cut_dataset(
 inline void cut_dataset(
     const octree::IndexedStorage &input_dataset,
     const MeshMask& mask,
-    const std::filesystem::path &output_path) {
+    const std::filesystem::path &output_path,
+    const bool keep_inside) {
     LOG_TRACE("Creating output dataset at {}", output_path);
     std::filesystem::create_directories(output_path);
 
@@ -140,6 +131,6 @@ inline void cut_dataset(
         LOG_ERROR_AND_EXIT("Output dataset has to be empty.");
     }
 
-    cut_dataset(input_dataset, mask, output_dataset);
+    cut_dataset(input_dataset, mask, output_dataset, keep_inside);
 }
 

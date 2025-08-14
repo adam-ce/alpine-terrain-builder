@@ -15,13 +15,15 @@ inline Result merge_meshes(
     const SimpleMesh &base_mesh,
     const SimpleMesh &new_mesh,
     const MeshMask &mask) {
-    const Cow<const SimpleMesh> new_mesh_clipped = clip_on_mask(new_mesh, mask);
-    const Cow<const SimpleMesh> base_mesh_clipped = clip_on_mask(base_mesh, mask);
+    
+    const Cow<const SimpleMesh> new_mesh_clipped = clip_on_mask(new_mesh, mask, true);
+    const Cow<const SimpleMesh> base_mesh_clipped = clip_on_mask(base_mesh, mask, false);
+    
     if (base_mesh_clipped.is_ref() && new_mesh_clipped->is_empty()) {
-        return Unchanged{true};
+        return Unchanged{.is_left = true};
     }
     if (new_mesh_clipped.is_ref() && base_mesh_clipped->is_empty()) {
-        return Unchanged{false};
+        return Unchanged{.is_left = false};
     }
 
     const SimpleMesh merged_mesh = mesh::merge(base_mesh_clipped, new_mesh_clipped);
@@ -56,39 +58,78 @@ class Masked : public Base {
 public:
     using Status = octree::NodeStatusOrMissing;
 
-    explicit Masked(MeshMask mask) : mask(mask) {}
-
-    MeshMask mask;
+    explicit Masked(MeshMask mask, octree::Space space) : _space(space) {
+        this->_masks[octree::Id::root()] = mask;
+    }
 
     template <Status LeftStatus, Status RightStatus>
     Result visit(
-        const octree::Id &,
+        const octree::Id &id,
         NodeData<LeftStatus> &left,
-        NodeData<RightStatus> &right,
-    ) {
-
-        if constexpr (right.status() == Status::Missing) {
-            return Unchanged{false};
+        NodeData<RightStatus> &right) {
+        if constexpr (left.status() == Status::Missing && right.status() == Status::Missing) {
+            return Ignore{};
         }
 
-        if constexpr (left.status() == Status::Missing) {
-            if constexpr (right.status() == Status::Leaf) {
-                auto result = clip_on_mask(right.mesh(), this->mask);
-                if (result.is_ref()) {
-                    return Unchanged{true};
-                } else {
-                    return Merged{result};
-                }
+        if constexpr (left.status() == Status::Leaf) {
+            const MeshMask &mask = this->mask_for_node(id);
+            auto result = clip_on_mask(left.mesh(), mask, false);
+            if (result->is_empty()) {
+                return Ignore{};
+            } else if (result.is_ref()) {
+                return Unchanged{.is_left = true};
             } else {
-                return Recurse{};
+                // TODO: ensure move here
+                return Merged{result};
+            }
+        }
+
+        if constexpr (right.status() == Status::Leaf) {
+            const MeshMask &mask = this->mask_for_node(id);
+            auto result = clip_on_mask(right.mesh(), mask, true);
+            if (result->is_empty()) {
+                return Ignore{};
+            } else if (result.is_ref()) {
+                return Unchanged{.is_left = false};
+            } else {
+                return Merged{result};
             }
         }
 
         if constexpr (left.status() == Status::Leaf && right.status() == Status::Leaf) {
-            return merge_meshes(right.mesh(), left.mesh(), this->mask);
+            const MeshMask &mask = this->mask_for_node(id);
+            return merge_meshes(right.mesh(), left.mesh(), mask);
         }
 
         return Recurse{};
+    }
+
+private:
+    std::unordered_map<octree::Id, MeshMask> _masks = {};
+    octree::Space _space;
+
+    const MeshMask& mask_for_node(const octree::Id id) {
+        // TODO: evict old masks or rewrite such that merge.h handles passing in the masks
+        // we return in Recurse{}
+
+        // Try to find cached mask first
+        if (auto it = this->_masks.find(id); it != this->_masks.end()) {
+            return it->second;
+        }
+
+        // Recursively get parent mask (root always exists)
+        const octree::Id parent_id = id.parent().value();
+        const MeshMask &parent_mask = this->mask_for_node(parent_id);
+
+        // Clip mask based on parent
+        const auto bounds = pad_bounds(this->_space.get_node_bounds(id), 1.1);
+        LOG_TRACE("Clipping mask for {}", id);
+        auto [it, inserted] = this->_masks.try_emplace(
+            id,
+            mesh::clip_on_bounds_and_cap(parent_mask.mesh, bounds)
+        );
+
+        return it->second;
     }
 };
 } // namespace merge::visitor

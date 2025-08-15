@@ -13,7 +13,10 @@ public:
     EpsilonVertexDeduplicate(Lookup &lookup, Component epsilon)
         : _lookup(lookup),
           _epsilon(epsilon) {}
-
+          
+    Component epsilon() const {
+        return this->_epsilon;
+    }
     void add(const Vec &point, const Meta meta) override {
         this->_lookup.insert(point, meta);
     }
@@ -26,7 +29,6 @@ private:
     Component _epsilon;
 };
 
-// This deduction guide is placed after your class definition
 template <glm::length_t N, typename C, typename M, typename S,
           template <glm::length_t, typename, typename, typename> class CellBased,
           typename EpsilonType>

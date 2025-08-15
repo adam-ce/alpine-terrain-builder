@@ -45,7 +45,8 @@ public:
     }
 
     friend std::ostream &operator<<(std::ostream &os, const LoadMeshError &err) {
-        return os << err.description();
+        os << err.description();
+        return os;
     }
 
 private:

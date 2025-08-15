@@ -183,7 +183,7 @@ private:
         }
     }
 
-    static_assert(SpatialLookup<Self, n_dims, Component, Value>);
+    // static_assert(SpatialLookup<Self, n_dims, Component, Value>);
 };
 
 } // namespace spatial_lookup

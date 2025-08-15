@@ -3,7 +3,15 @@
 #include <optional>
 
 template <typename T>
-std::optional<std::reference_wrapper<T>> as_ref(const std::optional<T> &option) {
+std::optional<std::reference_wrapper<const T>> as_ref(const std::optional<T> &option) {
+    if (option.has_value()) {
+        return option.value();
+    } else {
+        return std::nullopt;
+    }
+}
+template <typename T>
+std::optional<std::reference_wrapper<T>> as_ref(std::optional<T> &option) {
     if (option.has_value()) {
         return option.value();
     } else {

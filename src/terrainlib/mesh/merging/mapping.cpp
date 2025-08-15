@@ -1,6 +1,9 @@
 #include <numeric>
 
+#include <glm/common.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <libassert/assert.hpp>
+#include <radix/geometry.h>
 
 #include "UnionFind.h"
 #include "log.h"
@@ -9,30 +12,114 @@
 #include "mesh/merging/mapping.h"
 #include "mesh/utils.h"
 #include "mesh/validate.h"
+#include "spatial_lookup/Grid.h"
 #include "spatial_lookup/Hashmap.h"
 #include "type_utils.h"
 
 namespace mesh::merging {
+
+namespace {
+radix::geometry::Aabb3d pad_bounds(const radix::geometry::Aabb3d &bounds, const double percentage) {
+    const glm::dvec3 bounds_padding = bounds.size() * percentage;
+    const radix::geometry::Aabb3d padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
+    return padded_bounds;
+}
+
+template <typename T>
+spatial_lookup::Grid3d<T> _construct_grid_for_meshes(const radix::geometry::Aabb3d &bounds, const size_t vertex_count) {
+    const radix::geometry::Aabb3d padded_bounds = pad_bounds(bounds, 0.01);
+
+    const double max_extends = glm::compMax(padded_bounds.size());
+    const glm::dvec3 relative_extends = padded_bounds.size() / max_extends;
+    const glm::uvec3 grid_divisions = glm::max(glm::uvec3(2 * std::cbrt(vertex_count) * relative_extends), glm::uvec3(1));
+    spatial_lookup::Grid3d<T> grid(padded_bounds.min, padded_bounds.size(), grid_divisions);
+
+    return grid;
+}
+
+template <typename T>
+spatial_lookup::Grid3d<T> construct_grid_for_mesh(const SimpleMesh &mesh) {
+    const radix::geometry::Aabb3d bounds = calculate_bounds(mesh);
+    const size_t vertex_count = mesh.vertex_count();
+    return _construct_grid_for_meshes<T>(bounds, vertex_count);
+}
+
+template <typename T>
+spatial_lookup::Grid3d<T> construct_grid_for_meshes(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    const radix::geometry::Aabb3d bounds = calculate_bounds(meshes);
+    const size_t maximal_merged_mesh_size = std::transform_reduce(
+        meshes.begin(), meshes.end(), 0, [](const size_t a, const size_t b) { return a + b; }, [](const SimpleMesh &mesh) { return mesh.vertex_count(); });
+    return _construct_grid_for_meshes<T>(bounds, maximal_merged_mesh_size);
+}
+
+double estimate_merge_epsilon(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {double total_length = 0.0;
+    size_t total_triangle_count = 0;
+    for (const auto &mesh_ref : meshes) {
+        const SimpleMesh &mesh = mesh_ref.get();
+        const auto avg_length_opt = estimate_average_edge_length(mesh);
+        if (avg_length_opt) {
+            const size_t num_triangles = mesh.triangles.size();
+            total_length += avg_length_opt.value() * num_triangles;
+            total_triangle_count += num_triangles;
+        }
+    }
+
+    const double average_edge_length = total_length / total_triangle_count;
+    const double distance_epsilon = average_edge_length / 1000;
+    return distance_epsilon;
+}
+}
 
 VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
     if (meshes.empty()) {
         return {};
     }
 
-    const double average_edge_length_sum = std::accumulate(
-        meshes.begin(), meshes.end(), 0.0,
-        [](double sum, const std::reference_wrapper<const SimpleMesh> &mesh_ref) {
-            return sum + estimate_average_edge_length(mesh_ref.get()).value_or(0);
-        });
-    const double average_edge_length = average_edge_length_sum / meshes.size();
-    const double distance_epsilon = average_edge_length / 100;
+    const double distance_epsilon = estimate_merge_epsilon(meshes);
     return create_mapping(meshes, distance_epsilon);
 }
 
+namespace {
+void validate_epsilon_mapping(
+    const VertexMapping &mapping,
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
+    double epsilon) {
+    const double epsilon2 = epsilon * epsilon;
+
+    const size_t max_merged_index = mapping.find_max_merged_index();
+
+    std::vector<VertexId> originals;
+    for (size_t merged_index = 0; merged_index <= max_merged_index; merged_index++) {
+        // Collect all original vertices mapping to this merged index
+        originals.clear();
+        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+            const std::optional<size_t> vertex_index = mapping.map_backward(mesh_index, merged_index);
+            if (vertex_index.has_value()) {
+                originals.push_back(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index.value()});
+            }
+        }
+
+        // Check all pairs of original vertices for this merged vertex
+        for (size_t i = 0; i < originals.size(); i++) {
+            const glm::dvec3 &pi = meshes[originals[i].mesh_index].get().positions[originals[i].vertex_index];
+            for (size_t j = i + 1; j < originals.size(); j++) {
+                const glm::dvec3 &pj = meshes[originals[j].mesh_index].get().positions[originals[j].vertex_index];
+                const double dist2 = glm::distance2(pi, pj);
+                DEBUG_ASSERT(dist2 <= epsilon2);
+            }
+        }
+    }
+}
+}
+
 VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, double distance_epsilon) {
-    auto map = spatial_lookup::Hashmap3d<VertexId>(distance_epsilon * 3);
+    // auto map = spatial_lookup::Hashmap3d<VertexId>(distance_epsilon * 3);
+    auto map = construct_grid_for_meshes<VertexId>(meshes);
     auto deduplicate = EpsilonVertexDeduplicate(map, distance_epsilon);
-    return create_mapping(meshes, deduplicate);
+    LOG_TRACE("Creating merge mapping with epsilon = {}", distance_epsilon);
+    const VertexMapping mapping = create_mapping(meshes, deduplicate);
+    validate_epsilon_mapping(mapping, meshes, distance_epsilon);
+    return mapping;
 }
 
 VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, VertexDeduplicate<3, double, VertexId> &deduplicate) {
@@ -43,7 +130,11 @@ VertexMapping create_mapping(const std::span<const std::reference_wrapper<const 
         return VertexMapping::identity(meshes[0].get().vertex_count());
     }
 
-    LOG_TRACE("Finding shared vertices between {} meshes (deduplication using {})", meshes.size(), type_name(deduplicate));
+    LOG_TRACE("Finding shared vertices between {} meshes using {}", meshes.size(), type_name(deduplicate));
+    for (size_t i = 0; i < meshes.size(); i++) {
+        const SimpleMesh &mesh = meshes[i].get();
+        LOG_TRACE("Mesh {}: {} vertices, {} triangles", i, mesh.vertex_count(), mesh.face_count());
+    }
 
     std::vector<size_t> mesh_sizes;
     mesh_sizes.reserve(meshes.size());
@@ -57,6 +148,10 @@ VertexMapping create_mapping(const std::span<const std::reference_wrapper<const 
 
     size_t unique_vertices = 0;
     bool has_warned = false;
+    auto add_unique_vertex = [&](const VertexId &vertex) {
+        mapping.add_bidirectional(vertex, unique_vertices);
+        unique_vertices += 1;
+    };
     std::vector<std::reference_wrapper<const VertexId>> duplicate_vertices;
     for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
@@ -66,25 +161,40 @@ VertexMapping create_mapping(const std::span<const std::reference_wrapper<const 
                 .mesh_index = mesh_index,
                 .vertex_index = vertex_index};
 
-            if (!deduplicate.get_or_add(position, current_vertex, duplicate_vertices)) {
+            if (mesh_index == 0) {
+                deduplicate.add(position, current_vertex);
+                add_unique_vertex(current_vertex);
+            } else if (!deduplicate.get_or_add(position, current_vertex, duplicate_vertices)) {
                 // Duplicates detected
-                for (const auto& other_vertex : duplicate_vertices) {
+                std::optional<std::pair<VertexId, double>> nearest_duplicate;
+                for (const auto &other_vertex : duplicate_vertices) {
                     // Warn if we would perform intra mesh merges (but dont actually do them)
                     if (other_vertex.get().mesh_index == current_vertex.mesh_index) {
                         if (!has_warned) {
                             LOG_WARN("Deduplication is too inclusive and would perform intra-mesh merges");
                             has_warned = true;
-                            break;
                         }
                     } else {
-                        mapping.add_bidirectional(current_vertex, mapping.map_forward(other_vertex.get()));
+                        double distance2 = 0;
+                        // Only caluclate the distance if there is actually more than a single duplicate vertex
+                        if (duplicate_vertices.size() > 1) {
+                            distance2 = glm::distance2(mesh.positions[other_vertex.get().vertex_index], position);
+                        }
+                        if (!nearest_duplicate.has_value() || nearest_duplicate.value().second > distance2) {
+                            nearest_duplicate = {other_vertex.get(), distance2};
+                        }
                     }
+                }
+                if (nearest_duplicate.has_value()) {
+                    mapping.add_bidirectional(current_vertex, mapping.map_forward(nearest_duplicate.value().first));
+                } else {
+                    deduplicate.add(position, current_vertex);
+                    add_unique_vertex(current_vertex);
                 }
                 duplicate_vertices.clear();
             } else {
                 // New vertex / No duplicates
-                mapping.add_bidirectional(current_vertex, unique_vertices);
-                unique_vertices += 1;
+                add_unique_vertex(current_vertex);
             }
         }
     }
@@ -94,7 +204,6 @@ VertexMapping create_mapping(const std::span<const std::reference_wrapper<const 
 
     return mapping;
 }
-
 /*
 namespace {
 radix::geometry::Aabb3d pad_bounds(const radix::geometry::Aabb3d &bounds, const double percentage) {
@@ -295,31 +404,38 @@ SimpleMesh apply_mapping(const std::span<const std::reference_wrapper<const Simp
         max_combined_face_count += mesh.face_count();
     }
 
-    const bool has_uvs = std::all_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) {
-        return mesh.has_uvs();
-    });
+    // Can happen if all meshes are empty
+    if (max_combined_vertex_count == 0) {
+        return {};
+    }
+
+#ifndef NDEBUG
+    const double distance_epsilon = estimate_merge_epsilon(meshes);
+    std::vector<bool> written(max_combined_vertex_count, false);
+#endif
 
     size_t max_vertex_index = 0;
     merged_mesh.positions.resize(max_combined_vertex_count);
-    if (has_uvs) {
-        merged_mesh.uvs.resize(max_combined_vertex_count);
-    }
     for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
         for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
             const size_t mapped_index = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index});
-            merged_mesh.positions[mapped_index] = mesh.positions[vertex_index];
-            if (has_uvs) {
-                merged_mesh.uvs[mapped_index] = mesh.uvs[vertex_index];
+            const glm::dvec3 position = mesh.positions[vertex_index];
+#ifndef NDEBUG
+            if (written[mapped_index]) {
+                const glm::dvec3 &old = merged_mesh.positions[mapped_index];
+                const double dist2 = glm::distance2(position, old);
+                DEBUG_ASSERT(dist2 <= distance_epsilon * distance_epsilon);
+            } else {
+                written[mapped_index] = true;
             }
+#endif
+            merged_mesh.positions[mapped_index] =  position;
             max_vertex_index = std::max(max_vertex_index, mapped_index);
         }
     }
     DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count || max_vertex_index == 0);
     merged_mesh.positions.resize(max_vertex_index + 1);
-    if (has_uvs) {
-        merged_mesh.uvs.resize(max_vertex_index + 1);
-    }
 
     merged_mesh.triangles.reserve(max_combined_face_count);
     for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
@@ -334,7 +450,7 @@ SimpleMesh apply_mapping(const std::span<const std::reference_wrapper<const Simp
             if (new_triangle[0] == new_triangle[1] ||
                 new_triangle[1] == new_triangle[2] ||
                 new_triangle[2] == new_triangle[0]) {
-                LOG_WARN("Skipping illegal triangle while merging");
+                LOG_WARN("Skipping degenerate triangle while merging");
                 continue;
             }
 
@@ -343,7 +459,7 @@ SimpleMesh apply_mapping(const std::span<const std::reference_wrapper<const Simp
     }
 
     mesh::validate(merged_mesh);
-    // mesh::validate(convert::to_cgal_mesh(merged_mesh));
+    mesh::validate(convert::to_cgal_mesh(merged_mesh));
 
     return merged_mesh;
 }

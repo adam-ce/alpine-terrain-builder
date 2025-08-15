@@ -224,37 +224,57 @@ int run(const cli::Args &args) {
     TreeView tree_view(storage, root_id);
 
     size_t selected = 0;
+    size_t scroll_offset = 0;
+    size_t visible_lines = 0;
+    auto screen = ftxui::ScreenInteractive::Fullscreen();
     auto renderer = ftxui::Renderer([&] {
         ftxui::Elements lines;
         lines.reserve(tree_view.size());
-        size_t i = 0;
-        for (auto it = tree_view.begin(); it != tree_view.end(); i++, it++) {
+
+        visible_lines = std::max<size_t>(1, screen.dimy() - 2);
+
+        for (size_t i = scroll_offset;
+             i < tree_view.size() && (i - scroll_offset) < visible_lines;
+             ++i) {
+            auto it = tree_view.begin();
+            std::advance(it, i);
             lines.push_back(render_line(*it, tree_view.root.level(), i == selected));
         }
-        return ftxui::vbox(std::move(lines)) | ftxui::frame | ftxui::border;
+
+        return ftxui::vbox(std::move(lines)) | ftxui::border;
     });
 
-    auto screen = ftxui::ScreenInteractive::Fullscreen();
-
     auto container = ftxui::CatchEvent(renderer, [&](ftxui::Event e) {
+        auto ensure_visible = [&] {
+            if (selected < scroll_offset) {
+                scroll_offset = selected;
+            } else if (selected >= scroll_offset + visible_lines) {
+                scroll_offset = selected - visible_lines + 1;
+            }
+        };
+
         if (e == ftxui::Event::ArrowUp) {
             if (selected > 0) {
                 selected--;
+                ensure_visible();
             }
             return true;
         }
         if (e == ftxui::Event::ArrowDown) {
             if (selected + 1 < tree_view.size()) {
                 selected++;
+                ensure_visible();
             }
             return true;
         }
         if (e == ftxui::Event::ArrowRight) {
             tree_view.expand_node(selected);
+            ensure_visible();
             return true;
         }
         if (e == ftxui::Event::ArrowLeft) {
             tree_view.collapse_node(selected);
+            ensure_visible();
             return true;
         }
         if ((e == ftxui::Event::Character('q') || e == ftxui::Event::Character('Q') || e == ftxui::Event::Escape)) {

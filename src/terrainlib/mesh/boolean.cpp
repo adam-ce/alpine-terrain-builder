@@ -5,8 +5,6 @@
 #include "mesh/boolean.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
-#include "mesh/clip.h"
-#include "mesh/utils.h"
 
 namespace mesh {
 

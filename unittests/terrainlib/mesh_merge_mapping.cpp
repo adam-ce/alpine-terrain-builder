@@ -63,20 +63,20 @@ TEST_CASE("merging::create_mapping") {
         // Merged index of (1, 0, 0) should be the same for both meshes
         size_t idx1 = mapping.map_forward(VertexId{0, 2});
         size_t idx2 = mapping.map_forward(VertexId{1, 0});
-        REQUIRE(idx1 == idx2);
+        CHECK(idx1 == idx2);
 
         // Merged index of (1,1,0) should be the same for both
         size_t idx3 = mapping.map_forward(VertexId{0, 1});
         size_t idx4 = mapping.map_forward(VertexId{1, 1});
-        REQUIRE(idx3 == idx4);
+        CHECK(idx3 == idx4);
 
         // (0, 1, 0) should be unique
         size_t idx5 = mapping.map_forward(VertexId{1, 2});
-        REQUIRE(idx5 != idx1);
-        REQUIRE(idx5 != idx3);
+        CHECK(idx5 != idx1);
+        CHECK(idx5 != idx3);
 
         // Total unique merged vertices should be 4
-        REQUIRE(mapping.find_max_merged_index() + 1 == 4);
+        CHECK(mapping.find_max_merged_index() + 1 == 4);
     }
 
     SECTION("similar vertices within epsilon are merged") {
@@ -118,8 +118,8 @@ TEST_CASE("merging::create_mapping") {
         size_t idx1 = mapping.map_forward(VertexId{0, 0});
         size_t idx2 = mapping.map_forward(VertexId{1, 0});
 
-        REQUIRE(idx1 != idx2);
-        REQUIRE(mapping.find_max_merged_index() + 1 == 2);
+        CHECK(idx1 != idx2);
+        CHECK(mapping.find_max_merged_index() + 1 == 2);
     }
 
     SECTION("identity mapping on disjoint meshes") {
@@ -135,8 +135,27 @@ TEST_CASE("merging::create_mapping") {
 
         VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1); // all far apart
 
-        REQUIRE(mapping.find_max_merged_index() + 1 == 4);
-        REQUIRE(mapping.map_forward(VertexId{0, 0}) != mapping.map_forward(VertexId{0, 1}));
-        REQUIRE(mapping.map_forward(VertexId{1, 0}) != mapping.map_forward(VertexId{1, 1}));
+        CHECK(mapping.find_max_merged_index() + 1 == 4);
+        CHECK(mapping.map_forward(VertexId{0, 0}) != mapping.map_forward(VertexId{0, 1}));
+        CHECK(mapping.map_forward(VertexId{1, 0}) != mapping.map_forward(VertexId{1, 1}));
+    }
+
+    SECTION("identical meshes collapse to one") {
+        SimpleMesh mesh1;
+        mesh1.positions = {
+            glm::dvec3(0, 0, 0),
+            glm::dvec3(1, 0, 0),
+            glm::dvec3(0, 1, 0)};
+        mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
+
+        SimpleMesh mesh2 = mesh1;
+
+        std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
+
+        VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+
+        CHECK(mapping.map_forward(VertexId{0, 0}) == mapping.map_forward(VertexId{1, 0}));
+        CHECK(mapping.map_forward(VertexId{0, 1}) == mapping.map_forward(VertexId{1, 1}));
+        CHECK(mapping.map_forward(VertexId{0, 2}) == mapping.map_forward(VertexId{1, 2}));
     }
 }

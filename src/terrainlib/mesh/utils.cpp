@@ -7,29 +7,44 @@
 #include "mesh/utils.h"
 #include "mesh/validate.h"
 
-radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh) {
-    radix::geometry::Aabb3d bounds;
-    bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
-    bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
-    for (unsigned int j = 0; j < mesh.positions.size(); j++) {
-        const auto &position = mesh.positions[j];
-        bounds.expand_by(position);
-    }
-    return bounds;
+namespace {
+template <typename T>
+const T& unwrap(const T& t) {
+    return t;
 }
 
-radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes) {
+template <typename T>
+const T& unwrap(const std::reference_wrapper<T>& t) {
+    return t.get();
+}
+
+template <typename MeshRange>
+radix::geometry::Aabb3d calculate_bounds_range(const MeshRange &meshes) {
     radix::geometry::Aabb3d bounds;
-    bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
-    bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
-    for (unsigned int i = 0; i < meshes.size(); i++) {
-        const SimpleMesh &mesh = meshes[i];
-        for (unsigned int j = 0; j < mesh.positions.size(); j++) {
-            const auto &position = mesh.positions[j];
+    constexpr double inf = std::numeric_limits<double>::infinity();
+    bounds.min = glm::dvec3(+inf);
+    bounds.max = glm::dvec3(-inf);
+
+    for (const auto &wrapper : meshes) {
+        const auto &mesh = unwrap(wrapper);
+        for (const auto &position : mesh.positions) {
             bounds.expand_by(position);
         }
     }
     return bounds;
+}
+}
+
+radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh) {
+    return calculate_bounds_range(std::array{std::cref(mesh)});
+}
+
+radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes) {
+    return calculate_bounds_range(meshes);
+}
+
+radix::geometry::Aabb3d calculate_bounds(std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    return calculate_bounds_range(meshes);
 }
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size) {

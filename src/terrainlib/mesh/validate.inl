@@ -95,7 +95,7 @@ void validate(const SimpleMesh_<n_dims, T> &mesh) {
 #endif
 }
 
-template<typename Point>
+template <typename Point>
 inline void validate(const CGAL::Surface_mesh<Point> &mesh) {
 #ifndef NDEBUG
     DEBUG_ASSERT(mesh.is_valid()); 
@@ -104,5 +104,4 @@ inline void validate(const CGAL::Surface_mesh<Point> &mesh) {
     DEBUG_ASSERT(!CGAL::Polygon_mesh_processing::does_self_intersect(mesh));
 #endif
 }
-
 }

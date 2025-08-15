@@ -23,6 +23,7 @@ public:
     }
 
     void write_node(const octree::Id &id, const SimpleMesh &mesh) {
+        mesh::validate(mesh);
         DEBUG_ASSERT_VAL(this->_storage.write_node(id, mesh, this->_overwrite));
     }
 

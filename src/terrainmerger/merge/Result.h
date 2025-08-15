@@ -6,18 +6,30 @@
 
 namespace merge {
 
-struct Recurse {};
+template <typename Context>
+struct Recurse {
+    // TODO: make optional?
+    Context context;
+};
+template <typename Context>
+Recurse(Context) -> Recurse<Context>;
 
 struct Ignore {};
 
+enum class Source {
+    Left,
+    Right
+};
+
 struct Unchanged {
-    bool is_left;
+    Source source;
 };
 
 struct Merged {
     SimpleMesh mesh;
 };
 
-using Result = std::variant<Recurse, Ignore, Unchanged, Merged>;
+template <typename Context>
+using Result = std::variant<Recurse<Context>, Ignore, Unchanged, Merged>;
 
 } // namespace merge

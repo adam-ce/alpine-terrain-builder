@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 # TODO: This is needed to avoid NDEBUG being undefined on Release
 if (CMAKE_BUILD_TYPE MATCHES Release)
-    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+    # set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
 endif()
 
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
@@ -271,6 +271,12 @@ add_executable(index_browser
     index_browser/main.cpp
 )
 target_link_libraries(index_browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
+
+add_executable(mesh_merger
+    mesh_merger/cli.h mesh_merger/cli.cpp
+    mesh_merger/main.cpp
+)
+target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
 
 add_executable(browser
     # browser/main2.cpp

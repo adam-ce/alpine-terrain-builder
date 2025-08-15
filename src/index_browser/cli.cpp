@@ -35,8 +35,7 @@ Args cli::parse(int argc, const char * const * argv) {
         ->default_val(spdlog::level::level_enum::info);
 
     try {
-        app.parse("--dataset ../../../meshes/innenstadt");
-        // app.parse(argc, argv);
+        app.parse(argc, argv);
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }

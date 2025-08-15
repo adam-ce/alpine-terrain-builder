@@ -14,8 +14,8 @@
 namespace octree {
 
 struct OpenOptions {
-    std::unique_ptr<disk::layout::Strategy> default_layout_strategy;
-    std::optional<std::string> preferred_extension_with_dot;
+    std::unique_ptr<disk::layout::Strategy> default_layout_strategy = {};
+    std::optional<std::string> preferred_extension_with_dot = {};
 };
 
 tl::expected<IndexedStorage, io::Error> open_index(const std::filesystem::path &index_path);

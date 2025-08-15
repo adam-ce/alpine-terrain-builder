@@ -113,7 +113,7 @@ inline void cut_dataset(
     const MeshMask& mask,
     octree::Storage &output,
     const bool keep_inside) {
-    Context ctx(input, output, octree::Space::earth());
+    Context ctx(input, output, octree::Space::earth(), keep_inside);
     cut_node(ctx, octree::Id::root(), mask);
     output.save_or_create_index();
 }

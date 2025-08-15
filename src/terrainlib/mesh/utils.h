@@ -11,7 +11,8 @@
 // TODO: make all methods work with SimpleMesh_<n_dims, T>
 
 radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh);
-radix::geometry::Aabb3d calculate_bounds(std::span<const SimpleMesh> meshes);
+radix::geometry::Aabb3d calculate_bounds(const std::span<const SimpleMesh> meshes);
+radix::geometry::Aabb3d calculate_bounds(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size = 1000);
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh);

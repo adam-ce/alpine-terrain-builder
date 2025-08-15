@@ -2,10 +2,13 @@
 
 #include <optional>
 #include <span>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 #include <radix/geometry.h>
+
+#include "mesh/SimpleMesh.h"
 
 // TODO: put in mesh namespace
 // TODO: make all methods work with SimpleMesh_<n_dims, T>
@@ -63,5 +66,13 @@ void flip_triangle_orientation(glm::uvec3 &triangle);
 void flip_triangle_orientations(std::vector<glm::uvec3> &triangles);
 template <glm::length_t n_dims, typename T>
 void flip_orientation(SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T, typename Func>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary);
 
 #include "utils.inl"

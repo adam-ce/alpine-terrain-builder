@@ -1,7 +1,5 @@
 #pragma once
 
-#include "mesh/SimpleMesh.h"
-
 namespace {
 template <typename MeshRange>
 auto calculate_bounds_range(const MeshRange &meshes) {
@@ -68,4 +66,52 @@ void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh) {
 template <glm::length_t n_dims, typename T>
 void flip_orientation(SimpleMesh_<n_dims, T> &mesh) {
     flip_triangle_orientations(mesh.triangles);
+}
+
+template <glm::length_t n_dims, typename T, typename Func>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const SimpleMesh_<n_dims, T> &mesh) {
+    using Edge = typename SimpleMesh_<n_dims, T>::Edge;
+    std::unordered_set<Edge> edges;
+    for (const auto& triangle_ref : mesh.triangles) {
+        glm::uvec3 triangle = triangle_ref;
+        std::sort(&triangle.x, &triangle.z + 1);
+
+        const std::array<glm::uvec2, 3> face_edges{glm::uvec2(triangle.x, triangle.y),
+                                              glm::uvec2(triangle.y, triangle.z),
+                                              glm::uvec2(triangle.x, triangle.z)};
+        for (const glm::uvec2 edge : face_edges) {
+            edges.insert(edge);
+        }
+    }
+    return edges;
+}
+
+template <glm::length_t n_dims, typename T>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
+    std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> boundary;
+    find_boundary_edges(mesh, boundary);
+    return boundary;
+}
+template <glm::length_t n_dims, typename T>
+void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
+    using Triangle = typename SimpleMesh_<n_dims, T>::Triangle;
+    using Edge = typename SimpleMesh_<n_dims, T>::Edge;
+    for (const auto &triangle_ref : mesh.triangles) {
+        Triangle triangle = triangle_ref;
+        std::sort(&triangle.x, &triangle.z + 1);
+
+        const std::array<Edge, 3> edges{Edge(triangle.x, triangle.y),
+                                        Edge(triangle.y, triangle.z),
+                                        Edge(triangle.x, triangle.z)};
+        for (const Edge& edge : edges) {
+            auto it = boundary.find(edge);
+            if (it != boundary.end()) {
+                // Edge already there -> shared egde -> remove it
+                boundary.erase(it);
+            } else {
+                // Edge not present -> add it
+                boundary.insert(edge);
+            }
+        }
+    }
 }

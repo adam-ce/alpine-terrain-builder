@@ -23,7 +23,7 @@ inline double estimate_merge_epsilon(const std::span<const std::reference_wrappe
     }
 
     const double average_edge_length = total_length / total_triangle_count;
-    const double distance_epsilon = average_edge_length / 1000;
+    const double distance_epsilon = average_edge_length / 100;
     return distance_epsilon;
 }
 

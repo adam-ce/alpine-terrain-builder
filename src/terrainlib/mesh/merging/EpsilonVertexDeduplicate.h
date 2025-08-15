@@ -17,10 +17,10 @@ public:
     Component epsilon() const {
         return this->_epsilon;
     }
-    void add(const Vec &point, const Meta meta) override {
+    virtual void add(const Vec &point, const Meta meta) override {
         this->_lookup.insert(point, meta);
     }
-    bool get(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
+    virtual bool get(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
         return this->_lookup.find_all_near(point, this->_epsilon, duplicates);
     }
 

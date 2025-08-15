@@ -173,6 +173,7 @@ add_library(terrainlib
     terrainlib/init.h terrainlib/init.cpp
     terrainlib/log.h terrainlib/log.cpp
     terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
+    terrainlib/SphereProjector.h
     terrainlib/srs.h
     terrainlib/string_utils.h
 )

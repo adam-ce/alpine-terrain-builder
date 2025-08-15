@@ -10,9 +10,12 @@
 // TODO: put in mesh namespace
 // TODO: make all methods work with SimpleMesh_<n_dims, T>
 
-radix::geometry::Aabb3d calculate_bounds(const SimpleMesh &mesh);
-radix::geometry::Aabb3d calculate_bounds(const std::span<const SimpleMesh> meshes);
-radix::geometry::Aabb3d calculate_bounds(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const SimpleMesh_<n_dims, T>> meshes);
+template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const std::reference_wrapper<const SimpleMesh_<n_dims, T>>> meshes);
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size = 1000);
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh);

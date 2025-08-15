@@ -56,8 +56,6 @@ public:
     using Self = HashmapStorage<n_dims, Component, Value>;
     using Vec = glm::vec<n_dims, Component>;
     using Bounds = radix::geometry::Aabb<n_dims, Component>;
-    using Hash = VecHash <n_dims, Component>;
-    using Equal = NeverEqual<Vec>;
 
     struct CellIndex {
         explicit CellIndex(const Vec& v) : quantized(v) {}
@@ -127,6 +125,9 @@ public:
     }
 
 private:
+    using Hash = VecHash<n_dims, Component>;
+    using Equal = NeverEqual<Vec>;
+
     Component _epsilon; 
     std::unordered_map<Vec, Value, Hash, Equal> _store;
 

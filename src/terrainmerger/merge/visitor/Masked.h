@@ -5,8 +5,12 @@
 #include "merge/Result.h"
 #include "merge/visitor/Visitor.h"
 #include "mesh/merge.h"
+#include "mesh/merging/SphereVertexDeduplicate.h"
+#include "mesh/merging/SphereVertexDeduplicate2.h"
+#include "mesh/merging/helpers.h"
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
+#include "spatial_lookup/Hashmap.h"
 #include "utils.h"
 
 namespace merge::visitor {
@@ -165,7 +169,23 @@ private:
             }
         }
 
-        const SimpleMesh merged_mesh = mesh::merge(base_mesh_clipped, new_mesh_clipped);
+        const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {base_mesh_clipped.get(), new_mesh_clipped.get()};
+        const double distance_epsilon = mesh::merging::estimate_merge_epsilon(meshes);
+        /*
+        spatial_lookup::Hashmap2d<mesh::merging::VertexId> map(distance_epsilon * 3);
+        const glm::dvec3 tangent_point = meshes[0].get().positions[0];
+        mesh::merging::SphereVertexDeduplicate<
+            mesh::merging::VertexId,
+            spatial_lookup::Hashmap2d<mesh::merging::VertexId>
+        > deduplicate(map, 0.01, tangent_point);
+        */
+        auto map = mesh::merging::construct_grid_for_meshes<mesh::merging::VertexId>(meshes);
+        const double radius = glm::length(meshes[0].get().positions[0]);
+        mesh::merging::SphereVertexDeduplicate2<
+            mesh::merging::VertexId,
+            decltype(map)
+        > deduplicate(map, distance_epsilon, radius);
+        const SimpleMesh merged_mesh = mesh::merge(meshes, deduplicate);
         return Merged{merged_mesh};
 
         /*

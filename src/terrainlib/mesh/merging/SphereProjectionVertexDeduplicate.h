@@ -22,8 +22,8 @@ class SphereProjectionVertexDeduplicate : public VertexDeduplicate<3, double, Me
 public:
     using Vec = glm::vec<3, double>;
 
-    SphereProjectionVertexDeduplicate(Lookup &lookup, double epsilon, double radius)
-        : _inner(lookup, epsilon), _radius(radius) {}
+    SphereProjectionVertexDeduplicate(Lookup lookup, double epsilon, double radius)
+        : _inner(std::move(lookup), epsilon), _radius(radius) {}
 
     void add(const Vec &point, const Meta meta) override {
         const Vec mapped = scale_to_length(point, this->_radius);

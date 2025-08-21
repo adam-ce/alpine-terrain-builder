@@ -19,18 +19,7 @@
 #include "spatial_lookup/Hashmap.h"
 #include "type_utils.h"
 
-namespace mesh::merging {
-
-VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
-    if (meshes.empty()) {
-        return {};
-    }
-
-    const double distance_epsilon = estimate_merge_epsilon(meshes);
-    return create_mapping(meshes, distance_epsilon);
-}
-
-namespace {
+namespace mesh::merging::detail {
 void validate_epsilon_mapping(
     const VertexMapping &mapping,
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
@@ -63,26 +52,14 @@ void validate_epsilon_mapping(
     }
 #endif
 }
-} // namespace
 
 VertexMapping create_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
-    double distance_epsilon,
-    const bool only_consider_boundary) {
-    // auto map = spatial_lookup::Hashmap3d<VertexId>(distance_epsilon * 3);
-    auto map = construct_grid_for_meshes<VertexId>(meshes);
-    auto deduplicate = EpsilonVertexDeduplicate(map, distance_epsilon);
-    LOG_TRACE("Creating merge mapping with epsilon = {}", distance_epsilon);
-    const VertexMapping mapping = create_mapping(meshes, deduplicate, only_consider_boundary);
-    validate_epsilon_mapping(mapping, meshes, distance_epsilon);
-    return mapping;
-}
-
-VertexMapping create_mapping(
-    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
-    VertexDeduplicate<3, double, VertexId> &deduplicate,
-    const bool only_consider_boundary
+    const ResolvedCreateOptions options
 ) {
+    VertexDeduplicate<3, double, VertexId> &deduplicate = options.deduplicate;
+    const bool only_consider_boundary = options.only_consider_boundary;
+
     if (meshes.empty()) {
         return {};
     }
@@ -199,6 +176,15 @@ VertexMapping create_mapping(
 
     LOG_DEBUG("Identified {} shared and {} unique vertices", maximal_merged_mesh_size - unique_vertices, unique_vertices);
     mapping.validate();
+
+#ifndef NDEBUG
+    using DefaultEpsilonDeduplicate = EpsilonVertexDeduplicate<3, double, VertexId, spatial_lookup::Grid3d<VertexId>>;
+    const auto *epsilon_deduplicate = dynamic_cast<DefaultEpsilonDeduplicate*>(&deduplicate);
+    if (epsilon_deduplicate != nullptr) {
+        const double epsilon = epsilon_deduplicate->epsilon();
+        validate_epsilon_mapping(mapping, meshes, epsilon);
+    }
+#endif
 
     return mapping;
 }
@@ -391,9 +377,11 @@ VertexMapping create_connecting_mapping(std::span<std::reference_wrapper<const S
 SimpleMesh apply_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     const VertexMapping &mapping,
-    const bool deduplicate_triangles, // TODO: automatically set to false when only considering boundary
-    const bool merge_uvs
+    const ResolvedApplyOptions options
 ) {
+    const bool deduplicate_triangles = options.deduplicate_triangles;
+    const bool merge_uvs = options.merge_uvs;
+
     LOG_TRACE("Merging meshes based on mapping");
     if (meshes.empty()) {
         return {};
@@ -463,6 +451,7 @@ SimpleMesh apply_mapping(
                     [&](const size_t i) { return mapping.find_source_triangle_in_mesh(new_triangle, i).has_value(); });
 
                 if (!is_first_mesh) {
+                    LOG_WARN("Skipping duplicate triangle while merging");
                     continue;
                 }
             }

@@ -12,8 +12,8 @@ class EpsilonVertexDeduplicate : public VertexDeduplicate<n_dims, Component, Met
 public:
     using Vec = glm::vec<n_dims, Component>;
 
-    EpsilonVertexDeduplicate(Lookup &lookup, Component epsilon)
-        : _lookup(lookup),
+    EpsilonVertexDeduplicate(Lookup lookup, Component epsilon)
+        : _lookup(std::move(lookup)),
           _epsilon(epsilon) {}
           
     Component epsilon() const {
@@ -27,14 +27,15 @@ public:
     }
 
 private:
-    Lookup &_lookup;
+    Lookup _lookup;
     Component _epsilon;
 };
 
-template <glm::length_t N, typename C, typename M, typename S,
-          template <glm::length_t, typename, typename, typename> class CellBased,
-          typename EpsilonType>
-EpsilonVertexDeduplicate(CellBased<N, C, M, S> &lookup, EpsilonType epsilon)
-    -> EpsilonVertexDeduplicate<N, C, M, CellBased<N, C, M, S>>;
+template <typename L,
+          typename C = typename L::Vec::value_type,
+          typename M = typename L::Value,
+          glm::length_t N = L::Vec::length()>
+EpsilonVertexDeduplicate(L lookup, C epsilon)
+    -> EpsilonVertexDeduplicate<N, C, M, L>;
 
 }

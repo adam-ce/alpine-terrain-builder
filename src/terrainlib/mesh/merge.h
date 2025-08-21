@@ -11,18 +11,19 @@
 
 namespace mesh {
 
-template <typename... Args>
-SimpleMesh merge(std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
-                 Args &&...args) {
+template <typename Mode = merging::EstimateEpsilon>
+SimpleMesh merge(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
+    const merging::CreateOptions<Mode> create_options = merging::create_options(),
+    const merging::ApplyOptions apply_options = merging::apply_options()) {
     switch (meshes.size()) {
     case 0:
         return {};
     case 1:
         return meshes[0];
     default:
-        const merging::VertexMapping mapping =
-            merging::create_mapping(meshes, std::forward<Args>(args)...);
-        return merging::apply_mapping(meshes, mapping);
+        const merging::VertexMapping mapping = merging::create_mapping(meshes, create_options);
+        return merging::apply_mapping(meshes, mapping, apply_options);
     }
 }
 

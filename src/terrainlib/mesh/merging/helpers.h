@@ -6,6 +6,8 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/utils.h"
 #include "spatial_lookup/Grid.h"
+#include "mesh/merging/EpsilonVertexDeduplicate.h"
+#include "mesh/merging/VertexMapping.h"
 
 namespace mesh::merging {
 
@@ -60,6 +62,16 @@ spatial_lookup::Grid3d<T> construct_grid_for_meshes(const std::span<const std::r
     const size_t maximal_merged_mesh_size = std::transform_reduce(
         meshes.begin(), meshes.end(), 0, [](const size_t a, const size_t b) { return a + b; }, [](const SimpleMesh &mesh) { return mesh.vertex_count(); });
     return _construct_grid_for_meshes<T>(bounds, maximal_merged_mesh_size);
+}
+
+inline auto make_epsilon_deduplicate(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, const double epsilon) {
+    spatial_lookup::Grid3d<VertexId> map = construct_grid_for_meshes<VertexId>(meshes);
+    return EpsilonVertexDeduplicate(std::move(map), epsilon);
+}
+
+inline auto make_default_deduplicate(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    const double epsilon = estimate_merge_epsilon(meshes);
+    return make_epsilon_deduplicate(meshes, epsilon);
 }
 
 } // namespace mesh::merging

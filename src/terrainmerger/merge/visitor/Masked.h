@@ -183,8 +183,10 @@ private:
             mesh::merging::VertexId,
             decltype(map)
         > deduplicate(map, distance_epsilon, radius);
-        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate, true);
-        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping, false, false);
+        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes,
+            mesh::merging::create_options().deduplicate(deduplicate).only_consider_boundary(true));
+        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping, 
+            mesh::merging::apply_options().deduplicate_triangles(false).merge_uvs(false));
         LOG_TRACE("Filling holes on merge border");
         mesh::fill_holes_on_merge_border(merged_mesh, mapping);
         return Merged{merged_mesh};

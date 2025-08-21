@@ -35,7 +35,10 @@ std::optional<std::reference_wrapper<typename SpatialLookup::Value>> _find_neare
     const typename SpatialLookup::Vec &point,
     const Distance epsilon) {
     using Vec = SpatialLookup::Vec;
-    using Value = SpatialLookup::Value;
+    using Value = std::conditional_t<
+        std::is_const_v<SpatialLookup>,
+        const typename SpatialLookup::Value,
+        typename SpatialLookup::Value>;
 
     Distance closest_distance2 = std::numeric_limits<Distance>::max();
     Value *closest_value = nullptr;
@@ -60,7 +63,10 @@ bool _find_all_near(
     const Distance epsilon,
     Vector &out) {
     using Vec = SpatialLookup::Vec;
-    using Value = SpatialLookup::Value;
+    using Value = std::conditional_t<
+        std::is_const_v<SpatialLookup>,
+        const typename SpatialLookup::Value,
+        typename SpatialLookup::Value>;
 
     out.clear();
     lookup.for_all_near(point, epsilon, [&](const Vec &, Value &value, Distance) {

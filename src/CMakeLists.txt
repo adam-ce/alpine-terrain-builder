@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 # TODO: This is needed to avoid NDEBUG being undefined on Release
 if (CMAKE_BUILD_TYPE MATCHES Release)
-    # set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
 endif()
 
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
@@ -123,8 +123,8 @@ add_library(terrainlib
     terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
     terrainlib/mesh/cgal.h
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
-    terrainlib/mesh/convert.h
-    terrainlib/mesh/convert.cpp
+    terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
+    terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/merge.h terrainlib/mesh/merge.cpp
     terrainlib/mesh/merging/VertexDeduplicate.h
@@ -158,6 +158,10 @@ add_library(terrainlib
     terrainlib/octree/Space.h terrainlib/octree/Space.cpp
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
+
+    terrainlib/polygon/Polygon.h 
+    terrainlib/polygon/triangulate.h terrainlib/polygon/triangulate.cpp 
+    terrainlib/polygon/utils.h terrainlib/polygon/utils.cpp 
 
     terrainlib/spatial_lookup/CellBased.h
     terrainlib/spatial_lookup/CellBasedStorage.h
@@ -209,8 +213,19 @@ target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
 
 
 add_library(terrainmergerlib
-    terrainmerger/merge.h
+    terrainmerger/merge/visitor/Masked.h
+    terrainmerger/merge/visitor/Simple.h
+    terrainmerger/merge/visitor/Visitor.h
+    terrainmerger/merge/NodeData.h
+    terrainmerger/merge/Result.h
+    terrainmerger/cut.h
+    terrainmerger/earth.h
     terrainmerger/mask.h
+    terrainmerger/merge.h
+    terrainmerger/NodeLoader.h
+    terrainmerger/NodeWriter.h
+    terrainmerger/SimpleMutex.h
+    terrainmerger/utils.h
 )
 target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
 target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)

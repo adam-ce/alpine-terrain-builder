@@ -39,14 +39,16 @@ add_executable(unittests_terrainlib
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/mesh_clip.cpp
+    terrainlib/mesh_connected_components.cpp
+    terrainlib/mesh_holes.cpp
     terrainlib/mesh_io.cpp
+    terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_merge.cpp
     terrainlib/mesh_utils.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/spatial_lookup.cpp
-    terrainlib/mesh_merge_mapping.cpp
-    terrainlib/mesh_merge.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 

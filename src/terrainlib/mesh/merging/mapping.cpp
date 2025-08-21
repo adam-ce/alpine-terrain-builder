@@ -73,8 +73,7 @@ VertexMapping create_mapping(const std::span<const std::reference_wrapper<const 
     return mapping;
 }
 
-// TODO: make only considering the boundary configurable
-VertexMapping create_mapping(std::span<const std::reference_wrapper<const SimpleMesh>> meshes, VertexDeduplicate<3, double, VertexId> &deduplicate) {
+VertexMapping create_mapping(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, VertexDeduplicate<3, double, VertexId> &deduplicate) {
     if (meshes.empty()) {
         return {};
     }
@@ -94,114 +93,58 @@ VertexMapping create_mapping(std::span<const std::reference_wrapper<const Simple
                     std::back_inserter(mesh_sizes),
                     [](const auto &mesh) { return mesh.get().vertex_count(); });
     const size_t maximal_merged_mesh_size = std::accumulate(mesh_sizes.begin(), mesh_sizes.end(), 0);
-    // Handle all meshes being empty
-    if (maximal_merged_mesh_size == 0) {
-        return {};
-    }
-
-    // Find the largest mesh and put it as the first element
-    const size_t index_of_largest_mesh = std::distance(mesh_sizes.begin(), std::max_element(mesh_sizes.begin(), mesh_sizes.end()));
-    std::vector<std::reference_wrapper<const SimpleMesh>> reordered;
-    if (index_of_largest_mesh != 0) {
-        std::copy(meshes.begin(), meshes.end(), std::back_inserter(reordered));
-        std::swap(reordered[0], reordered[index_of_largest_mesh]);
-        // we dont need to swap mesh_sizes here since we use the original mesh indices for the mapping
-        meshes = std::span(reordered);
-    }
 
     VertexMapping mapping;
     mapping.init(mesh_sizes);
 
     size_t unique_vertices = 0;
+    bool has_warned = false;
     auto add_unique_vertex = [&](const VertexId &vertex) {
         mapping.add_bidirectional(vertex, unique_vertices);
         unique_vertices += 1;
     };
-
-    // Init a reusable set of containers for the boundary
-    std::unordered_set<glm::uvec2> boundary_edges;
-    std::vector<bool> is_boundary_vertex;
-
-    // Reusable vector for duplicate vertices
     std::vector<std::reference_wrapper<const VertexId>> duplicate_vertices;
-
-    bool has_warned = false; // Flag to only print the intra-mesh merge warning once
-    for (size_t local_mesh_index = 0; local_mesh_index < meshes.size(); local_mesh_index++) {
-        const SimpleMesh &mesh = meshes[local_mesh_index];
-
-        // We need to adjust the mesh index in the generated mapping since we
-        // may have reordered the meshes before.
-        size_t mesh_index = local_mesh_index;
-        if (local_mesh_index == index_of_largest_mesh) {
-            mesh_index = 0;
-        } else if (local_mesh_index == 0) {
-            mesh_index = index_of_largest_mesh;
-        }
-
-        // Find boundary edges
-        boundary_edges.clear();
-        find_boundary_edges(mesh, boundary_edges);
-
-        // Classify vertices as on the boundary or on the inside
-        is_boundary_vertex.resize(mesh.vertex_count());
-        std::fill(is_boundary_vertex.begin(), is_boundary_vertex.end(), false);
-        for (const auto& edge : boundary_edges) {
-            is_boundary_vertex[edge[0]] = true;
-            is_boundary_vertex[edge[1]] = true;
-        }
-
+    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+        const SimpleMesh &mesh = meshes[mesh_index];
         for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
             const glm::dvec3 &position = mesh.positions[vertex_index];
             const VertexId current_vertex{
                 .mesh_index = mesh_index,
                 .vertex_index = vertex_index};
 
-            if (is_boundary_vertex[vertex_index]) {
-                // For each boundary vertex we need to deduplicate
-                if (mesh_index == 0) {
-                    // For the first mesh we know that there cannot be any duplicates
-                    deduplicate.add(position, current_vertex);
-                    add_unique_vertex(current_vertex);
-                } else {
-                    duplicate_vertices.clear();
-                    if (!deduplicate.get_or_add(position, current_vertex, duplicate_vertices)) {
-                        // Duplicates detected
-                        std::optional<std::pair<VertexId, double>> nearest_duplicate;
-                        for (const auto &other_vertex : duplicate_vertices) {
-                            // Warn if we would perform intra mesh merges (but dont actually do them)
-                            if (other_vertex.get().mesh_index == current_vertex.mesh_index) {
-                                if (!has_warned) {
-                                    LOG_WARN("Deduplication is too inclusive and would perform intra-mesh merges");
-                                    has_warned = true;
-                                }
-                            } else {
-                                double distance2 = 0;
-                                // Only caluclate the distance if there is actually more than a single duplicate vertex
-                                if (duplicate_vertices.size() > 1) {
-                                    distance2 = glm::distance2(mesh.positions[other_vertex.get().vertex_index], position);
-                                }
-                                if (!nearest_duplicate.has_value() || nearest_duplicate.value().second > distance2) {
-                                    nearest_duplicate = {other_vertex.get(), distance2};
-                                }
-                            }
-                        }
-
-                        if (nearest_duplicate.has_value()) {
-                            // We had at least one vertex from another mesh as duplicates
-                            mapping.add_bidirectional(current_vertex, mapping.map_forward(nearest_duplicate.value().first));
-                        } else {
-                            // Only vertices from the same mesh were detected as duplicate
-                            // Since we dont want to perform intra-mesh merges, just add it as a new vertex
-                            deduplicate.add(position, current_vertex);
-                            add_unique_vertex(current_vertex);
+            if (mesh_index == 0) {
+                deduplicate.add(position, current_vertex);
+                add_unique_vertex(current_vertex);
+            } else if (!deduplicate.get_or_add(position, current_vertex, duplicate_vertices)) {
+                // Duplicates detected
+                std::optional<std::pair<VertexId, double>> nearest_duplicate;
+                for (const auto &other_vertex : duplicate_vertices) {
+                    // Warn if we would perform intra mesh merges (but dont actually do them)
+                    if (other_vertex.get().mesh_index == current_vertex.mesh_index) {
+                        if (!has_warned) {
+                            LOG_WARN("Deduplication is too inclusive and would perform intra-mesh merges");
+                            has_warned = true;
                         }
                     } else {
-                        // New vertex / No duplicates
-                        add_unique_vertex(current_vertex);
+                        double distance2 = 0;
+                        // Only caluclate the distance if there is actually more than a single duplicate vertex
+                        if (duplicate_vertices.size() > 1) {
+                            distance2 = glm::distance2(mesh.positions[other_vertex.get().vertex_index], position);
+                        }
+                        if (!nearest_duplicate.has_value() || nearest_duplicate.value().second > distance2) {
+                            nearest_duplicate = {other_vertex.get(), distance2};
+                        }
                     }
                 }
+                if (nearest_duplicate.has_value()) {
+                    mapping.add_bidirectional(current_vertex, mapping.map_forward(nearest_duplicate.value().first));
+                } else {
+                    deduplicate.add(position, current_vertex);
+                    add_unique_vertex(current_vertex);
+                }
+                duplicate_vertices.clear();
             } else {
-                // Not a boundary vertex, so just add directly
+                // New vertex / No duplicates
                 add_unique_vertex(current_vertex);
             }
         }

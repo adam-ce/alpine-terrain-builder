@@ -1,6 +1,7 @@
 #pragma once
 
 #include <span>
+#include <functional>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/merging/VertexDeduplicate.h"

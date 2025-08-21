@@ -3,22 +3,42 @@
 #include <vector>
 #include <algorithm>
 
+#include <libassert/assert.hpp>
+
+template <bool TrackSizes = false>
 class UnionFind {
 public:
     using Index = size_t;
+    using Size = size_t;
 
-    explicit UnionFind(const size_t size)
-        : _parents(size), _sizes(size, 1) {
+    explicit UnionFind(Size size)
+        : _parents(size) {
         std::iota(this->_parents.begin(), this->_parents.end(), 0);
+        if constexpr (TrackSizes) {
+            this->_sizes.resize(size, 1);
+        }
     }
 
-    [[nodiscard]] Index find(const Index x) {
-        Index &x_parent = this->_parents[x];
-        if (x_parent != x) {
-            const Index x_rep = this->find(x_parent);
-            x_parent = x_rep;
+    [[nodiscard]] Index find(const Index item) const {
+        DEBUG_ASSERT(item < this->size());
+        Index current = item;
+        while (true) {
+            const Index parent = this->_parents[current];
+            if (current == parent) {
+                return current;
+            }
+            current = parent;
         }
-        return x_parent /* this is x_rep */;
+    }
+    [[nodiscard]] Index find(const Index item) {
+        DEBUG_ASSERT(item < this->size());
+        const Index parent = this->_parents[item];
+        if (parent == item) {
+            return parent;
+        }
+        const Index rep = this->find(parent);
+        this->_parents[item] = rep;
+        return rep;
     }
 
     void make_union(const Index x, const Index y) {
@@ -29,30 +49,39 @@ public:
             return;
         }
 
-        const Index x_size = this->_sizes[x_rep];
-        const Index y_size = this->_sizes[y_rep];
-        if (x_size < y_size) {
-            this->_parents[x_rep] = y_rep;
-            this->_sizes[y_rep] += this->_sizes[x_rep];
-        } else {
-            this->_parents[y_rep] = x_rep;
+        this->_parents[x_rep] = y_rep;
+        if constexpr (TrackSizes) {
             this->_sizes[x_rep] += this->_sizes[y_rep];
         }
     }
 
-    [[nodiscard]] Index size() {
+    [[nodiscard]] Size size() const {
         return this->_parents.size();
     }
 
-    [[nodiscard]] bool is_joint() {
-        return std::find(this->_sizes.begin(), this->_sizes.end(), this->size()) != this->_sizes.end();
+    template <bool Enabled = TrackSizes, typename = std::enable_if_t<Enabled>>
+    [[nodiscard]] Index get_set_size(Index x) const {
+        return this->_sizes[this->find(x)];
     }
 
+    [[nodiscard]] bool is_joint() {
+        if (this->_parents.empty()) {
+            return true;
+        }
+
+        if constexpr (TrackSizes) {
+            return this->get_set_size(0) == this->size();
+        } else {
+            const Index rep = this->find(0);
+            return std::all_of(std::next(this->_parents.begin()), this->_parents.end(),
+                               [&](Index i) { return this->find(i) == rep; });
+        }
+    }
     [[nodiscard]] bool is_disjoint() {
         return !this->is_joint();
     }
 
 private:
     std::vector<Index> _parents;
-    std::vector<Index> _sizes;
+    std::conditional_t<TrackSizes, std::vector<Size>, std::monostate> _sizes;
 };

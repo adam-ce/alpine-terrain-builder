@@ -15,7 +15,7 @@ struct formatter<std::filesystem::path> {
     }
 
     template <typename FormatContext>
-    auto format(const std::filesystem::path &path, FormatContext &ctx) {
+    auto format(const std::filesystem::path &path, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "{}", std::filesystem::weakly_canonical(path).string());
     }
 };
@@ -28,7 +28,7 @@ struct formatter<glm::vec<N, T>> {
     }
 
     template <typename FormatContext>
-    auto format(const glm::vec<N, T> &vec, FormatContext &ctx) {
+    auto format(const glm::vec<N, T> &vec, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "{}", glm::to_string(vec));
     }
 };
@@ -41,7 +41,7 @@ struct formatter<radix::geometry::Aabb<N, T>> {
     }
 
     template <typename FormatContext>
-    auto format(const radix::geometry::Aabb<N, T> &aabb, FormatContext &ctx) {
+    auto format(const radix::geometry::Aabb<N, T> &aabb, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "[{}-{}]", glm::to_string(aabb.min), glm::to_string(aabb.max));
     }
 };

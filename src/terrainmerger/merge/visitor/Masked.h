@@ -4,10 +4,11 @@
 #include "merge/NodeData.h"
 #include "merge/Result.h"
 #include "merge/visitor/Visitor.h"
-#include "mesh/merge.h"
+#include "mesh/holes.h"
 #include "mesh/merging/SphereVertexDeduplicate.h"
-#include "mesh/merging/SphereVertexDeduplicate2.h"
+#include "mesh/merging/VertexMapping.h"
 #include "mesh/merging/helpers.h"
+#include "mesh/merging/mapping.h"
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "spatial_lookup/Hashmap.h"
@@ -169,23 +170,22 @@ private:
             }
         }
 
+        LOG_TRACE("Performing actual mesh merge");
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {base_mesh_clipped.get(), new_mesh_clipped.get()};
         const double distance_epsilon = mesh::merging::estimate_merge_epsilon(meshes);
-        /*
-        spatial_lookup::Hashmap2d<mesh::merging::VertexId> map(distance_epsilon * 3);
+        // We have to use a hashmap here instead of a grid since we dont know
+        // the bounds of the mesh projected onto the sphere with the deduplication radius.
+        spatial_lookup::Hashmap3d<mesh::merging::VertexId> map(distance_epsilon * 3);
         const glm::dvec3 tangent_point = meshes[0].get().positions[0];
+        const double radius = glm::length(tangent_point);
         mesh::merging::SphereVertexDeduplicate<
-            mesh::merging::VertexId,
-            spatial_lookup::Hashmap2d<mesh::merging::VertexId>
-        > deduplicate(map, 0.01, tangent_point);
-        */
-        auto map = mesh::merging::construct_grid_for_meshes<mesh::merging::VertexId>(meshes);
-        const double radius = glm::length(meshes[0].get().positions[0]);
-        mesh::merging::SphereVertexDeduplicate2<
             mesh::merging::VertexId,
             decltype(map)
         > deduplicate(map, distance_epsilon, radius);
-        const SimpleMesh merged_mesh = mesh::merge(meshes, deduplicate);
+        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate);
+        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping);
+        LOG_TRACE("Filling holes on merge border");
+        mesh::fill_holes_on_merge_border(merged_mesh, mapping);
         return Merged{merged_mesh};
 
         /*

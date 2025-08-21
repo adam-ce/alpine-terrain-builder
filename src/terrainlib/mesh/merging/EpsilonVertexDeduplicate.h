@@ -1,5 +1,7 @@
 #pragma once
 
+#include <libassert/assert.hpp>
+
 #include "spatial_lookup/SpatialLookup.h"
 #include "mesh/merging/VertexDeduplicate.h"
 
@@ -18,7 +20,7 @@ public:
         return this->_epsilon;
     }
     virtual void add(const Vec &point, const Meta meta) override {
-        this->_lookup.insert(point, meta);
+        DEBUG_ASSERT_VAL(this->_lookup.insert(point, meta));
     }
     virtual bool get(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
         return this->_lookup.find_all_near(point, this->_epsilon, duplicates);

@@ -33,22 +33,30 @@ SimpleMesh merge(const std::span<const SimpleMesh> meshes, Args &&...args) {
     return merge(std::span<const std::reference_wrapper<const SimpleMesh>>(refs), std::forward<Args>(args)...);
 }
 
-template <typename... Args>
-SimpleMesh merge(const SimpleMesh &mesh1, Args &&...args) {
+template <typename T>
+concept SimpleMeshRefConcept =
+    std::is_same_v<T, SimpleMesh> ||
+    std::is_same_v<T, const SimpleMesh &> ||
+    std::is_same_v<T, SimpleMesh &> ||
+    std::is_same_v<T, std::reference_wrapper<const SimpleMesh>> ||
+    std::is_same_v<T, std::reference_wrapper<SimpleMesh>>;
+
+template <SimpleMeshRefConcept Mesh, typename... Args>
+SimpleMesh merge(Mesh&& mesh1, Args &&...args) {
     return mesh1;
 }
-template <typename... Args>
-SimpleMesh merge(const SimpleMesh &mesh1, const SimpleMesh &mesh2, Args &&...args) {
+template <SimpleMeshRefConcept Mesh1, SimpleMeshRefConcept Mesh2, typename... Args>
+SimpleMesh merge(Mesh1&& mesh1, Mesh2&& mesh2, Args &&...args) {
     const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
     return merge(std::span<const std::reference_wrapper<const SimpleMesh>>(meshes), std::forward<Args>(args)...);
 }
-template <typename... Args>
-SimpleMesh merge(const SimpleMesh &mesh1, const SimpleMesh &mesh2, const SimpleMesh &mesh3, Args &&...args) {
+template <SimpleMeshRefConcept Mesh1, SimpleMeshRefConcept Mesh2, SimpleMeshRefConcept Mesh3, typename... Args>
+SimpleMesh merge(Mesh1&& mesh1, Mesh2&& mesh2, Mesh3&& mesh3, Args &&...args) {
     const std::array<std::reference_wrapper<const SimpleMesh>, 3> meshes = {mesh1, mesh2, mesh3};
     return merge(std::span<const std::reference_wrapper<const SimpleMesh>>(meshes), std::forward<Args>(args)...);
 }
-template <typename... Args>
-SimpleMesh merge(const SimpleMesh &mesh1, const SimpleMesh &mesh2, const SimpleMesh &mesh3, const SimpleMesh& mesh4, Args &&...args) {
+template <SimpleMeshRefConcept Mesh1, SimpleMeshRefConcept Mesh2, SimpleMeshRefConcept Mesh3, SimpleMeshRefConcept Mesh4, typename... Args>
+SimpleMesh merge(Mesh1&& mesh1, Mesh2&& mesh2, Mesh3&& mesh3, Mesh4&& mesh4, Args &&...args) {
     const std::array<std::reference_wrapper<const SimpleMesh>, 4> meshes = {mesh1, mesh2, mesh3, mesh4};
     return merge(std::span<const std::reference_wrapper<const SimpleMesh>>(meshes), std::forward<Args>(args)...);
 }

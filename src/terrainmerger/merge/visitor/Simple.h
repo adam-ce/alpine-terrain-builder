@@ -3,6 +3,7 @@
 #include "merge/Result.h"
 #include "merge/NodeData.h"
 #include "merge/visitor/Visitor.h"
+#include "mesh/merge.h"
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 

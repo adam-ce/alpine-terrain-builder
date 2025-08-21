@@ -24,18 +24,20 @@
 #include "mesh/merge.h"
 #include "mesh/utils.h"
 
-TEST_CASE("terrainmerger") {
+TEST_CASE("mesh::merge") {
     SECTION("two tris with shared edge") {
         SimpleMesh mesh1;
         mesh1.positions.push_back(glm::dvec3(0, 0, 0));
         mesh1.positions.push_back(glm::dvec3(1, 1, 0));
         mesh1.positions.push_back(glm::dvec3(1, 0, 0));
+
         mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
 
         SimpleMesh mesh2;
         mesh2.positions.push_back(glm::dvec3(1, 0, 0));
         mesh2.positions.push_back(glm::dvec3(1, 1, 0));
         mesh2.positions.push_back(glm::dvec3(0, 1, 0));
+
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
         SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
@@ -45,6 +47,7 @@ TEST_CASE("terrainmerger") {
         expected.positions.push_back(glm::dvec3(1, 1, 0));
         expected.positions.push_back(glm::dvec3(1, 0, 0));
         expected.positions.push_back(glm::dvec3(0, 1, 0));
+
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
 

@@ -1,6 +1,8 @@
 #include <random>
 #include <ranges>
 
+#include <glm/gtc/type_ptr.hpp>
+
 #include "log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/TriangleSoup.h"
@@ -152,23 +154,51 @@ size_t remove_triangles_of_negligible_size(SimpleMesh &mesh, const double thresh
     return erased_count;
 }
 
-glm::uvec3 normalize_triangle(const glm::uvec3 &triangle) {
-    unsigned int min_index = 0;
-    for (size_t k = 1; k < static_cast<size_t>(triangle.length()); k++) {
-        if (triangle[min_index] > triangle[k]) {
+void normalize_face_index_rotation(std::span<uint32_t> face) {
+    if (face.empty()) {
+        return;
+    }
+
+    // find index of minimum element
+    size_t min_index = 0;
+    for (size_t k = 1; k < face.size(); k++) {
+        if (face[k] < face[min_index]) {
             min_index = k;
         }
     }
-    if (min_index == 0) {
-        return triangle;
-    }
 
-    glm::uvec3 normalized_triangle;
-    for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
-        normalized_triangle[k] = triangle[(min_index + k) % triangle.length()];
+    // rotate so minimum is first
+    if (min_index != 0) {
+        std::rotate(face.begin(), face.begin() + min_index, face.end());
     }
+}
 
-    return normalized_triangle;
+void normalize_edge_inplace(glm::uvec2 &edge) {
+    if (edge.x > edge.y) {
+        std::swap(edge.x, edge.y);
+    }
+}
+glm::uvec2 normalize_edge(glm::uvec2 edge) {
+    normalize_edge_inplace(edge);
+    return edge;
+}
+
+void normalize_triangle_inplace(glm::uvec3 &triangle) {
+    std::span<uint32_t> data(glm::value_ptr(triangle), triangle.length());
+    normalize_face_index_rotation(data);
+}
+glm::uvec3 normalize_triangle(glm::uvec3 triangle) {
+    normalize_triangle_inplace(triangle);
+    return triangle;
+}
+
+void normalize_quad_inplace(glm::uvec4 &quad) {
+    std::span<uint32_t> data(glm::value_ptr(quad), quad.length());
+    normalize_face_index_rotation(data);
+}
+glm::uvec4 normalize_quad(glm::uvec4 quad) {
+    normalize_quad_inplace(quad);
+    return quad;
 }
 
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {

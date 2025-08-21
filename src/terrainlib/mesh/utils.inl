@@ -86,14 +86,15 @@ std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const Simple
     return edges;
 }
 
+/*
 template <glm::length_t n_dims, typename T>
-std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_normalized_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
     std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> boundary;
-    find_boundary_edges(mesh, boundary);
+    find_normalized_boundary_edges(mesh, boundary);
     return boundary;
 }
 template <glm::length_t n_dims, typename T>
-void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
+void find_normalized_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
     using Triangle = typename SimpleMesh_<n_dims, T>::Triangle;
     using Edge = typename SimpleMesh_<n_dims, T>::Edge;
     for (const auto &triangle_ref : mesh.triangles) {
@@ -111,6 +112,36 @@ void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<
             } else {
                 // Edge not present -> add it
                 boundary.insert(edge);
+            }
+        }
+    }
+}
+*/
+
+template <glm::length_t n_dims, typename T>
+std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
+    std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> boundary;
+    find_boundary_edges(mesh, boundary);
+    return boundary;
+}
+template <glm::length_t n_dims, typename T>
+void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
+    using Triangle = typename SimpleMesh_<n_dims, T>::Triangle;
+    using Edge = typename SimpleMesh_<n_dims, T>::Edge;
+    for (const auto &triangle_ref : mesh.triangles) {
+        Triangle triangle = triangle_ref;
+
+        const std::array<Edge, 3> reverse_edges{Edge(triangle.y, triangle.x),
+                                                Edge(triangle.z, triangle.y),
+                                                Edge(triangle.x, triangle.z)};
+        for (const Edge &reverse_edge : reverse_edges) {
+            auto it = boundary.find(reverse_edge);
+            if (it != boundary.end()) {
+                // Edge already there -> shared egde -> remove it
+                boundary.erase(it);
+            } else {
+                // Edge not present -> add it (but in correct order)
+                boundary.insert(Edge(reverse_edge.y, reverse_edge.x));
             }
         }
     }

@@ -8,7 +8,8 @@
 #include "log.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
-#include "mesh/merge.h"
+#include "mesh/merging/mapping.h"
+#include "mesh/holes.h"
 
 SimpleMesh merge(const std::span<SimpleMesh> meshes, const std::optional<double> epsilon) {
     std::vector<std::reference_wrapper<const SimpleMesh>> mesh_refs;
@@ -17,11 +18,16 @@ SimpleMesh merge(const std::span<SimpleMesh> meshes, const std::optional<double>
         mesh_refs.push_back(mesh);
     }
 
+    mesh::merging::VertexMapping mapping;
     if (epsilon.has_value()) {
-        return mesh::merge(mesh_refs, epsilon.value());
+        mapping = mesh::merging::create_mapping(mesh_refs, epsilon.value());
     } else {
-        return mesh::merge(mesh_refs);
+        mapping = mesh::merging::create_mapping(mesh_refs);
     }
+
+    SimpleMesh merged = mesh::merging::apply_mapping(mesh_refs, mapping);
+    mesh::fill_holes_on_merge_border(merged, mapping);
+    return merged;
 }
 
 void run(const cli::Args &args) {

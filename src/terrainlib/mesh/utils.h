@@ -55,6 +55,14 @@ std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh);
 std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh);
 void remove_single_non_manifold_triangles(SimpleMesh& mesh);
 
+void normalize_face_index_rotation(std::span<uint32_t> face);
+void normalize_edge_inplace(glm::uvec2 &edge);
+glm::uvec2 normalize_edge(glm::uvec2 edge);
+void normalize_triangle_inplace(glm::uvec3 &triangle);
+glm::uvec3 normalize_triangle(glm::uvec3 triangle);
+void normalize_quad_inplace(glm::uvec4 &quad);
+glm::uvec4 normalize_quad(glm::uvec4 quad);
+
 template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);

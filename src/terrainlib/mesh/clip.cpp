@@ -441,8 +441,6 @@ Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
     }
-    LOG_TRACE("Clip result: original {} faces -> clipped {} faces. Intersections: {}",
-              mesh.face_count(), cgal_mesh.number_of_faces(), visitor.has_intersections);
     if (cgal_mesh.number_of_faces() == 0) {
         return Cow(SimpleMesh());
     }

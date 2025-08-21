@@ -11,6 +11,7 @@
 
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
+#include "polygon/utils.h"
 
 using Kernel = cgal::kernel::epeck::Kernel;
 using Point2 = Kernel::Point_2;

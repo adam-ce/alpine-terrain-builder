@@ -5,7 +5,7 @@
 #include "merge/Result.h"
 #include "merge/visitor/Visitor.h"
 #include "mesh/holes.h"
-#include "mesh/merging/SphereVertexDeduplicate.h"
+#include "mesh/merging/SphereProjectionVertexDeduplicate.h"
 #include "mesh/merging/VertexMapping.h"
 #include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"
@@ -176,14 +176,15 @@ private:
         // We have to use a hashmap here instead of a grid since we dont know
         // the bounds of the mesh projected onto the sphere with the deduplication radius.
         spatial_lookup::Hashmap3d<mesh::merging::VertexId> map(distance_epsilon * 3);
+        // Deduplication happens by projecting all points onto a sphere and performing epsilon checks there
         const glm::dvec3 tangent_point = meshes[0].get().positions[0];
         const double radius = glm::length(tangent_point);
-        mesh::merging::SphereVertexDeduplicate<
+        mesh::merging::SphereProjectionVertexDeduplicate<
             mesh::merging::VertexId,
             decltype(map)
         > deduplicate(map, distance_epsilon, radius);
-        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate);
-        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping);
+        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate, true);
+        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping, false, false);
         LOG_TRACE("Filling holes on merge border");
         mesh::fill_holes_on_merge_border(merged_mesh, mapping);
         return Merged{merged_mesh};

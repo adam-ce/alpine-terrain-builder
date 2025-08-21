@@ -126,9 +126,10 @@ add_library(terrainlib
     terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
     terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
-    terrainlib/mesh/merge.h terrainlib/mesh/merge.cpp
+    terrainlib/mesh/merge.h
     terrainlib/mesh/merging/VertexDeduplicate.h
     terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
+    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
     terrainlib/mesh/merging/VertexMapping.h
     terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
     terrainlib/mesh/SimpleMesh.h

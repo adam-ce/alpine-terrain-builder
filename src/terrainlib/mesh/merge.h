@@ -1,19 +1,30 @@
 #pragma once
 
-#include <unordered_map>
 #include <span>
-#include <optional>
 #include <vector>
+#include <array>
+#include <functional>
 
-#include "mesh/merging/VertexDeduplicate.h"
 #include "mesh/merging/VertexMapping.h"
+#include "mesh/merging/mapping.h"
 #include "pch.h"
 
 namespace mesh {
 
-SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes);
-SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, double distance_epsilon);
-SimpleMesh merge(const std::span<const std::reference_wrapper<const SimpleMesh>> meshes, merging::VertexDeduplicate<3, double, merging::VertexId> &deduplicate);
+template <typename... Args>
+SimpleMesh merge(std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
+                 Args &&...args) {
+    switch (meshes.size()) {
+    case 0:
+        return {};
+    case 1:
+        return meshes[0];
+    default:
+        const merging::VertexMapping mapping =
+            merging::create_mapping(meshes, std::forward<Args>(args)...);
+        return merging::apply_mapping(meshes, mapping);
+    }
+}
 
 template <std::size_t N, typename... Args>
 SimpleMesh merge(const std::span<const SimpleMesh, N> meshes, Args &&...args) {

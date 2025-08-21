@@ -18,11 +18,11 @@ glm::vec<n_dims, T> scale_to_length(const glm::vec<n_dims, T> &v, const T target
 }
 
 template <typename Meta, spatial_lookup::SpatialLookup<3, double, Meta> Lookup>
-class SphereVertexDeduplicate : public VertexDeduplicate<3, double, Meta> {
+class SphereProjectionVertexDeduplicate : public VertexDeduplicate<3, double, Meta> {
 public:
     using Vec = glm::vec<3, double>;
 
-    SphereVertexDeduplicate(Lookup &lookup, double epsilon, double radius)
+    SphereProjectionVertexDeduplicate(Lookup &lookup, double epsilon, double radius)
         : _inner(lookup, epsilon), _radius(radius) {}
 
     void add(const Vec &point, const Meta meta) override {

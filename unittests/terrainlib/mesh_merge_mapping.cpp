@@ -22,13 +22,13 @@
 #include "../catch2_helpers.h"
 
 #include "mesh/SimpleMesh.h"
+#include "mesh/merging/SphereProjectionVertexDeduplicate.h"
+#include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"
 #include "spatial_lookup/CellBasedStorage.h"
 #include "spatial_lookup/GridStorage.h"
-#include "spatial_lookup/HashmapStorage.h"
-#include "mesh/merging/SphereVertexDeduplicate.h"
-#include "mesh/merging/helpers.h"
 #include "spatial_lookup/Hashmap.h"
+#include "spatial_lookup/HashmapStorage.h"
 
 using mesh::merging::VertexId;
 using mesh::merging::VertexMapping;
@@ -43,7 +43,7 @@ TEST_CASE("merging::create_mapping") {
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
 
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1, false);
 
         const size_t idx1 = mapping.map_forward(VertexId{0, 0});
         const size_t idx2 = mapping.map_forward(VertexId{1, 0});
@@ -63,7 +63,7 @@ TEST_CASE("merging::create_mapping") {
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
 
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1, false);
 
         // Merged index of (1, 0, 0) should be the same for both meshes
         const size_t idx1 = mapping.map_forward(VertexId{0, 2});
@@ -94,8 +94,8 @@ TEST_CASE("merging::create_mapping") {
         mesh2.positions.push_back(glm::dvec3(2, 0, 0));
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
-
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+        
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1, false);
 
         const size_t idx1 = mapping.map_forward(VertexId{0, 1}); // (1, 0, 0)
         const size_t idx2 = mapping.map_forward(VertexId{1, 0}); // (1.05, 0, 0)
@@ -157,7 +157,9 @@ TEST_CASE("merging::create_mapping") {
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
 
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+        const bool only_boundary = GENERATE(true, false);
+        CAPTURE(only_boundary);
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1, only_boundary);
 
         CHECK(mapping.map_forward(VertexId{0, 0}) == mapping.map_forward(VertexId{1, 0}));
         CHECK(mapping.map_forward(VertexId{0, 1}) == mapping.map_forward(VertexId{1, 1}));
@@ -181,7 +183,9 @@ TEST_CASE("merging::create_mapping") {
 
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
 
-        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1);
+        const bool only_boundary = GENERATE(true, false);
+        CAPTURE(only_boundary);
+        const VertexMapping mapping = mesh::merging::create_mapping(meshes, 0.1, only_boundary);
 
         CHECK(mapping.map_forward(VertexId{0, 0}) != mapping.map_forward(VertexId{1, 2}));
         CHECK(mapping.map_forward(VertexId{0, 1}) == mapping.map_forward(VertexId{1, 1}));
@@ -206,12 +210,16 @@ TEST_CASE("merging::create_mapping") {
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {mesh1, mesh2};
         const double distance_epsilon = 0.001;
         auto map = spatial_lookup::Hashmap3d<mesh::merging::VertexId>(0.1);
-        const double radius = 100;
-        mesh::merging::SphereVertexDeduplicate<
+
+        const bool only_boundary = GENERATE(true, false);
+        CAPTURE(only_boundary);
+        const double radius = GENERATE(1, 100, 1000);
+        CAPTURE(radius);
+        mesh::merging::SphereProjectionVertexDeduplicate<
             mesh::merging::VertexId,
-            decltype(map)
-        > deduplicate(map, distance_epsilon, radius);
-        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate);
+            decltype(map)>
+            deduplicate(map, distance_epsilon, radius);
+        const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes, deduplicate, only_boundary);
 
         CHECK(mapping.map_forward(VertexId{0, 0}) != mapping.map_forward(VertexId{1, 0}));
         CHECK(mapping.map_forward(VertexId{0, 0}) != mapping.map_forward(VertexId{1, 1}));

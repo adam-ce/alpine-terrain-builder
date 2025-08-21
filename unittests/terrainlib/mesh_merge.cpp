@@ -117,7 +117,9 @@ TEST_CASE("mesh::merge") {
         mesh2.triangles.push_back(glm::uvec3(0, 2, 1));
         mesh2.triangles.push_back(glm::uvec3(1, 2, 3));
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
+        const bool only_boundary = GENERATE(true, false);
+        CAPTURE(only_boundary);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1, only_boundary);
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -159,8 +161,6 @@ TEST_CASE("mesh::merge") {
         CHECK(mesh1.triangles == actual.triangles);
     }
 
-    /*
-    TODO: this currently fails since we dont deduplicate the triangles
     SECTION("identical meshes collapse to one") {
         SimpleMesh mesh1;
         mesh1.positions = {
@@ -175,7 +175,7 @@ TEST_CASE("mesh::merge") {
 
         CHECK(actual.positions == mesh1.positions);
         CHECK(actual.triangles == mesh1.triangles);
-    }*/
+    }
 
     SECTION("epsilon too small prevents merging") {
         SimpleMesh mesh1;

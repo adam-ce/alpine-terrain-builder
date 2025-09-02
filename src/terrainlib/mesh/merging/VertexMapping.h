@@ -7,13 +7,9 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-namespace mesh::merging {
+#include "mesh/merging/VertexId.h"
 
-// Identifies a specific vertex within a particular mesh.
-struct VertexId {
-    size_t mesh_index;
-    size_t vertex_index;
-};
+namespace mesh::merging {
 
 // Represents a triangle from a specific mesh.
 struct TriangleInMesh {

@@ -16,46 +16,7 @@ tl::expected<void, mesh::io::SaveMeshError> RawStorage::write_node(const Id &id,
     const auto node_path = this->get_node_path(id);
     return mesh::io::save_to_path(node, node_path);
 }
-/*
-tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, const RawStorage &target) const noexcept {
-    const auto source_node_path = this->get_node_path(id);
-    if (!this->has_node(id)) {
-        return tl::unexpected(CopyMeshErrorKind::FileNotFound);
-    }
-    std::error_code ec;
-    const auto target_node_path = target.get_node_path(id);
-    if (source_node_path.extension() != target_node_path.extension()) {
-        // TODO: should this error instead?
-        const auto load_result = mesh::io::load_from_path(source_node_path);
-        if (!load_result.has_value()) {
 
-        }
-        const Node node = load_result.value();
-        const auto save_result = mesh::io::save_to_path(node, target_node_path);
-        if (!save_result.has_value()) {
-
-        }
-        return {};
-    }
-    if (std::filesystem::remove(target_node_path, ec)) {
-        if (ec) {
-            return tl::unexpected(CopyMeshErrorKind::RemoveOld);
-        }
-    }
-    std::filesystem::create_directories(target_node_path.parent_path(), ec);
-    if (ec) {
-        return tl::unexpected(CopyMeshErrorKind::CreateDirectories);
-    }
-    std::filesystem::create_hard_link(
-        source_node_path,
-        target_node_path,
-        ec);
-    if (ec) {
-        return tl::unexpected(CopyMeshErrorKind::CreateLink);
-    }
-    return {};
-}
-*/
 tl::expected<void, CopyMeshError> RawStorage::copy_node_from(const Id &id, const RawStorage &source) noexcept {
     if (!source.has_node(id)) {
         return tl::unexpected(CopyMeshErrorKind::FileNotFound);

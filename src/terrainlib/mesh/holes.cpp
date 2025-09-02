@@ -1,3 +1,5 @@
+#include <forward_list>
+
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
@@ -155,31 +157,188 @@ std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
     return boundaries;
 }
 
-std::vector<std::vector<VertexIndex>> find_holes_on_merge_border(const SimpleMesh &mesh, const mesh::merging::VertexMapping &mapping) {
+namespace {
+bool contains_shared_vertex(
+    const std::span<const VertexIndex> vertices_in_merged_mesh,
+    const mesh::merging::VertexMapping &mapping) {
+    FixedVector<VertexIndex, 2> source_meshes;
+    for (const VertexIndex vertex_index : vertices_in_merged_mesh) {
+        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+            const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
+            if (source_vertex.has_value()) {
+                source_meshes.push_back(source_vertex.value());
+                if (source_meshes.size() > 1) {
+                    return true;
+                }
+            }
+        }
+    }
+}
+} // namespace
+
+std::vector<std::vector<VertexIndex>> find_holes_on_merge_border(
+    const SimpleMesh &mesh,
+    const mesh::merging::VertexMapping &mapping
+) {
     std::vector<std::vector<VertexIndex>> holes = find_holes(mesh);
     for (auto it = holes.rbegin(); it != holes.rend(); it++) {
         const auto &hole = *it;
 
-        FixedVector<VertexIndex, 2> source_meshes;
-        for (const VertexIndex vertex_index : hole) {
-            for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
-                const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
-                if (source_vertex.has_value()) {
-                    source_meshes.push_back(source_vertex.value());
-                    if (source_meshes.size() > 1) {
-                        break;
-                    }
-                }
-            }
-            if (source_meshes.size() > 1) {
-                break;
-            }
-        }
-        if (source_meshes.size() == 1) {
+        if (!contains_shared_vertex(hole, mapping)) {
             // Not a hole between meshes
             holes.erase((it + 1).base());
         }
     }
+    return holes;
+}
+
+namespace {
+bool contains_shared_vertex(
+    const size_t source_mesh_index,
+    const std::span<const VertexIndex> vertices_in_source_mesh,
+    const mesh::merging::VertexMapping &mapping) {
+    for (const VertexIndex vertex_index : vertices_in_source_mesh) {
+        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+            if (mesh_index == source_mesh_index) {
+                continue;
+            }
+            
+            const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
+            if (source_vertex.has_value()) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool is_shared_vertex(
+    const merging::VertexId id,
+    const merging::VertexMapping &mapping
+) {
+    for (size_t other_mesh_index = 0; other_mesh_index < mapping.mesh_count(); other_mesh_index++) {
+        if (other_mesh_index == id.mesh_index) {
+            continue;
+        }
+
+        const std::optional<VertexIndex> source_vertex = mapping.map_backward(other_mesh_index, id.vertex_index);
+        if (source_vertex.has_value()) {
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
+
+std::vector<std::vector<merging::VertexId>> find_holes_between_meshes(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> &meshes,
+    const merging::VertexMapping &mapping
+) {
+    using Segment = std::vector<merging::VertexId>;
+
+    // Step 1: Extract all boundary segments betweem two shared vertices
+    std::forward_list<Segment> boundary_segments;
+    std::vector<size_t> shared_vertices_in_boundary;
+    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+        const SimpleMesh &mesh = meshes[mesh_index];
+
+        const std::vector<std::vector<VertexIndex>> boundaries = find_boundaries(mesh);
+        for (const auto &boundary : boundaries) {
+            shared_vertices_in_boundary.clear();
+
+            // Find shared vertices
+            for (size_t index_in_boundary = 0; index_in_boundary < boundary.size(); index_in_boundary++) {
+                const merging::VertexId vertex = {
+                    .mesh_index = mesh_index,
+                    .vertex_index = boundary[index_in_boundary]
+                };
+
+                if (is_shared_vertex(vertex, mapping)) {
+                    shared_vertices_in_boundary.push_back(index_in_boundary);
+                }
+            }
+
+            // Discard if not shared boundary
+            if (shared_vertices_in_boundary.empty()) {
+                continue;
+            }
+            if (shared_vertices_in_boundary.size() % 2 == 1) {
+                LOG_WARN("Encountered boundary with only a single shared vertex, unable to generate geometry.");
+                continue;
+            }
+
+            // Cut boundary into segments
+            for (size_t i = 0; i<shared_vertices_in_boundary.size(); i++) {
+                const size_t start_boundary_index = shared_vertices_in_boundary[i];
+                const size_t end_boundary_index = shared_vertices_in_boundary[(i + 1) % shared_vertices_in_boundary.size()];
+
+                Segment segment;
+                if (start_boundary_index < end_boundary_index) {
+                    // Normal case
+                    segment.reserve(end_boundary_index - start_boundary_index);
+                    for (size_t j = start_boundary_index; j < end_boundary_index; j++) {
+                        segment.push_back(merging::VertexId{
+                            .mesh_index = mesh_index,
+                            .vertex_index = boundary[j]
+                        });
+                    }
+                } else {
+                    // Wrap-around case: last to first
+                    segment.reserve(boundary.size() - start_boundary_index + end_boundary_index);
+                    for (size_t j = start_boundary_index; j < boundary.size(); j++) {
+                        segment.push_back(merging::VertexId{
+                            .mesh_index = mesh_index,
+                            .vertex_index = boundary[j]
+                        });
+                    }
+                    for (size_t j = 0; j < end_boundary_index; j++) {
+                        segment.push_back(merging::VertexId{
+                            .mesh_index = mesh_index,
+                            .vertex_index = boundary[j]
+                        });
+                    }
+                }
+                
+                boundary_segments.push_front(std::move(segment));
+            }
+        }
+    }
+
+    // Step 2: Merge segments into holes between meshes
+    std::vector<Segment> holes;
+    while (!boundary_segments.empty()) {
+        Segment current = std::move(boundary_segments.front());
+        boundary_segments.pop_front();
+        const size_t mesh_index = current[0].mesh_index;
+
+        auto prev = boundary_segments.before_begin();
+        auto it = boundary_segments.begin();
+
+        while (it != boundary_segments.end()) {
+            Segment &other = *it;
+
+            if (other[0].mesh_index == mesh_index) {
+                if (current.back() == other.front()) {
+                    Segment hole = std::move(current);
+                    hole.insert(hole.end(), other.begin(), other.end());
+                    holes.push_back(std::move(hole));
+                    it = boundary_segments.erase_after(prev);
+                    break;
+                } else if (current.front() == other.back()) {
+                    Segment hole = std::move(other);
+                    hole.insert(hole.end(), current.begin(), current.end());
+                    holes.push_back(std::move(hole));
+                    it = boundary_segments.erase_after(prev);
+                    break;
+                }
+            }
+
+            prev = it;
+            it++;
+        }
+    }
+
     return holes;
 }
 

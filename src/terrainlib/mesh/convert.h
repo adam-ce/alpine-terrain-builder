@@ -41,7 +41,7 @@ typename Kernel::Point_2 to_cgal_point(const glm::dvec2 &point) {
     return typename Kernel::Point_2(point.x, point.y);
 }
 
-cgal::SurfaceMesh to_cgal_mesh(const SimpleMesh& mesh);
-SimpleMesh to_simple_mesh(const cgal::SurfaceMesh& cgal_mesh);
+cgal::Mesh to_cgal_mesh(const SimpleMesh& mesh);
+SimpleMesh to_simple_mesh(const cgal::Mesh& cgal_mesh);
 
 }

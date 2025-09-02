@@ -12,12 +12,12 @@ IntersectionAndDifference intersection_and_difference(const SimpleMesh &a, const
     ASSERT(!a.has_uvs());
     ASSERT(!b.has_uvs());
 
-    cgal::SurfaceMesh cgal_a = convert::to_cgal_mesh(a);
-    cgal::SurfaceMesh cgal_b = convert::to_cgal_mesh(b);
+    cgal::Mesh cgal_a = convert::to_cgal_mesh(a);
+    cgal::Mesh cgal_b = convert::to_cgal_mesh(b);
 
-    cgal::SurfaceMesh cgal_intersection;
-    cgal::SurfaceMesh cgal_difference;
-    std::array<std::optional<cgal::SurfaceMesh*>, 4> cgal_out;
+    cgal::Mesh cgal_intersection;
+    cgal::Mesh cgal_difference;
+    std::array<std::optional<cgal::Mesh*>, 4> cgal_out;
     const size_t intersection_index = CGAL::Polygon_mesh_processing::Corefinement::Boolean_operation_type::INTERSECTION;
     const size_t difference_index = CGAL::Polygon_mesh_processing::Corefinement::Boolean_operation_type::TM1_MINUS_TM2;
     cgal_out[intersection_index] = &cgal_intersection;

@@ -5,7 +5,9 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/merging/VertexDeduplicate.h"
+#include "mesh/merging/VertexId.h"
 #include "mesh/merging/VertexMapping.h"
+#include "mesh/merging/helpers.h"
 
 namespace mesh::merging {
 
@@ -136,7 +138,7 @@ public:
 
 private:
     bool _deduplicate_triangles = true;
-    bool _merge_uvs = true;
+    bool _merge_uvs = false;
 };
 
 inline ApplyOptions apply_options() {

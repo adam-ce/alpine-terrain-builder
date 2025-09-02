@@ -1,10 +1,13 @@
 #pragma once
 
+#include <xatlas/xatlas.h>
+
 #include "mask.h"
 #include "merge/NodeData.h"
 #include "merge/Result.h"
 #include "merge/visitor/Visitor.h"
 #include "mesh/holes.h"
+#include "mesh/combine.h"
 #include "mesh/merging/SphereProjectionVertexDeduplicate.h"
 #include "mesh/merging/VertexMapping.h"
 #include "mesh/merging/helpers.h"
@@ -15,6 +18,186 @@
 #include "utils.h"
 
 namespace merge::visitor {
+
+inline xatlas::MeshDecl to_meshdecl(const SimpleMesh &mesh) {
+    xatlas::MeshDecl decl{};
+
+    decl.indexCount = static_cast<uint32_t>(mesh.triangles.size() * 3);
+    decl.indexData = mesh.triangles.data();
+    decl.indexFormat = xatlas::IndexFormat::UInt32;
+
+    decl.vertexCount = static_cast<uint32_t>(mesh.positions.size());
+    decl.vertexPositionData = mesh.positions.data();
+    decl.vertexPositionStride = sizeof(SimpleMesh::Position);
+
+    if (mesh.has_uvs()) {
+        decl.vertexUvData = mesh.uvs.data();
+        decl.vertexUvStride = sizeof(SimpleMesh::Uv);
+    }
+
+    return decl;
+}
+
+inline xatlas::UvMeshDecl to_uvmeshdecl(const SimpleMesh &mesh) {
+    xatlas::UvMeshDecl decl{};
+
+    decl.indexCount = static_cast<uint32_t>(mesh.triangles.size() * 3);
+    decl.indexData = mesh.triangles.data();
+    decl.indexFormat = xatlas::IndexFormat::UInt32;
+
+    ASSERT(mesh.has_uvs());
+    decl.vertexUvData = mesh.uvs.data();
+    decl.vertexCount = static_cast<uint32_t>(mesh.uvs.size());
+    decl.vertexStride = sizeof(SimpleMesh::Uv);
+
+    return decl;
+}
+
+struct Atlas {
+    std::vector<std::vector<SimpleMesh::Uv>> uvs;
+    SimpleMesh::Texture texture;
+};
+
+inline uint32_t next_pow2(uint32_t v) {
+    if (v <= 1) {
+        return 1;
+    }
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    return v + 1;
+}
+
+inline uint32_t compute_resolution(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    size_t total = 0;
+    for (const SimpleMesh &m : meshes) {
+        total += m.vertex_count();
+    }
+    const uint32_t result = next_pow2(static_cast<uint32_t>(std::ceil(std::sqrt(total))));
+    return std::clamp(result, 512u, 4096u);
+}
+
+inline Atlas generate_texture_atlas(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes
+) {
+    xatlas::Atlas *atlas = xatlas::Create();
+
+    for (const SimpleMesh &mesh : meshes) {
+        const xatlas::UvMeshDecl decl = to_uvmeshdecl(mesh);
+        const xatlas::AddMeshError error = xatlas::AddUvMesh(atlas, decl);
+        if (error != xatlas::AddMeshError::Success) {
+            xatlas::Destroy(atlas);
+            LOG_ERROR_AND_EXIT("Error adding mesh {}", xatlas::StringForEnum(error));
+        }
+    }
+
+    xatlas::ChartOptions chartOptions{};
+    chartOptions.useInputMeshUvs = true;
+
+    xatlas::PackOptions packOptions{};
+    packOptions.padding = 2;
+    packOptions.resolution = compute_resolution(meshes);
+
+    xatlas::Generate(atlas, chartOptions, packOptions);
+
+    Atlas result;
+    result.uvs.resize(meshes.size());
+    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+        const SimpleMesh & mesh = meshes[mesh_index];
+        result.uvs[mesh_index].resize(mesh.vertex_count());
+    }
+
+    for (size_t mesh_index = 0; mesh_index < atlas->meshCount; mesh_index++) {
+        const xatlas::Mesh &xmesh = atlas->meshes[mesh_index];
+
+        for (size_t vertex_index = 0; vertex_index < xmesh.vertexCount; vertex_index++) {
+            const xatlas::Vertex& vertex = xmesh.vertexArray[vertex_index];
+            result.uvs[mesh_index][vertex.xref] = glm::dvec2(vertex.uv[0], vertex.uv[1]);
+        }
+    }
+
+
+    cv::Mat mat(atlas->height, atlas->width, CV_8UC4, atlas->image);
+    result.texture = mat.clone();
+
+    xatlas::Destroy(atlas);
+
+    return result;
+}
+
+// Simple grid-based atlas using the largest texture size
+inline Atlas generate_texture_atlas_grid(
+    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes) {
+    // Identify meshes that actually have textures
+    std::vector<size_t> meshes_with_textures;
+    int max_texture_width = 0;
+    int max_texture_height = 0;
+
+    for (size_t i = 0; i < meshes.size(); ++i) {
+        if (meshes[i].get().texture.has_value()) {
+            meshes_with_textures.push_back(i);
+            const cv::Mat &tex = meshes[i].get().texture.value();
+            max_texture_width = std::max(max_texture_width, tex.cols);
+            max_texture_height = std::max(max_texture_height, tex.rows);
+        }
+    }
+
+    if (meshes_with_textures.empty()) {
+        return Atlas{}; // No textures to pack
+    }
+
+    size_t number_of_textured_meshes = meshes_with_textures.size();
+    size_t grid_size = static_cast<size_t>(std::ceil(std::sqrt(number_of_textured_meshes)));
+
+    int atlas_width = next_pow2(static_cast<uint32_t>(grid_size * max_texture_width));
+    int atlas_height = next_pow2(static_cast<uint32_t>(grid_size * max_texture_height));
+
+    // Create atlas image with transparent background
+    cv::Mat atlas_image(atlas_height, atlas_width, meshes[meshes_with_textures[0]].get().texture->type(), cv::Scalar(0, 0, 0, 0));
+
+    Atlas result;
+    result.uvs.resize(meshes.size());
+
+    size_t slot_index = 0;
+    for (size_t mesh_index : meshes_with_textures) {
+        const SimpleMesh &mesh = meshes[mesh_index].get();
+        int row = slot_index / grid_size;
+        int column = slot_index % grid_size;
+
+        // Compute destination rectangle in atlas
+        cv::Rect destination_rectangle(
+            column * max_texture_width,
+            row * max_texture_height,
+            mesh.texture->cols,
+            mesh.texture->rows);
+
+        // Copy the mesh's texture into the atlas
+        mesh.texture->copyTo(atlas_image(destination_rectangle));
+
+        // Update UV coordinates to map the mesh's full texture to its slot
+        result.uvs[mesh_index].resize(mesh.vertex_count());
+        double u_start = double(column * max_texture_width) / atlas_width;
+        double v_start = double(row * max_texture_height) / atlas_height;
+        double u_end = double(column * max_texture_width + mesh.texture->cols) / atlas_width;
+        double v_end = double(row * max_texture_height + mesh.texture->rows) / atlas_height;
+
+        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); ++vertex_index) {
+            const auto &original_uv = mesh.uvs[vertex_index];
+            result.uvs[mesh_index][vertex_index] = glm::dvec2(
+                u_start + original_uv.x * (u_end - u_start),
+                v_start + original_uv.y * (v_end - v_start));
+        }
+
+        ++slot_index;
+    }
+
+    result.texture = atlas_image;
+    return result;
+}
 
 class Masked {
 public:
@@ -170,7 +353,8 @@ private:
             }
         }
 
-        LOG_TRACE("Performing actual mesh merge");
+        // Merging the two meshes
+        LOG_TRACE("Calculating merge mapping");
         const std::array<std::reference_wrapper<const SimpleMesh>, 2> meshes = {base_mesh_clipped.get(), new_mesh_clipped.get()};
         const double distance_epsilon = mesh::merging::estimate_merge_epsilon(meshes);
         // We have to use a hashmap here instead of a grid since we dont know
@@ -185,10 +369,47 @@ private:
         > deduplicate(map, distance_epsilon, radius);
         const mesh::merging::VertexMapping mapping = mesh::merging::create_mapping(meshes,
             mesh::merging::create_options().deduplicate(deduplicate).only_consider_boundary(true));
-        SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping, 
-            mesh::merging::apply_options().deduplicate_triangles(false).merge_uvs(false));
-        LOG_TRACE("Filling holes on merge border");
-        mesh::fill_holes_on_merge_border(merged_mesh, mapping);
+
+        LOG_TRACE("Creating combined mesh");
+        std::vector<size_t> vertex_offsets;
+        SimpleMesh merged_mesh = mesh::combine(meshes, vertex_offsets);
+
+        // Find holes between meshes
+        LOG_TRACE("Triangulating region between meshes");
+        const std::vector<std::vector<mesh::merging::VertexId>> holes = mesh::find_holes_between_meshes(meshes, mapping);
+        std::vector<std::vector<uint32_t>> mapped_holes;
+        mapped_holes.reserve(holes.size());
+        for (const auto& hole : holes) {
+            std::vector<uint32_t> mapped_hole;
+            mapped_hole.reserve(hole.size());
+            for (const auto& vertex_id : hole) {
+                const size_t mapped_index = vertex_offsets[vertex_id.mesh_index] + vertex_id.vertex_index;
+                mapped_hole.push_back(mapped_index);
+            }
+        }
+
+        LOG_TRACE("Generating combined texture");
+        Atlas atlas = generate_texture_atlas_grid(meshes);
+        merged_mesh.texture = std::move(atlas.texture);
+        for (size_t mesh_index=0; mesh_index<meshes.size(); mesh_index++) {
+            const SimpleMesh &mesh = meshes[mesh_index];
+            for (size_t vertex_index=0; vertex_index<mesh.vertex_count(); vertex_index++) {
+                merged_mesh.uvs[vertex_offsets[mesh_index] + vertex_index] = atlas.uvs[mesh_index][vertex_index];
+            }
+        }
+
+        mesh::fill_planar_holes(merged_mesh, mapped_holes);
+
+        // SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, mapping, 
+        //    mesh::merging::apply_options().deduplicate_triangles(false).merge_uvs(false));
+        
+        // Generate geometry between the two meshes to fill holes on the merge border
+        // LOG_TRACE("Filling holes on merge border");
+        // mesh::fill_holes_on_merge_border(merged_mesh, mapping);
+
+
+
+
         return Merged{merged_mesh};
 
         /*

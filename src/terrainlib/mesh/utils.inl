@@ -146,3 +146,4 @@ void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<
         }
     }
 }
+

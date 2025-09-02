@@ -406,9 +406,9 @@ inline glm::dvec2 pad_radius_range(const glm::dvec2& radius_range, double paddin
 inline MeshMask extrude(
     const SphereMeshMask &mask,
     const glm::dvec2& radius_range) {
-    cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mask.mesh);
+    cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mask.mesh);
 
-    cgal::SurfaceMesh output_mesh;
+    cgal::Mesh output_mesh;
     auto bottom = [&](cgal::VertexDescriptor input_vertex, cgal::VertexDescriptor output_vertex) {
         const cgal::Point3 input_point = cgal_mesh.point(input_vertex);
         const glm::dvec3 glm_input_point = convert::to_glm_point(input_point);

@@ -65,6 +65,12 @@ alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
 
 alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
+
+alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
+# alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
+add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
+target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
 
 # Don't build glfw docs, tests and examples
@@ -135,6 +141,7 @@ add_library(terrainlib
     terrainlib/mesh/SimpleMesh.h
     terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
+    terrainlib/mesh/uv_map.h terrainlib/mesh/uv_map.cpp
     terrainlib/mesh/validate.h
 
     terrainlib/octree/disk/layout/strategy/Default.h
@@ -183,7 +190,7 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -229,7 +236,7 @@ add_library(terrainmergerlib
     terrainmerger/utils.h
 )
 target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected xatlas)
 add_executable(terrainmerger
     terrainmerger/main.cpp
     terrainmerger/cli.h terrainmerger/cli.cpp

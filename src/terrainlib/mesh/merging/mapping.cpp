@@ -401,7 +401,7 @@ SimpleMesh apply_mapping(
         return {};
     }
 
-    const bool has_uvs = merge_uvs && std::all_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) {
+    const bool has_uvs = merge_uvs && std::any_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) {
         return mesh.has_uvs();
     });
 

@@ -109,6 +109,10 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
                 const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
                 const glm::dvec3 point3d = lift(point2d, basis);
                 mesh.positions.push_back(point3d);
+                if (mesh.has_uvs()) {
+                    const glm::dvec2 uv = {0, 0};
+                    mesh.uvs.push_back(uv);
+                }
                 triangle[i] = new_index;
             } else {
                 triangle[i] = original_index.value();

@@ -10,13 +10,13 @@ namespace cgal {
     using Kernel = K;                                                                 \
     using Point2 = Kernel::Point_2;                                                   \
     using Point3 = Kernel::Point_3;                                                   \
-    using SurfaceMesh = CGAL::Surface_mesh<Point3>;                                   \
-    using VertexIndex = SurfaceMesh::Vertex_index;                                    \
-    using FaceIndex = SurfaceMesh::Face_index;                                        \
-    using VertexDescriptor = boost::graph_traits<SurfaceMesh>::vertex_descriptor;     \
-    using HalfedgeDescriptor = boost::graph_traits<SurfaceMesh>::halfedge_descriptor; \
-    using EdgeDescriptor = boost::graph_traits<SurfaceMesh>::edge_descriptor;         \
-    using FaceDescriptor = boost::graph_traits<SurfaceMesh>::face_descriptor;
+    using Mesh = CGAL::Surface_mesh<Point3>;                                   \
+    using VertexIndex = Mesh::Vertex_index;                                    \
+    using FaceIndex = Mesh::Face_index;                                        \
+    using VertexDescriptor = boost::graph_traits<Mesh>::vertex_descriptor;     \
+    using HalfedgeDescriptor = boost::graph_traits<Mesh>::halfedge_descriptor; \
+    using EdgeDescriptor = boost::graph_traits<Mesh>::edge_descriptor;         \
+    using FaceDescriptor = boost::graph_traits<Mesh>::face_descriptor;
 
 namespace kernel {
 namespace epick {

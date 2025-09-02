@@ -428,15 +428,15 @@ struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinem
 
 Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
     ASSERT(!mesh.has_uvs());
-    cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
+    cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
 
     const CGAL::Iso_cuboid_3<cgal::Kernel> cgal_bounds(
         convert::to_cgal_point<cgal::Kernel>(bounds.min),
         convert::to_cgal_point<cgal::Kernel>(bounds.max));
-    HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
+    HasIntersectionsVisitor<cgal::Mesh> visitor;
     const auto clip_params = CGAL::Polygon_mesh_processing::parameters::clip_volume(true)
         .visitor(visitor);
-    cgal::SurfaceMesh result_cgal_mesh;
+    cgal::Mesh result_cgal_mesh;
     const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");
@@ -454,7 +454,7 @@ Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const
         return Cow(convert::to_simple_mesh(cgal_mesh));
     }
     
-    cgal::SurfaceMesh remeshed_cgal_mesh;
+    cgal::Mesh remeshed_cgal_mesh;
     const auto remesh_params = CGAL::Polygon_mesh_processing::parameters::cosine_of_maximum_angle(0.999);
     CGAL::Polygon_mesh_processing::remesh_planar_patches(cgal_mesh, remeshed_cgal_mesh, remesh_params);
     remeshed_cgal_mesh.collect_garbage();
@@ -611,21 +611,21 @@ Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMes
     }
     
     // Convert both meshes to cgal and use their clipping logic.
-    using UvMap = cgal::SurfaceMesh::Property_map<cgal::VertexIndex, glm::dvec2>;
+    using UvMap = cgal::Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
-    cgal::SurfaceMesh cgal_mesh = convert::to_cgal_mesh(mesh);
-    cgal::SurfaceMesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
+    cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
+    cgal::Mesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
 
     bool success;
     bool has_intersections;
     if (mesh.has_uvs()) {
         UvMap uv_map = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv").value();
-        UvInterpolatorVisitor<cgal::SurfaceMesh, UvMap> visitor(uv_map, cgal_mesh);
+        UvInterpolatorVisitor<cgal::Mesh, UvMap> visitor(uv_map, cgal_mesh);
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
         has_intersections = !visitor.intersections.empty();
     } else {
-        HasIntersectionsVisitor<cgal::SurfaceMesh> visitor;
+        HasIntersectionsVisitor<cgal::Mesh> visitor;
         const auto params = CGAL::Polygon_mesh_processing::parameters::visitor(visitor);
         success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_clip_mesh, params);
         has_intersections = visitor.has_intersections;

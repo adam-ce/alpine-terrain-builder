@@ -10,6 +10,8 @@
 template <glm::length_t dimensions = 3, typename T = double>
 class SimpleMesh_ {
 public:
+    static constexpr glm::length_t n_dims = dimensions;
+    using Component = T;
     using Triangle = glm::uvec3;
     using Edge = glm::uvec2;
     using Position = glm::vec<dimensions, T>;

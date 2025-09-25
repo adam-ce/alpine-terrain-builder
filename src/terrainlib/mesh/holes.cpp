@@ -110,13 +110,13 @@ namespace {
 template <typename T>
 auto iterator_from_ref(std::vector<T> &vec, T &ref) {
     // Make sure ref actually belongs to vec
-    assert(&ref >= vec.data() && &ref < vec.data() + vec.size());
+    DEBUG_ASSERT(&ref >= vec.data() && &ref < vec.data() + vec.size());
     return vec.begin() + (&ref - vec.data());
 }
 
 template <typename T>
 auto iterator_from_ref(const std::vector<T> &vec, const T &ref) {
-    assert(&ref >= vec.data() && &ref < vec.data() + vec.size());
+    DEBUG_ASSERT(&ref >= vec.data() && &ref < vec.data() + vec.size());
     return vec.cbegin() + (&ref - vec.data());
 }
 }
@@ -192,6 +192,7 @@ std::vector<std::vector<VertexIndex>> find_holes_on_merge_border(
     return holes;
 }
 
+/*
 namespace {
 bool contains_shared_vertex(
     const size_t source_mesh_index,
@@ -202,7 +203,7 @@ bool contains_shared_vertex(
             if (mesh_index == source_mesh_index) {
                 continue;
             }
-            
+
             const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
             if (source_vertex.has_value()) {
                 return true;
@@ -299,7 +300,7 @@ std::vector<std::vector<merging::VertexId>> find_holes_between_meshes(
                         });
                     }
                 }
-                
+
                 boundary_segments.push_front(std::move(segment));
             }
         }
@@ -340,18 +341,10 @@ std::vector<std::vector<merging::VertexId>> find_holes_between_meshes(
     }
 
     return holes;
-}
+}*/
 
 void fill_planar_hole(SimpleMesh &mesh, const std::span<const VertexIndex> hole) {
-    if (hole.size() < 3) {
-        return;
-    }
-
     polygon::triangulate(mesh, hole);
-
-    // for (size_t i = 1; i + 1 < hole.size(); i++) {
-    //     mesh.triangles.emplace_back(hole[0], hole[i], hole[i + 1]);
-    // }
 }
 
 void fill_planar_holes(SimpleMesh &mesh, const std::vector<std::vector<VertexIndex>> holes) {

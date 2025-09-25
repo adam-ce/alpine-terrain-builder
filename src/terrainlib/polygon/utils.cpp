@@ -3,7 +3,7 @@
 
 #include "polygon/utils.h"
 
-    namespace polygon {
+namespace polygon {
 bool is_planar(const Polygon3d &polygon, const double epsilon) {
     if (polygon.size() < 4) {
         return true; // 3 points always define a plane
@@ -34,7 +34,7 @@ bool is_planar(const Polygon3d &polygon, const double epsilon) {
     for (const auto &p : polygon.points) {
         const double distance = std::abs(glm::dot(p - p0, normal));
         if (distance > epsilon) {
-            return false;
+            // return false;
         }
     }
     return true;

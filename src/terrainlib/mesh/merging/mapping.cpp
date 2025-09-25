@@ -161,7 +161,9 @@ VertexMapping create_mapping(
                     }
                 }
                 if (nearest_duplicate.has_value()) {
-                    mapping.add_bidirectional(current_vertex, mapping.map_forward(nearest_duplicate.value().first));
+                    const auto mapped = mapping.map_forward(nearest_duplicate.value().first);
+                    DEBUG_ASSERT(!mapping.map_backward(mesh_index, mapped).has_value());
+                    mapping.add_bidirectional(current_vertex, mapped);
                 } else {
                     deduplicate.add(position, current_vertex);
                     add_unique_vertex(current_vertex);
@@ -372,7 +374,7 @@ VertexMapping create_connecting_mapping(std::span<std::reference_wrapper<const S
 
     return mapping;
 }
-    */
+*/
 
 SimpleMesh apply_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
@@ -416,12 +418,15 @@ SimpleMesh apply_mapping(
             const size_t mapped_index = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index});
             merged_mesh.positions[mapped_index] =  mesh.positions[vertex_index];
             if (has_uvs) {
-                merged_mesh.uvs[mapped_index] = mesh.uvs[vertex_index];
+                merged_mesh.uvs[mapped_index] = mesh.has_uvs() ? mesh.uvs[vertex_index] : glm::dvec2(0);
             }
             max_vertex_index = std::max(max_vertex_index, mapped_index);
         }
     }
-    DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count || max_vertex_index == 0);
+    if (max_vertex_index == 0) {
+        return {};
+    }
+    DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_vertex_index + 1);

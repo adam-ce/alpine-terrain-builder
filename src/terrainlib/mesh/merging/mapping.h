@@ -87,7 +87,7 @@ inline CreateOptions<EstimateEpsilon> create_options() {
     return CreateOptions<EstimateEpsilon>::defaults();
 }
 
-template <typename Mode>
+template <typename Mode = EstimateEpsilon>
 VertexMapping create_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     const CreateOptions<Mode> options = create_options()) {
@@ -156,3 +156,4 @@ inline SimpleMesh apply_mapping(
 }
 
 } // namespace mesh::merging
+                                                                                                                

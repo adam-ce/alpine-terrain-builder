@@ -52,9 +52,9 @@ void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
     for (Triangle &triangle : triangles_ignore_orientation) {
         std::sort(&triangle.x, &triangle.z + 1);
     }
-    std::vector<Triangle> triangles_ignore_orientation2(triangles_ignore_orientation);
-    sort_and_normalize_triangles(triangles_ignore_orientation);
-    DEBUG_ASSERT(triangles_ignore_orientation.end() == std::adjacent_find(triangles_ignore_orientation.begin(), triangles_ignore_orientation.end()));
+    std::vector<Triangle> triangles_ignore_orientation_normalized(triangles_ignore_orientation);
+    sort_and_normalize_triangles(triangles_ignore_orientation_normalized);
+    DEBUG_ASSERT(triangles_ignore_orientation_normalized.end() == std::adjacent_find(triangles_ignore_orientation_normalized.begin(), triangles_ignore_orientation_normalized.end()));
 
     // Check for isolated vertices
     DEBUG_ASSERT(find_isolated_vertices(mesh).empty());

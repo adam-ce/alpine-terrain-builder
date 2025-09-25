@@ -11,6 +11,8 @@
 
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
+#include "mesh/validate.h"
+#include "mesh/utils.h"
 #include "polygon/utils.h"
 
 using Kernel = cgal::kernel::epeck::Kernel;
@@ -58,6 +60,10 @@ glm::dvec3 lift(const glm::dvec2 &q, const PlaneBasis &basis) {
 
 // TODO: deduplicate overloads
 void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
+    if (indices.size() < 3) {
+        return;
+    }
+
     // Build the 3D points of the polygon
     Polygon3d polygon;
     polygon.points.reserve(indices.size());
@@ -65,6 +71,9 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         DEBUG_ASSERT(vertex_index < mesh.positions.size());
         polygon.points.push_back(mesh.positions[vertex_index]);
     }
+
+    // Holes are oriented CW
+    std::reverse(polygon.points.begin(), polygon.points.end());
 
     DEBUG_ASSERT(polygon::is_planar(polygon));
     const PlaneBasis basis = make_basis(polygon);
@@ -124,10 +133,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
 }
 
 SimpleMesh3d triangulate(const Polygon3d &polygon) {
-    ASSERT(false);
-    // TODO;
-    return {};
-    /*
     DEBUG_ASSERT(polygon::is_planar(polygon));
     const PlaneBasis basis = make_basis(polygon);
 
@@ -143,39 +148,38 @@ SimpleMesh3d triangulate(const Polygon3d &polygon) {
     }
 
     // Mark facets that are inside the domain bounded by the polygon (since the full convex hull is triangulated)
-    CGAL::mark_domain_in_triangulation(cdt);
+    std::unordered_map<FaceHandle, bool> in_domain_map;
+    boost::associative_property_map<std::unordered_map<FaceHandle, bool>> in_domain(in_domain_map);
+    CGAL::mark_domain_in_triangulation(cdt, in_domain);
     DEBUG_ASSERT(cdt.is_valid());
 
     // Build the resulting triangle mesh
     SimpleMesh3d result;
-    // Map from CGAL vertex handles to output mesh indices
-    std::unordered_map<VertexHandle, uint32_t> vertex_index_map;
-
+    // insert new triangles and vertices
     for (const FaceHandle face : cdt.finite_face_handles()) {
-        if (!face->info()) {
-            // not inside polygon
-            continue;
+        if (!get(in_domain, face)) {
+            continue; // outside polygon
         }
 
         glm::uvec3 triangle;
-        for (uint32_t i = 0; i < 3; i++) {
-            const VertexHandle vertex = face->vertex(i);
-            auto [it, inserted] = vertex_index_map.emplace(vertex, 0);
-            if (inserted) {
+        for (int i = 0; i < 3; i++) {
+            const auto &vertex = face->vertex(i);
+            const auto &original_index = vertex->info();
+            if (!original_index.has_value()) {
                 const uint32_t new_index = result.positions.size();
                 const Point2 &cgal_point = vertex->point();
                 const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
                 const glm::dvec3 point3d = lift(point2d, basis);
                 result.positions.push_back(point3d);
-                it->second = new_index;
+                triangle[i] = new_index;
+            } else {
+                triangle[i] = original_index.value();
             }
-            triangle[i] = it->second;
         }
 
         result.triangles.push_back(triangle);
     }
 
     return result;
-    */
 }
 }

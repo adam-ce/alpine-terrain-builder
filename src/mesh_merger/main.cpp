@@ -15,12 +15,13 @@ SimpleMesh merge(const std::span<SimpleMesh> meshes, const std::optional<double>
     std::vector<std::reference_wrapper<const SimpleMesh>> mesh_refs;
     mesh_refs.reserve(meshes.size());
     for (const SimpleMesh &mesh : meshes) {
-        mesh_refs.push_back(mesh);
+        mesh_refs.push_back(std::cref(mesh));
     }
 
     mesh::merging::VertexMapping mapping;
     if (epsilon.has_value()) {
-        mapping = mesh::merging::create_mapping(mesh_refs, epsilon.value());
+        mapping = mesh::merging::create_mapping(mesh_refs,
+            mesh::merging::create_options().epsilon(epsilon.value()));
     } else {
         mapping = mesh::merging::create_mapping(mesh_refs);
     }

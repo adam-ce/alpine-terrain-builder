@@ -61,10 +61,31 @@ auto combine(
     return result;
 }
 
-template <glm::length_t n_dims, typename T, typename MeshRange>
+template <typename MeshRange>
 auto combine(const MeshRange &meshes) {
     std::vector<size_t> vertex_offsets;
     return combine(meshes, vertex_offsets);
 }
 
+template <glm::length_t n_dims, typename T>
+void combine_inplace(
+    SimpleMesh_<n_dims, T> &acc_mesh,
+    const SimpleMesh_<n_dims, T> &other_mesh) {
+    bool has_uvs = acc_mesh.has_uvs() || other_mesh.has_uvs();
+
+    acc_mesh.positions.insert(acc_mesh.positions.end(), other_mesh.positions.begin(), other_mesh.positions.end());
+
+    if (has_uvs) {
+        if (other_mesh.has_uvs()) {
+            acc_mesh.uvs.insert(acc_mesh.uvs.end(), other_mesh.uvs.begin(), other_mesh.uvs.end());
+        } else {
+            acc_mesh.uvs.insert(acc_mesh.uvs.end(), other_mesh.vertex_count(), glm::dvec2(0));
+        }
+    }
+
+    acc_mesh.triangles.reserve(acc_mesh.face_count() + other_mesh.face_count());
+    for (const auto &triangle : other_mesh.triangles) {
+        acc_mesh.triangles.push_back(triangle + static_cast<uint32_t>(acc_mesh.vertex_count()));
+    }
+}
 }

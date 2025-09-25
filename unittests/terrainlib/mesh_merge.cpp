@@ -40,7 +40,7 @@ TEST_CASE("mesh::merge") {
 
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.1));
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -78,7 +78,10 @@ TEST_CASE("mesh::merge") {
         mesh2.uvs.push_back(glm::dvec2(0, 1));
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, 
+            mesh::merging::create_options().epsilon(0.1),
+            mesh::merging::apply_options().merge_uvs(true)
+        );
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -119,7 +122,7 @@ TEST_CASE("mesh::merge") {
 
         const bool only_boundary = GENERATE(true, false);
         CAPTURE(only_boundary);
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1, only_boundary);
+        SimpleMesh actual = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.1).only_consider_boundary(only_boundary));
 
         SimpleMesh expected;
         expected.positions.push_back(glm::dvec3(0, 0, 0));
@@ -152,9 +155,9 @@ TEST_CASE("mesh::merge") {
         mesh1.positions.push_back(glm::dvec3(0, 1, 0));
         mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        SimpleMesh mesh2; // empty
+        const SimpleMesh mesh2; // empty
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.1);
+        const SimpleMesh actual = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.1));
 
         CHECK(mesh1.positions == actual.positions);
         CHECK(mesh1.uvs == actual.uvs);
@@ -169,9 +172,9 @@ TEST_CASE("mesh::merge") {
             glm::dvec3(0, 1, 0)};
         mesh1.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        SimpleMesh mesh2 = mesh1;
+        const SimpleMesh mesh2 = mesh1;
 
-        SimpleMesh actual = mesh::merge(mesh1, mesh2, 0.001);
+        const SimpleMesh actual = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.001));
 
         CHECK(actual.positions == mesh1.positions);
         CHECK(actual.triangles == mesh1.triangles);
@@ -192,8 +195,8 @@ TEST_CASE("mesh::merge") {
             glm::dvec3(1, 1, 0)};
         mesh2.triangles.push_back(glm::uvec3(0, 1, 2));
 
-        auto merged_small = mesh::merge(mesh1, mesh2, 0.01);
-        auto merged_large = mesh::merge(mesh1, mesh2, 0.1);
+        const SimpleMesh merged_small = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.01));
+        const SimpleMesh merged_large = mesh::merge(mesh1, mesh2, mesh::merging::create_options().epsilon(0.1));
 
         CHECK(merged_small.positions.size() > merged_large.positions.size());
     }

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <xatlas/xatlas.h>
-
 #include "mask.h"
 #include "merge/NodeData.h"
 #include "merge/Result.h"
@@ -20,40 +18,6 @@
 #include "utils.h"
 
 namespace merge::visitor {
-
-inline xatlas::MeshDecl to_meshdecl(const SimpleMesh &mesh) {
-    xatlas::MeshDecl decl{};
-
-    decl.indexCount = static_cast<uint32_t>(mesh.triangles.size() * 3);
-    decl.indexData = mesh.triangles.data();
-    decl.indexFormat = xatlas::IndexFormat::UInt32;
-
-    decl.vertexCount = static_cast<uint32_t>(mesh.positions.size());
-    decl.vertexPositionData = mesh.positions.data();
-    decl.vertexPositionStride = sizeof(SimpleMesh::Position);
-
-    if (mesh.has_uvs()) {
-        decl.vertexUvData = mesh.uvs.data();
-        decl.vertexUvStride = sizeof(SimpleMesh::Uv);
-    }
-
-    return decl;
-}
-
-inline xatlas::UvMeshDecl to_uvmeshdecl(const SimpleMesh &mesh) {
-    xatlas::UvMeshDecl decl{};
-
-    decl.indexCount = static_cast<uint32_t>(mesh.triangles.size() * 3);
-    decl.indexData = mesh.triangles.data();
-    decl.indexFormat = xatlas::IndexFormat::UInt32;
-
-    ASSERT(mesh.has_uvs());
-    decl.vertexUvData = mesh.uvs.data();
-    decl.vertexCount = static_cast<uint32_t>(mesh.uvs.size());
-    decl.vertexStride = sizeof(SimpleMesh::Uv);
-
-    return decl;
-}
 
 struct Atlas {
     std::vector<std::vector<SimpleMesh::Uv>> uvs;
@@ -164,202 +128,6 @@ inline Atlas generate_texture_atlas_grid(
     return result;
 }
 
-#include <fstream>
-#include <stdexcept>
-#include <string>
-#include <unordered_set>
-
-#include <fstream>
-#include <stdexcept>
-#include <string>
-
-inline void export_mesh_with_edges(
-    SimpleMesh mesh,
-    const std::vector<SimpleMesh::Edge> &highlighted_edges,
-    const std::string &obj_path,
-    const std::string &mtl_name = "edges.mtl") {
-    if (mesh.positions.empty()) {
-        throw std::runtime_error("Mesh has no positions");
-    }
-
-    // --- normalize mesh ---
-    glm::dvec3 min_pt = mesh.positions[0];
-    glm::dvec3 max_pt = mesh.positions[0];
-    for (const auto &v : mesh.positions) {
-        min_pt = glm::min(min_pt, v);
-        max_pt = glm::max(max_pt, v);
-    }
-    glm::dvec3 center = (min_pt + max_pt) * 0.5;
-    glm::dvec3 extent = max_pt - min_pt;
-    double scale = std::max({extent.x, extent.y, extent.z});
-    if (scale == 0.0)
-        scale = 1.0;
-    for (auto &v : mesh.positions) {
-        v = (v - center) / scale;
-    }
-
-    // --- open OBJ ---
-    std::ofstream out(obj_path);
-    if (!out)
-        throw std::runtime_error("Cannot open: " + obj_path);
-
-    out << "mtllib " << mtl_name << "\n";
-
-    // base mesh vertices
-    for (const auto &v : mesh.positions) {
-        out << "v " << v.x << " " << v.y << " " << v.z << "\n";
-    }
-
-    // faces
-    for (const auto &tri : mesh.triangles) {
-        out << "f " << (tri.x + 1) << " " << (tri.y + 1) << " " << (tri.z + 1) << "\n";
-    }
-
-    // --- edges as quads with red material ---
-    out << "o highlighted_edges\n";
-    out << "usemtl highlighted\n";
-
-    int vertex_index = static_cast<int>(mesh.positions.size());
-    for (const auto &e : highlighted_edges) {
-        glm::dvec3 a = mesh.positions[e.x];
-        glm::dvec3 b = mesh.positions[e.y];
-
-        glm::dvec3 dir = glm::normalize(b - a);
-        glm::dvec3 up(0, 0, 1);
-        if (glm::abs(glm::dot(dir, up)) > 0.9)
-            up = glm::dvec3(0, 1, 0);
-        glm::dvec3 offset = glm::normalize(glm::cross(dir, up)) * 0.00002; // thickness
-
-        // four new vertices
-        out << "v " << (a - offset).x << " " << (a - offset).y << " " << (a - offset).z << "\n";
-        out << "v " << (a + offset).x << " " << (a + offset).y << " " << (a + offset).z << "\n";
-        out << "v " << (b + offset).x << " " << (b + offset).y << " " << (b + offset).z << "\n";
-        out << "v " << (b - offset).x << " " << (b - offset).y << " " << (b - offset).z << "\n";
-
-        int base = ++vertex_index;
-        out << "f " << base << " " << base + 1 << " " << base + 2 << "\n";
-        out << "f " << base << " " << base + 2 << " " << base + 3 << "\n";
-        vertex_index += 3;
-    }
-
-    out.close();
-
-    // --- MTL ---
-    std::string dir;
-    auto pos = obj_path.find_last_of("/\\");
-    if (pos != std::string::npos)
-        dir = obj_path.substr(0, pos + 1);
-    std::string mtl_path = dir + mtl_name;
-
-    std::ofstream mtl_out(mtl_path);
-    if (!mtl_out)
-        throw std::runtime_error("Cannot open: " + mtl_path);
-
-    mtl_out << "newmtl highlighted\n";
-    mtl_out << "Kd 1.0 0.0 0.0\n"; // red
-    mtl_out << "Ka 0.0 0.0 0.0\n";
-    mtl_out << "Ks 0.0 0.0 0.0\n";
-    mtl_out << "d 1.0\n";
-    mtl_out << "illum 1\n";
-}
-
-#include <fstream>
-#include <stdexcept>
-#include <string>
-
-inline void export_two_meshes(
-    SimpleMesh mesh_a,
-    SimpleMesh mesh_b,
-    const std::string &obj_path,
-    const std::string &mtl_name = "two_meshes.mtl") {
-    if (mesh_a.positions.empty() || mesh_b.positions.empty()) {
-        throw std::runtime_error("One of the meshes has no positions");
-    }
-
-    // --- compute joint normalization ---
-    glm::dvec3 min_pt = mesh_a.positions[0];
-    glm::dvec3 max_pt = mesh_a.positions[0];
-    auto update_bounds = [&](const glm::dvec3 &v) {
-        min_pt = glm::min(min_pt, v);
-        max_pt = glm::max(max_pt, v);
-    };
-    for (const auto &v : mesh_a.positions)
-        update_bounds(v);
-    for (const auto &v : mesh_b.positions)
-        update_bounds(v);
-
-    glm::dvec3 center = (min_pt + max_pt) * 0.5;
-    glm::dvec3 extent = max_pt - min_pt;
-    double scale = std::max({extent.x, extent.y, extent.z});
-    if (scale == 0.0)
-        scale = 1.0;
-
-    for (auto &v : mesh_a.positions)
-        v = (v - center) / scale;
-    for (auto &v : mesh_b.positions)
-        v = (v - center) / scale;
-
-    // --- write OBJ ---
-    std::ofstream out(obj_path);
-    if (!out)
-        throw std::runtime_error("Cannot open: " + obj_path);
-
-    out << "mtllib " << mtl_name << "\n";
-
-    // Mesh A
-    out << "o mesh_a\n";
-    out << "usemtl color_a\n";
-    for (const auto &v : mesh_a.positions) {
-        out << "v " << v.x << " " << v.y << " " << v.z << "\n";
-    }
-    for (const auto &tri : mesh_a.triangles) {
-        out << "f " << (tri.x + 1) << " " << (tri.y + 1) << " " << (tri.z + 1) << "\n";
-    }
-
-    // Mesh B
-    out << "o mesh_b\n";
-    out << "usemtl color_b\n";
-    int vertex_offset = static_cast<int>(mesh_a.positions.size());
-    for (const auto &v : mesh_b.positions) {
-        out << "v " << v.x << " " << v.y << " " << v.z << "\n";
-    }
-    for (const auto &tri : mesh_b.triangles) {
-        out << "f "
-            << (tri.x + 1 + vertex_offset) << " "
-            << (tri.y + 1 + vertex_offset) << " "
-            << (tri.z + 1 + vertex_offset) << "\n";
-    }
-
-    out.close();
-
-    // --- write MTL ---
-    std::string dir;
-    auto pos = obj_path.find_last_of("/\\");
-    if (pos != std::string::npos)
-        dir = obj_path.substr(0, pos + 1);
-    std::string mtl_path = dir + mtl_name;
-
-    std::ofstream mtl_out(mtl_path);
-    if (!mtl_out)
-        throw std::runtime_error("Cannot open: " + mtl_path);
-
-    // color for mesh A (blue)
-    mtl_out << "newmtl color_a\n";
-    mtl_out << "Kd 0.0 0.0 1.0\n";
-    mtl_out << "Ka 0.0 0.0 0.0\n";
-    mtl_out << "Ks 0.0 0.0 0.0\n";
-    mtl_out << "d 1.0\n";
-    mtl_out << "illum 1\n";
-
-    // color for mesh B (green)
-    mtl_out << "newmtl color_b\n";
-    mtl_out << "Kd 0.0 1.0 0.0\n";
-    mtl_out << "Ka 0.0 0.0 0.0\n";
-    mtl_out << "Ks 0.0 0.0 0.0\n";
-    mtl_out << "d 1.0\n";
-    mtl_out << "illum 1\n";
-}
-
 class Masked {
 public:
     using Status = octree::NodeStatusOrMissing;
@@ -419,14 +187,14 @@ public:
 
         // If we have two leaf nodes we can directly merge them.
         if constexpr (left.status() == Status::Leaf && right.status() == Status::Leaf) {
-            return this->merge_meshes(id, left.mesh(), right.mesh(), true, true, mask);
+            return this->merge_meshes(left.mesh(), right.mesh(), true, true, mask);
         }
 
         // If we have a left leaf we either directly return it (after clipping)
         // or merge if right has a non-missing parent
         if constexpr (left.status() == Status::Leaf && right.status() == Status::Missing) {
             if (ctx.has_right_parent) {
-                return this->merge_meshes(id, left.mesh(), right.mesh().value(), true, false, mask);
+                return this->merge_meshes(left.mesh(), right.mesh().value(), true, false, mask);
             }
 
             // Right node is actually missing, just return the clipped left node
@@ -444,7 +212,7 @@ public:
         // or merge if left has a non-missing parent
         if constexpr (left.status() == Status::Missing && right.status() == Status::Leaf) {
             if (ctx.has_left_parent) {
-                return this->merge_meshes(id, left.mesh().value(), right.mesh(), false, true, mask);
+                return this->merge_meshes(left.mesh().value(), right.mesh(), false, true, mask);
             }
 
             // Left node is actually missing, just return the clipped right node
@@ -491,7 +259,6 @@ public:
 
 private:
     Result merge_meshes(
-        const octree::Id &id,
         const SimpleMesh &base_mesh,
         const SimpleMesh &new_mesh,
         const bool can_ref_base_mesh,
@@ -501,7 +268,6 @@ private:
         const Cow<const SimpleMesh> base_mesh_clipped = clip_on_mask(base_mesh, mask, false);
 
         if (base_mesh_clipped.is_ref() && new_mesh_clipped->is_empty()) {
-            return Ignore{};
             if (can_ref_base_mesh) {
                 return Unchanged{Source::Left};
             } else {
@@ -509,7 +275,6 @@ private:
             }
         }
         if (new_mesh_clipped.is_ref() && base_mesh_clipped->is_empty()) {
-            return Ignore{};
             if (can_ref_new_mesh) {
                 return Unchanged{Source::Right};
             } else {
@@ -554,26 +319,9 @@ private:
             }
             std::reverse(polygon.points.begin(), polygon.points.end());
             const SimpleMesh3d patch = polygon::triangulate(polygon);
-            // mesh::combine_inplace(hole_mesh, patch);
-            hole_mesh = mesh::combine(std::array{hole_mesh, patch});
+            mesh::combine_inplace(hole_mesh, patch);
         }
         hole_mesh.uvs.insert(hole_mesh.uvs.end(), hole_mesh.vertex_count(), glm::dvec2(0));
-
-        std::vector<SimpleMesh::Edge> edges;
-        for (const auto &hole : holes) {
-            for (size_t i = 0; i < hole.size(); i++) {
-                const SimpleMesh::Edge edge(
-                    hole[i],
-                    hole[(i + 1) % hole.size()]);
-                edges.push_back(edge);
-            }
-        }
-        const std::filesystem::path mesh_path = "/mnt/c/Users/Admin/Downloads/out-merge2/merged_" + std::to_string(id.x()) + "_" + std::to_string(id.y()) + "_" + std::to_string(id.z()) + ".obj";
-        export_mesh_with_edges(merged_mesh, edges, mesh_path.string());
-        export_two_meshes(merged_mesh, hole_mesh, mesh_path.string() + ".two.obj");
-        export_mesh_with_edges(hole_mesh, {}, mesh_path.string() + ".holes.obj");
-        mesh::validate(merged_mesh);
-        mesh::validate(hole_mesh);
 
         LOG_TRACE("Creating combined mesh");
         const std::array<std::reference_wrapper<const SimpleMesh>, 3> meshes_and_patches = {meshes[0], meshes[1], hole_mesh};

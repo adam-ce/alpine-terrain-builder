@@ -155,7 +155,7 @@ TEST_CASE("fill_planar_hole fill square hole") {
         {3, 4, 7}};
 
     const std::vector<uint32_t> outer_loop = {0, 1, 2, 3};
-    const std::vector<uint32_t> inner_loop = {4, 5, 6, 7};
+    const std::vector<uint32_t> inner_loop = {7, 6, 5, 4}; // {4, 5, 6, 7};
 
     const auto holes = mesh::find_holes(mesh);
     CHECK(holes.size() == 1);

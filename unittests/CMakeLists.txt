@@ -47,6 +47,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_utils.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
+    terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/spatial_lookup.cpp
 )

@@ -58,11 +58,12 @@ glm::dvec3 lift(const glm::dvec2 &q, const PlaneBasis &basis) {
 
 }
 
-// TODO: deduplicate overloads
 void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     if (indices.size() < 3) {
         return;
     }
+    
+    DEBUG_ASSERT(indices.size() <= mesh.positions.size());
 
     // Build the 3D points of the polygon
     Polygon3d polygon;
@@ -71,9 +72,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         DEBUG_ASSERT(vertex_index < mesh.positions.size());
         polygon.points.push_back(mesh.positions[vertex_index]);
     }
-
-    // Holes are oriented CW
-    std::reverse(polygon.points.begin(), polygon.points.end());
 
     DEBUG_ASSERT(polygon::is_planar(polygon));
     const PlaneBasis basis = make_basis(polygon);
@@ -102,27 +100,29 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     CGAL::mark_domain_in_triangulation(cdt, in_domain);
     DEBUG_ASSERT(cdt.is_valid());
 
-    // insert new triangles and vertices
+    // Insert new triangles and vertices
     for (const FaceHandle face : cdt.finite_face_handles()) {
         if (!get(in_domain, face)) {
-            continue; // outside polygon
+            // outside the polygon
+            continue;
         }
 
         glm::uvec3 triangle;
         for (int i = 0; i < 3; i++) {
             const auto &vertex = face->vertex(i);
-            const auto &original_index = vertex->info();
+            auto &original_index = vertex->info();
             if (!original_index.has_value()) {
                 const uint32_t new_index = mesh.positions.size();
-                const Point2 &cgal_point = vertex->point();
-                const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
+                const glm::dvec2 point2d = convert::to_glm_point(vertex->point());
                 const glm::dvec3 point3d = lift(point2d, basis);
                 mesh.positions.push_back(point3d);
                 if (mesh.has_uvs()) {
-                    const glm::dvec2 uv = {0, 0};
-                    mesh.uvs.push_back(uv);
+                    mesh.uvs.push_back({0, 0});
                 }
                 triangle[i] = new_index;
+                // Don't add steiner points multiple times
+                *original_index = new_index;
+                DEBUG_ASSERT(face->vertex(i)->info().value() == new_index);
             } else {
                 triangle[i] = original_index.value();
             }
@@ -133,53 +133,18 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
 }
 
 SimpleMesh3d triangulate(const Polygon3d &polygon) {
-    DEBUG_ASSERT(polygon::is_planar(polygon));
-    const PlaneBasis basis = make_basis(polygon);
+    // Copy polygon points into a mesh
+    SimpleMesh3d mesh;
+    mesh.positions = polygon.points;
 
-    CDT cdt;
-    // insert edges
-    for (size_t i = 0; i < polygon.size(); i++) {
-        const glm::dvec2 a = project(polygon.points[i], basis);
-        const glm::dvec2 b = project(polygon.points[(i + 1) % polygon.size()], basis);
-        cdt.insert_constraint(
-            convert::to_cgal_point<Kernel>(a),
-            convert::to_cgal_point<Kernel>(b)
-        );
+    // Build indices [0..N-1] for the helper
+    std::vector<uint32_t> indices(polygon.points.size());
+    for (uint32_t i = 0; i < polygon.points.size(); i++) {
+        indices[i] = i;
     }
 
-    // Mark facets that are inside the domain bounded by the polygon (since the full convex hull is triangulated)
-    std::unordered_map<FaceHandle, bool> in_domain_map;
-    boost::associative_property_map<std::unordered_map<FaceHandle, bool>> in_domain(in_domain_map);
-    CGAL::mark_domain_in_triangulation(cdt, in_domain);
-    DEBUG_ASSERT(cdt.is_valid());
-
-    // Build the resulting triangle mesh
-    SimpleMesh3d result;
-    // insert new triangles and vertices
-    for (const FaceHandle face : cdt.finite_face_handles()) {
-        if (!get(in_domain, face)) {
-            continue; // outside polygon
-        }
-
-        glm::uvec3 triangle;
-        for (int i = 0; i < 3; i++) {
-            const auto &vertex = face->vertex(i);
-            const auto &original_index = vertex->info();
-            if (!original_index.has_value()) {
-                const uint32_t new_index = result.positions.size();
-                const Point2 &cgal_point = vertex->point();
-                const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
-                const glm::dvec3 point3d = lift(point2d, basis);
-                result.positions.push_back(point3d);
-                triangle[i] = new_index;
-            } else {
-                triangle[i] = original_index.value();
-            }
-        }
-
-        result.triangles.push_back(triangle);
-    }
-
-    return result;
+    triangulate(mesh, indices);
+    return mesh;
 }
+
 }

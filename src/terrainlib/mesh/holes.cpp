@@ -158,21 +158,32 @@ std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
 }
 
 namespace {
+bool is_shared_vertex(
+    const VertexIndex vertex_index,
+    const mesh::merging::VertexMapping &mapping) {
+    bool first_source_mesh_found = false;
+    for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+        const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
+        if (!source_vertex.has_value()) {
+            continue;
+        }
+        if (first_source_mesh_found) {
+            return true;
+        }
+        first_source_mesh_found = true;
+    }
+    return false;
+}
+
 bool contains_shared_vertex(
     const std::span<const VertexIndex> vertices_in_merged_mesh,
     const mesh::merging::VertexMapping &mapping) {
-    FixedVector<VertexIndex, 2> source_meshes;
     for (const VertexIndex vertex_index : vertices_in_merged_mesh) {
-        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
-            const std::optional<VertexIndex> source_vertex = mapping.map_backward(mesh_index, vertex_index);
-            if (source_vertex.has_value()) {
-                source_meshes.push_back(source_vertex.value());
-                if (source_meshes.size() > 1) {
-                    return true;
-                }
-            }
+        if (is_shared_vertex(vertex_index, mapping)) {
+            return true;
         }
     }
+    return false;
 }
 } // namespace
 
@@ -343,12 +354,13 @@ std::vector<std::vector<merging::VertexId>> find_holes_between_meshes(
     return holes;
 }*/
 
-void fill_planar_hole(SimpleMesh &mesh, const std::span<const VertexIndex> hole) {
+void fill_planar_hole(SimpleMesh &mesh, std::vector<VertexIndex> hole) {
+    std::reverse(hole.begin(), hole.end());
     polygon::triangulate(mesh, hole);
 }
 
-void fill_planar_holes(SimpleMesh &mesh, const std::vector<std::vector<VertexIndex>> holes) {
-    for (const auto& hole : holes) {
+void fill_planar_holes(SimpleMesh &mesh, std::vector<std::vector<VertexIndex>> holes) {
+    for (auto& hole : holes) {
         fill_planar_hole(mesh, hole);
     }
 }

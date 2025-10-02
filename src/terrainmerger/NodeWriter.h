@@ -25,6 +25,10 @@ public:
     void write_node(const octree::Id &id, const SimpleMesh &mesh) {
         mesh::validate(mesh);
         DEBUG_ASSERT_VAL(this->_storage.write_node(id, mesh, this->_overwrite));
+        auto p = this->_storage.get_node_path(id);
+        // change extension to .png
+        p.replace_extension(".png");
+        cv::imwrite(p, mesh.texture.value_or(cv::Mat()));
     }
 
     void copy_subtree_to_output(

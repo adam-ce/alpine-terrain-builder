@@ -71,7 +71,7 @@ alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_opt
 add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
 target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH af07738928ab3129899dde72c8e73ed01622a420 NOT_SYSTEM DEEP_CLONE)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
 
 # Don't build glfw docs, tests and examples
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)

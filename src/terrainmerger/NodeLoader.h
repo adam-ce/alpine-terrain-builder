@@ -7,6 +7,7 @@
 #include "NodeLoader.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/clip.h"
+#include "mesh/texture_trim.h"
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "octree/Space.h"
@@ -57,7 +58,8 @@ public:
             if (parent_mesh_opt.has_value()) {
                 auto parent_mesh = parent_mesh_opt.value();
                 const auto bounds = this->_space.get_node_bounds(id);
-                const auto clipped = mesh::clip_on_bounds(parent_mesh, bounds);
+                SimpleMesh clipped = mesh::clip_on_bounds(parent_mesh, bounds);
+                trim_texture_inplace(clipped);
                 this->_cache.put(id, clipped);
                 return clipped;
             }

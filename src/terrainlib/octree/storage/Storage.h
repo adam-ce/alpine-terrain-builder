@@ -129,6 +129,8 @@ public:
 
     tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node, const bool overwrite = false) noexcept {
         // TODO: implement overwrite
+        ASSERT(!overwrite);
+
         const auto result = this->_inner.write_node(id, node);
         if (result.has_value()) {
             this->_cache.put(id, node);

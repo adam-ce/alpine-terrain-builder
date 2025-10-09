@@ -10,7 +10,7 @@ Args cli::parse(int argc, const char * const * argv) {
     DEBUG_ASSERT(argc >= 0);
 
     Args args;
-    CLI::App app{"index browser"};
+    CLI::App app{"index_browser"};
     app.positionals_at_end(false);
     app.allow_windows_style_options(false);
 

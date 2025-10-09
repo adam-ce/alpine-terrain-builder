@@ -137,7 +137,7 @@ int run(std::span<char *> args) {
     int argc = args.size();
     char **argv = args.data();
 
-    CLI::App app{"Terrain Builder"};
+    CLI::App app{"mesh_builder"};
     app.allow_windows_style_options();
     argv = app.ensure_utf8(argv);
 

@@ -6,7 +6,7 @@ using namespace cli;
 
 Args cli::parse(int argc, const char * const* argv) {
     DEBUG_ASSERT(argc >= 0);
-    CLI::App app{"terrainconvert"};
+    CLI::App app{"mesh_convert"};
     
     std::filesystem::path input_path;
     app.add_option("--input", input_path, "Path of tile to be converted")

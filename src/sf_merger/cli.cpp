@@ -9,7 +9,7 @@ using namespace cli;
 Args cli::parse(int argc, const char *const *argv) {
     DEBUG_ASSERT(argc >= 0);
 
-    CLI::App app{"terrainmerger"};
+    CLI::App app{"mesh_merger"};
     app.allow_windows_style_options();
     // argv = app.ensure_utf8(argv);
 
@@ -71,11 +71,8 @@ Args cli::parse(int argc, const char *const *argv) {
     app.require_subcommand(1);
 
     try {
-        // app.parse(argc, argv);
-        // app.parse("--input ../../../meshes/innenstadt2 ../../../meshes/vienna2 --output ../../../meshes/out --verbosity trace");
-        app.parse("merge --new ../../../meshes/innenstadt --base ../../../meshes/vienna --mask ../../../meshes/mask.geojson --output ../../../meshes/out-merge --verbosity trace");
-        // app.parse("cut --input ../../../meshes/innenstadt --mask ../../../meshes/mask.geojson --output ../../../meshes/out-cut --keep-outside --verbosity trace");
-    } catch (const CLI::ParseError &e) {
+        app.parse(argc, argv);
+     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }
 

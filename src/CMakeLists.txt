@@ -198,109 +198,115 @@ endif()
 
 
 add_library(tilebuilderlib
-    tilebuilder/alpine_raster.h tilebuilder/alpine_raster.cpp
-    tilebuilder/DatasetReader.h tilebuilder/DatasetReader.cpp
-    tilebuilder/depth_first_tile_traverser.h
-    tilebuilder/Exception.h
-    tilebuilder/Image.h tilebuilder/Image.cpp
-    tilebuilder/ParallelTileGenerator.h tilebuilder/ParallelTileGenerator.cpp
-    tilebuilder/ParallelTiler.h tilebuilder/ParallelTiler.cpp
-    tilebuilder/srs.h
-    tilebuilder/TileHeightsGenerator.h tilebuilder/TileHeightsGenerator.cpp
-    tilebuilder/Tiler.h tilebuilder/Tiler.cpp
-    tilebuilder/TopDownTiler.h tilebuilder/TopDownTiler.cpp
-    tilebuilder/algorithms/primitives.h
-    tilebuilder/algorithms/raster_triangle_scanline.h
+    tile_builder/alpine_raster.h tile_builder/alpine_raster.cpp
+    tile_builder/DatasetReader.h tile_builder/DatasetReader.cpp
+    tile_builder/depth_first_tile_traverser.h
+    tile_builder/Exception.h
+    tile_builder/Image.h tile_builder/Image.cpp
+    tile_builder/ParallelTileGenerator.h tile_builder/ParallelTileGenerator.cpp
+    tile_builder/ParallelTiler.h tile_builder/ParallelTiler.cpp
+    tile_builder/srs.h
+    tile_builder/TileHeightsGenerator.h tile_builder/TileHeightsGenerator.cpp
+    tile_builder/Tiler.h tile_builder/Tiler.cpp
+    tile_builder/TopDownTiler.h tile_builder/TopDownTiler.cpp
+    tile_builder/algorithms/primitives.h
+    tile_builder/algorithms/raster_triangle_scanline.h
 )
-target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tilebuilder)
+target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tile_builder)
 target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
-add_executable(tilebuilder
-    tilebuilder/main.cpp
+add_executable(tile-builder
+    tile_builder/main.cpp
 )
-target_link_libraries(tilebuilder PUBLIC tilebuilderlib)
+target_link_libraries(tile-builder PUBLIC tilebuilderlib)
 
 
-add_library(terrainmergerlib
-    terrainmerger/merge/visitor/Masked.h
-    terrainmerger/merge/visitor/Simple.h
-    terrainmerger/merge/visitor/Visitor.h
-    terrainmerger/merge/NodeData.h
-    terrainmerger/merge/Result.h
-    terrainmerger/cut.h
-    terrainmerger/earth.h
-    terrainmerger/mask.h
-    terrainmerger/merge.h
-    terrainmerger/NodeLoader.h
-    terrainmerger/NodeWriter.h
-    terrainmerger/SimpleMutex.h
-    terrainmerger/utils.h
+add_library(sfmergerlib
+    sf_merger/atlas/build.h
+    sf_merger/atlas/HorizontalStripLayoutPlanner.h
+    sf_merger/atlas/Layout.h
+    sf_merger/atlas/LayoutPlanner.h
+    sf_merger/atlas/Sheet.h
+
+    sf_merger/merge/visitor/Masked.h
+    sf_merger/merge/visitor/Simple.h
+    sf_merger/merge/visitor/Visitor.h
+    sf_merger/merge/NodeData.h
+    sf_merger/merge/Result.h
+
+    sf_merger/cut.h
+    sf_merger/earth.h
+    sf_merger/mask.h
+    sf_merger/merge.h
+    sf_merger/NodeLoader.h
+    sf_merger/NodeWriter.h
+    sf_merger/SimpleMutex.h
+    sf_merger/utils.h
 )
-target_include_directories(terrainmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainmerger)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected xatlas)
-add_executable(terrainmerger
-    terrainmerger/main.cpp
-    terrainmerger/cli.h terrainmerger/cli.cpp
+target_include_directories(sfmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sf_merger)
+target_link_libraries(sfmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(sf-merger
+    sf_merger/main.cpp
+    sf_merger/cli.h sf_merger/cli.cpp
 )
-target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+target_link_libraries(sf-merger PUBLIC sfmergerlib)
 
 
-add_library(terrainbuilderlib
-    terrainbuilder/tile_provider.h
-    terrainbuilder/mesh_builder.h
-    terrainbuilder/mesh_builder.cpp
-    terrainbuilder/raw_dataset_reader.h
-    terrainbuilder/texture_assembler.h
-    terrainbuilder/border.h
-    terrainbuilder/raster.h
-    terrainbuilder/terrainbuilder.h
-    terrainbuilder/terrainbuilder.cpp
+add_library(meshbuilderlib
+    mesh_builder/tile_provider.h
+    mesh_builder/mesh_builder.h
+    mesh_builder/mesh_builder.cpp
+    mesh_builder/raw_dataset_reader.h
+    mesh_builder/texture_assembler.h
+    mesh_builder/border.h
+    mesh_builder/raster.h
+    mesh_builder/mesh_builder.h
+    mesh_builder/mesh_builder.cpp
 )
-target_include_directories(terrainbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainbuilder)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
-add_executable(terrainbuilder
-    terrainbuilder/main.cpp
+target_include_directories(meshbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_builder)
+target_link_libraries(meshbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(mesh-builder
+    mesh_builder/main.cpp
 )
-target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
+target_link_libraries(mesh-builder PUBLIC meshbuilderlib)
 
 
-add_library(terrainsimplifylib
-    terrainsimplify/cli.h
-    terrainsimplify/cli.cpp
-    terrainsimplify/simplify.h
-    terrainsimplify/simplify.cpp
-    terrainsimplify/uv_map.h
-    terrainsimplify/uv_map.cpp
+add_library(meshsimplifylib
+    mesh_simplify/cli.h
+    mesh_simplify/cli.cpp
+    mesh_simplify/simplify.h
+    mesh_simplify/simplify.cpp
+    mesh_simplify/uv_map.h
+    mesh_simplify/uv_map.cpp
 )
-target_include_directories(terrainsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainsimplify)
-target_precompile_headers(terrainsimplifylib PRIVATE terrainsimplify/pch.h)
-target_link_libraries(terrainsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
-add_executable(terrainsimplify
-    terrainsimplify/main.cpp
+target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
+target_precompile_headers(meshsimplifylib PRIVATE mesh_simplify/pch.h)
+target_link_libraries(meshsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
+add_executable(mesh-simplify
+    mesh_simplify/main.cpp
 )
-target_link_libraries(terrainsimplify PUBLIC terrainsimplifylib)
+target_link_libraries(mesh-simplify PUBLIC meshsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 
-add_executable(terrainconvert
-    terrainconvert/cli.h terrainconvert/cli.cpp
-    terrainconvert/main.cpp
+add_executable(mesh-convert
+    mesh_convert/cli.h mesh_convert/cli.cpp
+    mesh_convert/main.cpp
 )
-target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)
+target_link_libraries(mesh-convert PUBLIC terrainlib CLI11::CLI11)
 
-add_executable(index_browser
+add_executable(index-browser
     index_browser/cli.h index_browser/cli.cpp
     index_browser/main.cpp
 )
-target_link_libraries(index_browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
-
 add_executable(mesh_merger
     mesh_merger/cli.h mesh_merger/cli.cpp
     mesh_merger/main.cpp
 )
 target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
+target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_executable(browser
     # browser/main2.cpp

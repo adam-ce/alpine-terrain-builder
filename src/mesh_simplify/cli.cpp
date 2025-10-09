@@ -8,7 +8,7 @@ using namespace cli;
 Args cli::parse(int argc, const char * const * argv) {
     DEBUG_ASSERT(argc >= 0);
 
-    CLI::App app{"terrainsimplify"};
+    CLI::App app{"mesh_simplify"};
     app.allow_windows_style_options();
     // argv = app.ensure_utf8(argv);
     

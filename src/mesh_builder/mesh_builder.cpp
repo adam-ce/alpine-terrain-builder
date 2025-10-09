@@ -125,7 +125,7 @@ SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReferen
 
 std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
     std::vector<glm::dvec2> uvs = srs::transform_points_to_2d(srs::transformation(mesh_srs, texture_srs).get(), positions);
-    texture_bounds = radix::tile::SrsBounds(radix::geometry::find_bounds(uvs));
+    texture_bounds = radix::tile::SrsBounds(radix::geometry::find_bounds(std::span<const glm::dvec2>(uvs)));
 
     for (glm::dvec2 &uv : uvs) {
         uv = (uv - texture_bounds.min) / texture_bounds.size();

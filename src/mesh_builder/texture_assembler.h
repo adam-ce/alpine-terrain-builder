@@ -6,6 +6,8 @@
 #include <span>
 #include <vector>
 
+#include <csignal>
+
 #include <fmt/core.h>
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
@@ -70,23 +72,36 @@ namespace terrainbuilder {
             return true;
         }
 
-        // Check the region of this tile can be assembled from its children (or further down)
-        bool all_children_present = false;
+        // Check if the current tile is available.
+        const bool has_current_tile = tile_provider.has_tile(tile);
+
+        // If we are not deep enough yet, recurse further down.
+        bool should_recurse;
         if (tile.zoom_level + 1 <= min_zoom_level_to_examine.value()) {
-            all_children_present = true;
+            // Minimum zoom level to examine not yet reached.
+            should_recurse = true;
+        } else {
+            // Minimum zoom level reached, only continue if the current tile is available.
+              should_recurse = has_current_tile;
+        }
+
+        // Check the region of this tile can be assembled from its children (or further down)
+        if (should_recurse) {
+            bool all_children_present = true;
+
             for (const radix::tile::Id subtile : tile.children()) {
                 if (!helper(subtile)) {
                     all_children_present = false;
                 }
             }
-        }
 
-        if (all_children_present) {
-            return true;
+            if (all_children_present) {
+                return true;
+            }
         }
 
         // Check if the current tile is available as a replacement.
-        if (!tile_provider.has_tile(tile)) {
+        if (!has_current_tile) {
             return false;
         }
 
@@ -114,10 +129,13 @@ namespace terrainbuilder {
     const unsigned int zoom_level_range) {
     const glm::dvec2 relative_min = (target_bounds.min - root_tile_bounds.min) / root_tile_bounds.size();
     const glm::dvec2 relative_max = (target_bounds.max - root_tile_bounds.min) / root_tile_bounds.size();
+
     const unsigned int full_image_size_factor = std::pow(2, zoom_level_range);
     const glm::uvec2 root_tile_image_size = tile_image_pixel_size * glm::uvec2(full_image_size_factor);
     const glm::uvec2 target_pixel_offset_min(glm::floor(relative_min * glm::dvec2(root_tile_image_size)));
     const glm::uvec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
+    
+    // Map from bottom-left origin to top-left origin
     const radix::geometry::Aabb2ui target_image_region(
         glm::uvec2(target_pixel_offset_min.x, root_tile_image_size.y - target_pixel_offset_max.y),
         glm::uvec2(target_pixel_offset_max.x, root_tile_image_size.y - target_pixel_offset_min.y));
@@ -129,9 +147,7 @@ namespace terrainbuilder {
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
     const unsigned int max_zoom_level) {
-    if (tile.scheme != radix::tile::Scheme::SlippyMap) {
-        tile = tile.to(radix::tile::Scheme::SlippyMap);
-    }
+    tile = tile.to(radix::tile::Scheme::SlippyMap);
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
     const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
     const glm::uvec2 tile_size = tile_image_pixel_size * tile_size_factor;
@@ -140,32 +156,100 @@ namespace terrainbuilder {
     return radix::geometry::Aabb2ui(tile_position, tile_position + tile_size);
 }
 
+[[nodiscard]] cv::Rect to_cv_rect(radix::geometry::Aabb2ui aabb) {
+    const glm::uvec2 size = aabb.size();
+    return cv::Rect{
+        static_cast<int>(aabb.min.x),
+        static_cast<int>(aabb.min.y),
+        static_cast<int>(size.x),
+        static_cast<int>(size.y)
+    };
+}
+[[nodiscard]] cv::Size to_cv_size(glm::uvec2 vec) {
+    return cv::Size{
+        static_cast<int>(vec.x),
+        static_cast<int>(vec.y)
+    };
+}
+
 void copy_paste_image(
     cv::Mat &target,
     const cv::Mat &source,
     const radix::geometry::Aabb2i target_bounds,
     const bool trim_excess = false,
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
-    if (target_bounds.width() != source.cols || target_bounds.height() != source.rows) {
-        cv::Mat source_resized;
-        cv::resize(source, source_resized, cv::Size(target_bounds.width(), target_bounds.height()), 0, 0, rescale_filter);
-        copy_paste_image(target, source_resized, target_bounds, trim_excess);
-        return;
+    // Full source/target rectangles
+    const cv::Rect full_source_rect(0, 0, source.cols, source.rows);
+    const cv::Rect full_target_rect(0, 0, target.cols, target.rows);
+
+    cv::Rect source_rect = full_source_rect;
+    // Target rectangle for source image in target image
+    cv::Rect target_rect = to_cv_rect(target_bounds);
+
+    // Compute scale factors from source to target
+    const glm::dvec2 scale(
+        static_cast<double>(source_rect.width) / target_rect.width,
+        static_cast<double>(source_rect.height) / target_rect.height);
+
+    // Check bounds
+    const cv::Rect clipped_target_rect = target_rect & full_target_rect;
+    if (!trim_excess) {
+        // Must fit entirely
+        if (clipped_target_rect != target_rect) {
+            throw std::runtime_error("Target rectangle out of bounds and trim_excess is false");
+        }
+    } else {
+        target_rect = clipped_target_rect;
+        if (target_rect.empty()) {
+            return;
+        }
     }
 
-    cv::Rect source_rect(0, 0, source.cols, source.rows);
-    cv::Rect target_rect(target_bounds.min.x, target_bounds.min.y, target_bounds.width(), target_bounds.height());
-    if (trim_excess) {
-        const cv::Rect full_target_rect(0, 0, target.cols, target.rows);
-        target_rect = target_rect & full_target_rect;
-        source_rect = cv::Rect(target_rect.x - target_bounds.min.x, target_rect.y - target_bounds.min.y, target_rect.width, target_rect.height);
-    }
+    // Calculate offset and size of clipped target rect
+    const glm::ivec2 trg_offset = glm::ivec2(
+        target_rect.x - target_bounds.min.x,
+        target_rect.y - target_bounds.min.y);
+    const glm::uvec2 trg_size = glm::uvec2(target_rect.width, target_rect.height);
 
-    if (source_rect.empty()) {
-        return;
-    }
+    // Exact source region corresponding to clipped target rect
+    const radix::geometry::Aabb2d src_exact(glm::dvec2(trg_offset) * scale, glm::dvec2(trg_offset + glm::ivec2(trg_size)) * scale);
 
-    source(source_rect).copyTo(target(target_rect));
+    // Pad outwards to integer pixel boundaries for OpenCV crop
+    const radix::geometry::Aabb2ui src_padded(
+        glm::uvec2(glm::floor(src_exact.min)),
+        glm::uvec2(glm::ceil(src_exact.max)));
+    const radix::geometry::Aabb2d src_padding(
+        src_exact.min - glm::dvec2(src_padded.min),
+        glm::dvec2(src_padded.max) - src_exact.max);
+    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding, glm::dvec2(0))));
+
+    // Safe integer crop of source
+    const cv::Rect src_padded_cv = to_cv_rect(src_padded);
+    DEBUG_ASSERT(src_padded_cv == (src_padded_cv & full_source_rect));
+    const cv::Mat source_cropped = source(src_padded_cv);
+
+    // Compute the target size including padding
+    const radix::geometry::Aabb2ui target_padding(
+        glm::uvec2(glm::round(src_padding.min / scale)),
+        glm::uvec2(glm::round(src_padding.max / scale))
+    );
+    const glm::uvec2 padded_target_size = target_padding.min + trg_size + target_padding.max;
+
+    // Resize the padded crop -> padded target size
+    cv::Mat source_resized;
+    cv::resize(source_cropped, source_resized, to_cv_size(padded_target_size), 0, 0, rescale_filter);
+
+    // Crop off the padding
+    const radix::geometry::Aabb2ui unpad_rect(
+        target_padding.min,
+        target_padding.min + trg_size);
+    const cv::Rect unpad_rect_cv = to_cv_rect(unpad_rect);
+    DEBUG_ASSERT(unpad_rect_cv == (unpad_rect_cv & cv::Rect(0, 0, source_resized.cols, source_resized.rows)));
+
+    const cv::Mat final_source = source_resized(unpad_rect_cv);
+
+    // Copy into target
+    final_source.copyTo(target(target_rect));
 }
 
 void copy_paste_image(
@@ -210,7 +294,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
     const unsigned int zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
-    // Choose any tile to load infer like tile size and format to allocate our texture buffer accordingly.
+    // Choose any tile to infer tile size and format to allocate our texture buffer accordingly.
     const radix::tile::Id &any_tile = tiles_to_splatter.front();
     const cv::Mat any_tile_image = tile_provider.get_tile(any_tile).value();
     const glm::uvec2 tile_image_size(any_tile_image.cols, any_tile_image.rows);
@@ -221,10 +305,15 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     const glm::uvec2 image_size = target_image_region.size();
 
     // Allocate the image to write all the individual tiles into.
+    LOG_DEBUG("Allocating image {}x{} type={} (≈{:.2f} MB)",
+                image_size.x,
+                image_size.y,
+                cv::typeToString(any_tile_image.type()),
+                (image_size.x * image_size.y * any_tile_image.elemSize()) / (1024.0 * 1024.0));
     cv::Mat image = cv::Mat::zeros(image_size.y, image_size.x, any_tile_image.type());
 
     for (const radix::tile::Id &tile : tiles_to_splatter) {
-        cv::Mat tile_image = tile_provider.get_tile(tile).value();
+        const cv::Mat tile_image = tile_provider.get_tile(tile).value();
         if (tile_image.empty()) {
             const std::optional<std::filesystem::path> tile_path = try_get_tile_path(tile, tile_provider);
             if (tile_path.has_value()) {
@@ -254,6 +343,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
 
         // Resize current tile image and copy into image buffer.
         copy_paste_image(image, tile_image, target_pixel_tile_bounds, true /* allows und handles overflow */, rescale_filter);
+        
     }
 
     cv::flip(image, image, 0);
@@ -304,5 +394,4 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     // Splatter tiles into texture buffer
     return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter);
 }
-
 }

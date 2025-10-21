@@ -74,7 +74,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         polygon.points.push_back(mesh.positions[vertex_index]);
     }
     polygon.points.push_back(polygon.points[0]); // close the polygon
-    DEBUG_ASSERT(cgal_polygon.is_simple());
 
     DEBUG_ASSERT(polygon::is_planar(polygon));
     const PlaneBasis basis = make_basis(polygon);
@@ -88,7 +87,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         const glm::dvec3 &point = polygon.points[i];
         const glm::dvec2 projected = project(point, basis);
         VertexHandle vh = cdt.insert(convert::to_cgal_point<Kernel>(projected));
-        DEBUG_ASSERT(vh.is_valid());
         vh->info() = indices[i];
         handles.push_back(vh);
     }

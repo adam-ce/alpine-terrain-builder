@@ -66,6 +66,8 @@ alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git 
 
 alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 
+alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v0.25)
+
 alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
 # alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
 add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
@@ -130,6 +132,8 @@ add_library(terrainlib
     terrainlib/mesh/cgal.h
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
     terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
+    terrainlib/mesh/encode.h
+    terrainlib/mesh/EncodedMesh.h
     terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/merge.h
@@ -190,7 +194,10 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
+target_link_libraries(terrainlib PUBLIC 
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected 
+    opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum
+    meshoptimizer)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

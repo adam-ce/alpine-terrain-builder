@@ -2,7 +2,6 @@
 
 namespace mesh {
 namespace io {
-namespace texture {
 
 cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
     cv::Mat raw_data = cv::Mat(1, buffer.size(), CV_8UC1, const_cast<uint8_t *>(buffer.data()));
@@ -22,6 +21,5 @@ std::vector<uint8_t> write_texture_to_encoded_buffer(const cv::Mat &image, const
     return buffer;
 }
 
-} // namespace texture
 } // namespace io
 } // namespace mesh

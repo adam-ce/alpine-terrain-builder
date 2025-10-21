@@ -7,8 +7,10 @@
 #include <radix/geometry.h>
 #include <zpp_bits.h>
 
+namespace mesh {
+
 template <glm::length_t dimensions = 3, typename T = double>
-class SimpleMesh_ {
+class Simple_ {
 public:
     static constexpr glm::length_t n_dims = dimensions;
     using Component = T;
@@ -17,21 +19,20 @@ public:
     using Position = glm::vec<dimensions, T>;
     using Uv = glm::vec<2, T>;
     using Texture = cv::Mat;
-    using serialize = zpp::bits::members<4>;
 
-    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions) 
-        : SimpleMesh_(triangles, positions, {}) {}
-    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs) 
-        : SimpleMesh_(triangles, positions, uvs, std::nullopt) {}
-    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, Texture texture)
-        : SimpleMesh_(triangles, positions, uvs, std::optional<Texture>(std::move(texture))) {}
-    SimpleMesh_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, std::optional<Texture> texture)
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions) 
+        : Simple_(triangles, positions, {}) {}
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs) 
+        : Simple_(triangles, positions, uvs, std::nullopt) {}
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, Texture texture)
+        : Simple_(triangles, positions, uvs, std::optional<Texture>(std::move(texture))) {}
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, std::optional<Texture> texture)
         : triangles(triangles), positions(positions), uvs(uvs), texture(std::move(texture)) {}
-    SimpleMesh_() = default;
-    SimpleMesh_(SimpleMesh_ &&) = default;
-    SimpleMesh_ &operator=(SimpleMesh_ &&) = default;
-    SimpleMesh_(const SimpleMesh_ &) = default;
-    SimpleMesh_ &operator=(const SimpleMesh_ &) = default;
+    Simple_() = default;
+    Simple_(Simple_ &&) = default;
+    Simple_ &operator=(Simple_ &&) = default;
+    Simple_(const Simple_ &) = default;
+    Simple_ &operator=(const Simple_ &) = default;
 
     std::vector<Triangle> triangles;
     std::vector<Position> positions;
@@ -56,7 +57,16 @@ public:
     }
 };
 
-using SimpleMesh3d = SimpleMesh_<3, double>;
-using SimpleMesh2d = SimpleMesh_<2, double>;
+using Simple3d = Simple_<3, double>;
+using Simple2d = Simple_<2, double>;
 
-using SimpleMesh = SimpleMesh3d;
+using Simple = Simple3d;
+}
+
+template <glm::length_t n_dims = 3, typename T = double>
+using SimpleMesh_ = mesh::Simple_<n_dims, T>;
+
+using SimpleMesh3d = mesh::Simple3d;
+using SimpleMesh2d = mesh::Simple2d;
+
+using SimpleMesh = mesh::Simple3d;

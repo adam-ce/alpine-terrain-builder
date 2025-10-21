@@ -200,7 +200,7 @@ std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material
     cgltf_image &albedo_image = *albedo_texture.image;
 
     const std::span<const uint8_t> raw_texture{cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
-    cv::Mat texture = mesh::io::texture::read_texture_from_encoded_bytes(raw_texture);
+    cv::Mat texture = mesh::io::read_texture_from_encoded_bytes(raw_texture);
     return texture;
 }
 
@@ -397,7 +397,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     const bool has_texture = terrain_mesh.has_texture();
     std::vector<uint8_t> texture_bytes;
     if (has_texture) {
-        texture_bytes = mesh::io::texture::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
+        texture_bytes = mesh::io::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
     }
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)

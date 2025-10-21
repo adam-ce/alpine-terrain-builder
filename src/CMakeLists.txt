@@ -253,14 +253,12 @@ target_link_libraries(sf-merger PUBLIC sfmergerlib)
 
 add_library(meshbuilderlib
     mesh_builder/tile_provider.h
-    mesh_builder/mesh_builder.h
-    mesh_builder/mesh_builder.cpp
+    mesh_builder/terrainbuilder.h mesh_builder/terrainbuilder.cpp
     mesh_builder/raw_dataset_reader.h
     mesh_builder/texture_assembler.h
     mesh_builder/border.h
     mesh_builder/raster.h
-    mesh_builder/mesh_builder.h
-    mesh_builder/mesh_builder.cpp
+    mesh_builder/mesh_builder.h mesh_builder/mesh_builder.cpp
 )
 target_include_directories(meshbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_builder)
 target_link_libraries(meshbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
@@ -273,10 +271,8 @@ target_link_libraries(mesh-builder PUBLIC meshbuilderlib)
 add_library(meshsimplifylib
     mesh_simplify/cli.h
     mesh_simplify/cli.cpp
-    mesh_simplify/simplify.h
-    mesh_simplify/simplify.cpp
-    mesh_simplify/uv_map.h
-    mesh_simplify/uv_map.cpp
+    mesh_simplify/simplify.h mesh_simplify/simplify.cpp
+    mesh_simplify/uv_map.h mesh_simplify/uv_map.cpp
 )
 target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
 target_precompile_headers(meshsimplifylib PRIVATE mesh_simplify/pch.h)
@@ -297,15 +293,16 @@ add_executable(mesh-convert
 )
 target_link_libraries(mesh-convert PUBLIC terrainlib CLI11::CLI11)
 
-add_executable(index-browser
-    index_browser/cli.h index_browser/cli.cpp
-    index_browser/main.cpp
-)
 add_executable(mesh_merger
     mesh_merger/cli.h mesh_merger/cli.cpp
     mesh_merger/main.cpp
 )
 target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(index-browser
+    index_browser/cli.h index_browser/cli.cpp
+    index_browser/main.cpp
+)
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_executable(browser

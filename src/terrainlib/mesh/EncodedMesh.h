@@ -10,6 +10,7 @@ namespace mesh {
 class Encoded {
 public:
     struct Header {
+        uint32_t version;
         uint32_t n_dims;
         uint32_t component_type;
         uint32_t vertex_count;

@@ -138,6 +138,7 @@ tl::expected<Encoded, EncodeError> encode(const Simple_<n_dims, T>& mesh, const 
     }
 
     const Encoded::Header header{
+        .version = 1,
         .n_dims = n_dims,
         .component_type = component_type_id<T>(),
         .vertex_count = static_cast<uint32_t>(vertex_count),
@@ -191,7 +192,8 @@ template <glm::length_t n_dims = 3, typename T = double>
 tl::expected<Simple_<n_dims, T>, DecodeError> decode(const Encoded &encoded, const DecodeOptions = {}) {
     const uint32_t expected_component_type = component_type_id<T>();
     const Encoded::Header& header = encoded.header;
-    if (header.n_dims != n_dims ||
+    if (header.version != 1 ||
+        header.n_dims != n_dims ||
         header.component_type != expected_component_type) {
         return tl::unexpected(DecodeError::IncompatibleData);
     }

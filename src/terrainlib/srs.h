@@ -162,8 +162,7 @@ inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransforma
     return transformed;
 }
 
-inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
-    const auto transform = transformation(sourceSrs, targetSrs);
+inline radix::tile::SrsBounds non_exact_bounds_transform(OGRCoordinateTransformation *transform, const radix::tile::SrsBounds &bounds) {
     std::array xs = {bounds.min.x, bounds.max.x};
     std::array ys = {bounds.min.y, bounds.max.y};
     if (!transform->Transform(2, xs.data(), ys.data())) {
@@ -171,9 +170,11 @@ inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsB
     }
     return {{xs[0], ys[0]}, {xs[1], ys[1]}};
 }
-
-inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry::Aabb3d &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
+inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
     const auto transform = transformation(sourceSrs, targetSrs);
+    return non_exact_bounds_transform(transform.get(), bounds);
+}
+inline radix::geometry::Aabb3d non_exact_bounds_transform(OGRCoordinateTransformation *transform, const radix::geometry::Aabb3d &bounds) {
     std::array xs = {bounds.min.x, bounds.max.x};
     std::array ys = {bounds.min.y, bounds.max.y};
     std::array zs = {bounds.min.z, bounds.max.z};
@@ -181,6 +182,10 @@ inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry:
         throw std::runtime_error("srs::non_exact_bounds_transform failed");
     }
     return {{xs[0], ys[0], zs[0]}, {xs[1], ys[1], zs[1]}};
+}
+inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry::Aabb3d &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
+    const auto transform = transformation(sourceSrs, targetSrs);
+    return non_exact_bounds_transform(transform.get(), bounds);
 }
 
 /// Transforms bounds from one srs to another,

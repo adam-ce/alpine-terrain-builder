@@ -16,7 +16,7 @@
 #include "mesh/utils.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"  
+#include "mesh/validate.h"
    
 namespace {
 double significant_above_epsilon(double x, double epsilon) {
@@ -24,9 +24,6 @@ double significant_above_epsilon(double x, double epsilon) {
     return x - residual;
 }
 
-bool is_degenerate(const glm::uvec3& triangle) {
-    return triangle[0] == triangle[1] || triangle[1] == triangle[2] || triangle[2] == triangle[0];
-}
 template <typename T>
 bool epsilon_equal(const glm::tvec3<T>& a, const glm::tvec3<T>& b, const T epsilon) {
     return glm::all(glm::epsilonEqual(a, b, epsilon));

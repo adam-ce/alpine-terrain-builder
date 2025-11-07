@@ -20,14 +20,14 @@ public:
     using Uv = glm::vec<2, T>;
     using Texture = cv::Mat;
 
-    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions) 
-        : Simple_(triangles, positions, {}) {}
-    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs) 
-        : Simple_(triangles, positions, uvs, std::nullopt) {}
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions)
+        : Simple_(std::move(triangles), std::move(positions), {}) {}
+    Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs)
+        : Simple_(std::move(triangles), std::move(positions), std::move(uvs), std::nullopt) {}
     Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, Texture texture)
-        : Simple_(triangles, positions, uvs, std::optional<Texture>(std::move(texture))) {}
+        : Simple_(std::move(triangles), std::move(positions), std::move(uvs), std::optional<Texture>(std::move(texture))) {}
     Simple_(std::vector<Triangle> triangles, std::vector<Position> positions, std::vector<Uv> uvs, std::optional<Texture> texture)
-        : triangles(triangles), positions(positions), uvs(uvs), texture(std::move(texture)) {}
+        : triangles(std::move(triangles)), positions(std::move(positions)), uvs(std::move(uvs)), texture(std::move(texture)) {}
     Simple_() = default;
     Simple_(Simple_ &&) = default;
     Simple_ &operator=(Simple_ &&) = default;
@@ -38,6 +38,13 @@ public:
     std::vector<Position> positions;
     std::vector<Uv> uvs;
     std::optional<Texture> texture;
+
+    void clear() {
+        this->triangles.clear();
+        this->positions.clear();
+        this->uvs.clear();
+        this->texture = std::nullopt;
+    }
 
     size_t vertex_count() const {
         return this->positions.size();
@@ -59,8 +66,12 @@ public:
 
 using Simple3d = Simple_<3, double>;
 using Simple2d = Simple_<2, double>;
+using Simple3f = Simple_<3, float>;
+using Simple2f = Simple_<3, float>;
 
 using Simple = Simple3d;
+using Shared = std::shared_ptr<Simple>;
+
 }
 
 template <glm::length_t n_dims = 3, typename T = double>

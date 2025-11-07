@@ -9,8 +9,46 @@ if (CMAKE_BUILD_TYPE MATCHES Release)
     set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
 endif()
 
-option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
+
+# ASAN & PSAN
+option(ALP_ENABLE_THREAD_SANITIZER "compiles with thread sanitizer enabled" OFF)
+option(ALP_ENABLE_ADDRESS_SANITIZER "compiles with address sanitizer enabled" OFF)
+
+if(ALP_ENABLE_ADDRESS_SANITIZER)
+    if(ALP_ENABLE_THREAD_SANITIZER)
+        message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")
+    endif()
+endif()
+
+if(ALP_ENABLE_ADDRESS_SANITIZER)
+    message(STATUS "AddressSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(ASAN_FLAGS "-fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -g")
+        foreach(flag_var CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
+            set(${flag_var} "${${flag_var}} ${ASAN_FLAGS}" CACHE STRING "Add ASAN flags" FORCE)
+        endforeach()
+    else()
+        message(WARNING "ALP_ENABLE_ADDRESS_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
+if(ALP_ENABLE_THREAD_SANITIZER)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(WARNING "ThreadSanitizer is not recommended with Release builds. "
+                        "Use Debug or RelWithDebInfo for accurate race detection.")
+    endif()
+    message(STATUS "ThreadSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(TSAN_FLAGS "-fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g")
+        foreach(flag_var CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
+            set(${flag_var} "${${flag_var}} ${TSAN_FLAGS}" CACHE STRING "Add TSAN flags" FORCE)
+        endforeach()
+    else()
+        message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
 
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -68,10 +106,10 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v0.25)
 
-alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
+# alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
 # alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
-add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
-target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+# add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
+# target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
 
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
 
@@ -311,6 +349,16 @@ add_executable(index-browser
     index_browser/main.cpp
 )
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
+
+add_library(dagbuilderlib
+    dag_builder/cluster.h
+)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert)
+add_executable(dag-builder
+    # dag_builder/cli.h index_browser/cli.cpp
+    dag_builder/main.cpp
+)
+target_link_libraries(dag-builder PUBLIC dagbuilderlib CLI11::CLI11)
 
 add_executable(browser
     # browser/main2.cpp

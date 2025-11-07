@@ -48,6 +48,9 @@ public:
     bool empty() const {
         return this->_size == 0;
     }
+    bool full() const {
+        return this->_size == N;
+    }
 
     T *begin() {
         return this->_data.data();

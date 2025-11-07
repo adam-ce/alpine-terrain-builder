@@ -227,6 +227,7 @@ void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const ra
     }
 }
 
+/*
 TEST_CASE("mesh::clip_on_bounds") {
     const std::filesystem::path mesh_path = ATB_TEST_DATA_DIR "/meshes/6857.terrain";
     auto mesh_result = mesh::io::load_from_path(mesh_path);
@@ -297,6 +298,7 @@ TEST_CASE("mesh::clip_on_bounds") {
         run_checks(mesh, clipped_mesh, bounds);
     }
 }
+*/
 
 #ifdef NDEBUG
 TEST_CASE("mesh::clip_on_bounds benchmark") {

@@ -466,3 +466,7 @@ void flip_triangle_orientations(std::vector<glm::uvec3> &triangles) {
         flip_triangle_orientation(triangle);
     }
 }
+
+bool is_degenerate(const glm::uvec3& triangle) {
+    return triangle[0] == triangle[1] || triangle[1] == triangle[2] || triangle[2] == triangle[0];
+}

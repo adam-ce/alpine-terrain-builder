@@ -83,4 +83,6 @@ std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(co
 template <glm::length_t n_dims, typename T>
 void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary);
 
+bool is_degenerate(const glm::uvec3& triangle);
+
 #include "utils.inl"

@@ -23,6 +23,47 @@
 #include "../catch2_helpers.h"
 #include "../opencv_helpers.h"
 #include "mesh/io.h"
+#include "mesh/encode.h"
+
+TEST_CASE("transcode roundtrip") {
+    mesh::Simple mesh;
+
+    mesh.positions.push_back(glm::dvec3(0, 0, 0));
+    mesh.positions.push_back(glm::dvec3(1, 0, 0));
+    mesh.positions.push_back(glm::dvec3(0, 1, 0));
+    mesh.positions.push_back(glm::dvec3(1, 1, 0));
+
+    mesh.triangles.push_back(glm::uvec3(0, 2, 1));
+    mesh.triangles.push_back(glm::uvec3(1, 2, 3));
+
+    mesh.uvs.push_back(glm::dvec2(0, 0));
+    mesh.uvs.push_back(glm::dvec2(1, 0));
+    mesh.uvs.push_back(glm::dvec2(0, 1));
+    mesh.uvs.push_back(glm::dvec2(1, 1));
+
+    mesh.texture = cv::Mat3b(100, 100);
+    cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
+
+    const tl::expected<mesh::Encoded, mesh::EncodeError> encode_result =
+        mesh::encode(mesh, mesh::EncodeOptions{.texture_format = ".png"});
+    if (!encode_result.has_value()) {
+        FAIL(encode_result.error());
+    }
+    const mesh::Encoded encoded = encode_result.value();
+
+    const tl::expected<mesh::Simple, mesh::DecodeError> decode_result =
+        mesh::decode(encoded, mesh::DecodeOptions{});
+    if (!decode_result.has_value()) {
+        FAIL(decode_result.error());
+    }
+
+    const SimpleMesh roundtrip_mesh = decode_result.value();
+    CHECK(roundtrip_mesh.positions == mesh.positions);
+    CHECK(roundtrip_mesh.uvs == mesh.uvs);
+    CHECK(roundtrip_mesh.triangles == mesh.triangles);
+    CHECK(roundtrip_mesh.texture.has_value());
+    CHECK(mat_equals(*roundtrip_mesh.texture, *mesh.texture));
+}
 
 TEST_CASE("io roundtrip") {
     for (const auto& format : {"glb", "gltf"}) {

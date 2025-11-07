@@ -32,6 +32,9 @@ public:
         exit(1);                \
     } while (false)
 
+template <typename... Ts>
+constexpr void USE(Ts &&...) noexcept {}
+
 /*
 #if __cplusplus >= 202302L
 #define _UNREACHABLE() std::unreachable()

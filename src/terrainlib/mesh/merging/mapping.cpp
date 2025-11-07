@@ -24,6 +24,7 @@ void validate_epsilon_mapping(
     const VertexMapping &mapping,
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     double epsilon) {
+    USE(mapping, meshes, epsilon);
 #ifndef NDEBUG
     const double epsilon2 = epsilon * epsilon;
 

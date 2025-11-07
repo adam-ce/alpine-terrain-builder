@@ -121,8 +121,8 @@ void warp_triangle(
     const cv::Mat &source_image,
     cv::Mat &target_image,
     std::array<cv::Point2f, 3> source_triangle,
-    std::array<cv::Point2f, 3> target_triangle,
-    const uint32_t padding = 1 // TODO:
+    std::array<cv::Point2f, 3> target_triangle
+    // TODO: const uint32_t padding = 1
 ) {
     // Find bounding rectangle for each triangle
     const cv::Rect source_rect = clamp_rect_to_mat_bounds(cv::boundingRect(source_triangle), source_image);

@@ -35,6 +35,7 @@ Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
             cgal::VertexIndex(triangle.x),
             cgal::VertexIndex(triangle.y),
             cgal::VertexIndex(triangle.z));
+        USE(face);
         DEBUG_ASSERT(face != Mesh::null_face());
     }
 

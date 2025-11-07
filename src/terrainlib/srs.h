@@ -41,12 +41,49 @@ inline std::unique_ptr<OGRSpatialReference> clone(const OGRSpatialReference &srs
     return std::unique_ptr<OGRSpatialReference>(cloned);
 }
 
-inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs) {
-    auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
-    if (!transformer) {
+namespace {
+struct TransformationCacheEntry {
+    OGRSpatialReference source;
+    OGRSpatialReference target;
+    std::shared_ptr<OGRCoordinateTransformation> transform;
+};
+}
+
+inline std::unique_ptr<OGRCoordinateTransformation> uncached_transformation(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs) {
+    std::unique_ptr<OGRCoordinateTransformation> transform(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
+    if (!transform) {
         throw std::runtime_error("Couldn't create SRS transformation");
     }
-    return transformer;
+    return transform;
+}
+
+inline std::shared_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs) {
+    thread_local std::vector<TransformationCacheEntry> cache;
+
+    // Check forward
+    for (auto &entry : cache) {
+        if (entry.source.IsSame(&source_srs) && entry.target.IsSame(&target_srs)) {
+            return entry.transform;
+        }
+    }
+
+    // Check inverse 
+    for (auto &entry : cache) {
+        if (entry.source.IsSame(&target_srs) && entry.target.IsSame(&source_srs)) {
+            std::shared_ptr<OGRCoordinateTransformation> inverse(entry.transform->GetInverse());
+            if (!inverse) {
+                throw std::runtime_error("Couldn't create inverse transformation");
+            }
+            cache.push_back({source_srs, target_srs, inverse});
+            return inverse;
+        }
+    }
+
+    // Not found
+    auto transform = uncached_transformation(source_srs, target_srs);
+    std::shared_ptr<OGRCoordinateTransformation> shared_transform = std::move(transform);
+    cache.push_back({source_srs, target_srs, shared_transform});
+    return shared_transform;
 }
 
 template <typename T>
@@ -150,7 +187,7 @@ inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransforma
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
+        throw std::runtime_error("srs::transform_points_to_2d(OGRCoordinateTransformation *, std::vector<glm::tvec3<T>>) failed");
     }
 
     std::vector<glm::tvec2<T>> transformed;
@@ -168,7 +205,9 @@ inline radix::tile::SrsBounds non_exact_bounds_transform(OGRCoordinateTransforma
     if (!transform->Transform(2, xs.data(), ys.data())) {
         throw std::runtime_error("srs::non_exact_bounds_transform failed");
     }
-    return {{xs[0], ys[0]}, {xs[1], ys[1]}};
+    return {
+        {std::min(xs[0], xs[1]), std::min(ys[0], ys[1])},
+        {std::max(xs[0], xs[1]), std::max(ys[0], ys[1])}};
 }
 inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
     const auto transform = transformation(sourceSrs, targetSrs);
@@ -207,7 +246,7 @@ inline radix::tile::SrsBounds encompassing_bounds_transfer(const OGRSpatialRefer
         return source_bounds;
     }
 
-    const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
+    const std::shared_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
     return encompassing_bounds_transfer(transformation.get(), source_bounds);
 }
 

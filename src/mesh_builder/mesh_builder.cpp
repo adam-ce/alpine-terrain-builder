@@ -195,6 +195,13 @@ tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
         return tl::unexpected(BuildMeshError::EmptyRegion);
     }
 
+    // Fast check if all vertices will be clipped
+    const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
+    const radix::geometry::Aabb3d approx_clip_bounds = srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds);
+    if (!radix::geometry::intersect(approx_clip_bounds, clip_bounds)) {
+        return tl::unexpected(BuildMeshError::EmptyRegion);
+    }
+
     LOG_TRACE("Clipping mesh based on target bounds");
     const SimpleMesh mesh_in_clip_srs = transform_mesh(std::move(mesh_in_source_srs), source_srs, clip_srs);
     SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh_in_clip_srs, clip_bounds);

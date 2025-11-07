@@ -208,7 +208,7 @@ void build_all_patches(
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
+    tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
         auto local_ecef_srs = ecef_srs;
         auto local_dataset_srs = dataset_srs;
         auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
@@ -216,10 +216,15 @@ void build_all_patches(
     });
 
     process_node = [&](octree::Id node) {
+        // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds);
+        if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
+            return;
+        }
 
+        // Check if node bounds in dataset srs intersect with dataset
+        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
+            &*transform_ecef_dataset.local(), node_bounds, 7, 3);
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
             return;
         }

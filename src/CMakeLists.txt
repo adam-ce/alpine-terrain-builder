@@ -11,7 +11,7 @@ endif()
 
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-# ASAN & PSAN
+# ASAN & TSAN
 option(ALP_ENABLE_THREAD_SANITIZER "compiles with thread sanitizer enabled" OFF)
 option(ALP_ENABLE_ADDRESS_SANITIZER "compiles with address sanitizer enabled" OFF)
 
@@ -49,6 +49,22 @@ if(ALP_ENABLE_THREAD_SANITIZER)
     endif()
 endif()
 
+option(ALP_RELEASE_OPT_LEVEL "Optimization level (0=O0,1=O1,2=O2,3=O3)" 1)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")
+    if(ALP_RELEASE_OPT_LEVEL STREQUAL "0")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O0" CACHE STRING "Release flags" FORCE)
+    elseif(ALP_RELEASE_OPT_LEVEL STREQUAL "1")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O1" CACHE STRING "Release flags" FORCE)
+    elseif(ALP_RELEASE_OPT_LEVEL STREQUAL "2")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O2" CACHE STRING "Release flags" FORCE)
+    elseif(ALP_RELEASE_OPT_LEVEL STREQUAL "3")
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3" CACHE STRING "Release flags" FORCE)
+    else()
+        message(FATAL_ERROR "Invalid ALP_RELEASE_OPT_LEVEL: ${ALP_RELEASE_OPT_LEVEL}")
+    endif()
+endif()
 
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)

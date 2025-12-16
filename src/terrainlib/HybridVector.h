@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-namespace {
 template <typename T, std::size_t N>
 class HybridVector {
 public:
@@ -63,10 +62,10 @@ public:
     }
 
     T *data() {
-        return this->_is_on_stack ? &this->_stack.data() : this->_heap.data();
+        return this->_is_on_stack ? this->_stack.data() : this->_heap.data();
     }
     const T *data() const {
-        return this->_is_on_stack ? &this->_stack.data() : this->_heap.data();
+        return this->_is_on_stack ? this->_stack.data() : this->_heap.data();
     }
 
     size_t size() const {
@@ -91,10 +90,10 @@ public:
     }
 
     T* begin() {
-        return this->_is_on_stack ? this->_stack.begin() : this->_heap.begin();
+        return this->_is_on_stack ? this->_stack.data() : this->_heap.data();
     }
-    T* end() {
-        return this->_is_on_stack ? this->_stack.end() : this->_heap.end();
+    T *end() {
+        return this->_is_on_stack ? this->_stack.data() + this->_stack.size() : this->_heap.data() + this->_heap.size();
     }
     const T* begin() const {
         return this->_is_on_stack ? this->_stack.data() : this->_heap.data();
@@ -129,4 +128,3 @@ private:
     std::vector<T> _heap;
     bool _is_on_stack;
 };
-}

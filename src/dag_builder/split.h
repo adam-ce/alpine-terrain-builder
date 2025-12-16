@@ -7,6 +7,7 @@
 #include <libassert/assert.hpp>
 
 #include "clusterize.h"
+#include "group.h"
 #include "meshopt.h"
 #include "utils.h"
 #include "log.h"
@@ -65,14 +66,17 @@ Clustering split_each_into_equal_parts(const Clustering &input, const size_t num
         ASSERT(vertex_count >= num_parts && "Cluster has fewer vertices than requested parts");
         // TODO: ASSERT(vertex_count / num_parts <= ClusterOptions::MAX_VERTEX_LIMIT);
 
+        auto floor4 = [](const uint32_t v) { return v & ~uint32_t(3); };
+
         const uint32_t target_triangle_count = static_cast<float>(triangle_count) / static_cast<float>(num_parts);
         const uint32_t base_min_triangles = triangle_count / (num_parts + 1) + 1;
         const uint32_t base_max_triangles = triangle_count / (num_parts - 1) - 1;
         const uint32_t min_triangles = integral_lerp(base_min_triangles, target_triangle_count, uniformity_strength);
-        const uint32_t max_triangles = integral_lerp(base_max_triangles, target_triangle_count, uniformity_strength);
+        const uint32_t max_triangles = floor4(integral_lerp(base_max_triangles, target_triangle_count, uniformity_strength));
 
         LOG_INFO("Cluster with {} triangles: min_triangles={}, max_triangles={}",
                  triangle_count, min_triangles, max_triangles);
+        LOG_INFO("Cluster with {} vertices", vertex_count);
 
         const ClusterOptions options{
             .min_triangles = min_triangles,
@@ -90,4 +94,30 @@ Clustering split_each_into_equal_parts(const Clustering &input, const size_t num
     }
 
     return Clustering{input.positions, std::move(new_clusters)};
+}
+
+Clustering split_each_into_equal_parts2(const Clustering &input, const size_t num_parts = 2) {
+    if (num_parts == 0) {
+        return {
+            .positions = input.positions,
+            .clusters = {}};
+    }
+    if (num_parts == 1) {
+        return input;
+    }
+
+    validate(input);
+    const Clustering intermediate = clusterize(input, ClusterOptions {
+        .max_vertices = 64,
+        .min_triangles = 42,
+        .max_triangles = 126,
+        .cone_weight = 1.0,
+    });
+    validate(intermediate);
+    const Clustering output = group(intermediate, GroupOptions{
+                                                      .clusters_per_group = (intermediate.clusters.size() + 1u) / 2u});
+
+    DEBUG_ASSERT(output.clusters.size() == 2);
+
+    return output;
 }

@@ -99,11 +99,11 @@ std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh) {
 
 size_t remove_isolated_vertices(SimpleMesh &mesh) {
     const bool has_uvs = mesh.has_uvs();
-    const std::vector<size_t> isolated = find_isolated_vertices(mesh);
+    const std::vector<uint32_t> isolated = find_isolated_vertices(mesh);
 
-    std::vector<size_t> index_offset;
-    for (size_t i : isolated | std::views::reverse) {
-        const size_t last_index = mesh.positions.size() - 1;
+    std::vector<uint32_t> index_offset;
+    for (uint32_t i : isolated | std::views::reverse) {
+        const uint32_t last_index = mesh.positions.size() - 1;
         std::swap(mesh.positions[i], mesh.positions[last_index]);
         mesh.positions.pop_back();
         if (has_uvs) {
@@ -112,7 +112,7 @@ size_t remove_isolated_vertices(SimpleMesh &mesh) {
         mesh.uvs.pop_back();
 
         for (glm::uvec3 &triangle : mesh.triangles) {
-            for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            for (uint8_t k = 0; k < 3; k++) {
                 if (triangle[k] == last_index) {
                     triangle[k] = i;
                 }
@@ -144,12 +144,11 @@ size_t remove_triangles_of_negligible_size(SimpleMesh &mesh, const double thresh
 
     const double average_area =
         std::reduce(areas.begin(), areas.end()) / static_cast<double>(areas.size());
-    const size_t erased_count =
-        std::erase_if(mesh.triangles, [&](const glm::uvec3 &triangle) {
-            const size_t index = &triangle - &*mesh.triangles.begin();
-            const double area = areas[index];
-            return area < average_area * threshold_percentage_of_average;
-        });
+    const size_t erased_count = std::erase_if(mesh.triangles, [&](const glm::uvec3 &triangle) {
+        const size_t index = &triangle - &*mesh.triangles.begin();
+        const double area = areas[index];
+        return area < average_area * threshold_percentage_of_average;
+    });
 
     return erased_count;
 }
@@ -223,7 +222,7 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
 }
 
 template <typename T>
-void erase_by_index(std::vector<T> &vec, std::size_t pos) {
+void erase_by_index(std::vector<T> &vec, size_t pos) {
     typename std::vector<T>::iterator it = vec.begin();
     std::advance(it, pos);
     vec.erase(it);
@@ -272,24 +271,51 @@ create_edge_to_triangle_index_mapping_impl(const std::span<const glm::uvec3> tri
         result->second.push_back(triangle_index);
     }, true);
 
+#ifndef NDEBUG
+    // Validate the mapping
+    for (const auto &[edge, triangle_indices] : edges_to_triangles) {
+        DEBUG_ASSERT(!triangle_indices.empty(), "Each edge must have at least one triangle");
+
+        for (const uint32_t triangle_index : triangle_indices) {
+            DEBUG_ASSERT(triangle_index < triangles.size(), "Triangle index must be valid");
+
+            const glm::uvec3 &triangle = triangles[triangle_index];
+
+            const bool first_vertex_found_in_triangle =
+                (triangle[0] == edge.x || triangle[1] == edge.x || triangle[2] == edge.x);
+
+            const bool second_vertex_found_in_triangle =
+                (triangle[0] == edge.y || triangle[1] == edge.y || triangle[2] == edge.y);
+
+            DEBUG_ASSERT(first_vertex_found_in_triangle && second_vertex_found_in_triangle, "Both vertices of the edge exist in the triangle");
+        }
+    }
+#endif
+
     return edges_to_triangles;
 }
 }
 
-std::unordered_map<glm::uvec2, FixedVector<size_t, 2>> create_edge_to_triangle_index_mapping(const SimpleMesh &mesh) {
+std::unordered_map<glm::uvec2, FixedVector<uint32_t, 2>> create_edge_to_triangle_index_mapping(const SimpleMesh &mesh) {
     return create_edge_to_triangle_index_mapping(mesh.triangles);
 }
-std::unordered_map<glm::uvec2, FixedVector<size_t, 2>> create_edge_to_triangle_index_mapping(const std::span<const glm::uvec3> triangles) {
-    return detail::create_edge_to_triangle_index_mapping_impl<FixedVector<size_t, 2>>(triangles);
+std::unordered_map<glm::uvec2, FixedVector<uint32_t, 2>> create_edge_to_triangle_index_mapping(const std::span<const glm::uvec3> triangles) {
+    return create_edge_to_triangle_index_mapping_impl<FixedVector<uint32_t, 2>>(triangles);
 }
 
-std::unordered_map<glm::uvec2, HybridVector<size_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const SimpleMesh &mesh) {
+std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const SimpleMesh &mesh) {
     return create_edge_to_triangle_index_mapping_non_manifold(mesh.triangles);
 }
-std::unordered_map<glm::uvec2, sHybridVector<size_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const std::span<const glm::uvec3> triangles) {
-    return detail::create_edge_to_triangle_index_mapping_impl<HybridVector<size_t, 2>>(triangles);
+std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const std::span<const glm::uvec3> triangles) {
+    return create_edge_to_triangle_index_mapping_impl<HybridVector<uint32_t, 2>>(triangles);
 }
 
+std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_index_mapping_non_manifold2(const SimpleMesh &mesh) {
+    return create_edge_to_triangle_index_mapping_non_manifold2(mesh.triangles);
+}
+std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_index_mapping_non_manifold2(const std::span<const glm::uvec3> triangles) {
+    return create_edge_to_triangle_index_mapping_impl<std::vector<uint32_t>>(triangles);
+}
 
 namespace {
 struct TriangleHash {
@@ -305,11 +331,11 @@ struct TriangleEquals {
 };
 }
 
-std::vector<size_t> find_duplicate_triangles_consider_orientation(const std::span<const glm::uvec3> triangles) {
-    std::vector<size_t> triangles_to_remove;
+std::vector<uint32_t> find_duplicate_triangles_consider_orientation(const std::span<const glm::uvec3> triangles) {
+    std::vector<uint32_t> triangles_to_remove;
     std::unordered_set<glm::uvec3, TriangleHash, TriangleEquals> unique_triangles;
 
-    for (size_t i = 0; i < triangles.size(); i++) {
+    for (uint32_t i = 0; i < triangles.size(); i++) {
         const glm::uvec3& triangle = triangles[i];
         if (unique_triangles.find(triangle) != unique_triangles.end()) {
             triangles_to_remove.push_back(i);
@@ -325,11 +351,11 @@ void remove_duplicate_triangles_consider_orientation(std::vector<glm::uvec3> &tr
     remove_duplicate_triangles<double>(triangles, {}, false);
 }
 
-std::vector<size_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh) {
-    std::vector<size_t> adjacent_triangle_count(mesh.vertex_count(), 0);
+std::vector<uint32_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh) {
+    std::vector<uint32_t> adjacent_triangle_count(mesh.vertex_count(), 0);
 
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+        for (uint8_t k = 0; k < 3; k++) {
             adjacent_triangle_count[triangle[k]]++;
         }
     }
@@ -338,13 +364,10 @@ std::vector<size_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh) {
 }
 
 std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh) {
-    std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles = create_edge_to_triangle_index_mapping_non_manifold(mesh);
+    const auto edges_to_triangles = create_edge_to_triangle_index_mapping_non_manifold2(mesh);
     std::vector<glm::uvec2> non_manifold_edges;
 
-    for (const auto& entry : edges_to_triangles) {
-        const glm::uvec2 edge = entry.first;
-        const std::vector<size_t> &triangle_indices = entry.second;
-
+    for (const auto& [edge, triangle_indices] : edges_to_triangles) {
         if (triangle_indices.size() > 2) {
             non_manifold_edges.push_back(edge);
         }
@@ -353,24 +376,19 @@ std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh) {
     return non_manifold_edges;
 }
 
-std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh) {
-    const std::vector<size_t> adjacent_triangle_count =
-        count_vertex_adjacent_triangles(mesh);
-    const std::unordered_map<glm::uvec2, std::vector<size_t>> edges_to_triangles =
-        create_edge_to_triangle_index_mapping_non_manifold(mesh);
+std::vector<uint32_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh) {
+    const auto adjacent_triangle_count = count_vertex_adjacent_triangles(mesh);
+    const auto edges_to_triangles = create_edge_to_triangle_index_mapping_non_manifold(mesh);
 
-    std::vector<size_t> non_manifold_triangles;
-    for (auto entry : edges_to_triangles) {
-        const glm::uvec2 edge = entry.first;
-        const std::vector<size_t> &triangle_indices = entry.second;
-
+    std::vector<uint32_t> non_manifold_triangles;
+    for (const auto& [edge, triangle_indices] : edges_to_triangles) {
         if (triangle_indices.size() <= 2) {
             continue;
         }
 
-        for (const size_t triangle_index : triangle_indices) {
+        for (const uint32_t triangle_index : triangle_indices) {
             const glm::uvec3 triangle = mesh.triangles[triangle_index];
-            for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            for (uint8_t k = 0; k < 3; k++) {
                 if (triangle[k] == edge[0] || triangle[k] == edge[1]) {
                     continue;
                 }
@@ -390,13 +408,13 @@ std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &
 }
 
 void remove_single_non_manifold_triangles(SimpleMesh & mesh) {
-    std::vector<size_t> non_manifold_triangles = find_single_non_manifold_triangle_indices(mesh);
+    std::vector<uint32_t> non_manifold_triangles = find_single_non_manifold_triangle_indices(mesh);
 
     std::sort(non_manifold_triangles.begin(),
                 non_manifold_triangles.end(),
-                std::greater<size_t>());
+                std::greater<uint32_t>());
 
-    for (const size_t triangle_index : non_manifold_triangles) {
+    for (const uint32_t triangle_index : non_manifold_triangles) {
         erase_by_index(mesh.triangles, triangle_index);
     }
 
@@ -476,7 +494,7 @@ SimpleMesh reindex_mesh(const SimpleMesh &mesh) {
 
     for (const auto &triangle : mesh.triangles) {
         glm::uvec3 new_triangle_indices;
-        for (size_t i = 0; i < 3; i++) {
+        for (uint8_t i = 0; i < 3; i++) {
             const uint32_t old_index = triangle[i];
             if (index_map[old_index] == invalid_index) {
                 // Vertex newly encountered
@@ -503,10 +521,10 @@ SimpleMesh reindex_mesh(const SimpleMesh &mesh) {
     return new_mesh;
 }
 
-void flip_triangle_orientation(glm::uvec3 & triangle) {
+void flip_triangle_orientation(glm::uvec3& triangle) {
     std::swap(triangle.z, triangle.x);
 }
-void flip_triangle_orientations(std::vector<glm::uvec3> & triangles) {
+void flip_triangle_orientations(std::vector<glm::uvec3>& triangles) {
     for (auto &triangle : triangles) {
         flip_triangle_orientation(triangle);
     }
@@ -514,4 +532,10 @@ void flip_triangle_orientations(std::vector<glm::uvec3> & triangles) {
 
 bool is_degenerate(const glm::uvec3 &triangle) {
     return triangle[0] == triangle[1] || triangle[1] == triangle[2] || triangle[2] == triangle[0];
+}
+
+void remove_degenerate_triangles(std::vector<glm::uvec3> &triangles) {
+    triangles.erase(
+        std::remove_if(triangles.begin(), triangles.end(), is_degenerate),
+        triangles.end());
 }

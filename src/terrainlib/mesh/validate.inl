@@ -51,9 +51,7 @@ void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
 
     // Check for degenerate triangles
     for (const Triangle &triangle : mesh.triangles) {
-        DEBUG_ASSERT(triangle.x != triangle.y);
-        DEBUG_ASSERT(triangle.y != triangle.z);
-        DEBUG_ASSERT(triangle.x != triangle.z);
+        DEBUG_ASSERT(!is_degenerate(triangle));
     }
 
     // Check for manifoldness

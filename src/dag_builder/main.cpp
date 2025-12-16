@@ -57,16 +57,20 @@ int main(int argc, char **argv) {
     const auto grouped_mesh = clustering_to_mesh(clustering);
     mesh::io::save_to_path(grouped_mesh, "/home/user/master/meshes/grouped.glb");
 
+    clustering.clusters[0] = clustering.clusters[100];
+    clustering.clusters.resize(1);
+    const auto pre_simplified_mesh = clustering_to_mesh(clustering);
+    mesh::io::save_to_path(pre_simplified_mesh, "/home/user/master/meshes/pre-simplified.glb");
     clustering = simplify(clustering, SimplifyOptions{
                                           .target_ratio = 0,
                                           .absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[16]});
     validate(clustering);
-    clustering.clusters[0] = clustering.clusters[100];
-    clustering.clusters.resize(1);
+    // clustering.clusters[0] = clustering.clusters[100];
+    // clustering.clusters.resize(1);
     const auto simplified_mesh = clustering_to_mesh(clustering);
     mesh::io::save_to_path(simplified_mesh, "/home/user/master/meshes/simplified.glb");
 
-    clustering = split_each_into_equal_parts(clustering, 2, 0.95);
+    clustering = split_each_into_equal_parts2(clustering, 2 /*, 0.95 */);
     validate(clustering);
     auto c = clustering;
     const auto split_mesh = clustering_to_mesh(c);

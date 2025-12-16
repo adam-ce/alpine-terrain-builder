@@ -7,6 +7,7 @@
 #include "mesh/SimpleMesh.h"
 #include "meshopt.h"
 #include "utils.h"
+#include "validate.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
@@ -31,8 +32,8 @@ inline std::vector<Cluster> clusterize(
         triangles,
         positions,
         options.max_vertices,
-        options.min_triangles,
-        options.max_triangles,
+        options.min_triangles & ~3, // account for 4b alignment (remove for 1.0)
+        options.max_triangles & ~3, // account for 4b alignment (remove for 1.0),
         options.cone_weight,
         options.split_factor);
 
@@ -120,19 +121,20 @@ Clustering clusterize(const Clustering &input, const ClusterOptions &options = {
 
     std::vector<glm::dvec3> positions_d;
     std::vector<glm::vec3> positions_f;
-    for (const auto &cluster : input.clusters) {
-        // Materialize cluster positions in float
+    for (const Cluster &cluster : input.clusters) {
+        // Materialize cluster positions as floats
         materialize_cluster_positions(cluster, input.positions, positions_d);
         to_approximate_normalized(positions_d, positions_f);
 
-        // Sub-clusters using parent’s vertex mapping
-        auto sub_clusters = clusterize(
+        // Perform clustering on current cluster
+        validate(cluster, input.positions);
+        std::vector<Cluster> sub_clusters = clusterize(
             cluster.local_triangles,
             positions_f,
             options,
             cluster.vertex_indices);
+        validate(Clustering{input.positions, sub_clusters });
 
-        
         new_clusters.insert(new_clusters.end(),
                             std::make_move_iterator(sub_clusters.begin()),
                             std::make_move_iterator(sub_clusters.end()));

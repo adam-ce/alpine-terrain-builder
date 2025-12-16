@@ -1,8 +1,4 @@
-#pragma once
-
-#include <glm/gtx/norm.hpp>
-
-#include "HybridVector.h"
+#include "mesh/validate.h"
 
 namespace {
 template <typename MeshRange>
@@ -42,18 +38,18 @@ radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const std::ref
 }
 
 template <glm::length_t n_dims, typename T>
-std::vector<size_t> find_isolated_vertices(const SimpleMesh_<n_dims, T> &mesh) {
+std::vector<uint32_t> find_isolated_vertices(const SimpleMesh_<n_dims, T> &mesh) {
     std::vector<bool> connected;
     connected.resize(mesh.vertex_count());
     std::fill(connected.begin(), connected.end(), false);
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+        for (uint8_t k = 0; k < 3; k++) {
             connected[triangle[k]] = true;
         }
     }
 
-    std::vector<size_t> isolated;
-    for (size_t i = 0; i < mesh.vertex_count(); i++) {
+    std::vector<uint32_t> isolated;
+    for (uint32_t i = 0; i < mesh.vertex_count(); i++) {
         if (!connected[i]) {
             isolated.push_back(i);
         }
@@ -96,10 +92,10 @@ void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F&& func, const bool no
 }
 template <TriangleContainer Triangles, typename F>
 void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
-    for (size_t i = 0; i < triangles.size(); i++) {
+    for (uint32_t i = 0; i < triangles.size(); i++) {
         glm::uvec3 triangle = triangles[i];
         if (normalize) {
-            normalize_triangle_inplace(triangle, true);
+            normalize_triangle_inplace(triangle, false);
         }
 
         std::forward<F>(func)(glm::uvec2(triangle[0], triangle[1]), i);
@@ -120,7 +116,7 @@ std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(co
 }
 template <glm::length_t n_dims, typename T>
 void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
-    for_each_edge(mesh, [&](const glm::uvec2 &edge, const size_t /*triangle_index*/) {
+    for_each_edge(mesh, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) {
         auto it = boundary.find(glm::uvec2(edge.y, edge.x));
         if (it != boundary.end()) {
             // Edge already there -> shared egde -> remove it
@@ -182,11 +178,11 @@ glm::vec<3, T> compute_normal(const glm::uvec3 &triangle,
 }
 
 template <typename T>
-std::vector<size_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, bool ignore_orientation) {
+std::vector<uint32_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, bool ignore_orientation) {
     return find_duplicate_triangles<T>(mesh.triangles, mesh.positions, ignore_orientation);
 }
 template <typename T>
-std::vector<size_t> find_duplicate_triangles(
+std::vector<uint32_t> find_duplicate_triangles(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec<3, T>> positions,
     bool ignore_orientation) {
@@ -198,13 +194,12 @@ std::vector<size_t> find_duplicate_triangles(
 }
 namespace {
 template <typename T>
-size_t identify_triangle_to_remove(
-    const size_t a, const size_t b,
+uint32_t identify_triangle_to_remove(
+    const uint32_t a, const uint32_t b,
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec<3, T>> positions,
-    std::vector<size_t> &neighbourhood,
-    const std::unordered_map<glm::uvec2, HybridVector<size_t, 2>> &edge_to_triangle
-) {
+    std::vector<uint32_t> &neighbourhood,
+    const std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> &edge_to_triangle) {
     const glm::uvec3 triangle_a = triangles[a];
     // const glm::uvec3 triangle_b = triangles[b];
 
@@ -217,8 +212,8 @@ size_t identify_triangle_to_remove(
         const auto it = edge_to_triangle.find(normalize_edge(edge));
         DEBUG_ASSERT(it != edge_to_triangle.end());
 
-        const HybridVector<size_t, 2> &adjacent_triangles = it->second;
-        for (const size_t triangle_index : adjacent_triangles) {
+        const HybridVector<uint32_t, 2> &adjacent_triangles = it->second;
+        for (const uint32_t triangle_index : adjacent_triangles) {
             neighbourhood.push_back(triangle_index);
         }
     }
@@ -229,7 +224,7 @@ size_t identify_triangle_to_remove(
 
     // Calculate dominant normal
     glm::dvec3 average_normal(0.0);
-    for (const size_t triangle_index : neighbourhood) {
+    for (const uint32_t triangle_index : neighbourhood) {
         const glm::uvec3& triangle = triangles[triangle_index];
         const glm::dvec3 scaled_normal = compute_normal(triangle, positions, false);
         average_normal += scaled_normal;
@@ -239,7 +234,7 @@ size_t identify_triangle_to_remove(
     // Identify triangle with most deviating normal
     const glm::dvec3 normal_a = compute_normal(triangle_a, positions);
     const glm::dvec3 normal_b = compute_normal(triangle_a, positions);
-    size_t triangle_to_remove = a;
+    uint32_t triangle_to_remove = a;
     if (glm::dot(normal_b, average_normal) < glm::dot(normal_a, average_normal)) {
         triangle_to_remove = b;
     }
@@ -248,28 +243,27 @@ size_t identify_triangle_to_remove(
 }
 
 template <typename T>
-std::vector<size_t> find_duplicate_triangles_ignore_orientation(
+std::vector<uint32_t> find_duplicate_triangles_ignore_orientation(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec<3, T>> positions) {
     const auto edge_to_triangle = create_edge_to_triangle_index_mapping_non_manifold(triangles);
 
-    std::vector<size_t> neighbourhood;
-    std::vector<size_t> triangles_to_remove;
-    for (const auto &entry : edge_to_triangle) {
-        const HybridVector<size_t, 2>& triangle_indices = entry.second;
-        const size_t num_triangles = triangle_indices.size();
+    std::vector<uint32_t> neighbourhood;
+    std::vector<uint32_t> triangles_to_remove;
+    for (const auto &[_, triangle_indices] : edge_to_triangle) {
+        const uint32_t num_triangles = triangle_indices.size();
         DEBUG_ASSERT(triangle_indices.size() != 0);
 
         // Find duplicates
-        for (size_t i = 0; i < num_triangles; i++) {
-            for (size_t j = i + 1; j < num_triangles; j++) {
-                const size_t a = triangle_indices[i];
-                const size_t b = triangle_indices[j];
+        for (uint32_t i = 0; i < num_triangles; i++) {
+            for (uint32_t j = i + 1; j < num_triangles; j++) {
+                const uint32_t a = triangle_indices[i];
+                const uint32_t b = triangle_indices[j];
                 const bool are_equal = compare_equality_triangles_ignore_orientation(
                     triangles[a], triangles[b]);
                 if (are_equal) {
                     // Determine which triangle to remove
-                    const size_t triangle_to_remove = identify_triangle_to_remove(
+                    const uint32_t triangle_to_remove = identify_triangle_to_remove(
                         a, b,
                         triangles,
                         positions,
@@ -298,7 +292,7 @@ void remove_duplicate_triangles(
     std::vector<glm::uvec3> &triangles,
     const std::span<const glm::vec<3, T>> positions,
     bool ignore_orientation) {
-    const std::vector<size_t> triangles_to_remove = find_duplicate_triangles(triangles, positions, ignore_orientation);
+    const std::vector<uint32_t> triangles_to_remove = find_duplicate_triangles(triangles, positions, ignore_orientation);
 
     // Ensure indices are sorted in ascending order
     DEBUG_ASSERT(std::is_sorted(triangles_to_remove.begin(), triangles_to_remove.end()) && "triangles_to_remove must be sorted!");
@@ -311,57 +305,97 @@ void remove_duplicate_triangles(
 template <typename T>
 void remove_duplicate_triangles_ignore_orientation(
     std::vector<glm::uvec3> &triangles,
+    const std::vector<glm::vec<3, T>> &positions,
+    bool ignore_orientation) {
+    remove_duplicate_triangles<T>(triangles, std::span<const glm::vec<3, T>>(positions), ignore_orientation);
+}
+template <typename T>
+void remove_duplicate_triangles_ignore_orientation(
+    std::vector<glm::uvec3> &triangles,
     const std::span<const glm::vec<3, T>> positions) {
     remove_duplicate_triangles<T>(triangles, positions, true);
 }
+template <typename T>
+void remove_duplicate_triangles_ignore_orientation(
+    std::vector<glm::uvec3> &triangles,
+    const std::vector<glm::vec<3, T>> & positions) {
+    remove_duplicate_triangles<T>(triangles, std::span<const glm::vec<3, T>>(positions));
+}
 
 template <glm::length_t n_dims, typename T>
-void make_manifold(mesh::Simple_<n_dims, T> &mesh) {
-    make_manifold(mesh.triangles, mesh.positions, mesh.uvs);
+void duplicate_non_manifold_edges(mesh::Simple_<n_dims, T> &mesh) {
+    duplicate_non_manifold_edges(mesh.triangles, mesh.positions, mesh.uvs);
+}
+
+template <glm::length_t n_dims, typename Position>
+void duplicate_non_manifold_edges(
+    std::span<glm::uvec3> triangles,
+    std::vector<glm::vec<n_dims, Position>> &positions
+) {
+    std::vector<glm::vec<2, double>> uvs; // empty uvs
+    duplicate_non_manifold_edges(triangles, positions, uvs);
 }
 
 template <glm::length_t n_dims, typename Position, typename Uv>
-void make_manifold(
+void duplicate_non_manifold_edges(
     std::span<glm::uvec3> triangles,
-    std::vector<glm::vec<n_dims, Position>>& positions,
-    std::vector<glm::vec<2, Uv>>& uvs
+    std::vector<glm::vec<n_dims, Position>> &positions,
+    std::vector<glm::vec<2, Uv>> &uvs
 ) {
-    const auto edge_to_triangle = create_edge_to_triangle_index_mapping_non_manifold(triangles);
+    std::unordered_map<glm::uvec2, uint32_t> triangles_per_edge;
 
-    for (const auto &entry : edge_to_triangle) {
-        const glm::uvec2& edge = entry.first;
-        const std::span<const size_t> triangle_indices = entry.second;
-        const size_t num_triangles = triangle_indices.size();
-        DEBUG_ASSERT(num_triangles != 0);
-
-        if (num_triangles <= 2) {
-            // Manifold edge
-            continue;
+    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+        const uint32_t new_vertex_index = positions.size();
+        positions.push_back(positions[old_vertex_index]);
+        if (uvs.size() > 0) {
+            uvs.push_back(uvs[old_vertex_index]);
         }
+        return new_vertex_index;
+    };
 
-        // Non-manifold edge
-        for (size_t i = 2; i < num_triangles; i++) {
-            const size_t triangle_index = triangle_indices[i];
-            glm::uvec3& triangle = triangles[triangle_index];
-            for (size_t k=0; k<2; k++) {
-                const size_t new_vertex_index = positions.size();
-                positions.push_back(positions[edge[k]]);
-                if (uvs.size() > 0) {
-                    uvs.push_back(uvs[edge[k]]);
-                }
-
-                for (size_t v = 0; v < 3; v++) {
-                    if (triangle[v] == edge[k]) {
-                        triangle[v] = static_cast<uint32_t>(new_vertex_index);
-                    }
+    for (glm::uvec3& triangle : triangles) {
+        for (uint8_t k = 0; k < 3; k++) {
+            const glm::vec<2, uint8_t> edge_indices(k, (k + 1) % 3);
+            const glm::uvec2 edge(triangle[edge_indices[0]], triangle[edge_indices[1]]);
+            uint32_t& triangle_count = triangles_per_edge[normalize_edge(edge)];
+            if (triangle_count < 2) {
+                triangle_count++;
+            } else {
+                // edge already has two triangles -> duplicate edge vertices
+                for (uint8_t i = 0; i < 2; i++) {
+                    const uint32_t vertex_index = edge[i];
+                    const uint32_t duplicate_vertex_index = duplicate_vertex(vertex_index);
+                    triangle[edge_indices[i]] = duplicate_vertex_index;
                 }
             }
         }
     }
 
-#if DEBUG
+#ifndef NDEBUG
     const std::vector<glm::uvec3> triangles_copy(triangles.begin(), triangles.end());
-    const mesh::Simple_<n_dims, T> mesh{triangles_copy, positions, uvs}
-    mesh::validate(mesh);
+    const mesh::Simple_<n_dims, Position> mesh(triangles_copy, positions);
+    DEBUG_ASSERT(find_non_manifold_edges(mesh).empty());
 #endif
 }
+
+template <glm::length_t n_dims, typename T>
+void make_manifold(mesh::Simple_<n_dims, T> & mesh) {
+    make_manifold(mesh.triangles, mesh.positions, mesh.uvs);
+}
+template <glm::length_t n_dims, typename Position>
+void make_manifold(
+    std::vector<glm::uvec3>& triangles,
+    std::vector<glm::vec<n_dims, Position>> & positions) {
+    std::vector<glm::vec<2, double>> uvs; // empty uvs
+    make_manifold(triangles, positions, uvs);
+}
+template <glm::length_t n_dims, typename Position, typename Uv>
+void make_manifold(
+    std::vector<glm::uvec3>& triangles,
+    std::vector<glm::vec<n_dims, Position>> & positions,
+    std::vector<glm::vec<2, Uv>> & uvs) {
+    remove_degenerate_triangles(triangles);
+    remove_duplicate_triangles_ignore_orientation(triangles, positions);
+    duplicate_non_manifold_edges(triangles, positions, uvs);
+}
+

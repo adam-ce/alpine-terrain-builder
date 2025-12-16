@@ -17,7 +17,10 @@ public:
         if (init.size() > N) {
             throw std::out_of_range("capacity exceeded");
         }
-        std::uninitialized_copy(init.begin(), init.end(), this->begin());
+        for (const T &value : init) {
+            this->construct_at(this->_size, value);
+            this->_size++;
+        }
     }
     
     // Copy constructor
@@ -131,22 +134,22 @@ public:
         this->_size--;
     }
 
-    T &operator[](size_t i) {
+    T &operator[](const size_t i) {
         return this->get_at(i);
     }
-    const T &operator[](size_t i) const {
+    const T &operator[](const size_t i) const {
         return this->get_at(i);
     }
 
     T &at(const size_t i) {
         if (i >= this->_size) {
-            throw std::out_of_range();
+            throw std::out_of_range("index out of range");
         }
         return this->get_at(i);
     }
     const T &at(const size_t i) const {
         if (i >= this->_size) {
-            throw std::out_of_range();
+            throw std::out_of_range("index out of range");
         }
         return this->get_at(i);
     }
@@ -160,23 +163,23 @@ public:
 
     void clear() {
         for (size_t i = this->_size; i-- > 0;) {
-            destroy_at(i);
+            this->destroy_at(i);
         }
         this->_size = 0;
     }
 
-    void resize(size_t new_size) {
+    void resize(const size_t new_size) {
         if (new_size > N) {
             throw std::out_of_range("capacity exceeded");
         }
 
         if (this->_size > new_size) {
-            for (size_t i = this->new_size; i < _size; i++) {
-                destroy_at(i);
+            for (size_t i = new_size; i < this->_size; i++) {
+                this->destroy_at(i);
             }
         } else {
             for (size_t i = this->_size; i < new_size; i++) {
-                construct_at(i);
+                this->construct_at(i);
             }
         }
         this->_size = new_size;
@@ -185,7 +188,7 @@ public:
     constexpr size_t size() const {
         return this->_size;
     }
-    constexpr std::size_t capacity() const {
+    constexpr size_t capacity() const {
         return N;
     }
     constexpr bool empty() const {
@@ -229,22 +232,22 @@ public:
     }
 
 private:
-    T& get_at(size_t index) {
+    T &get_at(const size_t index) {
         DEBUG_ASSERT(index < this->_size);
         return *std::launder(reinterpret_cast<T *>(&this->_data[index]));
     }
-    const T &get_at(size_t index) const {
+    const T &get_at(const size_t index) const {
         DEBUG_ASSERT(index < this->_size);
         return *std::launder(reinterpret_cast<const T *>(&this->_data[index]));
     }
 
     template <typename... Args>
-    void construct_at(size_t index, Args &&...args) {
+    void construct_at(const size_t index, Args &&...args) {
         DEBUG_ASSERT(index >= this->_size && index < this->capacity());
         ::new (&this->_data[index]) T(std::forward<Args>(args)...);
     }
 
-    void destroy_at(size_t index) {
+    void destroy_at(const size_t index) {
         DEBUG_ASSERT(index < this->_size);
         std::destroy_at(std::launder(reinterpret_cast<T *>(&this->_data[index])));
     }

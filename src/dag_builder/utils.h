@@ -3,33 +3,55 @@
 #include <span>
 #include <vector>
 
+#include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 
 #include "mesh/SimpleMesh.h"
 #include "cluster.h"
 
-inline void to_approximate_normalized(std::span<const glm::dvec3> positions, std::vector<glm::vec3> &approx) {
-    if (positions.empty()) {
-        return;
-    }
-
+// Normalize a set of 3D positions into the range of [-1,1] based on maximum extents of the bounding box.
+// Outputs are written as float coordinates.
+// Optionally outputs the computed AABB if out_bounds is provided.
+inline void to_approximate_normalized(std::span<const glm::dvec3> positions, 
+                                      std::vector<glm::vec3> &approx,
+                                      radix::geometry::Aabb3d *out_bounds = nullptr) {
     // compute bounds
     const radix::geometry::Aabb3d bounds = radix::geometry::find_bounds(positions);
     const glm::dvec3 center = bounds.centre();
     const glm::dvec3 extents = bounds.size() / 2.0;
+    const double max_extents = glm::compMax(extents);
+
+    if (out_bounds) {
+        *out_bounds = bounds;
+    }
 
     // normalize based on aabb
+    approx.clear();
     approx.reserve(positions.size());
     for (const auto &p : positions) {
-        const glm::dvec3 rel = (p - center) / extents;
+        const glm::dvec3 rel = (p - center) / max_extents;
         approx.push_back(glm::vec3(rel));
     }
 }
 
-inline std::vector<glm::vec3> to_approximate_normalized(std::span<const glm::dvec3> positions) {
+// Normalize a set of 3D positions into the range of [-1,1] based on maximum extents of the bounding box.
+// Outputs are written as float coordinates.
+// Optionally outputs the computed AABB if out_bounds is provided.
+inline std::vector<glm::vec3> to_approximate_normalized(std::span<const glm::dvec3> positions,
+                                                        radix::geometry::Aabb3d *out_bounds = nullptr) {
     std::vector<glm::vec3> approx;
-    to_approximate_normalized(positions, approx);
+    to_approximate_normalized(positions, approx, out_bounds);
     return approx;
+}
+
+inline mesh::Simple materialize_cluster(const Cluster& cluster, const std::span<const glm::dvec3> positions) {
+    mesh::Simple mesh;
+    mesh.positions.reserve(cluster.vertex_indices.size());
+    for (const uint32_t vertex_index : cluster.vertex_indices) {
+        mesh.positions.push_back(positions[vertex_index]);
+    }
+    mesh.triangles = cluster.local_triangles;
+    return mesh;
 }
 
 using Rgb = glm::tvec3<uint8_t>;
@@ -103,4 +125,3 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
 
     return mesh;
 }
-

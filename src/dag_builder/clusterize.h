@@ -9,26 +9,29 @@
 #include "utils.h"
 
 struct ClusterOptions {
-    uint32_t max_vertices = 256;
+    static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
+    static constexpr uint32_t MAX_TRIANGLE_LIMIT = UINT32_MAX;
+
+    uint32_t max_vertices = MAX_VERTEX_LIMIT;
+    uint32_t min_triangles = 256;
     uint32_t max_triangles = 256;
     float cone_weight = 0.5;
     float split_factor = 0.0;
     bool optimize = false;
 };
 
-namespace {
-inline std::vector<Cluster> build_clusters_core(
+inline std::vector<Cluster> clusterize(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec3> positions,
-    const std::span<const uint32_t> global_vertex_map,
-    const ClusterOptions &options) {
+    const ClusterOptions &options = {},
+    const std::span<const uint32_t> global_vertex_map = {}) {
     std::vector<Cluster> clusters;
 
     meshopt::BuildMeshletsResult meshlet_result = meshopt::build_meshlets(
         triangles,
         positions,
         options.max_vertices,
-        options.max_triangles,
+        options.min_triangles,
         options.max_triangles,
         options.cone_weight,
         options.split_factor);
@@ -75,31 +78,61 @@ inline std::vector<Cluster> build_clusters_core(
 
     return clusters;
 }
-}
 
 Clustering clusterize(const mesh::Simple3d& mesh, const ClusterOptions &options = {}) {
     const auto positions_f = to_approximate_normalized(mesh.positions);
 
-    auto clusters = build_clusters_core(mesh.triangles, positions_f, {}, options);
+    auto clusters = clusterize(mesh.triangles, positions_f, options, {});
 
     std::vector<glm::dvec3> positions(mesh.positions.begin(), mesh.positions.end());
     return Clustering{std::move(positions), std::move(clusters)};
 }
 
+namespace {
+void materialize_cluster_positions(const Cluster& cluster, const std::span<const glm::dvec3> source_positions, std::vector<glm::dvec3>& target_positions) {
+    target_positions.clear();
+    target_positions.reserve(cluster.vertex_indices.size());
+    for (const uint32_t vertex_index : cluster.vertex_indices) {
+        target_positions.push_back(source_positions[vertex_index]);
+    }
+}
+
+std::vector<glm::dvec3> materialize_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> source_positions) {
+    std::vector<glm::dvec3> target_positions;
+    materialize_cluster_positions(cluster, source_positions, target_positions);
+    return target_positions;
+}
+}
+
+std::vector<Cluster> clusterize(const Cluster &cluster, const std::span<const glm::dvec3> positions, const ClusterOptions &options = {}) {
+    const std::vector<glm::dvec3> positions_d = materialize_cluster_positions(cluster, positions);
+    const std::vector<glm::vec3> positions_f = to_approximate_normalized(positions_d);
+
+    return clusterize(
+        cluster.local_triangles,
+        positions_f,
+        options,
+        cluster.vertex_indices);
+}
+
 Clustering clusterize(const Clustering &input, const ClusterOptions &options = {}) {
     std::vector<Cluster> new_clusters;
 
-    for (const auto& cluster : input.clusters) {
-        // Build parent positions in float
-        const std::vector<glm::vec3> positions_f = to_approximate_normalized(input.positions);
+    std::vector<glm::dvec3> positions_d;
+    std::vector<glm::vec3> positions_f;
+    for (const auto &cluster : input.clusters) {
+        // Materialize cluster positions in float
+        materialize_cluster_positions(cluster, input.positions, positions_d);
+        to_approximate_normalized(positions_d, positions_f);
 
         // Sub-clusters using parent’s vertex mapping
-        auto sub_clusters = build_clusters_core(
+        auto sub_clusters = clusterize(
             cluster.local_triangles,
             positions_f,
-            cluster.vertex_indices, // global map
-            options);
+            options,
+            cluster.vertex_indices);
 
+        
         new_clusters.insert(new_clusters.end(),
                             std::make_move_iterator(sub_clusters.begin()),
                             std::make_move_iterator(sub_clusters.end()));

@@ -9,9 +9,20 @@
 #include <radix/geometry.h>
 
 #include "mesh/SimpleMesh.h"
+#include "FixedVector.h"
+#include "HybridVector.h"
+#include "mesh/WindingOrder.h"
 
 // TODO: put in mesh namespace
 // TODO: make all methods work with SimpleMesh_<n_dims, T>
+
+template <typename T>
+concept TriangleContainer = requires(T c) {
+    { c.size() } -> std::convertible_to<size_t>;
+    { c[0] } -> std::convertible_to<glm::uvec3>;
+    { c[1] } -> std::convertible_to<glm::uvec3>;
+    { c[2] } -> std::convertible_to<glm::uvec3>;
+};
 
 template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh);
@@ -36,32 +47,50 @@ bool compare_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3
 bool compare_equality_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2);
 bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2);
 
-template <typename Triangles>
-inline auto find_duplicate_triangles(Triangles& triangles, bool ignore_orientation = true) {
-    std::sort(std::begin(triangles), std::end(triangles), ignore_orientation ? compare_triangles_ignore_orientation : compare_triangles);
-    return std::unique(std::begin(triangles), std::end(triangles), ignore_orientation ? compare_equality_triangles_ignore_orientation : compare_equality_triangles);
-}
-template <>
-inline auto find_duplicate_triangles(SimpleMesh& mesh, bool ignore_orientation) {
-    return find_duplicate_triangles(mesh.triangles, ignore_orientation);
-}
-void remove_duplicate_triangles(SimpleMesh& mesh, bool ignore_orientation = true);
-void remove_duplicate_triangles(std::vector<glm::uvec3>& triangles, bool ignore_orientation = true);
+template <typename T>
+std::vector<size_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, bool ignore_orientation = true);
+template <typename T>
+std::vector<size_t> find_duplicate_triangles(
+    const std::span<const glm::uvec3> triangles,
+    const std::span<const glm::vec<3, T>> positions,
+    bool ignore_orientation = true);
+std::vector<size_t> find_duplicate_triangles_consider_orientation(const std::span<const glm::uvec3> triangles);
+template <typename T>
+std::vector<size_t> find_duplicate_triangles_ignore_orientation(
+    const std::span<const glm::uvec3> triangles,
+    const std::span<const glm::vec<3, T>> positions);
+template <typename T>
+void remove_duplicate_triangles(mesh::Simple_<3, T> &mesh, bool ignore_orientation = true);
+template <typename T>
+void remove_duplicate_triangles(
+    std::vector<glm::uvec3> &triangles,
+    const std::span<const glm::vec<3, T>> positions,
+    bool ignore_orientation = true);
+void remove_duplicate_triangles_consider_orientation(std::vector<glm::uvec3>& triangles);
+template <typename T>
+void remove_duplicate_triangles_ignore_orientation(
+    std::vector<glm::uvec3> &triangles,
+    const std::span<const glm::vec<3, T>> positions);
 
-std::unordered_map<glm::uvec2, std::vector<size_t>> create_edge_to_triangle_index_mapping(const SimpleMesh &mesh);
+std::unordered_map<glm::uvec2, FixedVector<size_t, 2>> create_edge_to_triangle_index_mapping(const SimpleMesh &mesh);
+std::unordered_map<glm::uvec2, FixedVector<size_t, 2>> create_edge_to_triangle_index_mapping(const std::span<const glm::uvec3> triangles);
+std::unordered_map<glm::uvec2, HybridVector<size_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const SimpleMesh &mesh);
+std::unordered_map<glm::uvec2, HybridVector<size_t, 2>> create_edge_to_triangle_index_mapping_non_manifold(const std::span<const glm::uvec3> triangles);
+
 std::vector<size_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh);
+std::vector<size_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles);
 
 std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh);
 std::vector<size_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh);
 void remove_single_non_manifold_triangles(SimpleMesh& mesh);
 
-void normalize_face_index_rotation(std::span<uint32_t> face);
+void normalize_face_index_rotation(std::span<uint32_t> face, bool keep_orientation = true);
 void normalize_edge_inplace(glm::uvec2 &edge);
 glm::uvec2 normalize_edge(glm::uvec2 edge);
-void normalize_triangle_inplace(glm::uvec3 &triangle);
-glm::uvec3 normalize_triangle(glm::uvec3 triangle);
-void normalize_quad_inplace(glm::uvec4 &quad);
-glm::uvec4 normalize_quad(glm::uvec4 quad);
+void normalize_triangle_inplace(glm::uvec3 &triangle, bool keep_orientation = true);
+glm::uvec3 normalize_triangle(glm::uvec3 triangle, bool keep_orientation = true);
+void normalize_quad_inplace(glm::uvec4 &quad, bool keep_orientation = true);
+glm::uvec4 normalize_quad(glm::uvec4 quad, bool keep_orientation = true);
 
 template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh);
@@ -84,5 +113,38 @@ template <glm::length_t n_dims, typename T>
 void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary);
 
 bool is_degenerate(const glm::uvec3& triangle);
+
+
+template <typename T>
+WindingOrder get_winding_order(const glm::vec<2, T> &a,
+                               const glm::vec<2, T> &b,
+                               const glm::vec<2, T> &c);
+template <typename T>
+WindingOrder get_winding_order(const glm::vec<2, uint32_t> &triangle,
+                               const std::span<const glm::vec<2, T>> positions);
+
+template <typename T>
+glm::vec<3, T> compute_normal(const glm::uvec3 &triangle,
+                    const std::span<const glm::vec<3, T>> positions,
+                    const bool normalize = true);
+
+template <typename T>
+glm::vec<3, T> compute_normal(const glm::vec<3, T> &a,
+                            const glm::vec<3, T> &b,
+                            const glm::vec<3, T> &c,
+                            const bool normalize = true);
+
+template <glm::length_t n_dims, typename T, typename F>
+void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F&& func, const bool normalize);
+template <TriangleContainer Triangles, typename F>
+void for_each_edge(const Triangles &triangles, F &&func, const bool normalize);
+
+template <glm::length_t n_dims, typename T>
+void make_manifold(mesh::Simple_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename Position, typename Uv>
+void make_manifold(
+    std::span<glm::uvec3> triangles,
+    std::vector<glm::vec<n_dims, Position>> &positions,
+    std::vector<glm::vec<2, Uv>> &uvs = {});
 
 #include "utils.inl"

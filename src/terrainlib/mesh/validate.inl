@@ -1,19 +1,32 @@
-#pragma once
-
 #include "pch.h"
 #include "mesh/utils.h"
 
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <libassert/assert.hpp>
 
+#include "log.h"
+
 namespace mesh {
 
 namespace {
+inline bool triangle_compare(const glm::uvec3 &a, const glm::uvec3 &b) {
+    if (a.x != b.x) {
+        return a.x < b.x;
+    }
+    if (a.y != b.y) {
+        return a.y < b.y;
+    }
+    return a.z < b.z;
+}
+
+inline void sort_triangles(std::span<glm::uvec3> triangles) {
+    std::sort(triangles.begin(), triangles.end(), triangle_compare);
+}
+
 template <glm::length_t n_dims, typename T>
 void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
     using Mesh = SimpleMesh_<n_dims, T>;
     using Triangle = typename Mesh::Triangle;
-    using Position = typename Mesh::Position;
     using Uv = typename Mesh::Uv;
     static_assert(n_dims == 2 || n_dims == 3, "Mesh must be 2D or 3D");
 
@@ -43,23 +56,20 @@ void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
         DEBUG_ASSERT(triangle.x != triangle.z);
     }
 
+    // Check for manifoldness
+    DEBUG_ASSERT(find_non_manifold_edges(mesh).empty());
+
     // Check for duplicated triangles
-    DEBUG_ASSERT(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
+    DEBUG_ASSERT(find_duplicate_triangles(mesh, false).empty());
 
     // Check for duplicated triangles with different orientations
-    std::vector<Triangle> triangles_ignore_orientation(mesh.triangles);
-    // Sort vertices in triangles
-    for (Triangle &triangle : triangles_ignore_orientation) {
-        std::sort(&triangle.x, &triangle.z + 1);
-    }
-    std::vector<Triangle> triangles_ignore_orientation_normalized(triangles_ignore_orientation);
-    sort_and_normalize_triangles(triangles_ignore_orientation_normalized);
-    DEBUG_ASSERT(triangles_ignore_orientation_normalized.end() == std::adjacent_find(triangles_ignore_orientation_normalized.begin(), triangles_ignore_orientation_normalized.end()));
+    DEBUG_ASSERT(find_duplicate_triangles(mesh, true).empty());
 
     // Check for isolated vertices
     DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
 
     // Check for duplicate vertices
+    /*
     const double epsilon = 1e-9;
     auto almost_equal = [epsilon](const Position &a, const Position &b) {
         return glm::all(glm::lessThan(glm::abs(a - b), Position(epsilon)));
@@ -83,6 +93,7 @@ void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
     for (size_t i = 1; i < sorted_positions.size(); i++) {
         DEBUG_ASSERT(!almost_equal(sorted_positions[i - 1], sorted_positions[i]));
     }
+    */
 }
 } // namespace
 

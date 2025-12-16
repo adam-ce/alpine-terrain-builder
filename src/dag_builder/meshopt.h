@@ -166,7 +166,7 @@ inline BuildMeshletsResult build_meshlets(
     const float cone_weight = 0.5f,
     const float split_factor = 0.0f) {
     ASSERT(max_vertices <= 256, "Max vertices per cluster must be less than 256.");
-    
+
     // Flatten inputs
     const std::span<const uint32_t> indices = flatten(triangles);
     const std::span<const float> positions_flat = flatten(positions);
@@ -189,7 +189,7 @@ inline BuildMeshletsResult build_meshlets(
         indices.data(),
         index_count,
         positions_flat.data(),
-        positions.size(),
+        meshlet_vertices.size(),
         sizeof(glm::vec3),
         max_vertices,
         min_triangles,

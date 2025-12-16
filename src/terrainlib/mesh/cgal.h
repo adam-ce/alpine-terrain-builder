@@ -6,10 +6,10 @@
 #include <CGAL/Surface_mesh/Surface_mesh.h>
 
 namespace cgal {
-#define DEFINE_KERNEL(K)                                                              \
-    using Kernel = K;                                                                 \
-    using Point2 = Kernel::Point_2;                                                   \
-    using Point3 = Kernel::Point_3;                                                   \
+#define DEFINE_KERNEL(K)                                                       \
+    using Kernel = K;                                                          \
+    using Point2 = Kernel::Point_2;                                            \
+    using Point3 = Kernel::Point_3;                                            \
     using Mesh = CGAL::Surface_mesh<Point3>;                                   \
     using VertexIndex = Mesh::Vertex_index;                                    \
     using FaceIndex = Mesh::Face_index;                                        \

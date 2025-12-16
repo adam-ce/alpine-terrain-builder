@@ -3,6 +3,8 @@
 #include <libassert/assert.hpp>
 
 #include "cluster.h"
+#include "utils.h"
+// #include "mesh/validate.h"
 
 inline void validate(const Clustering &clustering) {
     ASSERT(!clustering.positions.empty(), "Clustering must have positions.");
@@ -32,5 +34,9 @@ inline void validate(const Clustering &clustering) {
                        "cluster.local_triangles refers to invalid local vertex index");
             }
         }
+
+        // Materialize cluster mesh to validate mesh
+        // const mesh::Simple mesh = materialize_cluster(cluster, clustering.positions);
+        // mesh::validate(mesh);
     }
 }

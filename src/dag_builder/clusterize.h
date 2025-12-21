@@ -8,6 +8,7 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "validate.h"
+#include "mesh/utils.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
@@ -18,7 +19,6 @@ struct ClusterOptions {
     uint32_t max_triangles = 256;
     float cone_weight = 0.5;
     float split_factor = 0.0;
-    bool optimize = false;
 };
 
 inline std::vector<Cluster> clusterize(
@@ -32,19 +32,10 @@ inline std::vector<Cluster> clusterize(
         triangles,
         positions,
         options.max_vertices,
-        options.min_triangles & ~3, // account for 4b alignment (remove for 1.0)
-        options.max_triangles & ~3, // account for 4b alignment (remove for 1.0),
+        options.min_triangles & ~3, // account for 4b alignment (remove for meshopt 1.0)
+        options.max_triangles & ~3, // account for 4b alignment (remove for meshopt 1.0),
         options.cone_weight,
         options.split_factor);
-
-    if (options.optimize) {
-        for (const auto &m : meshlet_result.meshlets) {
-            meshopt::optimize_meshlet(
-                std::span(&meshlet_result.vertex_indices[m.vertex_offset], m.vertex_count),
-                std::span(&meshlet_result.local_triangles[m.triangle_offset], m.triangle_count)
-            );
-        }
-    }
 
     for (const auto &meshlet : meshlet_result.meshlets) {
         Cluster cluster;
@@ -56,20 +47,21 @@ inline std::vector<Cluster> clusterize(
                 meshlet_result.vertex_indices.begin() + meshlet.vertex_offset,
                 meshlet_result.vertex_indices.begin() + meshlet.vertex_offset + meshlet.vertex_count);
         } else {
+            DEBUG_ASSERT(global_vertex_map.size() == positions.size());
             cluster.vertex_indices.reserve(meshlet.vertex_count);
             for (size_t i = 0; i < meshlet.vertex_count; i++) {
-                cluster.vertex_indices.push_back(global_vertex_map[meshlet_result.vertex_indices[meshlet.vertex_offset + i]]);
+                const size_t original_index = meshlet_result.vertex_indices[meshlet.vertex_offset + i];
+                cluster.vertex_indices.push_back(global_vertex_map[original_index]);
             }
         }
 
-        // Remap triangles
-        cluster.local_triangles.reserve(meshlet.triangle_count);
-        const size_t triangle_start = meshlet.triangle_offset / 3;
-        const size_t triangle_end = triangle_start + meshlet.triangle_count;
-        for (size_t i = triangle_start; i < triangle_end; i++) {
-            const glm::tvec3<uint8_t> meshlet_triangle = meshlet_result.local_triangles[i];
-            cluster.local_triangles.emplace_back(meshlet_triangle);
-        }
+        // Copy triangles
+        const size_t triangle_begin = meshlet.triangle_offset;
+        const size_t triangle_end = triangle_begin + meshlet.triangle_count;
+        cluster.local_triangles.insert(
+            cluster.local_triangles.end(),
+            meshlet_result.local_triangles.begin() + triangle_begin,
+            meshlet_result.local_triangles.begin() + triangle_end);
 
         cluster.relative_error = 0.0;
         cluster.uv_unwrapping = std::nullopt;
@@ -133,7 +125,7 @@ Clustering clusterize(const Clustering &input, const ClusterOptions &options = {
             positions_f,
             options,
             cluster.vertex_indices);
-        validate(Clustering{input.positions, sub_clusters });
+        validate(Clustering{input.positions, sub_clusters});
 
         new_clusters.insert(new_clusters.end(),
                             std::make_move_iterator(sub_clusters.begin()),
@@ -142,4 +134,3 @@ Clustering clusterize(const Clustering &input, const ClusterOptions &options = {
 
     return Clustering{input.positions, std::move(new_clusters)};
 }
-

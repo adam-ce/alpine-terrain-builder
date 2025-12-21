@@ -7,50 +7,9 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <meshoptimizer.h>
 
+#include "utils.h"
+
 namespace meshopt {
-
-namespace {
-template <glm::length_t L, typename T>
-T *value_ptr(const std::span<glm::vec<L, T>>& v) noexcept {
-    if (v.empty()) {
-        return nullptr;
-    }
-    return glm::value_ptr(*v.data());
-}
-template <glm::length_t L, typename T>
-const T *value_ptr(const std::span<const glm::vec<L, T>>& v) noexcept {
-    if (v.empty()) {
-        return nullptr;
-    }
-    return glm::value_ptr(*v.data());
-}
-
-template <glm::length_t L, typename T>
-std::span<T> flatten(const std::span<glm::vec<L, T>> v) {
-    static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
-    static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
-
-    return std::span<T>(value_ptr(v), v.size() * L);
-}
-
-template <glm::length_t L, typename T>
-std::span<const T> flatten(const std::span<const glm::vec<L, T>> v) {
-    static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
-    static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
-
-    return std::span<const T>(value_ptr(v), v.size() * L);
-}
-
-template <glm::length_t L, typename T>
-std::span<T> flatten(std::vector<glm::vec<L, T>> &v) {
-    return flatten(std::span(v));
-}
-
-template <glm::length_t L, typename T>
-std::span<const T> flatten(const std::vector<glm::vec<L, T>> &v) {
-    return flatten(std::span(v));
-}
-}
 
 inline constexpr size_t NO_TARGET_COUNT = 0;
 inline constexpr float NO_TARGET_ERROR = FLT_MAX;
@@ -198,18 +157,25 @@ inline BuildMeshletsResult build_meshlets(
         split_factor);
     ASSERT(meshlet_count <= max_meshlets);
 
-    // Trim unused buffer space
+    // Trim meshlet output buffer
+    meshlets.resize(meshlet_count);
+
+    // Convert index offsets into triangle offsets
+    for (meshopt_Meshlet& meshlet : meshlets) {
+        DEBUG_ASSERT(meshlet.triangle_offset % 3 == 0);
+        meshlet.triangle_offset /= 3;
+    }
+
+    // Trim unused vertex and triangle buffers
     if (meshlet_count > 0) {
         const meshopt_Meshlet &last = meshlets[meshlet_count - 1];
         const size_t full_vertex_count = last.vertex_offset + last.vertex_count;
-        const size_t full_triangle_count = last.triangle_offset/3 + last.triangle_count;
+        const size_t full_triangle_count = last.triangle_offset + last.triangle_count;
         ASSERT(meshlet_vertices.size() >= full_vertex_count);
         ASSERT(meshlet_triangles.size() >= full_triangle_count);
         meshlet_vertices.resize(full_vertex_count);
         meshlet_triangles.resize(full_triangle_count);
     }
-
-    meshlets.resize(meshlet_count);
 
     return BuildMeshletsResult{
         std::move(meshlets),
@@ -230,26 +196,26 @@ inline void optimize_meshlet(
 }
 
 struct [[nodiscard]] PartitionClustersResult {
-    std::vector<uint32_t> cluster_groups;
-    size_t group_count = 0;
+    std::vector<uint32_t> cluster_partitions;
+    size_t partition_count = 0;
 };
 
 inline PartitionClustersResult partition_clusters(
     const std::span<const uint32_t> cluster_indices,       // flattened vertex indices of all clusters
     const std::span<const uint32_t> cluster_vertex_counts, // number of vertices per cluster
     const std::span<const glm::vec3> vertex_positions,
-    const uint32_t clusters_per_group) {
-    ASSERT(clusters_per_group > 0, "clusters_per_group must be > 0");
+    const uint32_t clusters_per_partition) {
+    ASSERT(clusters_per_partition > 0, "clusters_per_partition must be > 0");
 
-    // Allocate cluster to group map
+    // Allocate cluster to partition map
     const size_t cluster_count = cluster_vertex_counts.size();
-    std::vector<uint32_t> groups(cluster_count);
+    std::vector<uint32_t> partitions(cluster_count);
 
     const size_t total_index_count = std::accumulate(cluster_vertex_counts.begin(), cluster_vertex_counts.end(), 0u);
     const std::span<const float> positions_flat = flatten(vertex_positions);
 
-    const size_t group_count = meshopt_partitionClusters(
-        groups.data(),
+    const size_t partition_count = meshopt_partitionClusters(
+        partitions.data(),
         cluster_indices.data(),
         total_index_count,
         cluster_vertex_counts.data(),
@@ -257,10 +223,10 @@ inline PartitionClustersResult partition_clusters(
         positions_flat.data(),
         vertex_positions.size(),
         sizeof(glm::vec3),
-        clusters_per_group
+        clusters_per_partition
     );
 
-    return PartitionClustersResult{std::move(groups), group_count};
+    return PartitionClustersResult{std::move(partitions), partition_count};
 }
 
 } // namespace meshopt

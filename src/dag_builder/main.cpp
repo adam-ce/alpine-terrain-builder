@@ -2,7 +2,7 @@
 
 #include "cluster.h"
 #include "clusterize.h"
-#include "group.h"
+#include "partition.h"
 #include "mesh/io.h"
 #include "simplify.h"
 #include "split.h"
@@ -52,57 +52,21 @@ int main(int argc, char **argv) {
     const auto clusters_mesh = clustering_to_mesh(clustering);
     mesh::io::save_to_path(clusters_mesh, "/home/user/master/meshes/clusters.glb");
 
-    clustering = group(clustering, GroupOptions{.clusters_per_group = 8});
+    clustering = partition(clustering, PartitionOptions{.clusters_per_partition = 8});
     validate(clustering);
-    const auto grouped_mesh = clustering_to_mesh(clustering);
-    mesh::io::save_to_path(grouped_mesh, "/home/user/master/meshes/grouped.glb");
+    const auto partitioned_mesh = clustering_to_mesh(clustering);
+    mesh::io::save_to_path(partitioned_mesh, "/home/user/master/meshes/partitioned.glb");
 
-    clustering.clusters[0] = clustering.clusters[100];
-    clustering.clusters.resize(1);
-    const auto pre_simplified_mesh = clustering_to_mesh(clustering);
-    mesh::io::save_to_path(pre_simplified_mesh, "/home/user/master/meshes/pre-simplified.glb");
     clustering = simplify(clustering, SimplifyOptions{
                                           .target_ratio = 0,
-                                          .absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[16]});
+                                          .absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[17]});
     validate(clustering);
-    // clustering.clusters[0] = clustering.clusters[100];
-    // clustering.clusters.resize(1);
     const auto simplified_mesh = clustering_to_mesh(clustering);
     mesh::io::save_to_path(simplified_mesh, "/home/user/master/meshes/simplified.glb");
 
-    clustering = split_each_into_equal_parts2(clustering, 2 /*, 0.95 */);
+    clustering = split_each_into_equal_parts<2>(clustering);
     validate(clustering);
     auto c = clustering;
     const auto split_mesh = clustering_to_mesh(c);
     mesh::io::save_to_path(split_mesh, "/home/user/master/meshes/split.glb");
-    auto c1 = clustering;
-    c1.clusters.resize(1);
-    const auto split1_mesh = clustering_to_mesh(c1);
-    mesh::io::save_to_path(split1_mesh, "/home/user/master/meshes/split1.glb");
-    auto c2 = clustering;
-    c2.clusters[0] = c2.clusters[1];
-    c2.clusters.resize(1);
-    const auto split2_mesh = clustering_to_mesh(c2);
-    mesh::io::save_to_path(split2_mesh, "/home/user/master/meshes/split2.glb");
 }
-
-/*
-void perform(mesh::Simple mesh) {
-    const mesh::ComponentsIndex component_index = find_connected_components(mesh);
-    Clustering components = clusterize_by_vertex_map(mesh, component_index);
-
-    for (const Cluster component : components.clusters) {
-        Clustering clustering = clusterize(component);
-
-        for (size_t iter=0; iter<3; iter++) {
-            clustering = group(clustering, GroupOptions{.clusters_per_group = 4});
-            for (Cluster &cluster : clustering.cluster) {
-                cluster.uv_unwrapping = create_uv_unwrapping(cluster, clustering.positions);
-                cluster = simplify(cluster, clustering.positions);
-            }
-            clustering = split_clusters(clustering);
-        }
-    }
-}
-
-*/

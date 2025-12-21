@@ -44,18 +44,25 @@ inline std::vector<glm::vec3> to_approximate_normalized(std::span<const glm::dve
     return approx;
 }
 
+inline std::vector<glm::dvec3> collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions) {
+    std::vector<glm::dvec3> positions;
+    positions.reserve(cluster.vertex_indices.size());
+    for (const uint32_t vertex_index : cluster.vertex_indices) {
+        DEBUG_ASSERT(vertex_index <= global_positions.size());
+        positions.push_back(global_positions[vertex_index]);
+    }
+    return positions;
+}
+
 inline mesh::Simple materialize_cluster(const Cluster& cluster, const std::span<const glm::dvec3> positions) {
     mesh::Simple mesh;
-    mesh.positions.reserve(cluster.vertex_indices.size());
-    for (const uint32_t vertex_index : cluster.vertex_indices) {
-        mesh.positions.push_back(positions[vertex_index]);
-    }
+    mesh.positions = collect_cluster_positions(cluster, positions);
     mesh.triangles = cluster.local_triangles;
     return mesh;
 }
 
 using Rgb = glm::tvec3<uint8_t>;
-inline std::vector<Rgb> generate_distinct_colors(const size_t count) {
+inline std::vector<Rgb> generate_colors(const size_t count) {
     std::vector<Rgb> colors(count);
 
     for (size_t i = 0; i < count; i++) {
@@ -89,7 +96,7 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
     mesh.triangles.reserve(total_triangles);
 
     // Prepare texture
-    const std::vector<Rgb> cluster_colors = generate_distinct_colors(cluster_count);
+    const std::vector<Rgb> cluster_colors = generate_colors(cluster_count);
     const size_t texture_size = static_cast<size_t>(std::ceil(std::sqrt(cluster_count)));
     const size_t actual_texture_size = texture_size * 3;
     cv::Mat texture = cv::Mat(actual_texture_size, actual_texture_size, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -108,7 +115,7 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
         // Append vertices and UVs
         for (const uint32_t vertex_index : cluster.vertex_indices) {
             mesh.positions.push_back(clustering.positions[vertex_index]);
-            mesh.uvs.push_back(glm::dvec2(u, v));
+            mesh.uvs.emplace_back(u, v);
         }
 
         // Fill cluster color in texture
@@ -124,4 +131,45 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
     mesh.texture = texture;
 
     return mesh;
+}
+
+template <glm::length_t L, typename T>
+T *value_ptr(const std::span<glm::vec<L, T>>& v) noexcept {
+    if (v.empty()) {
+        return nullptr;
+    }
+    return glm::value_ptr(*v.data());
+}
+template <glm::length_t L, typename T>
+const T *value_ptr(const std::span<const glm::vec<L, T>>& v) noexcept {
+    if (v.empty()) {
+        return nullptr;
+    }
+    return glm::value_ptr(*v.data());
+}
+
+template <glm::length_t L, typename T>
+std::span<T> flatten(const std::span<glm::vec<L, T>> v) {
+    static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
+    static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
+
+    return std::span<T>(value_ptr(v), v.size() * L);
+}
+
+template <glm::length_t L, typename T>
+std::span<const T> flatten(const std::span<const glm::vec<L, T>> v) {
+    static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
+    static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
+
+    return std::span<const T>(value_ptr(v), v.size() * L);
+}
+
+template <glm::length_t L, typename T>
+std::span<T> flatten(std::vector<glm::vec<L, T>> &v) {
+    return flatten(std::span(v));
+}
+
+template <glm::length_t L, typename T>
+std::span<const T> flatten(const std::vector<glm::vec<L, T>> &v) {
+    return flatten(std::span(v));
 }

@@ -7,14 +7,14 @@
 #include "meshopt.h"
 #include "mesh/utils.h"
 
-struct GroupOptions {
-    uint32_t clusters_per_group = 4;
+struct PartitionOptions {
+    uint32_t clusters_per_partition = 4;
 };
 
-Clustering group(const Clustering &clustering, const GroupOptions options = {}) {
-    const uint32_t clusters_per_group = options.clusters_per_group;
-    ASSERT(clusters_per_group > 0, "Clusters per group must be greater than zero.");
-    if (clusters_per_group == 1) {
+Clustering partition(const Clustering &clustering, const PartitionOptions options = {}) {
+    const uint32_t clusters_per_partition = options.clusters_per_partition;
+    ASSERT(clusters_per_partition > 0, "Clusters per partition must be greater than zero.");
+    if (clusters_per_partition == 1) {
         return clustering;
     }
 
@@ -39,26 +39,26 @@ Clustering group(const Clustering &clustering, const GroupOptions options = {}) 
         offset += vertices.size();
     }
 
-    // Partition clusters into groups using the helper
+    // Partition clusters into partitions using the helper
     meshopt::PartitionClustersResult partition_result = meshopt::partition_clusters(
         cluster_vertices,
         cluster_vertex_counts,
         positions_f,
-        clusters_per_group);
-    const size_t group_count = partition_result.group_count;
-    const auto &cluster_groups = partition_result.cluster_groups;
+        clusters_per_partition);
+    const size_t partition_count = partition_result.partition_count;
+    const auto &cluster_partitions = partition_result.cluster_partitions;
 
-    // Build grouped clusters
+    // Build partitioned clusters
     const uint32_t no_vertex_remap = -1;
     std::vector<uint32_t> vertex_remap(clustering.positions.size(), no_vertex_remap);
 
-    std::vector<Cluster> grouped_clusters(group_count);
-    for (uint32_t group_index = 0; group_index < group_count; group_index++) {
-        Cluster &group = grouped_clusters[group_index];
+    std::vector<Cluster> partitioned_clusters(partition_count);
+    for (uint32_t partition_index = 0; partition_index < partition_count; partition_index++) {
+        Cluster &partition = partitioned_clusters[partition_index];
 
         for (uint32_t i = 0; i < cluster_count; i++) {
-            // Skip all clusters not in this group
-            if (cluster_groups[i] != group_index) {
+            // Skip all clusters not in this partition
+            if (cluster_partitions[i] != partition_index) {
                 continue;
             }
 
@@ -66,10 +66,10 @@ Clustering group(const Clustering &clustering, const GroupOptions options = {}) 
 
             // Add cluster vertices, avoiding duplicates
             for (uint32_t vertex_index : cluster.vertex_indices) {
-                uint32_t &vertex_index_in_group = vertex_remap[vertex_index];
-                if (vertex_index_in_group == no_vertex_remap) {
-                    vertex_index_in_group = group.vertex_indices.size();
-                    group.vertex_indices.push_back(vertex_index);
+                uint32_t &vertex_index_in_partition = vertex_remap[vertex_index];
+                if (vertex_index_in_partition == no_vertex_remap) {
+                    vertex_index_in_partition = partition.vertex_indices.size();
+                    partition.vertex_indices.push_back(vertex_index);
                 }
             }
 
@@ -80,18 +80,18 @@ Clustering group(const Clustering &clustering, const GroupOptions options = {}) 
                     remapped[k] = vertex_remap[cluster.vertex_indices[triangle[k]]];
                 }
                 if (!is_degenerate(remapped)) {
-                    group.local_triangles.push_back(remapped);
+                    partition.local_triangles.push_back(remapped);
                 }
             }
         }
 
-        // Reset vertex remap for next group
-        for (const uint32_t vertex_index : group.vertex_indices) {
+        // Reset vertex remap for next partition
+        for (const uint32_t vertex_index : partition.vertex_indices) {
             vertex_remap[vertex_index] = no_vertex_remap;
         }
     }
 
     return Clustering{
         clustering.positions,
-        std::move(grouped_clusters)};
+        std::move(partitioned_clusters)};
 }

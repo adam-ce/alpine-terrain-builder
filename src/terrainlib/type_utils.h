@@ -56,3 +56,6 @@ std::string type_name(const T &obj) {
         std::free};
     return (status == 0) ? res.get() : typeid(obj).name();
 }
+
+template <class>
+inline constexpr bool always_false_v = false;

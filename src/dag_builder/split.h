@@ -1,49 +1,52 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <type_traits>
 #include <vector>
 
 #include <libassert/assert.hpp>
+#include <metis.h>
 
+#include "Size.h"
+#include "Buffer.h"
 #include "clusterize.h"
-#include "group.h"
-#include "meshopt.h"
-#include "utils.h"
 #include "log.h"
+#include "meshopt.h"
 #include "number_types.h"
+#include "utils.h"
+#include "validate.h"
 
 namespace {
-template <typename T, typename F>
-constexpr inline T integral_lerp(T a, T b, F f) {
-    static_assert(std::is_integral_v<T>, "lerp<T, F>: T must be an integral type");
-    static_assert(std::is_arithmetic_v<F>, "lerp<T, F>: F must be a number type");
+template <typename A, typename B>
+constexpr auto int_div_ceil(A a, B b) {
+    static_assert(std::is_integral_v<A>);
+    static_assert(std::is_integral_v<B>);
+    using T = std::conditional_t<(sizeof(A) >= sizeof(B)), A, B>;
+    ASSERT(b != 0);
 
-    DEBUG_ASSERT(f >= 0 && f <= 1);
+    const T a_t = static_cast<T>(a);
+    const T b_t = static_cast<T>(b);
+    const T q = a_t / b_t;
+    const T r = a_t % b_t;
 
-    if constexpr (std::is_integral_v<F>) {
-        DEBUG_ASSERT(f == 0 || f == 1);
-        return f == 0 ? a : b;
-    } else if constexpr (std::is_floating_point_v<F>) {
-        DEBUG_ASSERT(f >= 0 && f <= 1);
-
-        if (f <= F(0)) {
-            return a;
-        }
-        if (f >= F(1)) {
-            return b;
-        }
-
-        using Offset = next_precision_t<std::make_signed_t<T>>;
-        const Offset range = static_cast<Offset>(b) - static_cast<Offset>(a);
-        return a + static_cast<Offset>(std::round(range * f));
-    } else {
-        UNREACHABLE();
+    // Exact division -> already the ceiling
+    if (r == 0) {
+        return q;
     }
+
+    // Same sign
+    if ((a > 0 && b > 0) || (a < 0 && b < 0)) {
+        return q + 1;
+    }
+
+    // Opposite signs -> truncation toward zero already gave the ceiling
+    return q;
 }
 }
 
-Clustering split_each_into_equal_parts(const Clustering &input, const size_t num_parts = 2, const float uniformity_strength = 0.5) {
+template <Size S>
+Clustering split_each_into_equal_parts(const Clustering &input, const S num_parts) {
     if (num_parts == 0) {
         return {
             .positions = input.positions,
@@ -53,71 +56,115 @@ Clustering split_each_into_equal_parts(const Clustering &input, const size_t num
     if (num_parts == 1) {
         return input;
     }
-    DEBUG_ASSERT(uniformity_strength >= 0 && uniformity_strength <= 1);
 
+    validate(input);
     std::vector<Cluster> new_clusters;
-
     for (const auto& cluster : input.clusters) {
+        // Create packed normalized position buffer
+        const std::vector<glm::dvec3> positions_d = collect_cluster_positions(cluster, input.positions);
+        const std::vector<glm::vec3> positions_f = to_approximate_normalized(positions_d);
+
         const uint32_t triangle_count = cluster.local_triangles.size();
         const uint32_t vertex_count = cluster.vertex_indices.size();
 
         // Ensure we can meaningfully split triangles and vertices
         ASSERT(triangle_count >= num_parts && "Cluster has fewer triangles than requested parts");
         ASSERT(vertex_count >= num_parts && "Cluster has fewer vertices than requested parts");
-        // TODO: ASSERT(vertex_count / num_parts <= ClusterOptions::MAX_VERTEX_LIMIT);
 
-        auto floor4 = [](const uint32_t v) { return v & ~uint32_t(3); };
+        // Initialize eptr and eind based on the triangle data<
+        std::vector<idx_t> eptr(triangle_count + 1); // Offsets in eind where faces start/end
+        std::vector<idx_t> eind(triangle_count * 3); // Indices into vertex array
 
-        const uint32_t target_triangle_count = static_cast<float>(triangle_count) / static_cast<float>(num_parts);
-        const uint32_t base_min_triangles = triangle_count / (num_parts + 1) + 1;
-        const uint32_t base_max_triangles = triangle_count / (num_parts - 1) - 1;
-        const uint32_t min_triangles = integral_lerp(base_min_triangles, target_triangle_count, uniformity_strength);
-        const uint32_t max_triangles = floor4(integral_lerp(base_max_triangles, target_triangle_count, uniformity_strength));
+        eptr[0] = 0;
+        for (uint32_t i = 0; i < triangle_count; i++) {
+            eptr[i + 1] = eptr[i] + 3;
 
-        LOG_INFO("Cluster with {} triangles: min_triangles={}, max_triangles={}",
-                 triangle_count, min_triangles, max_triangles);
-        LOG_INFO("Cluster with {} vertices", vertex_count);
+            const glm::uvec3 triangle = cluster.local_triangles[i];
+            eind[i * 3] = triangle.x;
+            eind[i * 3 + 1] = triangle.y;
+            eind[i * 3 + 2] = triangle.z;
+        }
 
-        const ClusterOptions options{
-            .min_triangles = min_triangles,
-            .max_triangles = max_triangles,
-            .cone_weight = 1.0,
-            // .split_factor = 1.0,
-        };
+        // Initialize options to default values
+        std::array<idx_t, METIS_NOPTIONS> options = {};
+        METIS_SetDefaultOptions(options.data());
+        options[METIS_OPTION_NUMBERING] = 0;
 
-        std::vector<Cluster> split_clusters = clusterize(cluster, input.positions, options);
-        // TODO: ASSERT(split_clusters.size() == num_parts);
+            // Allocate memory for output vectors
+        std::vector<idx_t> epart(triangle_count); // Map triangle index -> partition id
+        std::vector<idx_t> npart(vertex_count); // Map vertex index -> partition id
+
+        // Call the METIS_PartMeshNodal function
+        idx_t quality;
+        // TODO: Try METIS_PartGraphKway as it supports edges weights which could be set to their lengths
+        idx_t num_parts_mut = num_parts;
+        idx_t triangle_count_mut = triangle_count;
+        idx_t vertex_count_mut = vertex_count;
+        auto result = METIS_PartMeshNodal(
+            &triangle_count_mut,
+            &vertex_count_mut,
+            eptr.data(),
+            eind.data(),
+            nullptr,
+            nullptr,
+            &num_parts_mut,
+            nullptr,
+            options.data(),
+            &quality,
+            epart.data(),
+            npart.data());
+        ASSERT(METIS_OK == result);
+
+        // Allocate new clusters
+        Buffer<Cluster, S> partitions = make_buffer<Cluster>(num_parts);
+        const size_t expected_part_vertex_count = int_div_ceil(vertex_count, num_parts.value());
+        const size_t expected_part_triangle_count = int_div_ceil(triangle_count, num_parts.value());
+        for (Cluster &partition : partitions) {
+            partition.vertex_indices.reserve(expected_part_vertex_count * 3 / 2);
+            partition.local_triangles.reserve(expected_part_triangle_count * 3 / 2);
+        }
+        Buffer<std::vector<uint32_t>, S> remap = make_buffer<std::vector<uint32_t>>(num_parts);
+        const uint32_t invalid_remap = -1;
+        for (std::vector<uint32_t>& remap_of_part : remap) {
+            remap_of_part.resize(vertex_count, invalid_remap);
+        }
+
+        // Convert METIS output to cluster vertices and triangles
+        // Note that we cant use npart since it only assigns border vertices to one partition
+        for (uint32_t i = 0; i < triangle_count; i++) {
+            const uint32_t partition_index = epart[i];
+            Cluster &partition = partitions[partition_index];
+            glm::uvec3 triangle = cluster.local_triangles[i];
+            for (uint8_t k=0; k<3; k++) {
+                const uint32_t original_index = triangle[k];
+                uint32_t &new_index = remap[partition_index][original_index];
+                if (new_index == invalid_remap) {
+                    new_index = partition.vertex_indices.size();
+                    partition.vertex_indices.push_back(cluster.vertex_indices[original_index]);
+                }
+                triangle[k] = new_index;
+            }
+            partition.local_triangles.push_back(triangle);
+        }
+
+        // Validate
+        for (const Cluster &partition : partitions) {
+            validate(partition, input.positions);
+        }
+
         new_clusters.insert(
             new_clusters.end(),
-            std::make_move_iterator(split_clusters.begin()),
-            std::make_move_iterator(split_clusters.end()));
+            std::make_move_iterator(partitions.begin()),
+            std::make_move_iterator(partitions.end()));
     }
 
     return Clustering{input.positions, std::move(new_clusters)};
 }
 
-Clustering split_each_into_equal_parts2(const Clustering &input, const size_t num_parts = 2) {
-    if (num_parts == 0) {
-        return {
-            .positions = input.positions,
-            .clusters = {}};
-    }
-    if (num_parts == 1) {
-        return input;
-    }
-
-    validate(input);
-    const Clustering intermediate = clusterize(input, ClusterOptions {
-        .max_vertices = 64,
-        .min_triangles = 42,
-        .max_triangles = 126,
-        .cone_weight = 1.0,
-    });
-    validate(intermediate);
-    const Clustering output = group(intermediate, GroupOptions{
-                                                      .clusters_per_group = (intermediate.clusters.size() + 1u) / 2u});
-
-    DEBUG_ASSERT(output.clusters.size() == 2);
-
-    return output;
+template <size_t NUM_PARTS>
+Clustering split_each_into_equal_parts(const Clustering &input) {
+    return split_each_into_equal_parts(input, make_size<NUM_PARTS>());
+}
+Clustering split_each_into_equal_parts(const Clustering &input, const size_t num_parts = 2) {
+    return split_each_into_equal_parts(input, make_size(num_parts));
 }

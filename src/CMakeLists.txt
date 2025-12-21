@@ -49,7 +49,7 @@ if(ALP_ENABLE_THREAD_SANITIZER)
     endif()
 endif()
 
-option(ALP_RELEASE_OPT_LEVEL "Optimization level (0=O0,1=O1,2=O2,3=O3)" 1)
+option(ALP_RELEASE_OPT_LEVEL "Optimization level (0=O0,1=O1,2=O2,3=O3)" 3)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")
@@ -122,10 +122,13 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v0.25)
 
-# alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
-# alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
-# add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
-# target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+# alp_add_git_repository(gklib URL https://github.com/scivision/GKlib COMMITISH master)
+set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(METIS_INSTALL OFF CACHE BOOL "" FORCE)
+set(IDXTYPEWIDTH 32 CACHE STRING "" FORCE)
+set(REALTYPEWIDTH 32 CACHE STRING "" FORCE)
+alp_add_git_repository(metis URL https://github.com/scivision/metis COMMITISH v5.2.1.2)
+target_compile_definitions(metis INTERFACE IDXTYPEWIDTH=32 REALTYPEWIDTH=32)
 
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
 
@@ -369,7 +372,7 @@ target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ft
 add_library(dagbuilderlib
     dag_builder/cluster.h
 )
-target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis)
 add_executable(dag-builder
     # dag_builder/cli.h index_browser/cli.cpp
     dag_builder/main.cpp

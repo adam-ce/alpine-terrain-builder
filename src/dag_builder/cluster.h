@@ -25,6 +25,13 @@ struct Cluster {
     std::vector<glm::uvec3> local_triangles;
     std::optional<UvUnwrapping> uv_unwrapping;
     double relative_error = 0.0;
+
+    constexpr size_t vertex_count() const noexcept {
+        return this->vertex_indices.size();
+    }
+    constexpr size_t triangle_count() const noexcept {
+        return this->local_triangles.size();
+    }
 };
 
 struct Clustering {

@@ -47,15 +47,30 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
         const float relative_target_error = options.absolute_target_error == meshopt::NO_TARGET_ERROR ?
             meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
 
+        // Set up vertex locks
+        const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(original_cluster.local_triangles);
+        std::vector<uint8_t> vertex_locks(original_cluster.vertex_count(), 0);
+        for (const uint32_t triangle_index : boundary_triangles) {
+            const glm::uvec3 &triangle = original_cluster.local_triangles[triangle_index];
+            for (uint8_t k = 0; k < 3; k++) {
+                const uint32_t vertex_index = triangle[k];
+                vertex_locks[vertex_index] = 1;
+            }
+        }
+
         // Perform simplification
         const size_t original_triangle_count = original_cluster.local_triangles.size();
         const size_t target_triangle_count = static_cast<size_t>(options.target_ratio * original_triangle_count);
-        meshopt::SimplifyResult result = meshopt::simplify(
+        meshopt::SimplifyResult result = meshopt::simplify_with_attributes(
             original_cluster.local_triangles,
             cluster_positions_f,
+            {},
+            0,
+            {},
+            vertex_locks,
             target_triangle_count,
             relative_target_error,
-            meshopt_SimplifyLockBorder | meshopt_SimplifyErrorAbsolute);
+            meshopt_SimplifyErrorAbsolute);
 
         // Make sure the result is manifold
         make_manifold(result.triangles, cluster_positions);

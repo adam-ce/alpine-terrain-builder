@@ -60,10 +60,6 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
     validate(input);
     std::vector<Cluster> new_clusters;
     for (const auto& cluster : input.clusters) {
-        // Create packed normalized position buffer
-        const std::vector<glm::dvec3> positions_d = collect_cluster_positions(cluster, input.positions);
-        const std::vector<glm::vec3> positions_f = to_approximate_normalized(positions_d);
-
         const uint32_t triangle_count = cluster.local_triangles.size();
         const uint32_t vertex_count = cluster.vertex_indices.size();
 
@@ -90,16 +86,16 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
         METIS_SetDefaultOptions(options.data());
         options[METIS_OPTION_NUMBERING] = 0;
 
-            // Allocate memory for output vectors
+        // Allocate memory for output vectors
         std::vector<idx_t> epart(triangle_count); // Map triangle index -> partition id
         std::vector<idx_t> npart(vertex_count); // Map vertex index -> partition id
 
-        // Call the METIS_PartMeshNodal function
+        // Perform partitioning
         idx_t quality;
-        // TODO: Try METIS_PartGraphKway as it supports edges weights which could be set to their lengths
         idx_t num_parts_mut = num_parts;
         idx_t triangle_count_mut = triangle_count;
         idx_t vertex_count_mut = vertex_count;
+        // TODO: Try METIS_PartGraphKway as it supports edges weights which could be set to their lengths
         auto result = METIS_PartMeshNodal(
             &triangle_count_mut,
             &vertex_count_mut,

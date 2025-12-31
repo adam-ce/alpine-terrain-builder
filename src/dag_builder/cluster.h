@@ -37,4 +37,11 @@ struct Cluster {
 struct Clustering {
     std::vector<glm::dvec3> positions;
     std::vector<Cluster> clusters;
+
+    constexpr size_t vertex_count() const noexcept {
+        return this->positions.size();
+    }
+    constexpr size_t cluster_count() const noexcept {
+        return this->clusters.size();
+    }
 };

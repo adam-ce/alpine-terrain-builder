@@ -118,7 +118,7 @@ VertexMapping create_mapping(
         if (only_consider_boundary) {
             // Find boundary edges
             boundary_edges.clear();
-            find_boundary_edges(mesh, boundary_edges);
+            find_boundary_edges(mesh.triangles, boundary_edges);
 
             // Classify vertices as on the boundary or on the inside
             is_boundary_vertex.resize(mesh.vertex_count());

@@ -108,25 +108,16 @@ void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
     }
 }
 
+
 template <glm::length_t n_dims, typename T>
-std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
-    std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> boundary;
-    find_boundary_edges(mesh, boundary);
-    return boundary;
+std::unordered_set<glm::uvec2> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh) {
+    return find_boundary_edges(mesh.triangles);
 }
 template <glm::length_t n_dims, typename T>
-void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary) {
-    for_each_edge(mesh, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) {
-        auto it = boundary.find(glm::uvec2(edge.y, edge.x));
-        if (it != boundary.end()) {
-            // Edge already there -> shared egde -> remove it
-            boundary.erase(it);
-        } else {
-            // Edge not present -> add it (but in correct order)
-            boundary.insert(edge);
-        }
-    }, /* normalize */ false);
+std::unordered_set<glm::uvec2> find_boundary_triangles(const SimpleMesh_<n_dims, T> &mesh) {
+    return find_boundary_triangles(mesh.triangles);
 }
+
 
 template <typename T>
 WindingOrder get_winding_order(const glm::vec<2, T> &a,

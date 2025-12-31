@@ -92,11 +92,13 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_in
 std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_index_mapping_non_manifold2(const std::span<const glm::uvec3> triangles);
 
 std::vector<uint32_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh);
-std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles);
+std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const size_t vertex_count);
 
 std::vector<glm::uvec2> find_non_manifold_edges(const SimpleMesh &mesh);
 std::vector<uint32_t> find_single_non_manifold_triangle_indices(const SimpleMesh &mesh);
+std::vector<uint32_t> find_single_non_manifold_triangle_indices(const std::span<const glm::uvec3> triangles, const size_t vertex_count);
 void remove_single_non_manifold_triangles(SimpleMesh & mesh);
+void remove_single_non_manifold_triangles(std::vector<glm::uvec3>& triangles, const size_t vertex_count);
 
 void normalize_face_index_rotation(std::span<uint32_t> face, bool keep_orientation = true);
 void normalize_edge_inplace(glm::uvec2 & edge);
@@ -119,12 +121,16 @@ template <glm::length_t n_dims, typename T>
 void flip_orientation(SimpleMesh_<n_dims, T> & mesh);
 
 template <glm::length_t n_dims, typename T, typename Func>
-std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const SimpleMesh_<n_dims, T> &mesh);
+std::unordered_set<glm::uvec2> get_edges(const SimpleMesh_<n_dims, T> &mesh);
 
 template <glm::length_t n_dims, typename T>
-std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh);
+std::unordered_set<glm::uvec2> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
-void find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh, std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> &boundary);
+std::unordered_set<glm::uvec2> find_boundary_triangles(const SimpleMesh_<n_dims, T> &mesh);
+
+void find_boundary_edges(const std::span<const glm::uvec3> triangles, std::unordered_set<glm::uvec2>&boundary);
+std::unordered_set<glm::uvec2> find_boundary_edges(const std::span<const glm::uvec3> triangles);
+std::unordered_set<uint32_t> find_boundary_triangles(const std::span<const glm::uvec3> triangles);
 
 bool is_degenerate(const glm::uvec3 &triangle);
 

@@ -261,11 +261,12 @@ int run(std::span<char *> args) {
     if (*batch) {
         std::optional<tbb::global_control> tbb_control;
         if (num_threads > 0) {
-            const auto maybe_s = num_threads == 1 ? "" : "s";
-            LOG_INFO("Using {} thread{} for batch processing.", num_threads, maybe_s);
-            tbb_control.emplace(tbb::global_control::max_allowed_parallelism,
-                                static_cast<std::size_t>(num_threads));
+            LOG_DEBUG("Requesting max parallelism of {}", num_threads);
+            tbb_control.emplace(tbb::global_control::max_allowed_parallelism, num_threads);
         }
+        const auto actual_num_threads = tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism);
+        const auto maybe_s = actual_num_threads == 1 ? "" : "s";
+        LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
         terrainbuilder::build_all_patches(
             dataset,

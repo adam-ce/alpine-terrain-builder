@@ -34,5 +34,6 @@ void build_all_patches(
     const std::optional<std::filesystem::path> &texture_base_path,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
-    const std::string &output_format);
+    const std::string &output_format,
+    const bool overwrite_existing);
 }

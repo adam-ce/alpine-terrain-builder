@@ -228,6 +228,8 @@ int run(std::span<char *> args) {
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
+    bool overwrite_existing = false;
+    batch->add_flag("--overwrite", overwrite_existing, "Overwrite existing mesh files");
 
     CLI11_PARSE(app, argc, argv);
 
@@ -270,7 +272,8 @@ int run(std::span<char *> args) {
             texture_base_path,
             mesh_srs,
             output_base_path,
-            output_format);
+            output_format,
+            overwrite_existing);
     }
 
     return 0;

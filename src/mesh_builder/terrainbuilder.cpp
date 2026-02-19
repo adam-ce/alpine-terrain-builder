@@ -176,7 +176,9 @@ void build_all_patches(
     const std::optional<std::filesystem::path> &texture_base_path,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
-    const std::string &output_format) {
+    const std::string &output_format,
+    const bool overwrite_existing
+) {
     if (!std::filesystem::exists(output_base_path)) {
         LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
         std::filesystem::create_directories(output_base_path);
@@ -249,6 +251,7 @@ void build_all_patches(
     ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
+    // Clone dataset and SRSs for each thread
     tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
         return dataset.clone();
     });
@@ -273,7 +276,7 @@ void build_all_patches(
 
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (storage.has_node(node)) {
+        if (!overwrite_existing && storage.has_node(node)) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
             return;
         }

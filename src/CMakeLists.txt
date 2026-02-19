@@ -110,7 +110,7 @@ alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git 
 
 alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 
-alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v0.25)
+alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
 set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(METIS_INSTALL OFF CACHE BOOL "" FORCE)

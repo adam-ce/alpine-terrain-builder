@@ -239,6 +239,9 @@ unsigned Dataset::n_bands() const {
 GDALDataset *Dataset::gdalDataset() {
     return m_gdal_dataset.get();
 }
+const GDALDataset *Dataset::gdalDataset() const {
+    return m_gdal_dataset.get();
+}
 
 double Dataset::gridResolution(const OGRSpatialReference &target_srs) const {
     return std::min(pixelWidthIn(target_srs), pixelHeightIn(target_srs));

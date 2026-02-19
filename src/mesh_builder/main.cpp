@@ -7,6 +7,7 @@
 #include <CLI/CLI.hpp>
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
@@ -133,6 +134,44 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
+void log_dataset_overview(const Dataset &dataset) {
+    const std::string name = dataset.name();
+
+    const unsigned int widthPx = dataset.widthInPixels();
+    const unsigned int heightPx = dataset.heightInPixels();
+    const unsigned int bands = dataset.n_bands();
+
+    const auto datasetSrs = dataset.srs();
+    const auto bounds = dataset.bounds3d(true);
+
+    const auto boundsEcef =
+        srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+
+    const octree::Space earth = octree::Space::earth();
+    const auto enclosingNode =
+        earth.find_smallest_node_encompassing_bounds(boundsEcef).value();
+
+    const int scaleLevel = static_cast<int>(std::floor(std::log2(
+        earth.bounds().size().x / glm::compMax(boundsEcef.size()))));
+
+    LOG_INFO("Dataset");
+    LOG_INFO("  name        : {}", name);
+    LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
+    LOG_INFO("  srs         : {}", srs::friendly_name(datasetSrs));
+    LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
+             bounds.min.x, bounds.min.y, bounds.min.z,
+             bounds.max.x, bounds.max.y, bounds.max.z);
+    LOG_INFO("  bounds ecef : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
+             boundsEcef.min.x, boundsEcef.min.y, boundsEcef.min.z,
+             boundsEcef.max.x, boundsEcef.max.y, boundsEcef.max.z);
+    LOG_INFO("  octree      : enclosing node level={} coords=({}, {}, {})",
+             enclosingNode.level(),
+             enclosingNode.coords().x,
+             enclosingNode.coords().y,
+             enclosingNode.coords().z);
+    LOG_INFO("  octree      : scale level={}", scaleLevel);
+}
+
 int run(std::span<char *> args) {
     int argc = args.size();
     char **argv = args.data();
@@ -236,6 +275,7 @@ int run(std::span<char *> args) {
     Log::init(log_level);
 
     Dataset dataset(dataset_path.string());
+    log_dataset_overview(dataset);
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
     OGRSpatialReference texture_srs = srs::webmercator();
 

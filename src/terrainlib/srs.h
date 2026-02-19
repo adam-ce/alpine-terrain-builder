@@ -25,6 +25,7 @@
 #include <vector>
 #include <array>
 #include <stdexcept>
+#include <optional>
 
 #include <fmt/format.h>
 #include <glm/detail/qualifier.hpp>
@@ -35,6 +36,38 @@
 #include <radix/tile.h>
 
 namespace srs {
+
+inline std::optional<int> epsg_code(const OGRSpatialReference &srs) {
+    OGRSpatialReference tmp = srs;
+    tmp.AutoIdentifyEPSG();
+
+    const char *authName = tmp.GetAuthorityName(nullptr);
+    const char *authCode = tmp.GetAuthorityCode(nullptr);
+
+    if (authName == nullptr || authCode == nullptr) {
+        return std::nullopt;
+    }
+
+    if (std::string(authName) != "EPSG") {
+        return std::nullopt;
+    }
+
+    return std::atoi(authCode);
+}
+
+inline std::string friendly_name(const OGRSpatialReference &srs) {
+    if (const auto code = epsg_code(srs)) {
+        return "EPSG:" + std::to_string(*code);
+    }
+
+    const char *name = srs.GetName();
+
+    if (name != nullptr && *name != '\0') {
+        return std::string(name);
+    }
+
+    return "unknown";
+}
 
 inline std::unique_ptr<OGRSpatialReference> clone(const OGRSpatialReference &srs) {
     auto cloned = srs.Clone();

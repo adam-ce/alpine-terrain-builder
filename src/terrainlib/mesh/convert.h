@@ -32,11 +32,11 @@ glm::dvec3 to_glm_point(const Point3 &point) {
 }
 
 
-template <typename Kernel>
+template <typename Kernel = cgal::Kernel>
 typename Kernel::Point_3 to_cgal_point(const glm::dvec3 &point) {
     return typename Kernel::Point_3(point.x, point.y, point.z);
 }
-template <typename Kernel>
+template <typename Kernel = cgal::Kernel>
 typename Kernel::Point_2 to_cgal_point(const glm::dvec2 &point) {
     return typename Kernel::Point_2(point.x, point.y);
 }

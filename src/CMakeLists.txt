@@ -112,7 +112,6 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v0.25)
 
-# alp_add_git_repository(gklib URL https://github.com/scivision/GKlib COMMITISH master)
 set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(METIS_INSTALL OFF CACHE BOOL "" FORCE)
 set(IDXTYPEWIDTH 32 CACHE STRING "" FORCE)

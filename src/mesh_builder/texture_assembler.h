@@ -10,6 +10,7 @@
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <glm/vector_relational.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
@@ -221,7 +222,8 @@ void copy_paste_image(
     const radix::geometry::Aabb2d src_padding(
         src_exact.min - glm::dvec2(src_padded.min),
         glm::dvec2(src_padded.max) - src_exact.max);
-    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding, glm::dvec2(0))));
+    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding.min, glm::dvec2(0))));
+    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding.max, glm::dvec2(0))));
 
     // Safe integer crop of source
     const cv::Rect src_padded_cv = to_cv_rect(src_padded);

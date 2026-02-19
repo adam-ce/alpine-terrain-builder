@@ -16,6 +16,7 @@
 #include "srs.h"
 #include "terrainbuilder.h"
 #include "octree/Space.h"
+#include "tile_provider.h"
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -184,6 +185,8 @@ int run(std::span<char *> args) {
     std::filesystem::path dataset_path;
     std::optional<std::filesystem::path> texture_base_path;
     std::string mesh_srs_input = "EPSG:4978";
+    std::optional<uint32_t> min_texture_level;
+    std::optional<uint32_t> max_texture_level;
     std::filesystem::path output_path;
     spdlog::level::level_enum log_level = spdlog::level::level_enum::trace;
 
@@ -203,6 +206,10 @@ int run(std::span<char *> args) {
         ->check(CLI::ExistingDirectory);
     app.add_option("--mesh-srs", mesh_srs_input, "EPSG code of the target srs of the mesh positions")
         ->default_val("EPSG:4978");
+    app.add_option("--min-texture-level", max_texture_level, "Minimum texture zoom level to use for assembling textures.")
+        ->needs("--textures");
+    app.add_option("--max-texture-level", max_texture_level, "Maximum texture zoom level to use for assembling textures.")
+        ->needs("--textures");
     app.add_option("--verbosity", log_level, "Verbosity level of logging")
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
 
@@ -279,6 +286,19 @@ int run(std::span<char *> args) {
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
     OGRSpatialReference texture_srs = srs::webmercator();
 
+    std::unique_ptr<TileProvider> tile_provider;
+    if (texture_base_path.has_value()) {
+        BasemapSchemeTilePathProvider basemap_provider(texture_base_path.value());
+        if (min_texture_level.has_value() || max_texture_level.has_value()) {
+            tile_provider = std::make_unique<ZoomRangeTileProvider<BasemapSchemeTilePathProvider>>(
+                std::move(basemap_provider),
+                min_texture_level,
+                max_texture_level);
+        } else {
+            tile_provider = std::make_unique<BasemapSchemeTilePathProvider>(std::move(basemap_provider));
+        }
+    }
+
     if (*single) {
         OGRSpatialReference target_srs = parse_srs(target_srs_input);
         const radix::geometry::Aabb3d target_bounds = parse_target_bounds(
@@ -293,7 +313,7 @@ int run(std::span<char *> args) {
             target_srs,
             target_bounds,
             texture_srs,
-            texture_base_path,
+            tile_provider.get(),
             mesh_srs,
             output_path);
     }
@@ -312,7 +332,7 @@ int run(std::span<char *> args) {
             dataset,
             target_level,
             texture_srs,
-            texture_base_path,
+            tile_provider.get(),
             mesh_srs,
             output_base_path,
             output_format,

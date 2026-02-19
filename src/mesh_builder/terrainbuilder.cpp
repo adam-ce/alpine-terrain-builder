@@ -43,25 +43,12 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
 }
 }
 
-class BasemapSchemeTilePathProvider : public TilePathProvider {
-public:
-    BasemapSchemeTilePathProvider(std::filesystem::path base_path)
-        : base_path(base_path) {}
-
-    std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile_id) const override {
-        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
-    }
-
-private:
-    std::filesystem::path base_path;
-};
-
 std::optional<SimpleMesh> build_patch(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> texture_base_path,
+    const TileProvider* tile_provider,
     const OGRSpatialReference &mesh_srs) {
     const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
@@ -97,11 +84,10 @@ std::optional<SimpleMesh> build_patch(
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
     LOG_INFO("Finished building mesh geometry");
 
-    if (texture_base_path.has_value()) {
+    if (tile_provider != nullptr) {
         start = std::chrono::high_resolution_clock::now();
         LOG_INFO("Assembling mesh texture");
-        BasemapSchemeTilePathProvider tile_provider(texture_base_path.value());
-        std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, tile_provider);
+        std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
         if (!texture.has_value()) {
             LOG_ERROR("Failed to assemble texture");
             // TODO: should we return nullopt here?
@@ -121,7 +107,7 @@ void build_and_save_patch(
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> texture_base_path,
+    const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_path) {
     auto mesh_result = build_patch(
@@ -129,7 +115,7 @@ void build_and_save_patch(
         target_bounds_srs,
         target_bounds,
         texture_srs,
-        texture_base_path,
+        tile_provider,
         mesh_srs);
     if (!mesh_result.has_value()) {
         return;
@@ -173,7 +159,7 @@ void build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> &texture_base_path,
+    const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
     const std::string &output_format,
@@ -292,7 +278,7 @@ void build_all_patches(
             ecef_srs,
             node_bounds,
             texture_srs,
-            texture_base_path,
+            tile_provider,
             mesh_srs);
 
         if (mesh_result.has_value()) {

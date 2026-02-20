@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.6) # due to glm
 project(terrain_builder_src LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -49,7 +49,7 @@ if(ALP_ENABLE_THREAD_SANITIZER)
     endif()
 endif()
 
-set( ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
+set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")

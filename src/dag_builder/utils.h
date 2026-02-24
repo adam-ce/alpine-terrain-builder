@@ -44,13 +44,18 @@ inline std::vector<glm::vec3> to_approximate_normalized(std::span<const glm::dve
     return approx;
 }
 
-inline std::vector<glm::dvec3> collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions) {
-    std::vector<glm::dvec3> positions;
-    positions.reserve(cluster.vertex_indices.size());
+inline void collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions, std::vector<glm::dvec3> &out_positions) {
+    out_positions.clear();
+    out_positions.reserve(cluster.vertex_indices.size());
     for (const uint32_t vertex_index : cluster.vertex_indices) {
         DEBUG_ASSERT(vertex_index <= global_positions.size());
-        positions.push_back(global_positions[vertex_index]);
+        out_positions.push_back(global_positions[vertex_index]);
     }
+}
+
+inline std::vector<glm::dvec3> collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions) {
+    std::vector<glm::dvec3> positions;
+    collect_cluster_positions(cluster, global_positions, positions);
     return positions;
 }
 
@@ -75,7 +80,7 @@ inline std::vector<Rgb> generate_colors(const size_t count) {
     return colors;
 }
 
-inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
+inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
     const size_t cluster_count = clustering.clusters.size();
     if (cluster_count == 0) {
         return {};
@@ -95,32 +100,17 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
     mesh.uvs.reserve(total_vertices);
     mesh.triangles.reserve(total_triangles);
 
-    // Prepare texture
-    const std::vector<Rgb> cluster_colors = generate_colors(cluster_count);
-    const size_t texture_size = static_cast<size_t>(std::ceil(std::sqrt(cluster_count)));
-    const size_t actual_texture_size = texture_size * 3;
-    cv::Mat texture = cv::Mat(actual_texture_size, actual_texture_size, CV_8UC3, cv::Scalar(0, 0, 0));
-
-    // Append vertices and assign UVs
+    // Append vertices and triangles
     for (size_t cluster_index = 0; cluster_index < cluster_count; cluster_index++) {
         const Cluster &cluster = clustering.clusters[cluster_index];
         const uint32_t base_vertex = mesh.vertex_count();
 
-        // Compute UV coordinates for this cluster
-        const size_t block_row = (cluster_index / texture_size) * 3;
-        const size_t block_col = (cluster_index % texture_size) * 3;
-        const double u = (block_col + 1.5) / actual_texture_size;
-        const double v = (block_row + 1.5) / actual_texture_size;
-
-        // Append vertices and UVs
-        for (const uint32_t vertex_index : cluster.vertex_indices) {
+        // Append vertices
+        for (size_t i = 0; i < cluster.vertex_indices.size(); i++) {
+            const uint32_t vertex_index = cluster.vertex_indices[i];
             mesh.positions.push_back(clustering.positions[vertex_index]);
-            mesh.uvs.emplace_back(u, v);
+            mesh.uvs.emplace_back(cluster.uvs[i]);
         }
-
-        // Fill cluster color in texture
-        const Rgb &color = cluster_colors[cluster_index];
-        texture.at<cv::Vec3b>(block_row + 1, block_col + 1) = {color.z, color.y, color.x};
 
         // Append triangles
         for (const glm::uvec3 &local_triangle : cluster.local_triangles) {
@@ -128,7 +118,39 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering) {
         }
     }
 
-    mesh.texture = texture;
+    if (!debug_texture) {
+        mesh.texture = clustering.texture;
+    } else {
+        mesh.uvs.clear();
+
+        // Prepare texture
+        const std::vector<Rgb> cluster_colors = generate_colors(cluster_count);
+        const size_t texture_size = static_cast<size_t>(std::ceil(std::sqrt(cluster_count)));
+        const size_t actual_texture_size = texture_size * 3;
+        cv::Mat texture = cv::Mat(actual_texture_size, actual_texture_size, CV_8UC3, cv::Scalar(0, 0, 0));
+
+        // Append vertices and assign UVs
+        for (size_t cluster_index = 0; cluster_index < cluster_count; cluster_index++) {
+            const Cluster &cluster = clustering.clusters[cluster_index];
+
+            // Compute UV coordinates for this cluster
+            const size_t block_row = (cluster_index / texture_size) * 3;
+            const size_t block_col = (cluster_index % texture_size) * 3;
+            const double u = (block_col + 1.5) / actual_texture_size;
+            const double v = (block_row + 1.5) / actual_texture_size;
+
+            // Append UVs
+            for (const uint32_t _ : cluster.vertex_indices) {
+                mesh.uvs.emplace_back(u, v);
+            }
+
+            // Fill cluster color in texture
+            const Rgb &color = cluster_colors[cluster_index];
+            texture.at<cv::Vec3b>(block_row + 1, block_col + 1) = {color.z, color.y, color.x};
+        }
+
+        mesh.texture = texture;
+    }
 
     return mesh;
 }

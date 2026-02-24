@@ -360,8 +360,15 @@ target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ft
 
 add_library(dagbuilderlib
     dag_builder/cluster.h
+    dag_builder/clusterize.h
+    dag_builder/meshopt.h
+    dag_builder/optimize.h
+    dag_builder/partition.h
+    dag_builder/simplify.h
+    dag_builder/split.h
+    dag_builder/validate.h
 )
-target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis meshoptimizer)
 add_executable(dag-builder
     # dag_builder/cli.h index_browser/cli.cpp
     dag_builder/main.cpp

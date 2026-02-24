@@ -50,7 +50,8 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
     if (num_parts == 0) {
         return {
             .positions = input.positions,
-            .clusters = {}
+            .clusters = {},
+            .texture = input.texture
         };
     }
     if (num_parts == 1) {
@@ -62,6 +63,7 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
     for (const auto& cluster : input.clusters) {
         const uint32_t triangle_count = cluster.local_triangles.size();
         const uint32_t vertex_count = cluster.vertex_indices.size();
+        const bool has_uvs = !cluster.uvs.empty();
 
         // Ensure we can meaningfully split triangles and vertices
         ASSERT(triangle_count >= num_parts && "Cluster has fewer triangles than requested parts");
@@ -118,6 +120,9 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
         for (Cluster &partition : partitions) {
             partition.vertex_indices.reserve(expected_part_vertex_count * 3 / 2);
             partition.local_triangles.reserve(expected_part_triangle_count * 3 / 2);
+            if (has_uvs) {
+                partition.uvs.reserve(expected_part_vertex_count * 3 / 2);
+            }
         }
         Buffer<std::vector<uint32_t>, S> remap = make_buffer<std::vector<uint32_t>>(num_parts);
         const uint32_t invalid_remap = -1;
@@ -137,6 +142,9 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
                 if (new_index == invalid_remap) {
                     new_index = partition.vertex_indices.size();
                     partition.vertex_indices.push_back(cluster.vertex_indices[original_index]);
+                    if (has_uvs) {
+                        partition.uvs.push_back(cluster.uvs[original_index]);
+                    }
                 }
                 triangle[k] = new_index;
             }
@@ -154,7 +162,11 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
             std::make_move_iterator(partitions.end()));
     }
 
-    return Clustering{input.positions, std::move(new_clusters)};
+    return Clustering{
+        input.positions,
+        std::move(new_clusters),
+        input.texture
+    };
 }
 
 template <size_t NUM_PARTS>

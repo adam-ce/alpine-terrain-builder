@@ -1,9 +1,10 @@
 #include <filesystem>
+#include <queue>
 
 #include "cluster.h"
 #include "clusterize.h"
-#include "partition.h"
 #include "mesh/io.h"
+#include "partition.h"
 #include "simplify.h"
 #include "split.h"
 #include "utils.h"
@@ -31,7 +32,6 @@ constexpr std::array<double, MAX_LEVEL> generate_meters_per_pixel_array() {
     return arr;
 }
 
-// The array
 constexpr std::array<double, MAX_LEVEL> METERS_PER_PIXEL_AT_EQUATOR = generate_meters_per_pixel_array();
 
 // Test values (compare with known table values)
@@ -39,34 +39,41 @@ static_assert(std::abs(METERS_PER_PIXEL_AT_EQUATOR[0] - 156543) < 1, "level 0 mi
 static_assert(std::abs(METERS_PER_PIXEL_AT_EQUATOR[10] - 152.874) < 0.001, "level 10 mismatch");
 static_assert(std::abs(METERS_PER_PIXEL_AT_EQUATOR[20] - 0.149) < 0.001, "level 20 mismatch");
 
-int main(int argc, char **argv) {
-    for (int z = 0; z < MAX_LEVEL; ++z) {
-        std::cout << "Zoom " << z << ": " << METERS_PER_PIXEL_AT_EQUATOR[z] << " m/pixel\n";
-    }
 
-    const std::filesystem::path path = "/home/user/master/meshes/innenstadt3/13/6478/4795/6857.glb";
-    auto mesh = mesh::io::load_from_path(path).value();
+int main(int argc, char **argv) {
+    const std::filesystem::path input =
+        "/home/user/master/meshes/innenstadt8/13/6478/4796/6856.glb";
+    const std::filesystem::path out_dir =
+        "/home/user/master/meshes/lod_tree";
+    std::filesystem::create_directories(out_dir);
+
+    auto mesh = mesh::io::load_from_path(input).value();
 
     auto clustering = clusterize(mesh);
     validate(clustering);
-    const auto clusters_mesh = clustering_to_mesh(clustering);
-    mesh::io::save_to_path(clusters_mesh, "/home/user/master/meshes/clusters.glb");
 
-    clustering = partition(clustering, PartitionOptions{.clusters_per_partition = 8});
-    validate(clustering);
-    const auto partitioned_mesh = clustering_to_mesh(clustering);
-    mesh::io::save_to_path(partitioned_mesh, "/home/user/master/meshes/partitioned.glb");
+    for (int level = 18; level >= 0; level--) {
+        LOG_INFO("Level {}", level);
+        clustering = partition(clustering, PartitionOptions{.clusters_per_partition = 8});
+        validate(clustering);
 
-    clustering = simplify(clustering, SimplifyOptions{
-                                          .target_ratio = 0,
-                                          .absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[17]});
-    validate(clustering);
-    const auto simplified_mesh = clustering_to_mesh(clustering);
-    mesh::io::save_to_path(simplified_mesh, "/home/user/master/meshes/simplified.glb");
+        clustering = simplify(clustering, SimplifyOptions{
+                                              .target_ratio = 0.5,
+                                              .vertex_lock = VertexLock::boundary(),
+                                              /*.absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[level]*/});
+        validate(clustering);
 
-    clustering = split_each_into_equal_parts<2>(clustering);
-    validate(clustering);
-    auto c = clustering;
-    const auto split_mesh = clustering_to_mesh(c);
-    mesh::io::save_to_path(split_mesh, "/home/user/master/meshes/split.glb");
+        mesh::io::save_to_path(
+            clustering_to_mesh(clustering),
+            (out_dir / ("level_" + std::to_string(level) + ".glb")).string());
+
+        if (clustering.clusters.size() == 1) {
+            break;
+        }
+        // clustering = split_each_into_equal_parts<2>(clustering);
+        clustering = clusterize(clustering).clustering;
+        validate(clustering);
+    }
+
+    return 0;
 }

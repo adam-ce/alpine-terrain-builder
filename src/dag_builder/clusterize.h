@@ -24,6 +24,7 @@ struct ClusterOptions {
 inline std::vector<Cluster> clusterize(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec3> positions,
+    const std::span<const glm::dvec2> uvs,
     const ClusterOptions &options = {},
     const std::span<const uint32_t> global_vertex_map = {}) {
     std::vector<Cluster> clusters;
@@ -32,8 +33,8 @@ inline std::vector<Cluster> clusterize(
         triangles,
         positions,
         options.max_vertices,
-        options.min_triangles & ~3, // account for 4b alignment (remove for meshopt 1.0)
-        options.max_triangles & ~3, // account for 4b alignment (remove for meshopt 1.0),
+        options.min_triangles,
+        options.max_triangles,
         options.cone_weight,
         options.split_factor);
 
@@ -63,8 +64,19 @@ inline std::vector<Cluster> clusterize(
             meshlet_result.local_triangles.begin() + triangle_begin,
             meshlet_result.local_triangles.begin() + triangle_end);
 
-        cluster.relative_error = 0.0;
-        cluster.uv_unwrapping = std::nullopt;
+        // Copy UVs
+        if (!uvs.empty()) {
+            DEBUG_ASSERT(uvs.size() == positions.size());
+            cluster.uvs.resize(cluster.vertex_count());
+
+            for (size_t i = 0; i < meshlet.vertex_count; i++) {
+                const uint32_t local_index = meshlet_result.vertex_indices[meshlet.vertex_offset + i];
+                cluster.uvs[i] = uvs[local_index];
+            }
+        }
+
+        // We made no error here
+        cluster.absolute_error = 0.0;
 
         clusters.push_back(std::move(cluster));
     }
@@ -72,65 +84,100 @@ inline std::vector<Cluster> clusterize(
     return clusters;
 }
 
-Clustering clusterize(const mesh::Simple3d& mesh, const ClusterOptions &options = {}) {
+Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
     const auto positions_f = to_approximate_normalized(mesh.positions);
 
-    auto clusters = clusterize(mesh.triangles, positions_f, options, {});
+    auto clusters = clusterize(
+        mesh.triangles,
+        positions_f,
+        mesh.uvs,
+        options,
+        {}
+    );
 
-    std::vector<glm::dvec3> positions(mesh.positions.begin(), mesh.positions.end());
-    return Clustering{std::move(positions), std::move(clusters)};
+    return Clustering{
+        std::move(mesh.positions),
+        std::move(clusters),
+        std::move(mesh.texture)
+    };
 }
 
-namespace {
-void materialize_cluster_positions(const Cluster& cluster, const std::span<const glm::dvec3> source_positions, std::vector<glm::dvec3>& target_positions) {
-    target_positions.clear();
-    target_positions.reserve(cluster.vertex_indices.size());
-    for (const uint32_t vertex_index : cluster.vertex_indices) {
-        target_positions.push_back(source_positions[vertex_index]);
-    }
-}
-
-std::vector<glm::dvec3> materialize_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> source_positions) {
-    std::vector<glm::dvec3> target_positions;
-    materialize_cluster_positions(cluster, source_positions, target_positions);
-    return target_positions;
-}
-}
-
-std::vector<Cluster> clusterize(const Cluster &cluster, const std::span<const glm::dvec3> positions, const ClusterOptions &options = {}) {
-    const std::vector<glm::dvec3> positions_d = materialize_cluster_positions(cluster, positions);
+std::vector<Cluster> clusterize(
+    const Cluster &cluster,
+    const std::span<const glm::dvec3> positions,
+    const ClusterOptions &options = {}) {
+    const std::vector<glm::dvec3> positions_d = collect_cluster_positions(cluster, positions);
     const std::vector<glm::vec3> positions_f = to_approximate_normalized(positions_d);
 
     return clusterize(
         cluster.local_triangles,
         positions_f,
+        cluster.uvs,
         options,
         cluster.vertex_indices);
 }
 
-Clustering clusterize(const Clustering &input, const ClusterOptions &options = {}) {
+struct ClusteringAndBackwardMapping {
+    Clustering clustering;
+    std::vector<uint32_t> backward_mapping; // new cluster index -> original cluster index
+
+    operator const Clustering &() const & {
+        return this->clustering;
+    }
+    operator Clustering &&() && {
+        return std::move(this->clustering);
+    }
+};
+
+ClusteringAndBackwardMapping clusterize(const Clustering &input, const ClusterOptions &options = {}) {
     std::vector<Cluster> new_clusters;
 
+    const auto counts = input.clusters | std::views::transform(&Cluster::vertex_count);
+    const size_t combined_vertex_count = std::accumulate(counts.begin(), counts.end(), size_t{0});
+    const size_t max_cluster_vertex_count = input.clusters.empty() ? 0 : std::ranges::max(counts);
+
+    // Preallocate position buffers
     std::vector<glm::dvec3> positions_d;
     std::vector<glm::vec3> positions_f;
-    for (const Cluster &cluster : input.clusters) {
+    positions_d.reserve(max_cluster_vertex_count);
+    positions_f.reserve(max_cluster_vertex_count);
+
+    // Track parent cluster for each new cluster
+    std::vector<uint32_t> parent_cluster_indices;
+    const size_t expected_new_cluster_count = combined_vertex_count / options.max_vertices;
+    parent_cluster_indices.reserve(expected_new_cluster_count);
+
+    for (uint32_t cluster_index = 0; cluster_index < input.clusters.size(); cluster_index++) {
+        const Cluster &cluster = input.clusters[cluster_index];
+
         // Materialize cluster positions as floats
-        materialize_cluster_positions(cluster, input.positions, positions_d);
+        collect_cluster_positions(cluster, input.positions, positions_d);
         to_approximate_normalized(positions_d, positions_f);
 
         // Perform clustering on current cluster
-        validate(cluster, input.positions);
         std::vector<Cluster> sub_clusters = clusterize(
             cluster.local_triangles,
             positions_f,
+            cluster.uvs,
             options,
             cluster.vertex_indices);
-        validate(Clustering{input.positions, sub_clusters});
 
+        // Copy error to sub-clusters
+        for (Cluster &sub_cluster : sub_clusters) {
+            sub_cluster.absolute_error = cluster.absolute_error;
+        }
+
+        // Record new clusters and their parent
+        parent_cluster_indices.insert(parent_cluster_indices.end(), sub_clusters.size(), cluster_index);
         new_clusters.insert(new_clusters.end(),
                             std::make_move_iterator(sub_clusters.begin()),
                             std::make_move_iterator(sub_clusters.end()));
     }
 
-    return Clustering{input.positions, std::move(new_clusters)};
+    Clustering new_clustering{
+        input.positions,
+        std::move(new_clusters),
+        input.texture
+    };
+    return ClusteringAndBackwardMapping{std::move(new_clustering), std::move(parent_cluster_indices)};
 }

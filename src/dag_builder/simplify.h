@@ -1,5 +1,8 @@
 #pragma once
 
+#include <variant>
+#include <unordered_set>
+#include <type_traits>
 #include <vector>
 #include <span>
 
@@ -14,14 +17,49 @@
 #include "mesh/validate.h"
 #include "validate.h"
 
+struct VertexLock {
+    struct None {};
+    struct Boundary {};
+    struct BoundaryTriangles {};
+    struct Custom {
+        const std::span<const uint8_t> mask;
+    };
+
+    using Variant = std::variant<None, Boundary, BoundaryTriangles, Custom>;
+    Variant v;
+
+    VertexLock() : v(None{}) {}
+    static VertexLock none() {
+        return VertexLock{None{}};
+    }
+    static VertexLock boundary() {
+        return VertexLock{Boundary{}};
+    }
+    static VertexLock boundaryTriangles() {
+        return VertexLock{BoundaryTriangles{}};
+    }
+    static VertexLock custom(std::span<const std::uint8_t> mask) {
+        return VertexLock{Custom{mask}};
+    }
+
+private:
+    template <class T>
+    explicit VertexLock(T t) : v(std::move(t)) {}
+};
+
 struct SimplifyOptions {
     float target_ratio = 0.5;
     float absolute_target_error = meshopt::NO_TARGET_ERROR;
+    VertexLock vertex_lock = VertexLock::none();
 };
 
 [[nodiscard]]
-Clustering simplify(const Clustering& original_clustering, const SimplifyOptions options = {}) {
+Clustering simplify(
+    const Clustering& original_clustering,
+    const SimplifyOptions options = {}
+) {
     Clustering simplified_clustering;
+    simplified_clustering.texture = original_clustering.texture;
     simplified_clustering.positions = original_clustering.positions;
 
     std::vector<glm::dvec3> cluster_positions;
@@ -48,15 +86,30 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
             meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
 
         // Set up vertex locks
-        const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(original_cluster.local_triangles);
-        std::vector<uint8_t> vertex_locks(original_cluster.vertex_count(), 0);
-        for (const uint32_t triangle_index : boundary_triangles) {
-            const glm::uvec3 &triangle = original_cluster.local_triangles[triangle_index];
-            for (uint8_t k = 0; k < 3; k++) {
-                const uint32_t vertex_index = triangle[k];
-                vertex_locks[vertex_index] = 1;
+        std::vector<uint8_t> vertex_locks;
+        int lock_options = 0;
+        std::visit([&](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, VertexLock::None>) {
+                // empty -> no locks
+            } else if constexpr (std::is_same_v<T, VertexLock::Boundary>) {
+                // use meshopt built-in boundary lock
+                lock_options = meshopt_SimplifyLockBorder;
+            } else if constexpr (std::is_same_v<T, VertexLock::BoundaryTriangles>) {
+                const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(original_cluster.local_triangles);
+                vertex_locks.resize(original_cluster.vertex_count(), 0);
+                for (const uint32_t triangle_index : boundary_triangles) {
+                    const glm::uvec3 &triangle = original_cluster.local_triangles[triangle_index];
+                    for (uint8_t k = 0; k < 3; k++) {
+                        const uint32_t vertex_index = triangle[k];
+                        vertex_locks[vertex_index] |= meshopt_SimplifyVertex_Lock;
+                    }
+                }
+            } else if constexpr (std::is_same_v<T, VertexLock::Custom>) {
+                DEBUG_ASSERT(arg.mask.size() == original_vertex_count);
+                vertex_locks.assign(arg.mask.begin(), arg.mask.end());
             }
-        }
+        }, options.vertex_lock.v);
 
         // Perform simplification
         const size_t original_triangle_count = original_cluster.local_triangles.size();
@@ -70,20 +123,13 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
             vertex_locks,
             target_triangle_count,
             relative_target_error,
-            meshopt_SimplifyErrorAbsolute);
+            meshopt_SimplifyErrorAbsolute | lock_options);
+        if (result.triangles.empty()) {
+            // Simplification removed all triangles, go to next cluster
+            continue;
+        }
 
-        // Make sure the result is manifold
-        make_manifold(result.triangles, cluster_positions);
-        const std::span<const glm::dvec3> duplicated_vertices(
-            cluster_positions.begin() + original_vertex_count,
-            cluster_positions.size() - original_vertex_count);
-        // Copy new vertices to clustering positions
-        simplified_clustering.positions.insert(
-            simplified_clustering.positions.end(),
-            duplicated_vertices.begin(),
-            duplicated_vertices.end());
-
-        // Crete remap for vertex compaction
+        // Create remap for vertex compaction
         constexpr uint32_t invalid_index = UINT32_MAX;
         vertex_remap.assign(cluster_positions.size(), invalid_index);
         uint32_t next_index = 0;
@@ -96,11 +142,6 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
                     next_index++;
                 }
             }
-        }
-        for (size_t i = 0; i < duplicated_vertices.size(); i++) {
-            const uint32_t original_vertex_index = original_vertex_count + i;
-            const uint32_t new_vertex_index = vertex_remap[original_vertex_index];
-            DEBUG_ASSERT(new_vertex_index != invalid_index);
         }
         const uint32_t new_vertex_count = next_index;
 
@@ -118,16 +159,6 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
             const uint32_t global_index = original_cluster.vertex_indices[original_index];
             vertex_indices[new_index] = global_index;
         }
-        // Add duplicate vertices to mapping
-        const uint32_t duplicated_vertex_offset = simplified_clustering.positions.size() - duplicated_vertices.size();
-        for (uint32_t i = 0; i < duplicated_vertices.size(); i++) {
-            const uint32_t original_index = original_vertex_count + i;
-            const uint32_t new_index = vertex_remap[original_index];
-            DEBUG_ASSERT(new_index != invalid_index);
-
-            const uint32_t global_index = duplicated_vertex_offset + i;
-            vertex_indices[new_index] = global_index;
-        }
         // Update triangles with compacted vertex indices
         std::vector<glm::uvec3> local_triangles = std::move(result.triangles);
         for (glm::uvec3 &triangle : local_triangles) {
@@ -137,16 +168,34 @@ Clustering simplify(const Clustering& original_clustering, const SimplifyOptions
                 index = vertex_remap[index];
             }
         }
+
+        std::vector<glm::dvec2> uvs;
+        if (!original_cluster.uvs.empty()) {
+            uvs.resize(new_vertex_count);
+            // Add original vertex UVs
+            for (uint32_t original_index = 0; original_index < original_vertex_count; original_index++) {
+                const uint32_t new_index = vertex_remap[original_index];
+                if (new_index == invalid_index) {
+                    // vertex was removed during simplification
+                    continue;
+                }
+
+                uvs[new_index] = original_cluster.uvs[original_index];
+            }
+        }
         
+        // Make error absolute
+        const float absolute_error = result.relative_error * (max_extents * 2);
+
         // Create new cluster
         Cluster simplified_cluster{
             .vertex_indices = std::move(vertex_indices),
             .local_triangles = std::move(local_triangles),
-            .relative_error = result.relative_error};
+            .uvs = std::move(uvs),
+            .absolute_error = absolute_error};
         validate(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
     return simplified_clustering;
 }
-

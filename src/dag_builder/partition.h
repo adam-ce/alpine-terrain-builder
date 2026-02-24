@@ -11,11 +11,24 @@ struct PartitionOptions {
     uint32_t clusters_per_partition = 4;
 };
 
-Clustering partition(const Clustering &clustering, const PartitionOptions options = {}) {
-    const uint32_t clusters_per_partition = options.clusters_per_partition;
-    ASSERT(clusters_per_partition > 0, "Clusters per partition must be greater than zero.");
-    if (clusters_per_partition == 1) {
+struct ClusteringAndForwardMapping {
+    Clustering clustering;
+    std::vector<uint32_t> forward_mapping; // original cluster index -> new cluster index
+
+    operator Clustering() const & {
         return clustering;
+    }
+    operator Clustering() && {
+        return std::move(clustering);
+    }
+};
+
+ClusteringAndForwardMapping partition(const Clustering &clustering, const PartitionOptions options = {}) {
+    const uint32_t clusters_per_partition = options.clusters_per_partition;
+    if (clusters_per_partition == 1) {
+        std::vector<uint32_t> identity(clustering.cluster_count());
+        std::iota(identity.begin(), identity.end(), 0);
+        return ClusteringAndForwardMapping{clustering, identity};
     }
 
     // meshopt only supports float positions
@@ -46,7 +59,7 @@ Clustering partition(const Clustering &clustering, const PartitionOptions option
         positions_f,
         clusters_per_partition);
     const size_t partition_count = partition_result.partition_count;
-    const auto &cluster_partitions = partition_result.cluster_partitions;
+    const std::vector<uint32_t> cluster_partitions = std::move(partition_result.cluster_partitions);
 
     // Build partitioned clusters
     const uint32_t no_vertex_remap = -1;
@@ -78,9 +91,20 @@ Clustering partition(const Clustering &clustering, const PartitionOptions option
                 glm::uvec3 remapped;
                 for (uint8_t k = 0; k < 3; k++) {
                     remapped[k] = vertex_remap[cluster.vertex_indices[triangle[k]]];
+                    DEBUG_ASSERT(remapped[k] != no_vertex_remap);
                 }
                 if (!is_degenerate(remapped)) {
                     partition.local_triangles.push_back(remapped);
+                }
+            }
+
+            // Copy UVs
+            if (!cluster.uvs.empty()) {
+                partition.uvs.resize(partition.vertex_count());
+                for (size_t vertex_index = 0; vertex_index < cluster.vertex_count(); vertex_index++) {
+                    const uint32_t original_index = cluster.vertex_indices[vertex_index];
+                    const uint32_t new_index = vertex_remap[original_index];
+                    partition.uvs[new_index] = cluster.uvs[vertex_index];
                 }
             }
         }
@@ -91,7 +115,10 @@ Clustering partition(const Clustering &clustering, const PartitionOptions option
         }
     }
 
-    return Clustering{
+    Clustering new_clustering{
         clustering.positions,
-        std::move(partitioned_clusters)};
+        std::move(partitioned_clusters),
+        clustering.texture
+    };
+    return ClusteringAndForwardMapping{std::move(new_clustering), std::move(cluster_partitions)};
 }

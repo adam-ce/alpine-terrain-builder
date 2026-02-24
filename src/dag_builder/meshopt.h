@@ -76,7 +76,7 @@ inline SimplifyResult simplify_with_attributes(
     const size_t target_index_count = target_triangle_count * 3;
 
     DEBUG_ASSERT(vertex_attributes.size() >= vertex_count * (vertex_attribute_stride / sizeof(float)));
-    DEBUG_ASSERT(vertex_locks.size() == vertex_count);
+    DEBUG_ASSERT(vertex_locks.size() == vertex_count || vertex_locks.empty());
 
     SimplifyResult result;
     result.triangles.resize(triangle_count);
@@ -85,6 +85,7 @@ inline SimplifyResult simplify_with_attributes(
     const std::span<const uint32_t> indices = flatten(triangles);
     const std::span<const float> positions_flat = flatten(positions);
     const std::span<uint32_t> result_indices = flatten(result.triangles);
+    const uint8_t* vertex_lock_ptr = vertex_locks.empty() ? nullptr : vertex_locks.data();
 
     const size_t new_index_count = meshopt_simplifyWithAttributes(
         result_indices.data(),
@@ -97,7 +98,7 @@ inline SimplifyResult simplify_with_attributes(
         vertex_attribute_stride,
         vertex_attribute_weights.data(),
         attribute_count,
-        vertex_locks.data(),
+        vertex_lock_ptr,
         target_index_count,
         target_error,
         options,

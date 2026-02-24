@@ -1,4 +1,4 @@
-#include "mesh/validate.h"
+#include "mesh/connected_components.h"
 
 namespace {
 template <typename MeshRange>
@@ -390,3 +390,26 @@ void make_manifold(
     duplicate_non_manifold_edges(triangles, positions, uvs);
 }
 
+
+template <glm::length_t n_dims, typename T>
+bool is_manifold(const SimpleMesh_<n_dims, T> &mesh) {
+    const auto edge_to_faces = create_edge_to_triangle_index_mapping_non_manifold2(mesh);
+
+    for (const auto &[_edge, faces] : edge_to_faces) {
+        if (faces.size() > 2u) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template <glm::length_t n_dims, typename T>
+bool is_single_component(const SimpleMesh_<n_dims, T> &mesh) {
+    if (mesh.triangles.empty()) {
+        return true;
+    }
+
+    const mesh::ComponentsIndex components = find_connected_components(SimpleMesh(mesh));
+    return components.component_count == 1u;
+}

@@ -184,4 +184,10 @@ void make_manifold(
     std::vector<glm::vec<n_dims, Position>> &positions,
     std::vector<glm::vec<2, Uv>> &uvs);
 
+template <glm::length_t n_dims, typename T>
+bool is_manifold(const SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T>
+bool is_single_component(const SimpleMesh_<n_dims, T> &mesh);
+
 #include "utils.inl"

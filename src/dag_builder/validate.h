@@ -31,7 +31,7 @@ inline void validate(const Cluster &cluster, const std::span<const glm::dvec3> p
 
     // Materialize cluster mesh to validate mesh
     const mesh::Simple mesh = materialize_cluster(cluster, positions);
-    mesh::validate(mesh);
+    mesh::validate_unconnected_nonmanifold(mesh);
 }
 
 inline void validate(const Clustering &clustering) {

@@ -422,3 +422,15 @@ add_executable(browser
 target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
 target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)
 
+# Setup compiler caching with sccache or ccache if available
+find_program(SCCACHE_PROGRAM sccache)
+find_program(CCACHE_PROGRAM ccache)
+if (SCCACHE_PROGRAM)
+    message(STATUS "Using sccache as compiler launcher: ${SCCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${SCCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+elseif (CCACHE_PROGRAM)
+    message(STATUS "Using ccache as compiler launcher: ${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()

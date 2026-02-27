@@ -51,7 +51,7 @@ endif()
 
 set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
     message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")
     set(CMAKE_CXX_FLAGS_RELEASE "-O${ALP_RELEASE_OPT_LEVEL}")
 endif()
@@ -65,7 +65,7 @@ alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH
 
 alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
 add_library(Eigen3 INTERFACE)
-target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
+target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
 
 alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
 find_package(Boost CONFIG REQUIRED)
@@ -75,13 +75,15 @@ alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
 
 alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
 find_package(CGAL REQUIRED)
-
+include(../cmake/MarkAsSystem.cmake)
+mark_target_includes_as_system(CGAL::CGAL)
+mark_target_includes_as_system(CGAL::CGAL_Core)
 include(../cmake/SetupOpenCV.cmake)
 alp_setup_opencv(4.11.0)
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
-target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+target_include_directories(cgltf INTERFACE SYSTEM ${cgltf_SOURCE_DIR})
 
 set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
@@ -90,11 +92,11 @@ alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 
 
 alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
 add_library(stb INTERFACE)
-target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+target_include_directories(stb INTERFACE SYSTEM ${stb_SOURCE_DIR})
 
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 add_library(tl_expected INTERFACE)
-target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
+target_include_directories(tl_expected INTERFACE SYSTEM ${tl_expected_SOURCE_DIR}/include)
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
@@ -102,7 +104,7 @@ add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
-target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
+target_include_directories(zpp_bits INTERFACE SYSTEM ${zpp_bits_SOURCE_DIR})
 
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 

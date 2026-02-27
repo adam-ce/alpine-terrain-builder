@@ -24,12 +24,11 @@
 using namespace ctb;
 
 // Set the spatial reference
-static OGRSpatialReference setSRS()
-{
+static OGRSpatialReference setSRS_Geodetic() {
     OGRSpatialReference srs;
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     srs.importFromEPSG(4326);
     return srs;
 }
 
-const OGRSpatialReference GlobalGeodetic::cSRS = setSRS();
+const OGRSpatialReference GlobalGeodetic::cSRS = setSRS_Geodetic();

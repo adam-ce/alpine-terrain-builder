@@ -34,8 +34,9 @@ bool epsilon_equal(const glm::tvec3<T>& a, const glm::tvec3<T>& b, const T epsil
     return glm::all(glm::epsilonEqual(a, b, epsilon));
     // return glm::length2(a - b) < epsilon * epsilon;
 }
+
 template <typename T>
-bool is_degenerate(const std::array<glm::tvec3<T>, 3>& triangle, const T epsilon) {
+bool is_epsilon_degenerate(const std::array<glm::tvec3<T>, 3>& triangle, const T epsilon) {
     return epsilon_equal(triangle[0], triangle[1], epsilon) ||
         epsilon_equal(triangle[1], triangle[2], epsilon) ||
         epsilon_equal(triangle[2], triangle[0], epsilon);
@@ -283,7 +284,7 @@ Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::
                         inside_uv,
                         intersection1_uv,
                         intersection2_uv};
-                    if (is_degenerate(new_vertices, epsilon)) {
+                    if (is_epsilon_degenerate(new_vertices, epsilon)) {
                         skip_triangle = true;
                         break;
                     }
@@ -342,15 +343,15 @@ Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::
                         intersection2_uv,
                         intersection1_uv};
 
-                    if (is_degenerate(new_vertices2, epsilon)) {
-                        if (is_degenerate(new_vertices1, epsilon)) {
+                    if (is_epsilon_degenerate(new_vertices2, epsilon)) {
+                        if (is_epsilon_degenerate(new_vertices1, epsilon)) {
                             skip_triangle = true;
                             break;
                         } else {
                             current_triangle_and_vertices = {new_triangle1, new_vertices1, new_uvs1, static_cast<uint8_t>(plane_index + 1)};
                         }
                     } else {
-                        if (is_degenerate(new_vertices1, epsilon)) {
+                        if (is_epsilon_degenerate(new_vertices1, epsilon)) {
                             current_triangle_and_vertices = {new_triangle2, new_vertices2, new_uvs2, static_cast<uint8_t>(plane_index + 1)};
                         } else {
                             current_triangle_and_vertices = {new_triangle1, new_vertices1, new_uvs1, static_cast<uint8_t>(plane_index + 1)};

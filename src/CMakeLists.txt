@@ -154,6 +154,17 @@ target_include_directories(imgui PUBLIC
 )
 target_link_libraries(imgui PUBLIC glfw)
 
+
+# Unity Builds
+option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" ON)
+# set(ALP_UNITY_BUILD_BATCH_SIZE 8 CACHE STRING "Number of source files per unity translation unit")
+if(ALP_ENABLE_UNITY_BUILD)
+    message(STATUS "ALP_ENABLE_UNITY_BUILD: enabling CMake unity builds (CMAKE_UNITY_BUILD=ON)")
+    set(CMAKE_UNITY_BUILD ON)
+    # set(CMAKE_UNITY_BUILD_BATCH_SIZE ${ALP_UNITY_BUILD_BATCH_SIZE})
+endif()
+
+
 # Own targets
 add_library(terrainlib
     terrainlib/ctb/CTBException.hpp

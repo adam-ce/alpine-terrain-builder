@@ -12,7 +12,6 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
-#include "mesh/utils.h"
 #include "polygon/utils.h"
 #include "log.h"
 

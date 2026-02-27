@@ -3,11 +3,11 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
-#include "mesh/holes.h"
 #include "FixedVector.h"
-#include "mesh/utils.h"
-#include "mesh/connected_components.h"
 #include "log.h"
+#include "mesh/connected_components.h"
+#include "mesh/holes.h"
+#include "mesh/topology.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
 

@@ -12,12 +12,11 @@
 
 #include "hash_utils.h"
 #include "log.h"
-#include "mesh/clip.h"
-#include "mesh/utils.h"
 #include "mesh/cgal.h"
+#include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
-   
+
 namespace {
 double significant_above_epsilon(double x, double epsilon) {
     const double residual = std::fmod(x, epsilon);

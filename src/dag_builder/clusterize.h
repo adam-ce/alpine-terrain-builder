@@ -8,7 +8,6 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "validate.h"
-#include "mesh/utils.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;

@@ -4,10 +4,12 @@
 #include <functional>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/utils.h"
 #include "spatial_lookup/Grid.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/VertexMapping.h"
+
+#include "mesh/geometry.h"
+#include "mesh/bounds.h"
 
 namespace mesh::merging {
 

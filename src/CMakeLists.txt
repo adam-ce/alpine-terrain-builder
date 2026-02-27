@@ -175,22 +175,32 @@ add_library(terrainlib
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
 
     terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
+    terrainlib/mesh/bounds.h
     terrainlib/mesh/cgal.h
+    terrainlib/mesh/cleanup.h terrainlib/mesh/cleanup.cpp
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
     terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
     terrainlib/mesh/encode.h
     terrainlib/mesh/EncodedMesh.h
+    terrainlib/mesh/geometry.h terrainlib/mesh/geometry.cpp
     terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/manifold.h terrainlib/mesh/manifold.cpp
     terrainlib/mesh/merge.h
+    terrainlib/mesh/PointWithMeta.h
+    terrainlib/mesh/reindex.h
+    terrainlib/mesh/SimpleMesh.h
+    terrainlib/mesh/texture_trim.h terrainlib/mesh/texture_trim.cpp
+    terrainlib/mesh/topology.h terrainlib/mesh/topology.cpp
+    terrainlib/mesh/TriangleContainer.h
+    terrainlib/mesh/TriangleSoup.h
+    terrainlib/mesh/utils.h
+    terrainlib/mesh/WindingOrder.h
     terrainlib/mesh/merging/VertexDeduplicate.h
     terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
     terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
     terrainlib/mesh/merging/VertexMapping.h
     terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
-    terrainlib/mesh/SimpleMesh.h
-    terrainlib/mesh/TriangleSoup.h
-    terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
     terrainlib/mesh/uv_map.h terrainlib/mesh/uv_map.cpp
     terrainlib/mesh/validate.h
 

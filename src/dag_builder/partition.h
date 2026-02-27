@@ -5,7 +5,7 @@
 
 #include "cluster.h"
 #include "meshopt.h"
-#include "mesh/utils.h"
+#include "vector_utils.h"
 
 struct PartitionOptions {
     uint32_t clusters_per_partition = 4;

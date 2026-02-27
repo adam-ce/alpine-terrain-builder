@@ -416,7 +416,9 @@ tl::expected<void, SaveMeshError> save_to_path(
     buffer_data.resize(texture_data_end);
     std::memcpy(buffer_data.data() + index_data_offset, terrain_mesh.triangles.data(), index_data_byte_count);
     std::memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
-    std::memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+    if (has_texture) {
+        std::memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+    }
 
     const bool binary_output = path.extension() == ".glb";
 

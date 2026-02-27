@@ -1,10 +1,13 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <initializer_list>
 #include <new>
 #include <span>
 #include <stdexcept>
+#include <type_traits>
+#include <utility>
 
 #include <libassert/assert.hpp>
 

@@ -1,8 +1,16 @@
+#include <cstddef>
+#include <utility>
+#include <optional>
+
+#include <glm/glm.hpp>
+#include <CGAL/boost/graph/helpers.h>
+#include <CGAL/boost/graph/iterator.h>
 #include <libassert/assert.hpp>
 
 #include "mesh/convert.h"
-#include "log.h"
+#include "mesh/cgal.h"
 #include "mesh/validate.h"
+#include "log.h"
 
 using namespace cgal;
 

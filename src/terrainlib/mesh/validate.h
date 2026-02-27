@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+
+#include <glm/glm.hpp>
+
 #include "mesh/SimpleMesh.h"
 
 namespace mesh {

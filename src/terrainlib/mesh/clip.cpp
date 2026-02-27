@@ -1,8 +1,14 @@
 #include <algorithm>
 #include <array>
-#include <vector>
-#include <unordered_map>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <stdexcept>
+#include <type_traits>
+#include <unordered_map>
+#include <variant>
+#include <vector>
 
 #include <CGAL/Polygon_mesh_processing/clip.h>
 #include <CGAL/Polygon_mesh_processing/remesh_planar_patches.h>

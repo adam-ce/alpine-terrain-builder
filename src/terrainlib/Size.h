@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <cstddef>
 
 inline constexpr size_t RUNTIME_TAG = SIZE_MAX;
 

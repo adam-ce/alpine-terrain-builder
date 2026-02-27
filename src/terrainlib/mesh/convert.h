@@ -1,8 +1,15 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <type_traits>
+#include <utility>
 
 #include "pch.h"
+#include <glm/glm.hpp>
+#include <CGAL/number_utils.h>
+
+#include "mesh/cgal.h"
+#include "mesh/SimpleMesh.h"
 
 namespace convert {
 

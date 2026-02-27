@@ -1,7 +1,16 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <numeric>
+#include <ranges>
+#include <span>
+#include <utility>
 #include <vector>
 
+#include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"

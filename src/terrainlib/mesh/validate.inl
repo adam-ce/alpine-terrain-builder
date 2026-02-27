@@ -1,16 +1,19 @@
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <unordered_map>
 #include <vector>
 
-#include <libassert/assert.hpp>
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
-
-#include "mesh/convert.h"
-#include "mesh/utils.h"
+#include <libassert/assert.hpp>
 
 #include "log.h"
+#include "mesh/connected_components.h"
+#include "mesh/convert.h"
+#include "mesh/geometry.h"
+#include "mesh/manifold.h"
+#include "mesh/cleanup.h"
 
 namespace mesh {
 

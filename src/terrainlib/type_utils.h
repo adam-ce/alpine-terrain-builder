@@ -4,6 +4,8 @@
 #include <cxxabi.h>
 #include <string_view>
 #include <typeinfo>
+#include <memory>
+#include <cstdlib>
 
 // modified from https://stackoverflow.com/questions/1055452/c-get-name-of-type-in-template/59522794#59522794
 namespace {

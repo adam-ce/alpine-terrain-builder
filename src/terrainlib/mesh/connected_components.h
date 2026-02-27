@@ -1,7 +1,15 @@
 #pragma once
 
-#include "mesh/SimpleMesh.h"
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <unordered_map>
+#include <vector>
+
+#include <glm/glm.hpp>
+
 #include "UnionFind.h"
+#include "mesh/SimpleMesh.h"
 
 namespace {
 using VertexIndex = uint32_t;
@@ -109,4 +117,5 @@ template <glm::length_t n_dims, typename T>
 bool is_single_component(const mesh::Simple_<n_dims, T> &mesh) {
     return count_connected_components(mesh) == 1u;
 }
+
 } // namespace mesh

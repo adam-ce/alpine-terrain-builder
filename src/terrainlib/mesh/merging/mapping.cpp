@@ -1,8 +1,15 @@
-#include <numeric>
-#include <ranges>
 #include <algorithm>
+#include <cstddef>
+#include <numeric>
+#include <optional>
+#include <ranges>
+#include <span>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
-#include <glm/common.hpp>
+#include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>

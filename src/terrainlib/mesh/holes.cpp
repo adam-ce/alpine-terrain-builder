@@ -1,5 +1,14 @@
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <forward_list>
+#include <optional>
+#include <span>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
+#include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/vector_angle.hpp>
 

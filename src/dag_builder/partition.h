@@ -2,6 +2,12 @@
 
 #include <vector>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <numeric>
+#include <vector>
+
+#include <glm/glm.hpp>
 
 #include "cluster.h"
 #include "meshopt.h"

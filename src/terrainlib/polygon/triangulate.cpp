@@ -1,19 +1,29 @@
-#include "polygon/triangulate.h"
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <span>
+#include <unordered_map>
+#include <vector>
 
+#include <glm/glm.hpp>
+#include <boost/property_map/property_map.hpp>
 #include <libassert/assert.hpp>
 
 #include <CGAL/Constrained_Delaunay_triangulation_2.h>
-#include <CGAL/mark_domain_in_triangulation.h>
+#include <CGAL/Constrained_triangulation_face_base_2.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Polygon_2.h>
+#include <CGAL/Triangulation_data_structure_2.h>
 #include <CGAL/Triangulation_face_base_with_info_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
+#include <CGAL/mark_domain_in_triangulation.h>
 
+#include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "polygon/triangulate.h"
 #include "polygon/utils.h"
-#include "log.h"
 
 using Kernel = cgal::kernel::epeck::Kernel;
 using Point2 = Kernel::Point_2;

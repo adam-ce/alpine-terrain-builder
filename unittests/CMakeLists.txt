@@ -90,3 +90,4 @@ add_executable(unittests_terrainmerger
     terrainmerger/sphere_projector.cpp
 )
 target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)
+

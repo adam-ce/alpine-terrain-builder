@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6) # due to glm
+cmake_minimum_required(VERSION 3.19)
 project(terrain_builder_src LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -24,10 +24,9 @@ endif()
 if(ALP_ENABLE_ADDRESS_SANITIZER)
     message(STATUS "AddressSanitizer enabled")
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        set(ASAN_FLAGS "-fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -g")
-        foreach(flag_var CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
-            set(${flag_var} "${${flag_var}} ${ASAN_FLAGS}" CACHE STRING "Add ASAN flags" FORCE)
-        endforeach()
+        set(ASAN_FLAGS -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -g)
+        add_compile_options(${ASAN_FLAGS})
+        add_link_options(${ASAN_FLAGS})
     else()
         message(WARNING "ALP_ENABLE_ADDRESS_SANITIZER set but compiler is not GCC/Clang; ignoring")
     endif()
@@ -40,10 +39,9 @@ if(ALP_ENABLE_THREAD_SANITIZER)
     endif()
     message(STATUS "ThreadSanitizer enabled")
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        set(TSAN_FLAGS "-fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g")
-        foreach(flag_var CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS)
-            set(${flag_var} "${${flag_var}} ${TSAN_FLAGS}" CACHE STRING "Add TSAN flags" FORCE)
-        endforeach()
+        set(TSAN_FLAGS -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g)
+        add_compile_options(${TSAN_FLAGS})
+        add_link_options(${TSAN_FLAGS})
     else()
         message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
     endif()
@@ -116,8 +114,6 @@ alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.g
 
 set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(METIS_INSTALL OFF CACHE BOOL "" FORCE)
-set(IDXTYPEWIDTH 32 CACHE STRING "" FORCE)
-set(REALTYPEWIDTH 32 CACHE STRING "" FORCE)
 alp_add_git_repository(metis URL https://github.com/scivision/metis COMMITISH v5.2.1.2)
 target_compile_definitions(metis INTERFACE IDXTYPEWIDTH=32 REALTYPEWIDTH=32)
 
@@ -394,6 +390,7 @@ add_library(dagbuilderlib
     dag_builder/validate.h
 )
 target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis meshoptimizer)
+target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)
 add_executable(dag-builder
     # dag_builder/cli.h index_browser/cli.cpp
     dag_builder/main.cpp

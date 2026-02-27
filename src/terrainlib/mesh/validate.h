@@ -28,13 +28,19 @@ constexpr ValidationFlags &operator|=(ValidationFlags &a, ValidationFlags b) noe
 }
 
 template <glm::length_t n_dims, typename T>
-void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags = ValidationFlags::All);
+void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags = ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::Manifold);
 
 template <glm::length_t n_dims, typename T>
-void validate_connected_manifold(const SimpleMesh_<n_dims, T> &mesh);
+void validate_basic(const SimpleMesh_<n_dims, T> &mesh);
 
 template <glm::length_t n_dims, typename T>
-void validate_unconnected_nonmanifold(const SimpleMesh_<n_dims, T> &mesh);
+void validate_unconnected(const SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T>
+void validate_connected(const SimpleMesh_<n_dims, T> &mesh);
+
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const SimpleMesh_<n_dims, T> &mesh);
 
 } // namespace mesh
 

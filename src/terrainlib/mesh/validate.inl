@@ -19,7 +19,7 @@ namespace mesh {
 
 namespace detail {
 
-constexpr double EPSILON = 1e-12;
+inline constexpr double EPSILON = 1e-12;
 
 constexpr bool has_flag(ValidationFlags set, ValidationFlags flag) noexcept {
     return (set & flag) != ValidationFlags::None;
@@ -62,7 +62,7 @@ T doubled_area_squared(const glm::vec<n_dims, T> &a,
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_basic_simplemesh(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_basic(const SimpleMesh_<n_dims, T> &mesh) {
     using Mesh = SimpleMesh_<n_dims, T>;
     using Triangle = typename Mesh::Triangle;
     using Uv = typename Mesh::Uv;
@@ -94,23 +94,25 @@ void validate_basic_simplemesh(const SimpleMesh_<n_dims, T> &mesh) {
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_topology_simplemesh(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
+void validate_topology(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
     if (has_flag(flags, ValidationFlags::SingleComponent)) {
         DEBUG_ASSERT(is_single_component(mesh));
     }
 
     if (has_flag(flags, ValidationFlags::Manifold)) {
         DEBUG_ASSERT(is_manifold(mesh));
+
+        DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), true));
     }
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_geometry_simplemesh(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_geometry(const SimpleMesh_<n_dims, T> &mesh) {
     static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
 
     DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
 
-    DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), true));
+    DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), false));
 
     const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
     for (const auto &tri : mesh.triangles) {
@@ -129,13 +131,13 @@ template <glm::length_t n_dims, typename T>
 void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
 #ifndef NDEBUG
     if (detail::has_flag(flags, ValidationFlags::Basic)) {
-        detail::validate_basic_simplemesh(mesh);
+        detail::validate_basic(mesh);
     }
 
-    detail::validate_topology_simplemesh(mesh, flags);
+    detail::validate_topology(mesh, flags);
 
     if (detail::has_flag(flags, ValidationFlags::Geometry)) {
-        detail::validate_geometry_simplemesh(mesh);
+        detail::validate_geometry(mesh);
     }
 #endif
 
@@ -144,13 +146,23 @@ void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_connected_manifold(const SimpleMesh_<n_dims, T> &mesh) {
-    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent | ValidationFlags::Manifold);
+void validate_basic(const SimpleMesh_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic);
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_unconnected_nonmanifold(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_unconnected(const SimpleMesh_<n_dims, T> &mesh) {
     validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry);
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_connected(const SimpleMesh_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent);
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const SimpleMesh_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent | ValidationFlags::Manifold);
 }
 
 } // namespace mesh

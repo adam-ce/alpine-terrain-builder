@@ -154,6 +154,7 @@ target_include_directories(imgui PUBLIC
 )
 target_link_libraries(imgui PUBLIC glfw)
 
+# Own targets
 add_library(terrainlib
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
@@ -195,14 +196,15 @@ add_library(terrainlib
     terrainlib/mesh/TriangleContainer.h
     terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h
+    terrainlib/mesh/validate_cgal.h
+    terrainlib/mesh/validate.h
+    terrainlib/mesh/View.h
     terrainlib/mesh/WindingOrder.h
     terrainlib/mesh/merging/VertexDeduplicate.h
     terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
     terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
     terrainlib/mesh/merging/VertexMapping.h
     terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
-    terrainlib/mesh/uv_map.h terrainlib/mesh/uv_map.cpp
-    terrainlib/mesh/validate.h
 
     terrainlib/octree/disk/layout/strategy/Default.h
     terrainlib/octree/disk/layout/strategy/Flat.h
@@ -250,9 +252,9 @@ add_library(terrainlib
     terrainlib/string_utils.h
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
+target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
 target_link_libraries(terrainlib PUBLIC 
-    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected 
-    opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum
     meshoptimizer)
 
 if(ALP_ENABLE_OVERVIEW_READING)

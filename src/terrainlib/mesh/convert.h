@@ -4,7 +4,6 @@
 #include <type_traits>
 #include <utility>
 
-#include "pch.h"
 #include <glm/glm.hpp>
 #include <CGAL/number_utils.h>
 

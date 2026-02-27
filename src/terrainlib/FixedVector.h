@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <initializer_list>
-#include <new>
+#include <memory>
 #include <span>
 #include <stdexcept>
 #include <type_traits>
@@ -20,78 +20,99 @@ public:
         if (init.size() > N) {
             throw std::out_of_range("capacity exceeded");
         }
-        for (const T &value : init) {
-            this->construct_at(this->_size, value);
-            this->_size++;
+
+        const size_t old_size = this->_size;
+        try {
+            for (const T &value : init) {
+                this->construct_back(value);
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
         }
-    }
-    
-    // Copy constructor
-    FixedVector(const FixedVector &other) {
-        for (size_t i = 0; i < other._size; ++i) {
-            this->construct_at(i, other[i]);
-        }
-        this->_size = other._size;
     }
 
-    // Copy assignment
+    FixedVector(const FixedVector &other) {
+        const size_t old_size = this->_size;
+        try {
+            for (size_t i = 0; i < other._size; ++i) {
+                this->construct_back(other[i]);
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
+        }
+    }
+
     FixedVector &operator=(const FixedVector &other) {
         if (this == &other) {
             return *this;
         }
 
-        // Destroy extra elements if needed
-        for (size_t i = other._size; i < this->_size; ++i) {
-            this->destroy_at(i);
-        }
+        const size_t common = std::min(this->_size, other._size);
 
-        // Copy-assign existing elements
-        size_t i = 0;
-        for (; i < std::min(this->_size, other._size); ++i) {
+        for (size_t i = 0; i < common; ++i) {
             (*this)[i] = other[i];
         }
 
-        // Copy-construct new elements if other is bigger
-        for (; i < other._size; ++i) {
-            this->construct_at(i, other[i]);
+        if (this->_size > other._size) {
+            this->destroy_from(other._size);
+            return *this;
         }
 
-        this->_size = other._size;
+        const size_t old_size = this->_size;
+        try {
+            for (size_t i = common; i < other._size; ++i) {
+                this->construct_back(other[i]);
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
+        }
+
         return *this;
     }
 
-    // Move constructor
-    FixedVector(FixedVector &&other) noexcept {
-        for (size_t i = 0; i < other._size; ++i) {
-            this->construct_at(i, std::move(other[i]));
+    FixedVector(FixedVector &&other) {
+        const size_t old_size = this->_size;
+        try {
+            for (size_t i = 0; i < other._size; ++i) {
+                this->construct_back(std::move(other[i]));
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
         }
-        this->_size = other._size;
         other.clear();
     }
 
-    // Move assignment
-    FixedVector &operator=(FixedVector &&other) noexcept {
+    FixedVector &operator=(FixedVector &&other) {
         if (this == &other) {
             return *this;
         }
 
-        // Destroy extra elements if needed
-        for (size_t i = other._size; i < this->_size; ++i) {
-            this->destroy_at(i);
-        }
+        const size_t common = std::min(this->_size, other._size);
 
-        // Move-assign existing elements
-        size_t i = 0;
-        for (; i < std::min(this->_size, other._size); ++i) {
+        for (size_t i = 0; i < common; ++i) {
             (*this)[i] = std::move(other[i]);
         }
 
-        // Move-construct new elements if other is bigger
-        for (; i < other._size; ++i) {
-            this->construct_at(i, std::move(other[i]));
+        if (this->_size > other._size) {
+            this->destroy_from(other._size);
+            other.clear();
+            return *this;
         }
 
-        this->_size = other._size;
+        const size_t old_size = this->_size;
+        try {
+            for (size_t i = common; i < other._size; ++i) {
+                this->construct_back(std::move(other[i]));
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
+        }
+
         other.clear();
         return *this;
     }
@@ -158,17 +179,14 @@ public:
     }
 
     T *data() {
-        return reinterpret_cast<T *>(this->_data);
+        return std::launder(reinterpret_cast<T *>(this->_data));
     }
     const T *data() const {
-        return reinterpret_cast<const T *>(this->_data);
+        return std::launder(reinterpret_cast<const T *>(this->_data));
     }
 
     void clear() {
-        for (size_t i = this->_size; i-- > 0;) {
-            this->destroy_at(i);
-        }
-        this->_size = 0;
+        this->destroy_from(0);
     }
 
     void resize(const size_t new_size) {
@@ -176,16 +194,20 @@ public:
             throw std::out_of_range("capacity exceeded");
         }
 
-        if (this->_size > new_size) {
-            for (size_t i = new_size; i < this->_size; i++) {
-                this->destroy_at(i);
-            }
-        } else {
-            for (size_t i = this->_size; i < new_size; i++) {
-                this->construct_at(i);
-            }
+        if (new_size < this->_size) {
+            this->destroy_from(new_size);
+            return;
         }
-        this->_size = new_size;
+
+        const size_t old_size = this->_size;
+        try {
+            while (this->_size < new_size) {
+                this->construct_back();
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
+        }
     }
 
     constexpr size_t size() const {
@@ -213,12 +235,6 @@ public:
     const T *end() const {
         return this->data() + this->_size;
     }
-    const T *cbegin() const {
-        return this->begin();
-    }
-    const T *cend() const {
-        return this->end();
-    }
 
     operator std::span<T>() {
         return std::span<T>(this->data(), this->size());
@@ -229,32 +245,51 @@ public:
     }
 
     ~FixedVector() {
-        for (size_t i = this->_size; i-- > 0;) {
-            this->destroy_at(i);
-        }
+        this->clear();
     }
 
 private:
     T &get_at(const size_t index) {
         DEBUG_ASSERT(index < this->_size);
-        return *std::launder(reinterpret_cast<T *>(&this->_data[index]));
+        return *std::launder(reinterpret_cast<T *>(this->_data + index * sizeof(T)));
     }
     const T &get_at(const size_t index) const {
         DEBUG_ASSERT(index < this->_size);
-        return *std::launder(reinterpret_cast<const T *>(&this->_data[index]));
+        return *std::launder(reinterpret_cast<const T *>(this->_data + index * sizeof(T)));
     }
 
     template <typename... Args>
     void construct_at(const size_t index, Args &&...args) {
-        DEBUG_ASSERT(index >= this->_size && index < this->capacity());
-        ::new (&this->_data[index]) T(std::forward<Args>(args)...);
+        DEBUG_ASSERT(index == this->_size && index < this->capacity());
+        std::construct_at(reinterpret_cast<T *>(this->_data + index * sizeof(T)),
+                          std::forward<Args>(args)...);
     }
 
     void destroy_at(const size_t index) {
         DEBUG_ASSERT(index < this->_size);
-        std::destroy_at(std::launder(reinterpret_cast<T *>(&this->_data[index])));
+        std::destroy_at(std::launder(reinterpret_cast<T *>(this->_data + index * sizeof(T))));
     }
 
-    std::aligned_storage_t<sizeof(T), alignof(T)> _data[N];
+    template <typename... Args>
+    void construct_back(Args &&...args) {
+        DEBUG_ASSERT(this->_size < N);
+        this->construct_at(this->_size, std::forward<Args>(args)...);
+        this->_size++;
+    }
+
+    void destroy_back() {
+        DEBUG_ASSERT(this->_size > 0);
+        this->destroy_at(this->_size - 1);
+        this->_size--;
+    }
+
+    void destroy_from(const size_t new_size) {
+        DEBUG_ASSERT(new_size <= this->_size);
+        while (this->_size > new_size) {
+            this->destroy_back();
+        }
+    }
+
+    alignas(T) std::byte _data[sizeof(T) * N];
     size_t _size = 0;
 };

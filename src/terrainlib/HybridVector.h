@@ -31,6 +31,10 @@ public:
     }
 
     void pop_back() {
+        if (this->empty()) {
+            throw std::out_of_range("HybridVector::pop_back on empty");
+        }
+
         if (this->_is_on_stack) {
             this->_stack.pop_back();
         } else {
@@ -121,6 +125,7 @@ private:
         for (auto &v : this->_stack) {
             this->_heap.push_back(std::move(v));
         }
+        this->_stack.clear();
         this->_is_on_stack = false;
     }
 

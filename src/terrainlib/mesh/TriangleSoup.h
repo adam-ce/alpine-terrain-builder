@@ -24,9 +24,9 @@ inline TriangleSoup to_triangle_soup(const SimpleMesh &mesh) {
 inline void sort_triangle_soup(TriangleSoup &soup) {
     for (auto &triangle : soup) {
         // Normalize triangle orientation by rotating so smallest vertex is first
-        uint32_t min_index = 0;
+        uint8_t min_index = 0;
         glm::dvec3 min_vertex = triangle[min_index];
-        for (uint32_t i = 1; i < 3; i++) {
+        for (uint8_t i = 1; i < 3; i++) {
             const auto &current_vertex = triangle[i];
             if (current_vertex.x < min_vertex.x ||
                 (current_vertex.x == min_vertex.x &&
@@ -47,7 +47,7 @@ inline void sort_triangle_soup(TriangleSoup &soup) {
 
     // Sort the list of triangles
     std::sort(soup.begin(), soup.end(), [](const auto &a, const auto &b) {
-        for (int i = 0; i < 3; ++i) {
+        for (uint8_t i = 0; i < 3; i++) {
             if (a[i].x != b[i].x) {
                 return a[i].x < b[i].x;
             }

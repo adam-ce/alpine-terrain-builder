@@ -47,7 +47,7 @@ template <glm::length_t n_dims, typename T>
 T doubled_area_squared(const glm::vec<n_dims, T> &a,
                        const glm::vec<n_dims, T> &b,
                        const glm::vec<n_dims, T> &c) {
-    static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
+    static_assert(n_dims == 2 || n_dims == 3);
 
     const glm::vec<n_dims, T> ab = b - a;
     const glm::vec<n_dims, T> ac = c - a;
@@ -56,10 +56,8 @@ T doubled_area_squared(const glm::vec<n_dims, T> &a,
         const T cross = ab.x * ac.y - ab.y * ac.x;
         return cross * cross;
     } else {
-        const glm::vec<3, T> ab3(ab.x, ab.y, ab.z);
-        const glm::vec<3, T> ac3(ac.x, ac.y, ac.z);
-        const glm::vec<3, T> cr = glm::cross(ab3, ac3);
-        return glm::dot(cr, cr);
+        const glm::vec<3, T> cross = glm::cross(ab, ac);
+        return glm::dot(cross, cross);
     }
 }
 
@@ -114,14 +112,14 @@ void validate_geometry_simplemesh(const SimpleMesh_<n_dims, T> &mesh) {
 
     DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), true));
 
-    const T doubled_eps_sq = static_cast<T>(4) * EPSILON * EPSILON;
+    const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
     for (const auto &tri : mesh.triangles) {
         const auto &a = mesh.positions[static_cast<size_t>(tri[0])];
         const auto &b = mesh.positions[static_cast<size_t>(tri[1])];
         const auto &c = mesh.positions[static_cast<size_t>(tri[2])];
 
-        const T da2 = doubled_area_squared<n_dims, T>(a, b, c);
-        DEBUG_ASSERT(da2 > doubled_eps_sq);
+        const T double_area_sq = doubled_area_squared<n_dims, T>(a, b, c);
+        DEBUG_ASSERT(double_area_sq > double_epsilon_sq);
     }
 }
 

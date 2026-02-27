@@ -12,12 +12,10 @@
 #include "mesh/validate.h"
 #include "log.h"
 
-using namespace cgal;
+using UvMap = cgal::Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
-using UvMap = Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
-
-Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
-    Mesh cgal_mesh;
+cgal::Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
+    cgal::Mesh cgal_mesh;
     const size_t approx_num_edges = (mesh.face_count() * 3) / 2;
     cgal_mesh.reserve(mesh.vertex_count(), approx_num_edges, mesh.face_count());
 
@@ -30,8 +28,8 @@ Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
 
     for (size_t index = 0; index < mesh.positions.size(); ++index) {
         const glm::dvec3 &position = mesh.positions[index];
-        const cgal::VertexIndex vertex = cgal_mesh.add_vertex(to_cgal_point<Kernel>(position));
-        DEBUG_ASSERT(vertex != Mesh::null_vertex());
+        const cgal::VertexIndex vertex = cgal_mesh.add_vertex(to_cgal_point<cgal::Kernel>(position));
+        DEBUG_ASSERT(vertex != cgal::Mesh::null_vertex());
         if (mesh.has_uvs()) {
             const glm::dvec2 &uv = mesh.uvs[index];
             uv_map[vertex] = uv;
@@ -44,13 +42,13 @@ Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
             cgal::VertexIndex(triangle.y),
             cgal::VertexIndex(triangle.z));
         USE(face);
-        DEBUG_ASSERT(face != Mesh::null_face());
+        DEBUG_ASSERT(face != cgal::Mesh::null_face());
     }
 
     return cgal_mesh;
 }
 
-SimpleMesh convert::to_simple_mesh(const Mesh &cgal_mesh) {
+SimpleMesh convert::to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     ASSERT(!cgal_mesh.has_garbage());
     
     SimpleMesh mesh;
@@ -71,7 +69,7 @@ SimpleMesh convert::to_simple_mesh(const Mesh &cgal_mesh) {
     mesh.triangles.reserve(face_count);
 
     for (const cgal::VertexIndex vertex_index : cgal_mesh.vertices()) {
-        const Point3 &position = cgal_mesh.point(vertex_index);
+        const cgal::Point3 &position = cgal_mesh.point(vertex_index);
         mesh.positions[vertex_index] = to_glm_point(position);
         if (has_uvs) {
             const glm::dvec2 &uv = uv_map[vertex_index];

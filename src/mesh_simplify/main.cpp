@@ -1,12 +1,11 @@
 #include "cli.h"
-#include "convert.h"
+#include "mesh/convert.h"
 #include "log.h"
-#include "merge.h"
+#include "mesh/merge.h"
 #include "mesh/io.h"
-#include "mesh/utils.h"
 #include "simplify.h"
 #include "uv_map.h"
-#include "validate.h"
+#include "mesh/validate.h"
 
 std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
     std::vector<SimpleMesh> meshes;
@@ -22,8 +21,8 @@ std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::p
         }
 
         const SimpleMesh mesh = std::move(result.value());
-        validate_mesh(mesh);
-        validate_mesh(convert::mesh2cgal(mesh));
+        mesh::validate(mesh);
+        mesh::validate(convert::mesh2cgal(mesh));
         meshes.push_back(mesh);
     }
 

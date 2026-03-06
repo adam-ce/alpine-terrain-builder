@@ -8,6 +8,8 @@
 
 #include "mesh/SimpleMesh.h"
 
+namespace mesh {
+    
 template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
@@ -22,4 +24,6 @@ radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::vector<glm::vec<n_d
 template <glm::length_t n_dims, typename T>
 void extend_bounds(radix::geometry::Aabb<n_dims, T> &bounds, const std::span<const glm::vec<n_dims, T>> positions);
 
-#include "mesh/bounds.inl"
+}
+
+#include "bounds.inl"

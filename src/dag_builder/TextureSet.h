@@ -15,7 +15,6 @@ public:
     using Id = size_t;
 
     TextureSet() = default;
-
     explicit TextureSet(const size_t count)
         : _textures(count) {
     }
@@ -34,6 +33,15 @@ public:
 
     bool contains(const Texture &texture) const {
         return this->id_of(texture).has_value();
+    }
+
+    Id add(const Texture& texture) {
+        const std::optional<Id> id = this->id_of(texture);
+        if (id.has_value()) {
+            return id.value();
+        }
+        this->_textures.push_back(texture);
+        return static_cast<Id>(this->size());
     }
 
     std::optional<Id> id_of(const Texture &texture) const {

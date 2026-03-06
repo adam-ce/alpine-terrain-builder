@@ -35,23 +35,23 @@ void validate_epsilon_mapping(
 #ifndef NDEBUG
     const double epsilon2 = epsilon * epsilon;
 
-    const size_t max_merged_index = mapping.find_max_merged_index();
+    const uint32_t max_merged_index = mapping.find_max_merged_index();
 
     std::vector<VertexId> originals;
-    for (size_t merged_index = 0; merged_index <= max_merged_index; merged_index++) {
+    for (uint32_t merged_index = 0; merged_index <= max_merged_index; merged_index++) {
         // Collect all original vertices mapping to this merged index
         originals.clear();
-        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
-            const std::optional<size_t> vertex_index = mapping.map_backward(mesh_index, merged_index);
+        for (uint32_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+            const std::optional<uint32_t> vertex_index = mapping.map_backward(mesh_index, merged_index);
             if (vertex_index.has_value()) {
                 originals.push_back(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index.value()});
             }
         }
 
         // Check all pairs of original vertices for this merged vertex
-        for (size_t i = 0; i < originals.size(); i++) {
+        for (uint32_t i = 0; i < originals.size(); i++) {
             const glm::dvec3 &pi = meshes[originals[i].mesh_index].get().positions[originals[i].vertex_index];
-            for (size_t j = i + 1; j < originals.size(); j++) {
+            for (uint32_t j = i + 1; j < originals.size(); j++) {
                 const glm::dvec3 &pj = meshes[originals[j].mesh_index].get().positions[originals[j].vertex_index];
                 const double dist2 = glm::distance2(pi, pj);
                 DEBUG_ASSERT(dist2 <= epsilon2);
@@ -76,24 +76,24 @@ VertexMapping create_mapping(
     }
 
     LOG_TRACE("Finding shared vertices between {} meshes using {}", meshes.size(), type_name(deduplicate));
-    for (size_t i = 0; i < meshes.size(); i++) {
+    for (uint32_t i = 0; i < meshes.size(); i++) {
         const SimpleMesh &mesh = meshes[i].get();
         LOG_TRACE("Mesh {}: {} vertices, {} triangles", i, mesh.vertex_count(), mesh.face_count());
     }
 
-    std::vector<size_t> mesh_sizes;
+    std::vector<uint32_t> mesh_sizes;
     mesh_sizes.reserve(meshes.size());
     std::transform(meshes.begin(), meshes.end(),
                    std::back_inserter(mesh_sizes),
                    [](const auto &mesh) { return mesh.get().vertex_count(); });
-    const size_t maximal_merged_mesh_size = std::accumulate(mesh_sizes.begin(), mesh_sizes.end(), 0);
+    const uint32_t maximal_merged_mesh_size = std::accumulate(mesh_sizes.begin(), mesh_sizes.end(), 0);
     // Handle all meshes being empty
     if (maximal_merged_mesh_size == 0) {
         return {};
     }
 
     // Find the largest mesh and put it as the first element
-    const size_t index_of_largest_mesh = std::distance(mesh_sizes.begin(), std::max_element(mesh_sizes.begin(), mesh_sizes.end()));
+    const uint32_t index_of_largest_mesh = std::distance(mesh_sizes.begin(), std::max_element(mesh_sizes.begin(), mesh_sizes.end()));
     std::vector<std::reference_wrapper<const SimpleMesh>> reordered;
     if (index_of_largest_mesh != 0) {
         std::copy(meshes.begin(), meshes.end(), std::back_inserter(reordered));
@@ -105,9 +105,9 @@ VertexMapping create_mapping(
     VertexMapping mapping;
     mapping.init(mesh_sizes);
 
-    size_t unique_vertices = 0;
+    uint32_t unique_vertices = 0;
     auto add_unique_vertex = [&](const VertexId &vertex) {
-        mapping.add_bidirectional(vertex, unique_vertices);
+        mapping.add(vertex, unique_vertices);
         unique_vertices += 1;
     };
 
@@ -119,7 +119,7 @@ VertexMapping create_mapping(
     std::vector<std::reference_wrapper<const VertexId>> duplicate_vertices;
 
     bool has_warned = false; // Flag to only print the intra-mesh merge warning once
-    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+    for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
 
         if (only_consider_boundary) {
@@ -136,7 +136,7 @@ VertexMapping create_mapping(
             }
         }
 
-        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
+        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
             const glm::dvec3 &position = mesh.positions[vertex_index];
             const VertexId current_vertex{
                 .mesh_index = mesh_index,
@@ -171,7 +171,7 @@ VertexMapping create_mapping(
                 if (nearest_duplicate.has_value()) {
                     const auto mapped = mapping.map_forward(nearest_duplicate.value().first);
                     DEBUG_ASSERT(!mapping.map_backward(mesh_index, mapped).has_value());
-                    mapping.add_bidirectional(current_vertex, mapped);
+                    mapping.add(current_vertex, mapped);
                 } else {
                     deduplicate.add(position, current_vertex);
                     add_unique_vertex(current_vertex);
@@ -217,9 +217,9 @@ bool are_all_bounds_connected(std::span<std::reference_wrapper<const SimpleMesh>
     std::transform(meshes.begin(), meshes.end(),
                    std::back_inserter(mesh_bounds),
                    [](const SimpleMesh &mesh) { return pad_bounds(calculate_bounds(mesh), 0.01); });
-    for (size_t i = 0; i < mesh_bounds.size(); i++) {
+    for (uint32_t i = 0; i < mesh_bounds.size(); i++) {
         bool intersect_any_other = false;
-        for (size_t j = 0; j < mesh_bounds.size(); j++) {
+        for (uint32_t j = 0; j < mesh_bounds.size(); j++) {
             if (i == j) {
                 continue;
             }
@@ -241,17 +241,17 @@ bool are_all_bounds_connected(std::span<std::reference_wrapper<const SimpleMesh>
 bool are_all_meshes_merged(const VertexMapping &mapping) {
     UnionFind union_find(mapping.mesh_count());
 
-    const size_t maximal_merged_mesh_index = mapping.find_max_merged_index();
+    const uint32_t maximal_merged_mesh_index = mapping.find_max_merged_index();
 
-    std::unordered_set<size_t> observed_sources;
+    std::unordered_set<uint32_t> observed_sources;
     observed_sources.reserve(mapping.mesh_count());
-    for (size_t vertex_index = 0; vertex_index < maximal_merged_mesh_index; vertex_index++) {
+    for (uint32_t vertex_index = 0; vertex_index < maximal_merged_mesh_index; vertex_index++) {
         observed_sources.clear();
-        for (size_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+        for (uint32_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
             if (auto opt = mapping.map_inverse(mesh_index, vertex_index); opt.has_value()) {
                 observed_sources.insert(mesh_index);
                 if (observed_sources.size() > 1) {
-                    for (size_t observed_source : observed_sources) {
+                    for (uint32_t observed_source : observed_sources) {
                         if (observed_source == mesh_index) {
                             continue;
                         }
@@ -275,8 +275,8 @@ double estimate_min_vertex_separation_between_meshes_after_merge(const Lookup &l
     for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
         for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
             for (auto second = first + 1; second != cell.items.end(); ++second) {
-                const size_t mesh1 = first->value.mesh_index;
-                const size_t mesh2 = second->value.mesh_index;
+                const uint32_t mesh1 = first->value.mesh_index;
+                const uint32_t mesh2 = second->value.mesh_index;
 
                 if (mesh1 == mesh2) {
                     continue;
@@ -297,9 +297,9 @@ double estimate_min_vertex_separation_between_meshes_after_merge(const Lookup &l
 double estimate_min_vertex_separation_between_meshes_after_merge(const std::span<const SimpleMesh> meshes, const VertexMapping &mapping) {
     Grid3d<VertexId> grid = construct_grid_for_meshes<VertexId>(meshes);
 
-    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+    for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
-        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
+        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
             const glm::dvec3 &position = mesh.positions[vertex_index];
             grid.insert(position, VertexId{mesh_index, vertex_index});
         }
@@ -309,16 +309,16 @@ double estimate_min_vertex_separation_between_meshes_after_merge(const std::span
     for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
         for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
             for (auto second = first + 1; second != cell.items.end(); ++second) {
-                const size_t mesh1 = first->value.mesh_index;
-                const size_t mesh2 = second->value.mesh_index;
+                const uint32_t mesh1 = first->value.mesh_index;
+                const uint32_t mesh2 = second->value.mesh_index;
 
                 if (mesh1 == mesh2) {
                     // Both vertices from the same mesh
                     continue;
                 }
 
-                const size_t mapped1 = mapping.map(first->value);
-                const size_t mapped2 = mapping.map(second->value);
+                const uint32_t mapped1 = mapping.map(first->value);
+                const uint32_t mapped2 = mapping.map(second->value);
                 if (mapped1 == mapped2) {
                     // Vertices were already merged
                     continue;
@@ -357,7 +357,7 @@ VertexMapping create_connecting_mapping(std::span<std::reference_wrapper<const S
 
     VertexMapping mapping;
     bool success = false;
-    for (size_t i = 0; i < 10; i++) {
+    for (uint32_t i = 0; i < 10; i++) {
         mapping = create_mapping(meshes, distance_epsilon);
 
         if (are_all_meshes_merged(mapping)) {
@@ -399,8 +399,8 @@ SimpleMesh apply_mapping(
 
     SimpleMesh merged_mesh;
 
-    size_t max_combined_vertex_count = 0;
-    size_t max_combined_face_count = 0;
+    uint32_t max_combined_vertex_count = 0;
+    uint32_t max_combined_face_count = 0;
     for (const SimpleMesh &mesh : meshes) {
         max_combined_vertex_count += mesh.vertex_count();
         max_combined_face_count += mesh.face_count();
@@ -415,15 +415,15 @@ SimpleMesh apply_mapping(
         return mesh.has_uvs();
     });
 
-    size_t max_vertex_index = 0;
+    uint32_t max_vertex_index = 0;
     merged_mesh.positions.resize(max_combined_vertex_count);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_combined_vertex_count);
     }
-    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+    for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
-        for (size_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
-            const size_t mapped_index = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index});
+        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
+            const uint32_t mapped_index = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index});
             merged_mesh.positions[mapped_index] =  mesh.positions[vertex_index];
             if (has_uvs) {
                 merged_mesh.uvs[mapped_index] = mesh.has_uvs() ? mesh.uvs[vertex_index] : glm::dvec2(0);
@@ -441,13 +441,13 @@ SimpleMesh apply_mapping(
     }
 
     merged_mesh.triangles.reserve(max_combined_face_count);
-    for (size_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
+    for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
-        for (size_t triangle_index = 0; triangle_index < mesh.face_count(); triangle_index++) {
+        for (uint32_t triangle_index = 0; triangle_index < mesh.face_count(); triangle_index++) {
             const glm::uvec3 &triangle = mesh.triangles[triangle_index];
 
             glm::uvec3 new_triangle;
-            for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
+            for (uint32_t k = 0; k < static_cast<uint32_t>(triangle.length()); k++) {
                 new_triangle[k] = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = triangle[k]});
             }
             if (new_triangle[0] == new_triangle[1] ||
@@ -461,7 +461,7 @@ SimpleMesh apply_mapping(
             if (deduplicate_triangles) {
                 const bool is_first_mesh = std::ranges::none_of(
                     std::views::iota(0u, mesh_index),
-                    [&](const size_t i) { return mapping.find_source_triangle_in_mesh(new_triangle, i).has_value(); });
+                    [&](const uint32_t i) { return mapping.find_source_triangle_in_mesh(new_triangle, i).has_value(); });
 
                 if (!is_first_mesh) {
                     LOG_WARN("Skipping duplicate triangle while merging");

@@ -10,6 +10,8 @@
 
 #include "mesh/SimpleMesh.h"
 
+namespace mesh {
+
 template <glm::length_t n_dims, typename T>
 std::unordered_set<uint32_t> find_boundary_vertices(const mesh::Simple_<n_dims, T> &mesh);
 std::unordered_set<uint32_t> find_boundary_vertices(const std::span<const glm::uvec3> triangles);
@@ -40,5 +42,7 @@ void build_boundary_triangle_mask(const std::span<const glm::uvec3> triangles, s
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> find_boundaries(const mesh::Simple_<n_dims, T> &mesh);
 std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uvec3> triangles);
+
+}
 
 #include "boundary.inl"

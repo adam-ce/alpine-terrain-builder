@@ -16,6 +16,8 @@
 #include "vector_utils.h"
 #include "HybridVector.h"
 
+namespace mesh {
+
 template <typename T>
 std::vector<uint32_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, bool ignore_orientation) {
     return find_duplicate_triangles<T>(mesh.triangles, mesh.positions, ignore_orientation);
@@ -222,4 +224,6 @@ size_t remove_triangles_of_negligible_size(
             return areas[idx] < average_area * threshold_percentage_of_average;
         });
     return erased_count;
+}
+
 }

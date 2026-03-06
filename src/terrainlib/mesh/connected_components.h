@@ -3,13 +3,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <unordered_map>
+#include <span>
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "UnionFind.h"
 #include "mesh/SimpleMesh.h"
+#include "enumerate.h"
+#include "split.h"
 
 namespace {
 using VertexIndex = uint32_t;
@@ -45,22 +48,24 @@ inline ComponentsIndex find_connected_components(const std::span<const glm::uvec
     std::unordered_map<VertexIndex, ComponentIndex> rep_to_index;
     ComponentIndex next_index = 0;
 
-    std::vector<ComponentIndex> vertex_to_component(vertex_count);
-    for (VertexIndex vertex = 0; vertex < vertex_count; vertex++) {
-        const VertexIndex rep = components.find(vertex);
-        auto it = rep_to_index.find(rep);
-        if (it == rep_to_index.end()) {
-            rep_to_index[rep] = next_index;
-            vertex_to_component[vertex] = next_index;
-            next_index += 1;
-        } else {
-            vertex_to_component[vertex] = it->second;
+    const ComponentIndex invalid_component = std::numeric_limits<ComponentIndex>::max();
+    std::vector<ComponentIndex> vertex_to_component(vertex_count, invalid_component);
+
+    for (VertexIndex vertex_index = 0; vertex_index < vertex_count; vertex_index++) {
+        const VertexIndex rep = components.find(vertex_index);
+        uint32_t& component_index = vertex_to_component[rep];
+        if (component_index == invalid_component) {
+            // representative has not been encountered yet
+            component_index = next_index;
+            next_index++;
         }
+        // vertex is in the same component as its represetative
+        vertex_to_component[vertex_index] = component_index;
     }
 
     return ComponentsIndex{
         .vertex_to_component = vertex_to_component,
-        .component_count = rep_to_index.size()};
+        .component_count = next_index};
 }
 template <glm::length_t n_dims, typename T>
 ComponentsIndex find_connected_components(const mesh::View_<n_dims, T> &mesh) {
@@ -72,46 +77,26 @@ ComponentsIndex find_connected_components(const mesh::Simple_<n_dims, T> &mesh) 
 }
 
 template <glm::length_t n_dims, typename T>
-std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::View_<n_dims, T> &mesh, const ComponentsIndex& components_index) {
-    const auto &[vertex_to_component, component_count] = components_index;
-
+struct ComponentsAndMap {
     std::vector<mesh::Simple_<n_dims, T>> components;
-    components.resize(component_count);
+    std::vector<uint32_t> vertex_remap;
+};
 
-    constexpr VertexIndex invalid_index = std::numeric_limits<VertexIndex>::max();
-    std::vector<VertexIndex> old_to_new(mesh.vertex_count(), invalid_index);
-    for (VertexIndex vertex = 0; vertex < mesh.vertex_count(); vertex++) {
-        const ComponentIndex component_index = vertex_to_component[vertex];
-        mesh::Simple_<n_dims, T> &component = components[component_index];
-        old_to_new[vertex] = component.positions.size();
-        component.positions.push_back(mesh.positions[vertex]);
-    }
-
-    for (mesh::Simple_<n_dims, T> &component : components) {
-        component.triangles.reserve((component.positions.size() * 3) / 2);
-    }
-
-    for (const glm::uvec3 &triangle : mesh.triangles) {
-        const ComponentIndex component_index = vertex_to_component[triangle[0]];
-
-        glm::uvec3 new_triangle;
-        bool skip_triangle = false;
-        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
-            if (k > 0 && vertex_to_component[triangle[k]] != component_index) {
-                skip_triangle = true;
-                break;
-            }
-            new_triangle[k] = old_to_new[triangle[k]];
-        }
-        if (skip_triangle) {
-            continue;
-        }
-
-        mesh::Simple_<n_dims, T> &component = components[component_index];
-        component.triangles.push_back(new_triangle);
-    }
-
-    return components;
+template <glm::length_t n_dims, typename T>
+ComponentsAndMap<n_dims, T> split_into_connected_components_with_map(const mesh::View_<n_dims, T> &mesh, const ComponentsIndex& components_index) {
+    const auto &[vertex_to_component, component_count] = components_index;
+    auto result = split_by_vertex(mesh, component_count, vertex_to_component);
+    return ComponentsAndMap<n_dims, T>{
+        .components = std::move(result.groups),
+        .vertex_remap = std::move(result.vertex_remap)};
+}
+template <glm::length_t n_dims, typename T>
+ComponentsAndMap<n_dims, T> split_into_connected_components_with_map(const mesh::Simple_<n_dims, T> &mesh, const ComponentsIndex &components_index) {
+    return split_into_connected_components_with_map(mesh::View_<n_dims, T>(mesh), components_index);
+}
+template <glm::length_t n_dims, typename T>
+std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::View_<n_dims, T> &mesh, const ComponentsIndex &components_index) {
+    return split_into_connected_components_with_map(mesh, components_index).components;
 }
 template <glm::length_t n_dims, typename T>
 std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::View_<n_dims, T> &mesh) {

@@ -11,6 +11,8 @@
 #include "mesh/cleanup.h"
 #include "mesh/topology.h"
 
+namespace mesh {
+
 template <glm::length_t n_dims, typename T>
 std::vector<glm::uvec2> find_non_manifold_edges(const mesh::Simple_<n_dims, T> &mesh) {
     return find_non_manifold_edges(mesh.triangles);
@@ -198,4 +200,6 @@ void make_manifold(
 template <glm::length_t n_dims, typename T>
 bool is_manifold(const SimpleMesh_<n_dims, T> &mesh) {
     return is_manifold(mesh.triangles);
+}
+
 }

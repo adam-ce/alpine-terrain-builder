@@ -10,7 +10,7 @@
 #include <CGAL/Unique_hash_map.h>
 
 #include "mesh/convert.h"
-#include "merge.h"
+#include "mesh/merge.h"
 #include "uv_map.h"
 
 using namespace uv_map;

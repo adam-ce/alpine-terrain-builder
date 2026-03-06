@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
-#include "octree/Id.h"
+#include "TextureSet.h"
 
 struct Cluster {
     std::vector<uint32_t> vertex_indices; // indices into Clustering::positions
@@ -30,13 +30,16 @@ struct Cluster {
 struct Clustering {
     std::vector<glm::dvec3> positions;
     std::vector<Cluster> clusters;
-    // std::vector<cv::Mat> textures;
     std::optional<cv::Mat> texture;
+    TextureSet textures = {};
 
     constexpr size_t vertex_count() const noexcept {
         return this->positions.size();
     }
     constexpr size_t cluster_count() const noexcept {
         return this->clusters.size();
+    }
+    cv::Mat get_cluster_texture(const uint32_t cluster_index) const noexcept {
+        return this->textures[this->clusters[cluster_index].texture_id];
     }
 };

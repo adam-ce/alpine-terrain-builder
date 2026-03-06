@@ -10,6 +10,8 @@
 #include "mesh/topology.h"
 #include "vector_utils.h"
 
+namespace mesh {
+
 void find_boundary_edges(const std::span<const glm::uvec3> triangles, std::unordered_set<glm::uvec2>& boundary) {
     boundary.clear();
     for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) {
@@ -120,4 +122,6 @@ std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uv
     }
 
     return boundaries;
+}
+
 }

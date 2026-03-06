@@ -31,11 +31,14 @@
 
 #include "../catch2_helpers.h"
 #include "Dataset.h"
-#include "merge.h"
+#include "mesh/merge.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh_builder.h"
 #include "mesh/io.h"
-#include "mesh/utils.h"
+#include "mesh/cgal.h"
+#include "mesh/cleanup.h"
+#include "mesh/geometry.h"
+#include "mesh/connected_components.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "srs.h"
@@ -139,15 +142,6 @@ void check_duplicate_vertices(const std::vector<glm::dvec3> &positions) {
         REQUIRE(seen.insert(pos).second);
     }
 }
-/*
-void check_duplicate_vertices(const std::vector<glm::dvec3> &positions, double epsilon=1e-8) {
-    for (size_t i = 0; i < positions.size(); i++) {
-        for (size_t j = i + 1; j < positions.size(); j++) {
-            REQUIRE(glm::distance(positions[i], positions[j]) > epsilon);
-        }
-    }
-}
-*/
 
 void check_duplicate_triangles(std::vector<glm::uvec3> triangles) {
     const auto duplicate_triangles = find_duplicate_triangles(triangles, true);

@@ -11,25 +11,39 @@
 #include "mesh/texture_trim.h"
 
 namespace {
-    bool is_empty(const radix::geometry::Aabb2i &bounds) {
-        return bounds.min.x >= bounds.max.x || bounds.min.y >= bounds.max.y;
-    }
+bool is_empty(const radix::geometry::Aabb2i &bounds) {
+    return bounds.min.x >= bounds.max.x || bounds.min.y >= bounds.max.y;
 }
 
-void trim_texture_inplace(cv::Mat &texture, std::span<glm::dvec2> uvs, const uint32_t padding) {
+void trim_texture_impl(
+    const cv::Mat &input_texture,
+    cv::Mat &output_texture,
+    const std::span<const glm::dvec2> input_uvs,
+    std::span<glm::dvec2> output_uvs,
+    const uint32_t padding) {
     // Calculate the bounding box of the UVs in pixel space
-    const radix::geometry::Aabb2d uv_bounds = radix::geometry::find_bounds(std::span<const glm::dvec2>(uvs));
-    const glm::uvec2 texture_size(texture.cols, texture.rows);
+    const radix::geometry::Aabb2d uv_bounds = radix::geometry::find_bounds(std::span<const glm::dvec2>(input_uvs));
+    const glm::uvec2 texture_size(input_texture.cols, input_texture.rows);
     const radix::geometry::Aabb2i pixel_bounds = {
         glm::floor(uv_bounds.min * glm::dvec2(texture_size)),
         glm::ceil(uv_bounds.max * glm::dvec2(texture_size))};
     const radix::geometry::Aabb2i padded_pixel_bounds = {
         pixel_bounds.min - glm::ivec2(padding),
         pixel_bounds.max + glm::ivec2(padding)};
-    const radix::geometry::Aabb2ui clamped_pixel_bounds = {
-        glm::uvec2(glm::max(padded_pixel_bounds.min, glm::ivec2(0))),
-        glm::uvec2(glm::min(padded_pixel_bounds.max, glm::ivec2(texture_size)))};
+    const radix::geometry::Aabb2i full_bounds(glm::ivec2(0), glm::ivec2(texture_size));
+    const radix::geometry::Aabb2i clamped_pixel_bounds(radix::geometry::intersection(padded_pixel_bounds, full_bounds));
+
+    // Return empty texture if uv bounds are empty
     if (is_empty(clamped_pixel_bounds)) {
+        output_texture = cv::Mat();
+        for (glm::dvec2& uv : output_uvs) {
+            uv = glm::dvec2(0);
+        }
+        return;
+    }
+
+    // Skip if no-op
+    if (&input_texture == &output_texture && clamped_pixel_bounds == full_bounds) {
         return;
     }
 
@@ -39,16 +53,28 @@ void trim_texture_inplace(cv::Mat &texture, std::span<glm::dvec2> uvs, const uin
         clamped_pixel_bounds.min.y,
         clamped_pixel_bounds.width(),
         clamped_pixel_bounds.height());
-    texture = texture(roi).clone();
+    output_texture = input_texture(roi).clone();
+
     // Update the UVs to match the cropped texture
-    const glm::uvec2 cropped_texture_size(texture.cols, texture.rows);
+    const glm::uvec2 cropped_texture_size(output_texture.cols, output_texture.rows);
     LOG_TRACE("Trimmed texture from {}x{} to {}x{}", texture_size.x, texture_size.y, cropped_texture_size.x, cropped_texture_size.y);
-    const radix::geometry::Aabb2d cropped_uv_bounds = {
-        glm::dvec2(clamped_pixel_bounds.min) / glm::dvec2(texture_size),
-        glm::dvec2(clamped_pixel_bounds.max) / glm::dvec2(texture_size)};
-    for (glm::dvec2 &uv : uvs) {
-        uv = (uv - cropped_uv_bounds.min) / cropped_uv_bounds.size();
-        DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
-        DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
+    const glm::dvec2 offset = glm::dvec2(clamped_pixel_bounds.min) / glm::dvec2(texture_size);
+    const glm::dvec2 scale = glm::dvec2(clamped_pixel_bounds.size()) / glm::dvec2(texture_size);
+    for (const size_t i : std::views::iota(0, input_uvs.size())) {
+        output_uvs[i] = (input_uvs[i] - offset) / scale;
+        DEBUG_ASSERT(output_uvs[i].x >= 0.0 && output_uvs[i].x <= 1.0);
+        DEBUG_ASSERT(output_uvs[i].y >= 0.0 && output_uvs[i].y <= 1.0);
     }
+}
+}
+
+TrimResult trim_texture(const cv::Mat &texture, const std::span<const glm::dvec2> uvs, const uint32_t padding) {
+    TrimResult result;
+    result.uvs.resize(uvs.size());
+    trim_texture_impl(texture, result.texture, uvs, result.uvs, padding);
+    return result;
+}
+
+void trim_texture_inplace(cv::Mat &texture, const std::span<glm::dvec2> uvs, const uint32_t padding) {
+    trim_texture_impl(texture, texture, uvs, uvs, padding);
 }

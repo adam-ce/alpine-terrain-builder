@@ -9,6 +9,8 @@
 
 #include "mesh/SimpleMesh.h"
 
+namespace mesh {
+
 template <typename T>
 std::vector<uint32_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, const bool ignore_orientation);
 template <typename T>
@@ -56,7 +58,8 @@ size_t remove_triangles_of_negligible_size(
     SimpleMesh_<n_dims, T> &mesh,
     const Size threshold_percentage_of_average);
 
-bool is_degenerate(const glm::uvec3 &triangle);
 void remove_degenerate_triangles(std::vector<glm::uvec3> &triangles);
+
+}
 
 #include "cleanup.inl"

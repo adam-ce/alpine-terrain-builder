@@ -8,6 +8,8 @@
 
 #include "mesh/SimpleMesh.h"
 
+namespace mesh {
+
 std::vector<glm::uvec2> find_non_manifold_edges(const std::span<const glm::uvec3> &triangles);
 template <glm::length_t n_dims, typename T>
 std::vector<glm::uvec2> find_non_manifold_edges(const mesh::Simple_<n_dims, T> &mesh);
@@ -65,5 +67,7 @@ void make_manifold(
 template <glm::length_t n_dims, typename T>
 bool is_manifold(const SimpleMesh_<n_dims, T> &mesh);
 bool is_manifold(const std::span<const glm::uvec3> triangles);
+
+}
 
 #include "manifold.inl"

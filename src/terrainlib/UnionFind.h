@@ -16,6 +16,7 @@ public:
     using Size = SizeT;
 
     explicit UnionFind_(const Size size) {
+        this->_parents.resize(size);
         this->reset(size);
     }
 

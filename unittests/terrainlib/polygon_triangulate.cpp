@@ -47,7 +47,7 @@ TEST_CASE("triangulate handles a simple triangle") {
     polygon::triangulate(mesh, indices);
 
     REQUIRE(mesh.triangles.size() == 1);
-    CHECK(compare_equality_triangles(mesh.triangles[0], {0, 1, 2}));
+    CHECK(mesh::compare_equality_triangles(mesh.triangles[0], {0, 1, 2}));
 }
 
 void check_every_vertex_used_at_least_once(const SimpleMesh3d &mesh) {

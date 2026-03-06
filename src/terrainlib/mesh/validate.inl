@@ -44,24 +44,6 @@ inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, con
 }
 
 template <glm::length_t n_dims, typename T>
-T doubled_area_squared(const glm::vec<n_dims, T> &a,
-                       const glm::vec<n_dims, T> &b,
-                       const glm::vec<n_dims, T> &c) {
-    static_assert(n_dims == 2 || n_dims == 3);
-
-    const glm::vec<n_dims, T> ab = b - a;
-    const glm::vec<n_dims, T> ac = c - a;
-
-    if constexpr (n_dims == 2) {
-        const T cross = ab.x * ac.y - ab.y * ac.x;
-        return cross * cross;
-    } else {
-        const glm::vec<3, T> cross = glm::cross(ab, ac);
-        return glm::dot(cross, cross);
-    }
-}
-
-template <glm::length_t n_dims, typename T>
 void validate_basic(const mesh::View_<n_dims, T> &mesh) {
     using Mesh = mesh::View_<n_dims, T>;
     using Triangle = typename Mesh::Triangle;
@@ -115,21 +97,14 @@ void validate_geometry(const mesh::View_<n_dims, T> &mesh) {
     DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
 
     const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
-    for (const auto &triangle : mesh.triangles) {
-        const auto &a = mesh.positions[triangle[0]];
-        const auto &b = mesh.positions[triangle[1]];
-        const auto &c = mesh.positions[triangle[2]];
-
-        const T double_area_sq = doubled_area_squared<n_dims, T>(a, b, c);
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        const T double_area_sq = compute_squared_triangle_area<n_dims, T>(triangle, mesh.positions);
         DEBUG_ASSERT(double_area_sq > double_epsilon_sq);
     }
 }
 
-} // namespace detail
-
 template <glm::length_t n_dims, typename T>
-void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
-#ifndef NDEBUG
+void validate_impl(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
     if (detail::has_flag(flags, ValidationFlags::Basic)) {
         detail::validate_basic(mesh);
     }
@@ -139,6 +114,14 @@ void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
     if (detail::has_flag(flags, ValidationFlags::Geometry)) {
         detail::validate_geometry(mesh);
     }
+}
+
+} // namespace detail
+
+template <glm::length_t n_dims, typename T>
+void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
+#ifndef NDEBUG
+    detail::validate_impl(mesh, flags);
 #endif
 
     USE(mesh);
@@ -186,3 +169,4 @@ void validate_manifold(const mesh::Simple_<n_dims, T> &mesh) {
 }
 
 } // namespace mesh
+

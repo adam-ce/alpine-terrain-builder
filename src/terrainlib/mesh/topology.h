@@ -14,6 +14,10 @@
 #include "TriangleContainer.h"
 #include "mesh/SimpleMesh.h"
 
+namespace mesh {
+
+bool is_degenerate(const glm::uvec3 &triangle);
+
 template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
@@ -76,5 +80,7 @@ std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm:
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh);
 std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count);
+
+}
 
 #include "topology.inl"

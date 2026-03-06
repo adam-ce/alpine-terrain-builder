@@ -6,6 +6,8 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/topology.h"
 
+namespace mesh {
+    
 template <glm::length_t n_dims, typename T>
 std::unordered_set<glm::uvec2> find_boundary_edges(const mesh::Simple_<n_dims, T> &mesh) {
     return find_boundary_edges(mesh.triangles);
@@ -92,4 +94,6 @@ inline void build_boundary_triangle_mask(const std::span<const glm::uvec3> trian
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> find_boundaries(const mesh::Simple_<n_dims, T> &mesh) {
     return find_boundaries(mesh.triangles);
+}
+
 }

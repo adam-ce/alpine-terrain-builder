@@ -2,21 +2,29 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <span>
 #include <cstdint>
 #include <numeric>
-#include <vector>
+#include <span>
 #include <unordered_map>
+#include <vector>
+#include <ranges>
 
 #include <glm/glm.hpp>
 
+#include "OffsetTable.h"
 #include "cluster.h"
+#include "enumerate.h"
+#include "mesh/manifold.h"
+#include "mesh/merging/VertexMapping.h"
 #include "meshopt.h"
+#include "unwrap_atlas.h"
 #include "uv.h"
 #include "vector_utils.h"
-#include "mesh/manifold.h"
-#include "OffsetTable.h"
-#include "unwrap_atlas.h"
+#include "mesh/split.h"
+#include "glm_utils.h"
+#include "range_utils.h"
+#include "mesh/texture_trim.h"
+#include "opencv_utils.h"
 
 struct PartitionOptions {
     uint32_t clusters_per_partition = 4;
@@ -69,103 +77,102 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
 }
 
 namespace detail {
-class [[nodiscard]] MergeResult {
-public:
-    explicit MergeResult(
-        Cluster cluster,
-        std::unordered_map<uint32_t, std::vector<std::optional<glm::dvec2>>> inconsistent_uvs,
-        OffsetTable remap_offset_table) : _cluster(std::move(cluster)), _inconsistent_uvs(std::move(inconsistent_uvs)), _remap_offset_table(remap_offset_table) {}
-
-    Cluster &cluster() noexcept {
-        return this->_cluster;
-    }
-    const Cluster& cluster() const noexcept {
-        return this->_cluster;
+inline bool check_all_same_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
+    const uint32_t cluster_count = cluster_indices.size();
+    if (cluster_count <= 1) {
+        return true;
     }
 
-    bool has_consistent_uvs() const noexcept {
-        return this->_inconsistent_uvs.empty();
-    }
-    bool has_consistent_uvs(const uint32_t vertex_index) const noexcept {
-        return !this->_inconsistent_uvs.contains(vertex_index);
-    }
-
-    std::optional<uint32_t> get_source_cluster(const uint32_t vertex_index) const noexcept {
-        if (this->has_consistent_uvs(vertex_index)) {
-            return this->_remap_offset_table.locate(vertex_index).element;
-        } else {
-            return std::nullopt;
+    const uint32_t first_texture_id = clustering.clusters[cluster_indices[0]].texture_id;
+    for (uint32_t i = 1; i < cluster_count; i++) {
+        if (clustering.clusters[cluster_indices[i]].texture_id != first_texture_id) {
+            return false;
         }
     }
-    
-    void get_source_clusters(const uint32_t vertex_index, std::vector<uint32_t>& source_clusters) const noexcept {
-        source_clusters.clear();
+    return true;
+}
+inline bool check_consistent_uvs(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
+    const size_t uv_count = sum(cluster_indices | std::views::transform([&](const uint32_t i) {
+        return clustering.clusters[i].uvs.size();
+    }));
 
-        const auto it = this->_inconsistent_uvs.find(vertex_index);
-        if (it != this->_inconsistent_uvs.end()) {
-            const std::vector<std::optional<glm::dvec2>>& uvs_per_vertex = it->second;
-            for (uint32_t cluster_index = 0; cluster_index < uvs_per_vertex.size(); cluster_index++) {
-                if (uvs_per_vertex[cluster_index].has_value()) {
-                    source_clusters.push_back(cluster_index);
-                }
+    struct VertexEntry {
+        uint32_t global_index;
+        glm::dvec2 uv;
+    };
+
+    // Buffer for vertex entries
+    std::vector<VertexEntry> buffer;
+    buffer.reserve(uv_count);
+
+    // Collect all cluster vertices
+    for (const uint32_t cluster_index : cluster_indices) {
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        if (!cluster.has_uvs()) {
+            continue;
+        }
+
+        const uint32_t vertex_count = cluster.vertex_count();
+        for (uint32_t i = 0; i < vertex_count; i++) {
+            buffer.push_back({cluster.vertex_indices[i], cluster.uvs[i]});
+        }
+    }
+
+    // Sort vertices by global index
+    std::sort(buffer.begin(), buffer.end(), [](const VertexEntry &a, const VertexEntry &b) {
+        return a.global_index < b.global_index;
+    });
+
+    // Check for inconsistent uvs.
+    for (uint32_t i = 1; i < uv_count; i++) {
+        if (buffer[i].global_index == buffer[i - 1].global_index) {
+            if (buffer[i].uv != buffer[i - 1].uv) {
+                return false;
             }
-        } else {
-            const uint32_t cluster_index = this->_remap_offset_table.locate(vertex_index).element;
-            source_clusters.push_back(cluster_index);
         }
     }
 
-    const std::optional<glm::dvec2> get_uv(const uint32_t vertex_index, const uint32_t cluster_index) const noexcept {
-        const auto it = this->_inconsistent_uvs.find(vertex_index);
-        if (it != this->_inconsistent_uvs.end()) {
-            const std::vector<std::optional<glm::dvec2>>& uvs_per_vertex = it->second;
-            return uvs_per_vertex[cluster_index];
-        } else {
-            return this->_cluster.uvs[vertex_index];
-        }
+    return true;
+}
+inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
+    if (cluster_indices.empty()) {
+        return false;
     }
 
-private:
-    Cluster _cluster;
+    if (!check_all_same_texture(clustering, cluster_indices)) {
+        return true;
+    }
 
-    // This contains the inconsistent uvs encountered during merging of duplicate vertices
-    // The correspoding entries in cluster.uvs are indetermine
-    // Note that even if uvs from unique vertices stem from different textures, the uvs are still all stored in cluster.uvs.
-    // Accessed as inconsistent_uvs[vertex_index][cluster_index]
-    std::unordered_map<uint32_t, std::vector<std::optional<glm::dvec2>>> _inconsistent_uvs;
+    if (!check_consistent_uvs(clustering, cluster_indices)) {
+        return true;
+    }
 
-    OffsetTable _remap_offset_table;
-};
+    return false;
+}
 
-inline MergeResult merge_clusters(
+inline Cluster merge_clusters_simple(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
-    std::vector<uint32_t>& vertex_remap) {
+    std::vector<uint32_t> &vertex_remap) {
     constexpr uint32_t no_vertex_remap = -1;
 #ifndef NDEBUG
     DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
     for (const uint32_t vertex_index : vertex_remap) {
         DEBUG_ASSERT(vertex_index == no_vertex_remap);
     }
+    DEBUG_ASSERT(check_consistent_uvs(clustering, cluster_indices));
 #endif
 
     const uint32_t cluster_count = cluster_indices.size();
 
-    // Contains uvs for each source cluster per inconsistent vertex.
-    std::unordered_map<uint32_t, std::vector<std::optional<glm::dvec2>>> inconsistent_uvs;
-
-    // Source ranges for remapped vertex indices
-    OffsetTable remap_offset_table;
-    remap_offset_table.reserve(cluster_count);
-
     Cluster merged;
-    for (uint32_t linear_cluster_index=0; linear_cluster_index<cluster_count; linear_cluster_index++) {
+    for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
         const uint32_t cluster_index = cluster_indices[linear_cluster_index];
         const Cluster &cluster = clustering.clusters[cluster_index];
         const uint32_t vertex_count = cluster.vertex_count();
 
         // Create vertex remapping from original vertex indices to merged vertex indices
-        for (uint32_t local_vertex_index=0; local_vertex_index<vertex_count; local_vertex_index++) {
+        for (uint32_t local_vertex_index = 0; local_vertex_index < vertex_count; local_vertex_index++) {
             const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
             uint32_t &merged_vertex_index = vertex_remap[global_vertex_index];
 
@@ -176,31 +183,8 @@ inline MergeResult merge_clusters(
                 if (cluster.has_uvs()) {
                     merged.uvs.push_back(cluster.uvs[local_vertex_index]);
                 }
-            } else {
-                // This is not a new vertex -> check uv consistency
-                if (cluster.has_uvs()) {
-                    const glm::dvec2 &new_uv = cluster.uvs[local_vertex_index];
-                    const glm::dvec2 &existing_uv = merged.uvs[merged_vertex_index];
-                    if (existing_uv != new_uv) {
-                        // Uvs are inconsistent -> add to inconsistent list
-                        auto [it, inserted] = inconsistent_uvs.try_emplace(merged_vertex_index, cluster_count, std::nullopt);
-                        std::vector<std::optional<glm::dvec2>>& uvs_per_cluster = it->second;
-
-                        // Add first occurance of vertex
-                        if (inserted) {
-                            const uint32_t original_linear_cluster_index = remap_offset_table.locate(merged_vertex_index).element;
-                            uvs_per_cluster[original_linear_cluster_index] = existing_uv;
-                        }
-
-                        // Add new uv
-                        uvs_per_cluster[linear_cluster_index] = new_uv;
-                    }
-                }
             }
         }
-
-        // Mark the source range of the current cluster
-        remap_offset_table.append_length(merged.vertex_count() - remap_offset_table.total_size());
 
         // Remap triangles to new vertex indices
         for (const auto &triangle : cluster.local_triangles) {
@@ -220,21 +204,160 @@ inline MergeResult merge_clusters(
         vertex_remap[vertex_index] = no_vertex_remap;
     }
 
-    return MergeResult(std::move(merged), std::move(inconsistent_uvs), std::move(remap_offset_table));
+    return merged;
 }
-} // namespace detail
+
+struct MergeWithBackward {
+    std::vector<mesh::merging::VertexId> backwards;
+    Cluster merged;
+};
+
+inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &clustering, const std::span<const uint32_t> cluster_indices, std::vector<uint32_t> &vertex_remap) {
+    constexpr uint32_t no_vertex_remap = -1;
+#ifndef NDEBUG
+    DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
+    for (const uint32_t vertex_index : vertex_remap) {
+        DEBUG_ASSERT(vertex_index == no_vertex_remap);
+    }
+    DEBUG_ASSERT(check_consistent_uvs(clustering, cluster_indices));
+#endif
+
+    const uint32_t cluster_count = cluster_indices.size();
+
+    // Initialize vertex mapping
+    mesh::merging::VertexMapping mapping;
+    std::vector<uint32_t> vertex_counts;
+    vertex_counts.reserve(cluster_count);
+    for (const uint32_t cluster_index : cluster_indices) {
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        vertex_counts.push_back(cluster.vertex_count());
+    }
+    mapping.init(vertex_counts);
+
+    // Create actual mapping
+    uint32_t next_vertex_index = 0;
+    for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
+        const uint32_t cluster_index = cluster_indices[linear_cluster_index];
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        const uint32_t vertex_count = cluster.vertex_count();
+
+        // Create vertex remapping from original vertex indices to merged vertex indices
+        for (uint32_t local_vertex_index = 0; local_vertex_index < vertex_count; local_vertex_index++) {
+            const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
+            uint32_t &merged_vertex_index = vertex_remap[global_vertex_index];
+
+            if (merged_vertex_index == no_vertex_remap) {
+                // This vertex was not yet remapped -> assign new merged index.
+                merged_vertex_index = next_vertex_index;
+                next_vertex_index++;
+                const mesh::merging::VertexId source_vertex{.mesh_index = cluster_index, .vertex_index = local_vertex_index};
+                mapping.add(source_vertex, merged_vertex_index);
+            }
+        }
+    }
+
+    // Reset vertex_remap for the next call
+    for (const uint32_t cluster_index : cluster_indices) {
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        for (const uint32_t global_vertex_index : cluster.vertex_indices) {
+            vertex_remap[global_vertex_index] = no_vertex_remap;
+        }
+    }
+
+    return mapping;
+}
+
+inline Cluster merge_geometry_using_mapping(
+    const Clustering &clustering,
+    const std::span<const uint32_t> cluster_indices,
+    const mesh::merging::VertexMapping &mapping) {
+    // Preallocate merged cluster
+    Cluster merged;
+
+    const uint32_t unique_vertex_count = mapping.find_max_merged_index();
+    merged.vertex_indices.resize(unique_vertex_count);
+
+    uint32_t total_triangle_count = 0;
+    for (const uint32_t cluster_index : cluster_indices) {
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        total_triangle_count += cluster.triangle_count();
+    }
+    merged.local_triangles.reserve(total_triangle_count);
+
+    // Merge geometry
+    const uint32_t cluster_count = cluster_indices.size();
+    for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
+        const uint32_t cluster_index = cluster_indices[linear_cluster_index];
+        const Cluster &cluster = clustering.clusters[cluster_index];
+        const uint32_t vertex_count = cluster.vertex_count();
+
+        // Merge vertices
+        for (uint32_t local_vertex_index = 0; local_vertex_index < vertex_count; local_vertex_index++) {
+            const uint32_t merged_local_index = mapping.map_forward(linear_cluster_index, local_vertex_index);
+            const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
+            merged.vertex_indices[merged_local_index] = global_vertex_index;
+        }
+
+        // Merge triangles
+        for (const auto &triangle : cluster.local_triangles) {
+            glm::uvec3 remapped;
+            for (uint8_t k = 0; k < 3; k++) {
+                remapped[k] = mapping.map_forward(linear_cluster_index, triangle[k]);
+            }
+            if (!is_degenerate(remapped)) {
+                merged.local_triangles.push_back(remapped);
+            }
+        }
+    }
+
+    return merged;
+}
+
+inline std::vector<uint32_t> calculate_vertex_counts(const std::vector<uint32_t> vertex_to_component, const uint32_t component_count) {
+    std::vector<uint32_t> vertex_counts(component_count, 0);
+    for (const auto [vertex_index, component_index] : enumerate(vertex_to_component)) {
+        vertex_counts[component_index]++;
+    }
+    return vertex_counts;
+}
+
+std::vector<std::vector<uint32_t>> create_component_backwards_mapping(const mesh::ComponentsIndex &components_index, const std::vector<uint32_t>& forward) {
+    const auto& [vertex_to_component, component_count] = components_index;
+
+    // Allocate mapping storage
+    std::vector<std::vector<uint32_t>> backward;
+    backward.resize(component_count);
+    const std::vector<uint32_t> vertex_counts = detail::calculate_vertex_counts(vertex_to_component, component_count);
+    for (const uint32_t component_index : std::views::iota(0, component_count)) {
+        std::vector<uint32_t>& component_map = backward[component_index];
+        const uint32_t component_vertex_count = vertex_counts[component_index];
+        component_map.resize(component_vertex_count);
+    }
+
+    for (const auto [vertex_index, component_index] : enumerate(vertex_to_component)) {
+        std::vector<uint32_t>& component_map = backward[component_index];
+        const uint32_t index_in_component = forward[vertex_index];
+        component_map[index_in_component] = vertex_index;
+    }
+
+    return backward;
+}
+
+}
 
 inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning) {
     const uint32_t cluster_count = clustering.cluster_count();
     const size_t partition_count = partitioning.partition_count;
-    const std::vector<uint32_t>& cluster_partitions = partitioning.cluster_partitions;
+    const std::vector<uint32_t> &cluster_partitions = partitioning.cluster_partitions;
 
     // Prepare vertex remap buffer for merging
     const uint32_t no_vertex_remap = -1;
-    std::vector<uint32_t> vertex_remap(clustering.positions.size(), no_vertex_remap);
+    std::vector<uint32_t> vertex_remap;
 
     std::vector<Cluster> partitioned_clusters;
-    partitioned_clusters.reserve(cluster_count);
+    partitioned_clusters.reserve(partition_count);
+
+    TextureSet textures;
 
     std::vector<uint32_t> cluster_indices;
     for (uint32_t partition_index = 0; partition_index < partition_count; partition_index++) {
@@ -246,38 +369,164 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
             }
         }
 
-        // Merge clusters
-        auto result = detail::merge_clusters(clustering, cluster_indices, vertex_remap);
-        partitioned_clusters.push_back(std::move(result.cluster()));
-        Cluster& partition = partitioned_clusters.back();
+        // Check if we need to perform a fresh uv unwrap due to different textures or inconsistent uvs
+        const bool needs_unwrap = detail::check_merge_needs_unwrap(clustering, cluster_indices);
 
-        // Collect texture ids
-        std::vector<uint32_t> texture_ids;
-        texture_ids.reserve(cluster_indices.size());
-        for (const uint32_t cluster_index : cluster_indices) {
-            texture_ids.push_back(clustering.clusters[cluster_index].texture_id);
-        }
-        dedup_by_sort(texture_ids);
-
-        // Create a new uv unwrapping for this partition if the original clusters had inconsistent uvs or different textures
-        const bool uvs_consistent = result.has_consistent_uvs();
-        const bool has_single_texture = texture_ids.size() == 1;
-        const bool needs_unwrap = !(uvs_consistent && has_single_texture);
+        Cluster merged_cluster;
         if (needs_unwrap) {
-            // uv unwrap requires the cluster to be manifold
-            // make_manifold_inplace(partition); // only changes triangles
+            // We need to perform a fresh uv unwrap and generate a new texture
 
-            const std::vector<glm::dvec3> partition_positions = collect_cluster_positions(partition, clustering.positions);
-            const cv::Mat texture; // TODO = clustering.textures[partition.texture];
-            const mesh::View view(partition.local_triangles, partition_positions, partition.uvs, texture);
-            unwrap_atlas(partition.local_triangles, partition_positions);
+            // Merge the geometry of the clusters
+            mesh::merging::VertexMapping mapping = detail::construct_merge_mapping(clustering, cluster_indices, vertex_remap);
+            merged_cluster = detail::merge_geometry_using_mapping(clustering, cluster_indices, mapping);
+
+            // Keep only backward mapping, since we cant keep the forward mapping valid
+            auto [_, merged_to_original] = std::move(mapping).into_parts();
+
+            // Make merged geometry manifold, keeping backward mapping consitent
+            auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+                const uint32_t new_vertex_index = merged_cluster.vertex_indices.size();
+
+                // Add new vertex to merged cluster
+                merged_cluster.vertex_indices.push_back(merged_cluster.vertex_indices[old_vertex_index]);
+
+                // Update backwards mapping
+                for (const auto& [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
+                    const mesh::merging::VertexId merged_vertex(linear_cluster_index, old_vertex_index);
+                    const auto it = merged_to_original.find(merged_vertex);
+                    if (it == merged_to_original.end()) {
+                        continue;
+                    }
+                    const uint32_t source_vertex_index = it->second;
+                    const mesh::merging::VertexId duplicated_vertex{static_cast<uint32_t>(linear_cluster_index), new_vertex_index};
+                    merged_to_original[duplicated_vertex] = source_vertex_index;
+                }
+
+                return new_vertex_index;
+            };
+            make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
+
+            // Split into individual connecticity components
+            const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
+            const mesh::Simple merged_mesh = materialize_cluster(merged_cluster, clustering.positions);
+            DEBUG_ASSERT(!merged_mesh.has_uvs());
+            auto [components, merged_to_component] = mesh::split_into_connected_components_with_map(merged_mesh, components_index);
+            std::vector<std::vector<uint32_t>> component_to_merged = detail::create_component_backwards_mapping(components_index, merged_to_component);
+
+            // Prepare atlas for new texture
+            const glm::uvec2 target_texture_size(1024); // TODO:
+            const atlas::Plan atlas_plan = create_atlas_plan(target_texture_size, components);
+
+            // Perform an uv unwrap for each component
+            for (auto &[component_index, component] : enumerate(components)) {
+                const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
+
+                // Find relevant source clusters
+                const uint32_t original_cluster_count = cluster_indices.size();
+                std::vector<uint32_t> source_clusters;
+                source_clusters.reserve(original_cluster_count);
+                for (const uint32_t linear_cluster_index : std::views::iota(0, original_cluster_count)) {
+                    const bool cluster_is_relevant = std::ranges::any_of(local_to_merged, [&](const uint32_t merged_index) {
+                        const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+                        return merged_to_original.contains(merged_vertex);
+                    });
+
+                    if (cluster_is_relevant) {
+                        source_clusters.push_back(linear_cluster_index);
+                    }
+                }
+
+                const glm::uvec2 component_texture_size = atlas_plan.slots[component_index].size;
+                if (source_clusters.size() == 1) {
+                    // If one a single cluster is relevant we dont need to perform a fresh unwrap
+                    const uint32_t linear_cluster_index = source_clusters[0];
+                    const uint32_t cluster_index = cluster_indices[linear_cluster_index];
+                    component.uvs = transform_vector(local_to_merged, [&](const uint32_t merged_index) {
+                        const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+                        const auto it = merged_to_original.find(merged_vertex);
+                        DEBUG_ASSERT(it != merged_to_original.end());
+                        const uint32_t original_vertex_index = it->second;
+                        return clustering.clusters[cluster_index].uvs[original_vertex_index];
+                    });
+                    const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
+                    component.texture = clustering.textures[texture_id];
+                    trim_texture_inplace(component);
+                    rescale_texture_inplace(component.texture.value(), component_texture_size);
+                } else {
+                    // If multiple clusters are relevant, we have to perform an unwrap.
+                    component.uvs = uv::unwrap(component).value();
+
+                    // Build new texture
+                    auto map_to_original_triangle = [&](const uint32_t linear_cluster_index, const glm::uvec3& triangle) 
+                        -> std::optional<glm::uvec3> {
+                        glm::uvec3 original_triangle;
+                        for (uint8_t k = 0; k < 3; k++) {
+                            const uint32_t merged_index = local_to_merged[triangle[k]];
+                            const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+
+                            const auto it = merged_to_original.find(merged_vertex);
+                            if (it == merged_to_original.end()) {
+                                return std::nullopt;
+                            }
+
+                            original_triangle[k] = it->second;
+                        }
+                        return original_triangle;
+                    };
+
+                    TextureReprojector component_texture(component_texture_size);
+                    for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
+                        const Cluster &cluster = clustering.clusters[cluster_index];
+                        const cv::Mat &cluster_texture = clustering.textures[cluster.texture_id];
+
+                        for (const glm::uvec3 &triangle : component.triangles) {
+                            auto opt = map_to_original_triangle(linear_cluster_index, triangle);
+                            if (!opt.has_value()) {
+                                continue;
+                            }
+                            const glm::uvec3& original_triangle = opt.value();
+                            component_texture.add_triangle(
+                                cluster_texture,
+                                original_triangle, cluster.uvs,
+                                triangle, component.uvs
+                            );
+                        }
+                    }
+                    component.texture = component_texture.finish();
+                }
+            }
+
+            // Assemble texture atlas
+            const std::vector<cv::Mat> component_textures = transform_vector(components, [](const auto& component) { return component.texture.value(); });
+            const cv::Mat merged_texture = atlas::create(atlas_plan, component_textures);
+            for (auto &[component_index, component] : enumerate(components)) {
+                atlas::map_uvs(atlas_plan, component_index, component.uvs);
+            }
+
+            // Finalize uvs and texture
+            for (const auto [vertex_index, component_index] : enumerate(merged_to_component)) {
+                const mesh::Simple& component = components[component_index];
+                merged_cluster.uvs[vertex_index] = component.uvs[vertex_index];
+            }
+            merged_cluster.texture_id = textures.add(merged_texture);
+
+        } else {
+            // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
+            if (vertex_remap.empty()) {
+                vertex_remap.resize(clustering.positions.size(), no_vertex_remap);
+            }
+            merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
+            const cv::Mat& texture = clustering.get_cluster_texture(cluster_indices[0]);
+            merged_cluster.texture_id = textures.add(texture);
         }
+        partitioned_clusters.push_back(std::move(merged_cluster));
     }
 
     return Clustering{
         clustering.positions,
         std::move(partitioned_clusters),
-        clustering.texture};
+        clustering.texture,
+        textures};
 }
 
 inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}) {

@@ -13,13 +13,14 @@
 #include "Dataset.h"
 #include "log.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/utils.h"
+#include "mesh/cleanup.h"
 #include "mesh_builder.h"
 #include "raster.h"
 #include "raw_dataset_reader.h"
 #include "srs.h"
 #include "mesh/clip.h"
 #include "mesh/validate.h"
+#include "mesh/bounds.h"
 
 // TODO: fix namespace
 namespace terrainbuilder {
@@ -48,9 +49,6 @@ glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> 
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
     return result;
 }
-
-// TODO:: write documentation
-// TODO: use referencedBounds
 
 glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
@@ -217,7 +215,7 @@ tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     LOG_TRACE("Transforming mesh into output srs");
     SimpleMesh target_mesh = transform_mesh(std::move(clipped_mesh), clip_srs, mesh_srs);
     
-    remove_isolated_vertices(target_mesh); // TODO: is this still required?
+    mesh::remove_isolated_vertices(target_mesh); // TODO: is this still required?
     mesh::validate(target_mesh);
     return target_mesh;
 }

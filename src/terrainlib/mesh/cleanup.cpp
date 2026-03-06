@@ -9,6 +9,9 @@
 #include <glm/glm.hpp>
 
 #include "mesh/cleanup.h"
+#include "mesh/topology.h"
+
+namespace mesh {
 
 namespace {
 struct TriangleHash {
@@ -45,14 +48,10 @@ void remove_duplicate_triangles_consider_orientation(std::vector<glm::uvec3> &tr
     remove_duplicate_triangles<double>(triangles, {}, false);
 }
 
-bool is_degenerate(const glm::uvec3 &triangle) {
-    return triangle[0] == triangle[1] ||
-           triangle[1] == triangle[2] ||
-           triangle[2] == triangle[0];
-}
-
 void remove_degenerate_triangles(std::vector<glm::uvec3> &triangles) {
     triangles.erase(
         std::remove_if(triangles.begin(), triangles.end(), is_degenerate),
         triangles.end());
+}
+
 }

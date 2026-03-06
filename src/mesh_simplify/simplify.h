@@ -1,14 +1,22 @@
-#ifndef SIMPLIFY_H
-#define SIMPLIFY_H
+#pragma once
 
-#include "pch.h"
+#include "mesh/SimpleMesh.h" 
+#include "mesh/cgal.h"
 
-using namespace kernel::epick;
+#include <span>
+#include <string_view>
+#include <variant>
+
+#include <fmt/format.h>
+#include <glm/glm.hpp>
+#include <opencv2/opencv.hpp>
+
+using namespace cgal::kernel::epick;
 namespace simplify {
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
 // We could use the same type as in uv_map but this would require a custom visitor or similar.
-typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMap;
+using AttachedUvPropertyMap = SurfaceMesh::Property_map<VertexDescriptor, Point2>;
 
 cv::Mat simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution);
 

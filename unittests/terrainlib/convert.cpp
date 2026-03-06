@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/utils.h"
+#include "mesh/topology.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
 
@@ -25,8 +25,8 @@ TEST_CASE("convert rountrip keeps precision") {
     const cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     SimpleMesh roundtrip_mesh = convert::to_simple_mesh(cgal_mesh);
 
-    sort_and_normalize_triangles(mesh.triangles);
-    sort_and_normalize_triangles(roundtrip_mesh.triangles);
+    mesh::sort_and_normalize_triangles(mesh.triangles);
+    mesh::sort_and_normalize_triangles(roundtrip_mesh.triangles);
 
     REQUIRE(roundtrip_mesh.positions == mesh.positions);
     REQUIRE(roundtrip_mesh.triangles == mesh.triangles);

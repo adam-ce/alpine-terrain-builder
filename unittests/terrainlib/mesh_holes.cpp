@@ -7,8 +7,8 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/holes.h"
-#include "mesh/utils.h"
 #include "mesh/validate.h"
+#include "mesh/boundary.h"
 #include "log_impls.h"
 
 std::string vec2d_to_string(const std::vector<std::vector<uint32_t>> &v) {
@@ -58,7 +58,7 @@ TEST_CASE("find_boundaries returns single boundary of all vertices for two conne
     std::vector<uint32_t> expected = {0, 3, 2, 1};
     CHECK(boundaries.size() == 1);
     auto boundary = boundaries[0];
-    normalize_face_index_rotation(boundary);
+    mesh::normalize_face_index_rotation(boundary, true);
     CHECK_THAT(boundary, Catch::Matchers::UnorderedEquals(expected));
 }
 
@@ -271,7 +271,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
 
         const std::vector<glm::uvec4> expected_boundaries = {{0, 3, 2, 1}, {4, 8, 7, UINT_MAX}, {5, 6, 8, UINT_MAX}};
         for (const auto &quad : expected_boundaries) {
-            CHECK(normalize_quad(quad) == quad);
+            CHECK(mesh::normalize_quad(quad) == quad);
         }
 
         std::vector<glm::uvec4> actual_boundaries;
@@ -282,7 +282,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
             for (size_t i = 0; i < boundary.size(); i++) {
                 quad[i] = boundary[i];
             }
-            normalize_quad_inplace(quad);
+            mesh::normalize_quad_inplace(quad);
             size_t out_index = 0;
             for (size_t i = 0; i < 4; i++) {
                 if (quad[i] != UINT_MAX) {
@@ -303,7 +303,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
     SECTION("find_holes") {
         const std::vector<glm::uvec3> expected_holes = {{4, 8, 7}, {5, 6, 8}};
         for (const auto &triangle : expected_holes) {
-            CHECK(normalize_triangle(triangle) == triangle);
+            CHECK(mesh::normalize_triangle(triangle) == triangle);
         }
 
         std::vector<glm::uvec3> actual_holes;
@@ -311,7 +311,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
             INFO(fmt::format("hole = [{}]", fmt::join(hole, ", ")));
             REQUIRE(hole.size() == 3);
             const glm::uvec3 triangle(hole[0], hole[1], hole[2]);
-            actual_holes.push_back(normalize_triangle(triangle));
+            actual_holes.push_back(mesh::normalize_triangle(triangle));
         }
 
         REQUIRE_THAT(actual_holes, Catch::Matchers::UnorderedEquals(expected_holes));

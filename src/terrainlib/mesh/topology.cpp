@@ -11,6 +11,8 @@
 
 #include "mesh/topology.h"
 
+namespace mesh {
+
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
     // sort vertices in triangles
     for (glm::uvec3 &triangle : triangles) {
@@ -115,4 +117,6 @@ std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> t
     }
 
     return isolated;
+}
+
 }

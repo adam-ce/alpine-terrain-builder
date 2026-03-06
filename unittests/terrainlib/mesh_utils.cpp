@@ -4,7 +4,9 @@
 #include "../opencv_helpers.h"
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/utils.h"
+#include "mesh/bounds.h"
+#include "mesh/boundary.h"
+#include "mesh/reindex.h"
 
 TEST_CASE("calculate_bounds") {
     SimpleMesh mesh;
@@ -18,7 +20,7 @@ TEST_CASE("calculate_bounds") {
     CHECK(bounds.max == glm::dvec3(1.0, 1.0, 1.0));
 }
 
-TEST_CASE("reindex_mesh") {
+TEST_CASE("mesh::reindex") {
     using Catch::Matchers::UnorderedEquals;
 
     SimpleMesh mesh;
@@ -70,14 +72,14 @@ TEST_CASE("reindex_mesh") {
         CHECK(mat_equals(*reindexed.texture, *original.texture));
     };
 
-    SECTION("const SimpleMesh& overload") {
-        SimpleMesh reindexed_mesh = reindex_mesh(static_cast<const SimpleMesh &>(mesh));
+    SECTION("copy overload") {
+        SimpleMesh reindexed_mesh = mesh::reindex(mesh);
         run_checks(mesh, reindexed_mesh);
     }
 
-    SECTION("non-const SimpleMesh& overload") {
+    SECTION("inplace overload") {
         SimpleMesh original_mesh = mesh;
-        reindex_mesh(static_cast<SimpleMesh &>(mesh));
+        mesh::reindex_inplace(mesh);
         SimpleMesh reindexed_mesh = std::move(mesh);
         run_checks(original_mesh, reindexed_mesh);
     }
@@ -86,7 +88,7 @@ TEST_CASE("reindex_mesh") {
 TEST_CASE("mesh::find_boundary_edges") {
     SECTION("empty for empty mesh") {
         SimpleMesh mesh;
-        auto edges = find_boundary_edges(mesh);
+        auto edges = mesh::find_boundary_edges(mesh);
 
         std::vector<glm::uvec2> actual(edges.begin(), edges.end());
         std::vector<glm::uvec2> expected;
@@ -102,7 +104,7 @@ TEST_CASE("mesh::find_boundary_edges") {
             {0.f, 1.f, 0.f}};
         mesh.triangles = {glm::uvec3(0, 1, 2)};
 
-        auto edges = find_boundary_edges(mesh);
+        auto edges = mesh::find_boundary_edges(mesh);
 
         std::vector<glm::uvec2> actual(edges.begin(), edges.end());
         std::vector<glm::uvec2> expected = {
@@ -121,7 +123,7 @@ TEST_CASE("mesh::find_boundary_edges") {
             {0, 1, 2},
             {1, 3, 2}};
 
-        auto edges = find_boundary_edges(mesh);
+        auto edges = mesh::find_boundary_edges(mesh);
 
         std::vector<glm::uvec2> actual(edges.begin(), edges.end());
         std::vector<glm::uvec2> expected = {
@@ -153,7 +155,7 @@ TEST_CASE("mesh::find_boundary_edges") {
             {4, 5, 1}, {4, 1, 0}  // bottom
         };
 
-        auto edges = find_boundary_edges(mesh);
+        auto edges = mesh::find_boundary_edges(mesh);
 
         std::vector<glm::uvec2> actual(edges.begin(), edges.end());
         std::vector<glm::uvec2> expected;

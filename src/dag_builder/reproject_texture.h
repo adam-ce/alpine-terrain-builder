@@ -10,6 +10,8 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "glm_utils.h"
+
 class TextureReprojector {
 public:
     // Construct with size and optional type
@@ -22,10 +24,11 @@ public:
         this->weight_image = cv::Mat::ones(this->target_image.size(), CV_32FC1);
         this->target_type = this->target_image.type();
         this->target_image.convertTo(this->target_image, CV_32FC3);
+        this->cached_source_image = cv::Mat();
     }
 
-    // Warps a single triangle from the source image onto the internal target texture
-    void add_triangle(const cv::Mat &source_image,
+    // Warps a single triangle from the source image onto the internal target texture.
+    void add_scaled_triangle(const cv::Mat &source_image,
                       const std::array<cv::Point2f, 3> source_triangle,
                       const std::array<cv::Point2f, 3> target_triangle) {
         ASSERT(!this->target_image.empty());
@@ -54,13 +57,15 @@ public:
                                                          static_cast<int32_t>(target_triangle[i].y - target_rect.y));
         }
 
-        // Read source region from source image
-        const cv::Mat source_view = source_image(source_rect);
+        // Convert source image into floating point and cache
+        // This assumes that this method is often called with the same texture sequentially and that
+        // most of the texture is used.
+        if (!shallow_mat_equals(this->cached_source_image, source_image)) {
+            source_image.convertTo(this->cached_source_image, CV_32FC3);
+        }
 
-        // Ensure floating point for warping if needed, or maintain original type
-        const int32_t original_type = source_image_cropped.type();
-        cv::Mat source_image_cropped;
-        source_view.convertTo(source_image_cropped, CV_32FC3);
+        // Read source region from source image
+        const cv::Mat source_image_cropped = this->cached_source_image(source_rect);
 
         // Given a pair of triangles, find the affine transform
         const cv::Mat warp_transform = cv::getAffineTransform(source_triangle_cropped, target_triangle_cropped);
@@ -84,6 +89,72 @@ public:
         this->target_image(target_rect) += target_image_cropped;
         this->weight_image(target_rect) += mask;
     }
+    // Warps a single triangle from the source image onto the internal target texture.
+    void add_scaled_triangle(const cv::Mat &source_image,
+                      const std::array<glm::dvec2, 3> source_triangle,
+                      const std::array<glm::dvec2, 3> target_triangle) {
+        std::array<cv::Point2f, 3> cv_source_triangle;
+        std::array<cv::Point2f, 3> cv_target_triangle;
+
+        for (uint8_t k = 0; k < 3; k++) {
+            cv_source_triangle[k] = glm_to_cv(source_triangle[k]);
+            cv_target_triangle[k] = glm_to_cv(target_triangle[k]);
+        }
+
+        this->add_scaled_triangle(source_image, cv_source_triangle, cv_target_triangle);
+    }
+
+    // Warps a single triangle from the source image onto the internal target texture.
+    void add_triangle(const cv::Mat &source_image,
+                      const std::array<glm::dvec2, 3> &source_uv_triangle,
+                      const std::array<glm::dvec2, 3> &target_uv_triangle) {
+        const glm::dvec2 source_texture_size(source_image.cols, source_image.rows);
+        const glm::dvec2 target_texture_size(this->target_image.cols, this->target_image.rows);
+
+        std::array<cv::Point2f, 3> source_pixel_triangle;
+        std::array<cv::Point2f, 3> target_pixel_triangle;
+
+        for (uint8_t k = 0; k < 3; k++) {
+            const glm::dvec2 source_pixel = source_uv_triangle[k] * source_texture_size;
+            const glm::dvec2 target_pixel = target_uv_triangle[k] * target_texture_size;
+            source_pixel_triangle[k] = glm_to_cv(source_pixel);
+            target_pixel_triangle[k] = glm_to_cv(target_pixel);
+        }
+
+        this->add_scaled_triangle(source_image, source_pixel_triangle, target_pixel_triangle);
+    }
+    // Warps a single triangle from the source image onto the internal target texture.
+    void add_triangle(const cv::Mat &source_image,
+                      const glm::uvec3 &source_triangle,
+                      const std::span<const glm::dvec2> source_uvs,
+                      const glm::uvec3 &target_triangle,
+                      const std::span<const glm::dvec2> target_uvs) {
+        std::array<glm::dvec2, 3> source_uv_triangle;
+        std::array<glm::dvec2, 3> target_uv_triangle;
+
+        for (uint8_t k = 0; k < 3; k++) {
+            source_uv_triangle[k] = source_uvs[source_triangle[k]];
+            target_uv_triangle[k] = target_uvs[target_triangle[k]];
+        }
+
+        this->add_triangle(source_image, source_uv_triangle, target_uv_triangle);
+    }
+    // Warps a single triangle from the source image onto the internal target texture.
+    void add_triangle(const cv::Mat &source_image,
+                      const glm::uvec3 &triangle,
+                      const std::span<const glm::dvec2> source_uvs,
+                      const std::span<const glm::dvec2> target_uvs) {
+        this->add_triangle(source_image, triangle, source_uvs, triangle, target_uvs);
+    }
+    // Warps triangles from the source image onto the internal target texture.
+    void add_triangles(const cv::Mat &source_image,
+                      const std::span<const glm::uvec3> triangles,
+                      const std::span<const glm::dvec2> source_uvs,
+                      const std::span<const glm::dvec2> target_uvs) {
+        for (const glm::uvec3 &triangle : triangles) {
+            this->add_triangle(source_image, triangle, source_uvs, target_uvs);
+        }
+    }
 
     // Returns the finished texture
     cv::Mat finish(bool allow_continue = false) {
@@ -91,7 +162,7 @@ public:
 
         cv::Mat output_image;
         if (allow_continue) {
-            output_image = cv::Mat::zeros(this->target_image.size, CV_32FC3);
+            output_image = cv::Mat::zeros(this->target_image.size(), this->target_image.type());
         } else {
             output_image = this->target_image;
         }
@@ -109,11 +180,12 @@ public:
         }
 
         // Convert back to the original input type
-        output_image.convertTo(output_image, this->input_type);
-        return std::move(output_image);
+        output_image.convertTo(output_image, this->target_type);
+        return output_image;
     }
 
 private:
+    cv::Mat cached_source_image;
     cv::Mat target_image;
     cv::Mat weight_image;
     int32_t target_type;
@@ -126,9 +198,13 @@ private:
         const T height = std::max(std::min(rect.height, static_cast<T>(mat.rows) - y), static_cast<T>(0));
         return cv::Rect_<T>(x, y, width, height);
     }
+    static inline cv::Point2f glm_to_cv(const glm::dvec2 &vec) {
+        return cv::Point2f(static_cast<float>(vec.x), static_cast<float>(vec.y));
+    };
+    static inline bool shallow_mat_equals(const cv::Mat& a, const cv::Mat b) {
+        return a.data == b.data && a.size == b.size && a.type() == b.type();
+    }
 };
-
-// --- Original functions using the new class ---
 
 inline void reproject_texture(
     const std::span<const glm::uvec3> triangles,
@@ -136,20 +212,13 @@ inline void reproject_texture(
     const std::span<const glm::dvec2> new_uvs,
     const cv::Mat &old_texture,
     cv::Mat &new_texture) {
-
     TextureReprojector reprojector(new_texture);
-    const glm::dvec2 old_texture_size(old_texture.cols, old_texture.rows);
-    const glm::dvec2 new_texture_size(new_texture.cols, new_texture.rows);
-
+    std::array<glm::dvec2, 3> old_uv_triangle;
+    std::array<glm::dvec2, 3> new_uv_triangle;
     for (const glm::uvec3 &triangle : triangles) {
-        std::array<cv::Point2f, 3> old_uv_triangle;
-        std::array<cv::Point2f, 3> new_uv_triangle;
-        for (uint8_t k = 0; k < 3; k++) {
-            const uint32_t vertex_index = triangle[k];
-            const glm::dvec2 old_uv = old_uvs[vertex_index] * old_texture_size;
-            const glm::dvec2 new_uv = new_uvs[vertex_index] * new_texture_size;
-            old_uv_triangle[k] = cv::Point2f(static_cast<float>(old_uv.x), static_cast<float>(old_uv.y));
-            new_uv_triangle[k] = cv::Point2f(static_cast<float>(new_uv.x), static_cast<float>(new_uv.y));
+        for (const auto [k, vertex_index] : enumerate(triangle)) {
+            old_uv_triangle[k] = old_uvs[vertex_index];
+            new_uv_triangle[k] = new_uvs[vertex_index];
         }
         reprojector.add_triangle(old_texture, old_uv_triangle, new_uv_triangle);
     }

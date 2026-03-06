@@ -10,6 +10,8 @@
 #include "mesh/geometry.h"
 #include "optional_utils.h"
 
+namespace mesh {
+    
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size) {
     const auto &triangles = mesh.triangles;
     const auto &positions = mesh.positions;
@@ -100,4 +102,6 @@ std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
 
 std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh) {
     return map(calculate_max_edge_length_squared(mesh), [](const double min_len_sq) { return std::sqrt(min_len_sq); });
+}
+
 }

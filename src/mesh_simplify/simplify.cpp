@@ -15,12 +15,13 @@
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
 #include <CGAL/tags.h>
 
-#include "convert.h"
+#include "mesh/convert.h"
+#include "mesh/bounds.h"
 #include "log.h"
 #include "simplify.h"
 #include "uv_map.h"
+#include "mesh/cleanup.h"
 #include "mesh/validate.h"
-#include "mesh/utils.h"
 
 using namespace simplify;
 

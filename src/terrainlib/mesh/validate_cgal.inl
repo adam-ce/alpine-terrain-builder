@@ -1,10 +1,8 @@
-#include "pch.h"
-#include "mesh/utils.h"
-
 #include <CGAL/Polygon_mesh_processing/self_intersections.h>
 #include <libassert/assert.hpp>
 
 #include "log.h"
+#include "mesh/validate_cgal.h"
 
 namespace cgal {
 

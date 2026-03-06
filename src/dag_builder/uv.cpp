@@ -7,7 +7,10 @@
 #include <CGAL/Surface_mesh_parameterization/Mean_value_coordinates_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/Square_border_parameterizer_3.h>
 #include <CGAL/Surface_mesh_parameterization/parameterize.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuninitialized"
 #include <CGAL/Unique_hash_map.h>
+#pragma GCC diagnostic pop
 
 #include "mesh/cgal.h"
 #include "mesh/convert.h"

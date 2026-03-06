@@ -13,7 +13,7 @@
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/io.h"
-#include "mesh/utils.h"
+#include "mesh/bounds.h"
 #include "mesh/validate.h"
 #include "octree/Space.h"
 #include "octree/Id.h"

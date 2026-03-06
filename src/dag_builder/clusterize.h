@@ -92,7 +92,7 @@ inline std::vector<Cluster> clusterize(
     return clusters;
 }
 
-Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
+inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
     const auto positions_f = to_approximate_normalized(mesh.positions);
 
     auto clusters = clusterize(
@@ -110,7 +110,7 @@ Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
     };
 }
 
-std::vector<Cluster> clusterize(
+inline std::vector<Cluster> clusterize(
     const Cluster &cluster,
     const std::span<const glm::dvec3> positions,
     const ClusterOptions &options = {}) {
@@ -137,7 +137,7 @@ struct ClusteringAndBackwardMapping {
     }
 };
 
-ClusteringAndBackwardMapping clusterize(const Clustering &input, const ClusterOptions &options = {}) {
+inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const ClusterOptions &options = {}) {
     std::vector<Cluster> new_clusters;
 
     const auto counts = input.clusters | std::views::transform(&Cluster::vertex_count);

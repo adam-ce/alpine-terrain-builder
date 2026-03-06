@@ -15,12 +15,19 @@ public:
     using Index = IndexT;
     using Size = SizeT;
 
-    explicit UnionFind_(const Size size)
-        : _parents(static_cast<size_t>(size)) {
+    explicit UnionFind_(const Size size) {
+        this->reset(size);
+    }
+
+    void reset() noexcept {
+        this->reset(this->size());
+    }
+    void reset(const Size size) noexcept {
         std::iota(this->_parents.begin(), this->_parents.end(), Index{0});
         if constexpr (TrackSizes) {
-            this->_sizes.assign(static_cast<size_t>(size), Size{1});
+            this->_sizes.assign(size, Size{1});
         }
+        this->_set_count = size;
     }
 
     [[nodiscard]] Index find(const Index item) const noexcept {
@@ -40,6 +47,7 @@ public:
         }
 
         this->_parents[x_rep] = y_rep;
+        this->_set_count--;
 
         if constexpr (TrackSizes) {
             this->_sizes[y_rep] += this->_sizes[x_rep];
@@ -50,25 +58,20 @@ public:
         return static_cast<Size>(this->_parents.size());
     }
 
-    template <bool Enabled = TrackSizes>
-        requires(Enabled)
+    [[nodiscard]] Size set_count() const noexcept {
+        return this->_set_count;
+    }
+
+    template <bool Enabled = TrackSizes> requires(Enabled)
     [[nodiscard]] Size get_set_size(const Index x) const noexcept {
         return this->_sizes[this->find(x)];
     }
 
     [[nodiscard]] bool is_joint() const noexcept {
-        return this->is_joint_impl(*this);
-    }
-
-    [[nodiscard]] bool is_joint() noexcept {
-        return this->is_joint_impl(*this);
+        return this->set_count() == 1;
     }
 
     [[nodiscard]] bool is_disjoint() const noexcept {
-        return !this->is_joint();
-    }
-
-    [[nodiscard]] bool is_disjoint() noexcept {
         return !this->is_joint();
     }
 
@@ -103,34 +106,13 @@ private:
     }
 
     template <typename Self>
-    static bool is_joint_impl(Self &self) noexcept {
-        if (self._parents.empty()) {
-            return true;
-        }
-
-        if constexpr (TrackSizes) {
-            return self.get_set_size(Index{0}) == self.size();
-        } else {
-            const Index rep = self.find(Index{0});
-            const Size n = self.size();
-            for (Index i = 1; i < n; ++i) {
-                if (self.find(i) != rep) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    }
-
-    template <typename Self>
-    static std::unordered_map<Index, std::vector<Index>>
-    get_sets_impl(Self &self) {
+    static std::unordered_map<Index, std::vector<Index>> get_sets_impl(Self &self) {
         std::unordered_map<Index, std::vector<Index>> sets;
 
         const Size n = self.size();
-        sets.reserve(static_cast<size_t>(n));
+        sets.reserve(self.set_count());
 
-        for (Index item = 0; item < n; ++item) {
+        for (Index item = 0; item < n; item++) {
             sets[self.find(item)].push_back(item);
         }
 
@@ -140,6 +122,7 @@ private:
 private:
     std::vector<Index> _parents;
     std::conditional_t<TrackSizes, std::vector<Size>, std::monostate> _sizes;
+    Size _set_count;
 };
 
 using UnionFind = UnionFind_<false>;

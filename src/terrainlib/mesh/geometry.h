@@ -12,9 +12,6 @@
 
 #include "mesh/SimpleMesh.h"
 
-template <glm::length_t n_dims, typename T>
-std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh);
-
 template <typename T>
 glm::vec<3, T> compute_normal(const glm::vec<3, T> &a,
                               const glm::vec<3, T> &b,
@@ -32,3 +29,5 @@ std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh);
 
 std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh);
 std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh);
+
+#include "geometry.inl"

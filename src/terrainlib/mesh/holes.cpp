@@ -16,119 +16,18 @@
 #include "log.h"
 #include "mesh/connected_components.h"
 #include "mesh/holes.h"
-#include "mesh/topology.h"
+#include "mesh/boundary.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
+#include "vector_utils.h"
 
+namespace mesh {
+    
 namespace {
 using Edge = glm::uvec2;
 using VertexIndex = uint32_t;
 using ComponentIndex = uint32_t;
 } // namespace
-
-namespace mesh {
-namespace {
-template <typename T>
-void remove_first(std::vector<T> &vec, const T &value) {
-    auto it = std::find(vec.begin(), vec.end(), value);
-    if (it != vec.end()) {
-        vec.erase(it);
-    }
-}
-}
-
-std::vector<std::vector<VertexIndex>> find_boundaries(const SimpleMesh &mesh) {
-    std::unordered_set<Edge> boundary_edges = find_boundary_edges(mesh);
-    std::unordered_map<VertexIndex, std::vector<VertexIndex>> adjacencies;
-    adjacencies.reserve((boundary_edges.size() * 3) / 2);
-    for (const Edge &edge : boundary_edges) {
-        adjacencies[edge[0]].push_back(edge[1]);
-    }
-
-    auto remove_edge = [&](const auto edge) {
-        boundary_edges.erase(edge);
-        remove_first(adjacencies[edge[0]], edge[1]);
-    };
-
-    std::vector<std::vector<VertexIndex>> boundaries;
-    while (!boundary_edges.empty()) {
-        const Edge starting_edge = *boundary_edges.begin();
-        remove_edge(starting_edge);
-
-        std::vector<VertexIndex> boundary;
-        const VertexIndex starting_vertex_id = starting_edge[0];
-
-        Edge current_edge = starting_edge;
-        VertexIndex current_vertex_id = starting_edge[1];
-        boundary.push_back(current_vertex_id);
-        while (true) {
-            const auto neighbours = adjacencies[current_vertex_id];
-            if (neighbours.empty()) {
-                // non-manifold
-                break;
-            }
-            const VertexIndex next_vertex_id = neighbours[0];
-            const Edge next_edge(current_vertex_id, next_vertex_id);
-            remove_edge(next_edge);
-
-            boundary.push_back(next_vertex_id);
-            if (next_vertex_id == starting_vertex_id) {
-                break;
-            }
-            current_vertex_id = next_vertex_id;
-            current_edge = next_edge;
-        }
-
-        if (boundary.empty()) {
-            continue;
-        }
-
-        std::reverse(boundary.begin(), boundary.end());
-
-        // split boundary into individual loops
-        std::unordered_map<VertexIndex, size_t> visited;
-        for (size_t i = 0; i < boundary.size(); i++) {
-            const VertexIndex vertex = boundary[i];
-            auto it = visited.find(vertex);
-            if (it != visited.end()) {
-                const size_t first_occurance = it->second;
-                // finished current loop
-                DEBUG_ASSERT(first_occurance < i);
-                auto loop_start = boundary.begin() + first_occurance;
-                auto loop_end = boundary.begin() + i;
-                std::vector<VertexIndex> loop(loop_start, loop_end);
-                boundaries.push_back(std::move(loop));
-                boundary.erase(loop_start, loop_end);
-                i = first_occurance;
-            } else {
-                visited.emplace(vertex, i);
-            }
-        }
-
-        if (boundary.empty()) {
-            continue;
-        }
-
-        boundaries.push_back(std::move(boundary));
-    }
-
-    return boundaries;
-}
-
-namespace {
-template <typename T>
-auto iterator_from_ref(std::vector<T> &vec, T &ref) {
-    // Make sure ref actually belongs to vec
-    DEBUG_ASSERT(&ref >= vec.data() && &ref < vec.data() + vec.size());
-    return vec.begin() + (&ref - vec.data());
-}
-
-template <typename T>
-auto iterator_from_ref(const std::vector<T> &vec, const T &ref) {
-    DEBUG_ASSERT(&ref >= vec.data() && &ref < vec.data() + vec.size());
-    return vec.cbegin() + (&ref - vec.data());
-}
-}
 
 std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
     std::vector<std::vector<VertexIndex>> boundaries = find_boundaries(mesh);

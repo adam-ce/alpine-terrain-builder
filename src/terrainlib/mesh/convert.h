@@ -9,6 +9,7 @@
 
 #include "mesh/cgal.h"
 #include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 namespace convert {
 
@@ -47,7 +48,10 @@ typename Kernel::Point_2 to_cgal_point(const glm::dvec2 &point) {
     return typename Kernel::Point_2(point.x, point.y);
 }
 
-cgal::Mesh to_cgal_mesh(const SimpleMesh& mesh);
+cgal::Mesh to_cgal_mesh(const mesh::View& mesh);
+inline cgal::Mesh to_cgal_mesh(const mesh::Simple& mesh) {
+    return to_cgal_mesh(mesh::View(mesh));
+}
 SimpleMesh to_simple_mesh(const cgal::Mesh& cgal_mesh);
 
 }

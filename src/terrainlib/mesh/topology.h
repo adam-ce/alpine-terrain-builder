@@ -15,26 +15,21 @@
 #include "mesh/SimpleMesh.h"
 
 template <glm::length_t n_dims, typename T>
-void sort_and_normalize_triangles(SimpleMesh_<n_dims, T> &mesh);
+void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
 
 template <glm::length_t n_dims, typename T>
-void flip_orientation(SimpleMesh_<n_dims, T> &mesh);
+void flip_orientation(mesh::Simple_<n_dims, T> &mesh);
 constexpr void flip_triangle_orientation(glm::uvec3 &triangle);
-void flip_triangle_orientations(std::vector<glm::uvec3> &triangles);
+void flip_triangle_orientations(std::span<glm::uvec3> triangles);
 
 template <glm::length_t n_dims, typename T>
-std::unordered_set<typename SimpleMesh_<n_dims, T>::Edge> get_edges(const SimpleMesh_<n_dims, T> &mesh, const bool normalize = false);
+std::unordered_set<typename mesh::Simple_<n_dims, T>::Edge> get_edges(const mesh::Simple_<n_dims, T> &mesh, const bool normalize = false);
 
 template <glm::length_t n_dims, typename T, typename F>
 void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F &&func, const bool normalize);
 template <TriangleContainer Triangles, typename F>
 void for_each_edge(const Triangles &triangles, F &&func, const bool normalize);
-
-template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> find_boundary_edges(const SimpleMesh_<n_dims, T> &mesh);
-template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> find_boundary_triangles(const SimpleMesh_<n_dims, T> &mesh);
 
 constexpr glm::uvec2 other_vertices_in_triangle(const glm::uvec3 &triangle, const uint32_t vertex);
 
@@ -78,8 +73,8 @@ template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::Simple_<n_dims, T> &mesh);
 std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const size_t vertex_count);
 
-void find_boundary_edges(const std::span<const glm::uvec3> triangles, std::unordered_set<glm::uvec2> &boundary);
-std::unordered_set<glm::uvec2> find_boundary_edges(const std::span<const glm::uvec3> triangles);
-std::unordered_set<uint32_t> find_boundary_triangles(const std::span<const glm::uvec3> triangles);
+template <glm::length_t n_dims, typename T>
+std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh);
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count);
 
 #include "topology.inl"

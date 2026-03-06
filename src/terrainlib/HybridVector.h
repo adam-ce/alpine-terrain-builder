@@ -1,12 +1,13 @@
 #pragma once
 
-#include "FixedVector.h"
 #include <span>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
-template <typename T, std::size_t N>
+#include "FixedVector.h"
+
+template <typename T, size_t N>
 class HybridVector {
 public:
     HybridVector() : _is_on_stack(true) {}

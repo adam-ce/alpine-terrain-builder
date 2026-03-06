@@ -1,9 +1,10 @@
 #pragma once
 
-#include "mesh/topology.h"
-#include "mesh/geometry.h"
-#include "mesh/reindex.h"
-#include "mesh/manifold.h"
+#include "mesh/boundary.h"
+#include "mesh/bounds.h"
 #include "mesh/cleanup.h"
 #include "mesh/connected_components.h"
-#include "mesh/bounds.h"
+#include "mesh/geometry.h"
+#include "mesh/manifold.h"
+#include "mesh/reindex.h"
+#include "mesh/topology.h"

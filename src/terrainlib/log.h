@@ -34,21 +34,3 @@ public:
 
 template <typename... Ts>
 constexpr void USE(Ts &&...) noexcept {}
-
-/*
-#if __cplusplus >= 202302L
-#define _UNREACHABLE() std::unreachable()
-#elif defined(__GNUC__) || defined(__clang__)
-#define _UNREACHABLE() __builtin_unreachable()
-#elif defined(_MSC_VER)
-#define _UNREACHABLE() __assume(false)
-#else
-#define _UNREACHABLE() std::abort()
-#endif
-
-#define UNREACHABLE()                                                       \
-    do {                                                                    \
-        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
-        _UNREACHABLE();                                                     \
-    } while (0)
-*/

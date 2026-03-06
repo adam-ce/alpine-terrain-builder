@@ -11,10 +11,14 @@
 #include "mesh/cgal.h"
 #include "mesh/validate.h"
 #include "log.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 using UvMap = cgal::Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
 
-cgal::Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
+namespace convert {
+
+cgal::Mesh to_cgal_mesh(const mesh::View &mesh) {
     cgal::Mesh cgal_mesh;
     const size_t approx_num_edges = (mesh.face_count() * 3) / 2;
     cgal_mesh.reserve(mesh.vertex_count(), approx_num_edges, mesh.face_count());
@@ -48,7 +52,7 @@ cgal::Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
     return cgal_mesh;
 }
 
-SimpleMesh convert::to_simple_mesh(const cgal::Mesh &cgal_mesh) {
+SimpleMesh to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     ASSERT(!cgal_mesh.has_garbage());
     
     SimpleMesh mesh;
@@ -90,4 +94,6 @@ SimpleMesh convert::to_simple_mesh(const cgal::Mesh &cgal_mesh) {
     mesh::validate(mesh);
 
     return mesh;
+}
+ 
 }

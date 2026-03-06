@@ -12,6 +12,7 @@
 
 namespace atlas {
 
+// TODO: merge with dag_builder/atlas/atlas.h 
 inline Sheet build(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     const Layout &layout) {

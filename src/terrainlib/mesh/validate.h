@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 namespace mesh {
 
@@ -16,31 +17,41 @@ enum class ValidationFlags : uint32_t {
     SingleComponent = 1u << 3,
     All = Basic | Geometry | Manifold | SingleComponent
 };
-constexpr ValidationFlags operator|(ValidationFlags a, ValidationFlags b) noexcept {
+constexpr ValidationFlags operator|(const ValidationFlags a, const ValidationFlags b) noexcept {
     return static_cast<ValidationFlags>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
-constexpr ValidationFlags operator&(ValidationFlags a, ValidationFlags b) noexcept {
+constexpr ValidationFlags operator&(const ValidationFlags a, const ValidationFlags b) noexcept {
     return static_cast<ValidationFlags>(static_cast<uint32_t>(a) & static_cast<uint32_t>(b));
 }
-constexpr ValidationFlags &operator|=(ValidationFlags &a, ValidationFlags b) noexcept {
+constexpr ValidationFlags &operator|=(ValidationFlags &a, const ValidationFlags b) noexcept {
     a = a | b;
     return a;
 }
 
 template <glm::length_t n_dims, typename T>
-void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags = ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::Manifold);
+void validate(const mesh::Simple_<n_dims, T> &mesh, const ValidationFlags flags = ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::Manifold);
+template <glm::length_t n_dims, typename T>
+void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags = ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::Manifold);
 
 template <glm::length_t n_dims, typename T>
-void validate_basic(const SimpleMesh_<n_dims, T> &mesh);
+void validate_basic(const mesh::Simple_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void validate_basic(const mesh::View_<n_dims, T> &mesh);
 
 template <glm::length_t n_dims, typename T>
-void validate_unconnected(const SimpleMesh_<n_dims, T> &mesh);
+void validate_unconnected(const mesh::Simple_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void validate_unconnected(const mesh::View_<n_dims, T> &mesh);
 
 template <glm::length_t n_dims, typename T>
-void validate_connected(const SimpleMesh_<n_dims, T> &mesh);
+void validate_connected(const mesh::View_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void validate_connected(const mesh::Simple_<n_dims, T> &mesh);
 
 template <glm::length_t n_dims, typename T>
-void validate_manifold(const SimpleMesh_<n_dims, T> &mesh);
+void validate_manifold(const mesh::View_<n_dims, T> &mesh);
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const mesh::Simple_<n_dims, T> &mesh);
 
 } // namespace mesh
 

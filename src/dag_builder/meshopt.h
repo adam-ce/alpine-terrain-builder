@@ -198,7 +198,7 @@ inline void optimize_meshlet(
 
 struct [[nodiscard]] PartitionClustersResult {
     std::vector<uint32_t> cluster_partitions;
-    size_t partition_count = 0;
+    uint32_t partition_count = 0;
 };
 
 inline PartitionClustersResult partition_clusters(
@@ -227,7 +227,7 @@ inline PartitionClustersResult partition_clusters(
         clusters_per_partition
     );
 
-    return PartitionClustersResult{std::move(partitions), partition_count};
+    return PartitionClustersResult{std::move(partitions), static_cast<uint32_t>(partition_count)};
 }
 
 } // namespace meshopt

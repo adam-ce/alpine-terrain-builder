@@ -4,10 +4,11 @@
 
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
-#include <radix/geometry.h>
-#include <zpp_bits.h>
 
 namespace mesh {
+    
+template <glm::length_t dimensions, typename T>
+class View_;
 
 template <glm::length_t dimensions = 3, typename T = double>
 class Simple_ {
@@ -33,6 +34,12 @@ public:
     Simple_ &operator=(Simple_ &&) = default;
     Simple_(const Simple_ &) = default;
     Simple_ &operator=(const Simple_ &) = default;
+
+    explicit Simple_(const mesh::View_<dimensions, T>& v)
+        : triangles(v.triangles.begin(), v.triangles.end()),
+        positions(v.positions.begin(), v.positions.end()),
+        uvs(v.uvs.begin(), v.uvs.end()),
+        texture(v.texture) {}
 
     std::vector<Triangle> triangles;
     std::vector<Position> positions;
@@ -67,7 +74,7 @@ public:
 using Simple3d = Simple_<3, double>;
 using Simple2d = Simple_<2, double>;
 using Simple3f = Simple_<3, float>;
-using Simple2f = Simple_<3, float>;
+using Simple2f = Simple_<2, float>;
 
 using Simple = Simple3d;
 using Shared = std::shared_ptr<Simple>;

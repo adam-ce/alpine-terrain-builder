@@ -158,7 +158,7 @@ static void warp_triangle(const cv::Mat &source_image, cv::Mat &target_image, st
     target_image(target_rect) = target_image(target_rect) + target_image_cropped;
 }
 
-// TODO: reproject triangles
+// TODO: use dag_builder/reproject_texture.h here
 Texture uv_map::merge_textures(
     const std::span<const SimpleMesh> original_meshes,
     const SimpleMesh &merged_mesh,

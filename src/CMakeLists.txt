@@ -73,9 +73,7 @@ alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
 
 alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
 find_package(CGAL REQUIRED)
-include(../cmake/MarkAsSystem.cmake)
-mark_target_includes_as_system(CGAL::CGAL)
-mark_target_includes_as_system(CGAL::CGAL_Core)
+
 include(../cmake/SetupOpenCV.cmake)
 alp_setup_opencv(4.11.0)
 
@@ -111,6 +109,8 @@ alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git 
 alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
+
+alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
 
 set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(METIS_INSTALL OFF CACHE BOOL "" FORCE)
@@ -154,12 +154,12 @@ target_link_libraries(imgui PUBLIC glfw)
 
 
 # Unity Builds
-option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" ON)
-# set(ALP_UNITY_BUILD_BATCH_SIZE 8 CACHE STRING "Number of source files per unity translation unit")
+option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
+set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity translation unit")
 if(ALP_ENABLE_UNITY_BUILD)
     message(STATUS "ALP_ENABLE_UNITY_BUILD: enabling CMake unity builds (CMAKE_UNITY_BUILD=ON)")
     set(CMAKE_UNITY_BUILD ON)
-    # set(CMAKE_UNITY_BUILD_BATCH_SIZE ${ALP_UNITY_BUILD_BATCH_SIZE})
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE ${ALP_UNITY_BUILD_BATCH_SIZE})
 endif()
 
 
@@ -183,9 +183,16 @@ add_library(terrainlib
     terrainlib/mesh/io/terrain.h terrainlib/mesh/io/terrain.cpp
     terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
     terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
+    
+    terrainlib/mesh/merging/VertexDeduplicate.h
+    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
+    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
+    terrainlib/mesh/merging/VertexMapping.h
+    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
 
     terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
     terrainlib/mesh/bounds.h
+    terrainlib/mesh/boundary.h terrainlib/mesh/boundary.cpp
     terrainlib/mesh/cgal.h
     terrainlib/mesh/cleanup.h terrainlib/mesh/cleanup.cpp
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
@@ -209,11 +216,6 @@ add_library(terrainlib
     terrainlib/mesh/validate.h
     terrainlib/mesh/View.h
     terrainlib/mesh/WindingOrder.h
-    terrainlib/mesh/merging/VertexDeduplicate.h
-    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
-    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
-    terrainlib/mesh/merging/VertexMapping.h
-    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
 
     terrainlib/octree/disk/layout/strategy/Default.h
     terrainlib/octree/disk/layout/strategy/Flat.h
@@ -380,6 +382,11 @@ add_executable(index-browser
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_library(dagbuilderlib
+    dag_builder/atlas/atlas.h dag_builder/atlas/atlas.cpp
+    dag_builder/atlas/HorizontalStripPlanner.h dag_builder/atlas/HorizontalStripPlanner.cpp
+    dag_builder/atlas/PackingPlanner.h dag_builder/atlas/PackingPlanner.cpp
+    dag_builder/atlas/Plan.h
+    dag_builder/atlas/Planner.h
     dag_builder/cluster.h
     dag_builder/clusterize.h
     dag_builder/meshopt.h
@@ -387,10 +394,11 @@ add_library(dagbuilderlib
     dag_builder/partition.h
     dag_builder/simplify.h
     dag_builder/split.h
+    dag_builder/uv.h dag_builder/uv.cpp
     dag_builder/validate.h
 )
-target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis meshoptimizer)
 target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis rectpack2D meshoptimizer)
 add_executable(dag-builder
     # dag_builder/cli.h index_browser/cli.cpp
     dag_builder/main.cpp

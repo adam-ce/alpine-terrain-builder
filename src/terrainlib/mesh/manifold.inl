@@ -181,18 +181,21 @@ void make_manifold(
     remove_degenerate_triangles(triangles);
     duplicate_non_manifold_edges(triangles, positions, uvs);
     duplicate_non_manifold_vertices(triangles, positions, uvs);
-    DEBUG_ASSERT(is_manifold(SimpleMesh_(triangles, positions, uvs)));
+    DEBUG_ASSERT(is_manifold(triangles));
+}
+
+template <typename Duplicate>
+void make_manifold(
+    std::vector<glm::uvec3> &triangles,
+    const uint32_t vertex_count,
+    Duplicate &&duplicate_vertex) {
+    remove_degenerate_triangles(triangles);
+    duplicate_non_manifold_edges(triangles, duplicate_vertex);
+    duplicate_non_manifold_vertices(triangles, vertex_count, duplicate_vertex);
+    DEBUG_ASSERT(is_manifold(triangles));
 }
 
 template <glm::length_t n_dims, typename T>
 bool is_manifold(const SimpleMesh_<n_dims, T> &mesh) {
-    const auto edge_to_faces = create_edge_to_triangle_mapping_non_manifold2(mesh);
-
-    for (const auto &[_edge, faces] : edge_to_faces) {
-        if (faces.size() > 2u) {
-            return false;
-        }
-    }
-
-    return true;
+    return is_manifold(mesh.triangles);
 }

@@ -56,8 +56,14 @@ void make_manifold(
     std::vector<glm::uvec3> &triangles,
     std::vector<glm::vec<n_dims, Position>> &positions,
     std::vector<glm::vec<2, Uv>> &uvs);
+template <typename Duplicate>
+void make_manifold(
+    std::vector<glm::uvec3> &triangles,
+    const uint32_t vertex_count,
+    Duplicate &&duplicate_vertex);
 
 template <glm::length_t n_dims, typename T>
 bool is_manifold(const SimpleMesh_<n_dims, T> &mesh);
+bool is_manifold(const std::span<const glm::uvec3> triangles);
 
 #include "manifold.inl"

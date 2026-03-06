@@ -92,44 +92,27 @@ std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm:
     return adjacent_triangle_count;
 }
 
-void flip_triangle_orientations(std::vector<glm::uvec3>& triangles) {
+void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
     for (auto &triangle : triangles) {
         flip_triangle_orientation(triangle);
     }
 }
 
-void find_boundary_edges(const std::span<const glm::uvec3> triangles, std::unordered_set<glm::uvec2>& boundary) {
-    boundary.clear();
-    for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) {
-        auto it = boundary.find(glm::uvec2(edge.y, edge.x));
-        if (it != boundary.end()) {
-            // Edge already there -> shared egde -> remove it
-            boundary.erase(it);
-        } else {
-            // Edge not present -> add it (but in correct order)
-            boundary.insert(edge);
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
+    std::vector<bool> connected;
+    connected.resize(vertex_count, false);
+    for (const glm::uvec3 &triangle : triangles) {
+        for (uint8_t k = 0; k < 3; k++) {
+            connected[triangle[k]] = true;
         }
-    }, /* normalize */ false);
-}
-
-std::unordered_set<uint32_t> find_boundary_triangles(const std::span<const glm::uvec3> triangles) {
-    std::unordered_map<glm::uvec2, uint32_t> boundary_edges;
-    for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t triangle_index) {
-        auto it = boundary_edges.find(glm::uvec2(edge.y, edge.x));
-        if (it != boundary_edges.end()) {
-            // Edge already there -> shared egde -> remove it
-            boundary_edges.erase(it);
-        } else {
-            // Edge not present -> add it (but in correct order)
-            boundary_edges[edge] = triangle_index;
-        }
-    }, /* normalize */ false);
-
-    std::unordered_set<uint32_t> boundary_triangles;
-    boundary_triangles.reserve(boundary_edges.size());
-    for (const auto &[_, triangle_index] : boundary_edges) {
-        boundary_triangles.insert(triangle_index);
     }
 
-    return boundary_triangles;
+    std::vector<uint32_t> isolated;
+    for (uint32_t i = 0; i < vertex_count; i++) {
+        if (!connected[i]) {
+            isolated.push_back(i);
+        }
+    }
+
+    return isolated;
 }

@@ -38,7 +38,7 @@ std::vector<uint32_t> find_duplicate_triangles_consider_orientation(mesh::Simple
 
 namespace detail {
 template <typename T>
-uint32_t identify_triangle_to_remove(
+inline uint32_t identify_triangle_to_remove(
     const uint32_t a, const uint32_t b,
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec<3, T>> positions,

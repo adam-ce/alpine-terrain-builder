@@ -7,6 +7,7 @@
 #include <radix/geometry.h>
 
 #include "mesh/SimpleMesh.h"
+#include "mesh/manifold.h"
 #include "cluster.h"
 
 // Normalize a set of 3D positions into the range of [-1,1] based on maximum extents of the bounding box.
@@ -156,14 +157,14 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool 
 }
 
 template <glm::length_t L, typename T>
-T *value_ptr(const std::span<glm::vec<L, T>>& v) noexcept {
+inline T *value_ptr(const std::span<glm::vec<L, T>> &v) noexcept {
     if (v.empty()) {
         return nullptr;
     }
     return glm::value_ptr(*v.data());
 }
 template <glm::length_t L, typename T>
-const T *value_ptr(const std::span<const glm::vec<L, T>>& v) noexcept {
+inline const T *value_ptr(const std::span<const glm::vec<L, T>>& v) noexcept {
     if (v.empty()) {
         return nullptr;
     }
@@ -171,7 +172,7 @@ const T *value_ptr(const std::span<const glm::vec<L, T>>& v) noexcept {
 }
 
 template <glm::length_t L, typename T>
-std::span<T> flatten(const std::span<glm::vec<L, T>> v) {
+inline std::span<T> flatten(const std::span<glm::vec<L, T>> v) {
     static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
     static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
 
@@ -179,7 +180,7 @@ std::span<T> flatten(const std::span<glm::vec<L, T>> v) {
 }
 
 template <glm::length_t L, typename T>
-std::span<const T> flatten(const std::span<const glm::vec<L, T>> v) {
+inline std::span<const T> flatten(const std::span<const glm::vec<L, T>> v) {
     static_assert(std::is_standard_layout_v<glm::vec<L, T>>);
     static_assert(sizeof(glm::vec<L, T>) == sizeof(T) * L);
 
@@ -187,11 +188,35 @@ std::span<const T> flatten(const std::span<const glm::vec<L, T>> v) {
 }
 
 template <glm::length_t L, typename T>
-std::span<T> flatten(std::vector<glm::vec<L, T>> &v) {
+inline std::span<T> flatten(std::vector<glm::vec<L, T>> &v) {
     return flatten(std::span(v));
 }
 
 template <glm::length_t L, typename T>
-std::span<const T> flatten(const std::vector<glm::vec<L, T>> &v) {
+inline std::span<const T> flatten(const std::vector<glm::vec<L, T>> &v) {
     return flatten(std::span(v));
+}
+
+inline void make_manifold_inplace(Cluster &cluster) {
+    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+        const uint32_t new_vertex_index = cluster.vertex_indices.size();
+        // No need to update cluster_positions here.
+        cluster.vertex_indices.push_back(cluster.vertex_indices[old_vertex_index]);
+        if (cluster.has_uvs()) {
+            cluster.uvs.push_back(cluster.uvs[old_vertex_index]);
+        }
+        return new_vertex_index;
+    };
+
+    make_manifold(cluster.local_triangles, cluster.vertex_count(), duplicate_vertex);
+}
+inline void make_manifold_inplace(Clustering &clustering) {
+    for (Cluster &cluster : clustering.clusters) {
+        make_manifold_inplace(cluster);
+    }
+}
+inline Clustering make_manifold(const Clustering &clustering) {
+    Clustering manifold = clustering;
+    make_manifold_inplace(manifold);
+    return manifold;
 }

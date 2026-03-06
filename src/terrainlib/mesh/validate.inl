@@ -21,11 +21,11 @@ namespace detail {
 
 inline constexpr double EPSILON = 1e-12;
 
-constexpr bool has_flag(ValidationFlags set, ValidationFlags flag) noexcept {
+constexpr bool has_flag(const ValidationFlags set, const ValidationFlags flag) noexcept {
     return (set & flag) != ValidationFlags::None;
 }
 
-inline bool has_duplicate_faces(std::span<const glm::uvec3> triangles, bool ignore_orientation = true) {
+inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
     std::unordered_map<glm::uvec3, uint32_t> counts;
     counts.reserve(triangles.size());
 
@@ -62,8 +62,8 @@ T doubled_area_squared(const glm::vec<n_dims, T> &a,
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_basic(const SimpleMesh_<n_dims, T> &mesh) {
-    using Mesh = SimpleMesh_<n_dims, T>;
+void validate_basic(const mesh::View_<n_dims, T> &mesh) {
+    using Mesh = mesh::View_<n_dims, T>;
     using Triangle = typename Mesh::Triangle;
     using Uv = typename Mesh::Uv;
 
@@ -94,31 +94,31 @@ void validate_basic(const SimpleMesh_<n_dims, T> &mesh) {
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_topology(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
+void validate_topology(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
     if (has_flag(flags, ValidationFlags::SingleComponent)) {
         DEBUG_ASSERT(is_single_component(mesh));
     }
 
     if (has_flag(flags, ValidationFlags::Manifold)) {
-        DEBUG_ASSERT(is_manifold(mesh));
+        DEBUG_ASSERT(is_manifold(mesh.triangles));
 
-        DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), true));
+        DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, true));
     }
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_geometry(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_geometry(const mesh::View_<n_dims, T> &mesh) {
     static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
 
-    DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
+    DEBUG_ASSERT(find_isolated_vertices(mesh.triangles, mesh.vertex_count()).empty());
 
-    DEBUG_ASSERT(!has_duplicate_faces(std::span<const glm::uvec3>(mesh.triangles), false));
+    DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
 
     const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
-    for (const auto &tri : mesh.triangles) {
-        const auto &a = mesh.positions[static_cast<size_t>(tri[0])];
-        const auto &b = mesh.positions[static_cast<size_t>(tri[1])];
-        const auto &c = mesh.positions[static_cast<size_t>(tri[2])];
+    for (const auto &triangle : mesh.triangles) {
+        const auto &a = mesh.positions[triangle[0]];
+        const auto &b = mesh.positions[triangle[1]];
+        const auto &c = mesh.positions[triangle[2]];
 
         const T double_area_sq = doubled_area_squared<n_dims, T>(a, b, c);
         DEBUG_ASSERT(double_area_sq > double_epsilon_sq);
@@ -128,7 +128,7 @@ void validate_geometry(const SimpleMesh_<n_dims, T> &mesh) {
 } // namespace detail
 
 template <glm::length_t n_dims, typename T>
-void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
+void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
 #ifndef NDEBUG
     if (detail::has_flag(flags, ValidationFlags::Basic)) {
         detail::validate_basic(mesh);
@@ -144,25 +144,45 @@ void validate(const SimpleMesh_<n_dims, T> &mesh, ValidationFlags flags) {
     USE(mesh);
     USE(flags);
 }
+template <glm::length_t n_dims, typename T>
+void validate(const mesh::Simple_<n_dims, T> &mesh, const ValidationFlags flags) {
+    validate(mesh::View_<n_dims, T>(mesh), flags);
+}
 
 template <glm::length_t n_dims, typename T>
-void validate_basic(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_basic(const mesh::View_<n_dims, T> &mesh) {
     validate(mesh, ValidationFlags::Basic);
 }
+template <glm::length_t n_dims, typename T>
+void validate_basic(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_basic(mesh::View_<n_dims, T>(mesh));
+}
 
 template <glm::length_t n_dims, typename T>
-void validate_unconnected(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_unconnected(const mesh::View_<n_dims, T> &mesh) {
     validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry);
 }
-
 template <glm::length_t n_dims, typename T>
-void validate_connected(const SimpleMesh_<n_dims, T> &mesh) {
-    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent);
+void validate_unconnected(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_unconnected(mesh::View_<n_dims, T>(mesh));
 }
 
 template <glm::length_t n_dims, typename T>
-void validate_manifold(const SimpleMesh_<n_dims, T> &mesh) {
+void validate_connected(const mesh::View_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent);
+}
+template <glm::length_t n_dims, typename T>
+void validate_connected(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_connected(mesh::View_<n_dims, T>(mesh));
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const mesh::View_<n_dims, T> &mesh) {
     validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent | ValidationFlags::Manifold);
+}
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_manifold(mesh::View_<n_dims, T>(mesh));
 }
 
 } // namespace mesh

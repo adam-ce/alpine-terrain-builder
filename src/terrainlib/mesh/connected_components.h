@@ -22,17 +22,24 @@ struct ComponentsIndex {
     size_t component_count;
 };
 
+namespace detail {
+inline UnionFind build_union_find(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
+    UnionFind components(vertex_count);
+    for (const glm::uvec3 &triangle : triangles) {
+        components.make_union(triangle[0], triangle[1]);
+        components.make_union(triangle[1], triangle[2]);
+    }
+    return components;
+}
+}
+
 inline ComponentsIndex find_connected_components(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
     if (vertex_count == 0) {
         return {};
     }
 
     // Union vertices that belong to the same triangle
-    UnionFind components(vertex_count);
-    for (const glm::uvec3 &triangle : triangles) {
-        components.make_union(triangle[0], triangle[1]);
-        components.make_union(triangle[1], triangle[2]);
-    }
+    UnionFind components = detail::build_union_find(triangles, vertex_count);
 
     // Convert to vertex to component index mapping
     std::unordered_map<VertexIndex, ComponentIndex> rep_to_index;
@@ -56,13 +63,17 @@ inline ComponentsIndex find_connected_components(const std::span<const glm::uvec
         .component_count = rep_to_index.size()};
 }
 template <glm::length_t n_dims, typename T>
+ComponentsIndex find_connected_components(const mesh::View_<n_dims, T> &mesh) {
+    return find_connected_components(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
 ComponentsIndex find_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
     return find_connected_components(mesh.triangles, mesh.vertex_count());
 }
 
 template <glm::length_t n_dims, typename T>
-std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
-    const auto& [vertex_to_component, component_count] = find_connected_components(mesh);
+std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::View_<n_dims, T> &mesh, const ComponentsIndex& components_index) {
+    const auto &[vertex_to_component, component_count] = components_index;
 
     std::vector<mesh::Simple_<n_dims, T>> components;
     components.resize(component_count);
@@ -102,20 +113,43 @@ std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh
 
     return components;
 }
-
 template <glm::length_t n_dims, typename T>
-size_t count_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
-    if (mesh.triangles.empty()) {
+std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::View_<n_dims, T> &mesh) {
+    const ComponentsIndex& components_index = find_connected_components(mesh);
+    return split_into_connected_components(mesh, components_index);
+}
+template <glm::length_t n_dims, typename T>
+std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
+    return split_into_connected_components(mesh::View_<n_dims, T>(mesh));
+}
+
+inline size_t count_connected_components(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
+    if (vertex_count == 0 || triangles.empty()) {
         return 0;
     }
 
-    const mesh::ComponentsIndex components = find_connected_components(mesh::Simple_<n_dims, T>(mesh));
-    return components.component_count;
+    UnionFind components = detail::build_union_find(triangles, vertex_count);
+    return components.set_count();
+}
+template <glm::length_t n_dims, typename T>
+size_t count_connected_components(const mesh::View_<n_dims, T> &mesh) {
+    return count_connected_components(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
+size_t count_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
+    return count_connected_components(mesh.triangles, mesh.vertex_count());
 }
 
+inline bool is_single_component(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
+    return count_connected_components(triangles, vertex_count) == 1u;
+}
+template <glm::length_t n_dims, typename T>
+bool is_single_component(const mesh::View_<n_dims, T> &mesh) {
+    return is_single_component(mesh.triangles, mesh.vertex_count());
+}
 template <glm::length_t n_dims, typename T>
 bool is_single_component(const mesh::Simple_<n_dims, T> &mesh) {
-    return count_connected_components(mesh) == 1u;
+    return is_single_component(mesh.triangles, mesh.vertex_count());
 }
 
 } // namespace mesh

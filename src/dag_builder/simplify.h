@@ -15,17 +15,18 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "mesh/validate.h"
+#include "mesh/boundary.h"
 #include "validate.h"
 
 struct VertexLock {
     struct None {};
     struct Boundary {};
     struct BoundaryTriangles {};
-    struct Custom {
+    struct Mask {
         const std::span<const uint8_t> mask;
     };
 
-    using Variant = std::variant<None, Boundary, BoundaryTriangles, Custom>;
+    using Variant = std::variant<None, Boundary, BoundaryTriangles, Mask>;
     Variant v;
 
     VertexLock() : v(None{}) {}
@@ -35,12 +36,15 @@ struct VertexLock {
     static VertexLock boundary() {
         return VertexLock{Boundary{}};
     }
-    static VertexLock boundaryTriangles() {
+    static VertexLock boundary_triangles() {
         return VertexLock{BoundaryTriangles{}};
     }
-    static VertexLock custom(std::span<const std::uint8_t> mask) {
-        return VertexLock{Custom{mask}};
+    static VertexLock mask(const std::span<const std::uint8_t> mask) {
+        return VertexLock{Mask{.mask = mask}};
     }
+
+    static inline constexpr const uint8_t UNLOCKED = 0;
+    static inline constexpr const uint8_t LOCKED = meshopt_SimplifyVertex_Lock;
 
 private:
     template <class T>
@@ -53,8 +57,45 @@ struct SimplifyOptions {
     VertexLock vertex_lock = VertexLock::none();
 };
 
+namespace detail {
+    inline std::vector<uint8_t> resolve_vertex_lock(const VertexLock& v, const Clustering& clustering, const Cluster& cluster) {
+        constexpr const uint8_t UNLOCKED = VertexLock::UNLOCKED;
+        constexpr const uint8_t LOCKED = VertexLock::LOCKED;
+        std::vector<uint8_t> vertex_lock;
+
+        std::visit([&](auto &&arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, VertexLock::None>) {
+                // Nothing to do
+            } else if constexpr (std::is_same_v<T, VertexLock::Boundary>) {
+                build_boundary_vertex_mask<uint8_t>(cluster.local_triangles, cluster.vertex_count(), vertex_lock, LOCKED, UNLOCKED);
+            } else if constexpr (std::is_same_v<T, VertexLock::BoundaryTriangles>) {
+                const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(cluster.local_triangles);
+                vertex_lock.resize(cluster.vertex_count(), UNLOCKED);
+                for (const uint32_t triangle_index : boundary_triangles) {
+                    const glm::uvec3 &triangle = cluster.local_triangles[triangle_index];
+                    for (uint8_t k = 0; k < 3; k++) {
+                        const uint32_t vertex_index = triangle[k];
+                        vertex_lock[vertex_index] = LOCKED;
+                    }
+                }
+            } else if constexpr (std::is_same_v<T, VertexLock::Mask>) {
+                ASSERT(arg.mask.size() == clustering.vertex_count());
+                vertex_lock.resize(cluster.vertex_count(), UNLOCKED);
+                for (uint32_t local_vertex_index=0; local_vertex_index <clustering.vertex_count(); local_vertex_index++) {
+                    const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
+                    const uint8_t mask_value = arg.mask[global_vertex_index];
+                    DEBUG_ASSERT(mask_value == LOCKED || mask_value == UNLOCKED);
+                    vertex_lock[local_vertex_index] = mask_value;
+                }
+            }
+        }, v.v);
+        return vertex_lock;
+    }
+}
+
 [[nodiscard]]
-Clustering simplify(
+inline Clustering simplify(
     const Clustering& original_clustering,
     const SimplifyOptions options = {}
 ) {
@@ -86,30 +127,7 @@ Clustering simplify(
             meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
 
         // Set up vertex locks
-        std::vector<uint8_t> vertex_locks;
-        int lock_options = 0;
-        std::visit([&](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, VertexLock::None>) {
-                // empty -> no locks
-            } else if constexpr (std::is_same_v<T, VertexLock::Boundary>) {
-                // use meshopt built-in boundary lock
-                lock_options = meshopt_SimplifyLockBorder;
-            } else if constexpr (std::is_same_v<T, VertexLock::BoundaryTriangles>) {
-                const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(original_cluster.local_triangles);
-                vertex_locks.resize(original_cluster.vertex_count(), 0);
-                for (const uint32_t triangle_index : boundary_triangles) {
-                    const glm::uvec3 &triangle = original_cluster.local_triangles[triangle_index];
-                    for (uint8_t k = 0; k < 3; k++) {
-                        const uint32_t vertex_index = triangle[k];
-                        vertex_locks[vertex_index] |= meshopt_SimplifyVertex_Lock;
-                    }
-                }
-            } else if constexpr (std::is_same_v<T, VertexLock::Custom>) {
-                DEBUG_ASSERT(arg.mask.size() == original_vertex_count);
-                vertex_locks.assign(arg.mask.begin(), arg.mask.end());
-            }
-        }, options.vertex_lock.v);
+        std::vector<uint8_t> vertex_locks = detail::resolve_vertex_lock(options.vertex_lock, original_clustering, original_cluster);
 
         // Perform simplification
         const size_t original_triangle_count = original_cluster.local_triangles.size();
@@ -123,7 +141,7 @@ Clustering simplify(
             vertex_locks,
             target_triangle_count,
             relative_target_error,
-            meshopt_SimplifyErrorAbsolute | lock_options);
+            meshopt_SimplifyErrorAbsolute);
         if (result.triangles.empty()) {
             // Simplification removed all triangles, go to next cluster
             continue;

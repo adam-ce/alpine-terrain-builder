@@ -58,15 +58,6 @@ void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
 }
 
 template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> find_boundary_edges(const mesh::Simple_<n_dims, T> &mesh) {
-    return find_boundary_edges(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> find_boundary_triangles(const mesh::Simple_<n_dims, T> &mesh) {
-    return find_boundary_triangles(mesh.triangles);
-}
-
-template <glm::length_t n_dims, typename T>
 std::unordered_map<glm::uvec2, FixedVector<uint32_t, 2>> create_edge_to_triangle_mapping_manifold(const mesh::Simple_<n_dims, T> &mesh) {
     return create_edge_to_triangle_mapping_manifold(mesh.triangles);
 }
@@ -230,8 +221,7 @@ inline std::vector<uint32_t> count_vertex_adjacent_triangles(const SimpleMesh &m
     return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
 }
 
-inline std::unordered_set<glm::uvec2> find_boundary_edges(const std::span<const glm::uvec3> triangles) {
-    std::unordered_set<glm::uvec2> boundary;
-    find_boundary_edges(triangles, boundary);
-    return boundary;
+template <glm::length_t n_dims, typename T>
+std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh) {
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
 }

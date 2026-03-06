@@ -19,7 +19,7 @@
 
 namespace {
 template <typename A, typename B>
-constexpr auto int_div_ceil(A a, B b) {
+inline constexpr auto int_div_ceil(A a, B b) {
     static_assert(std::is_integral_v<A>);
     static_assert(std::is_integral_v<B>);
     using T = std::conditional_t<(sizeof(A) >= sizeof(B)), A, B>;
@@ -46,7 +46,7 @@ constexpr auto int_div_ceil(A a, B b) {
 }
 
 template <Size S>
-Clustering split_each_into_equal_parts(const Clustering &input, const S num_parts) {
+inline Clustering split_each_into_equal_parts(const Clustering &input, const S num_parts) {
     if (num_parts == 0) {
         return {
             .positions = input.positions,
@@ -170,9 +170,9 @@ Clustering split_each_into_equal_parts(const Clustering &input, const S num_part
 }
 
 template <size_t NUM_PARTS>
-Clustering split_each_into_equal_parts(const Clustering &input) {
+inline Clustering split_each_into_equal_parts(const Clustering &input) {
     return split_each_into_equal_parts(input, make_size<NUM_PARTS>());
 }
-Clustering split_each_into_equal_parts(const Clustering &input, const size_t num_parts = 2) {
+inline Clustering split_each_into_equal_parts(const Clustering &input, const size_t num_parts = 2) {
     return split_each_into_equal_parts(input, make_size(num_parts));
 }

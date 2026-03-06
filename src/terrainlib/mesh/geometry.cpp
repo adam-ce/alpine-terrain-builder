@@ -8,6 +8,7 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/geometry.h"
+#include "optional_utils.h"
 
 std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const size_t sample_size) {
     const auto &triangles = mesh.triangles;
@@ -27,16 +28,20 @@ std::optional<double> estimate_average_edge_length(const SimpleMesh &mesh, const
     const size_t offset = (num_triangles / 7) % num_triangles;
 
     for (size_t i = 0; i < triangle_sample_size; i++) {
-        const auto &tri = triangles[(offset + i * stride) % num_triangles];
+        const auto &triangle = triangles[(offset + i * stride) % num_triangles];
 
-        const glm::dvec3 &a = positions[tri.x];
-        const glm::dvec3 &b = positions[tri.y];
-        const glm::dvec3 &c = positions[tri.z];
+        const glm::dvec3 &a = positions[triangle.x];
+        const glm::dvec3 &b = positions[triangle.y];
+        const glm::dvec3 &c = positions[triangle.z];
 
-        total_length += glm::distance(a, b) + glm::distance(b, c) + glm::distance(c, a);
+        const double ab = glm::distance(a, b);
+        const double bc = glm::distance(b, c);
+        const double ca = glm::distance(c, a);
+
+        total_length += ab + bc + ca;
     }
 
-    return total_length / triangle_sample_size;
+    return total_length / (triangle_sample_size * 3);
 }
 
 std::optional<double> calculate_max_edge_length_squared(const SimpleMesh &mesh) {
@@ -44,19 +49,24 @@ std::optional<double> calculate_max_edge_length_squared(const SimpleMesh &mesh) 
         return std::nullopt;
     }
 
-    double max_length = 0.0;
-    for (const auto &tri : mesh.triangles) {
-        const glm::dvec3 &a = mesh.positions[tri.x];
-        const glm::dvec3 &b = mesh.positions[tri.y];
-        const glm::dvec3 &c = mesh.positions[tri.z];
+    double max_length_sq = 0.0;
+    for (const auto &triangle : mesh.triangles) {
+        const glm::dvec3 &a = mesh.positions[triangle.x];
+        const glm::dvec3 &b = mesh.positions[triangle.y];
+        const glm::dvec3 &c = mesh.positions[triangle.z];
 
-        const double ab = glm::distance2(a, b);
-        const double bc = glm::distance2(b, c);
-        const double ca = glm::distance2(c, a);
+        const double ab_sq = glm::distance2(a, b);
+        const double bc_sq = glm::distance2(b, c);
+        const double ca_sq = glm::distance2(c, a);
 
-        max_length = std::max({ab, bc, ca, max_length});
+        max_length_sq = std::max({
+            max_length_sq,
+            ab_sq,
+            bc_sq,
+            ca_sq,
+        });
     }
-    return max_length;
+    return max_length_sq;
 }
 
 std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh) {
@@ -64,35 +74,30 @@ std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh) 
         return std::nullopt;
     }
 
-    double max_length = 0.0;
-    for (const auto &tri : mesh.triangles) {
-        const glm::dvec3 &a = mesh.positions[tri.x];
-        const glm::dvec3 &b = mesh.positions[tri.y];
-        const glm::dvec3 &c = mesh.positions[tri.z];
+    double min_length_sq = 0.0;
+    for (const auto &triangle : mesh.triangles) {
+        const glm::dvec3 &a = mesh.positions[triangle.x];
+        const glm::dvec3 &b = mesh.positions[triangle.y];
+        const glm::dvec3 &c = mesh.positions[triangle.z];
 
-        const double ab = glm::distance2(a, b);
-        const double bc = glm::distance2(b, c);
-        const double ca = glm::distance2(c, a);
+        const double ab_sq = glm::distance2(a, b);
+        const double bc_sq = glm::distance2(b, c);
+        const double ca_sq = glm::distance2(c, a);
 
-        max_length = std::min({ab, bc, ca, max_length});
+        min_length_sq = std::min({
+            min_length_sq,
+            ab_sq,
+            bc_sq,
+            ca_sq,
+        });
     }
-    return max_length;
+    return min_length_sq;
 }
 
 std::optional<double> calculate_max_edge_length(const SimpleMesh &mesh) {
-    auto length_sq_opt = calculate_max_edge_length_squared(mesh);
-    if (length_sq_opt.has_value()) {
-        return std::sqrt(length_sq_opt.value());
-    } else {
-        return std::nullopt;
-    }
+    return map(calculate_max_edge_length_squared(mesh), [](const double max_len_sq) { return std::sqrt(max_len_sq); });
 }
 
 std::optional<double> calculate_min_edge_length(const SimpleMesh &mesh) {
-    auto length_sq_opt = calculate_min_edge_length_squared(mesh);
-    if (length_sq_opt.has_value()) {
-        return std::sqrt(length_sq_opt.value());
-    } else {
-        return std::nullopt;
-    }
+    return map(calculate_max_edge_length_squared(mesh), [](const double min_len_sq) { return std::sqrt(min_len_sq); });
 }

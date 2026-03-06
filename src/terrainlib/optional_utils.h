@@ -1,6 +1,8 @@
 #pragma once
 
 #include <optional>
+#include <functional>
+#include <type_traits>
 
 template <typename T>
 std::optional<std::reference_wrapper<const T>> as_ref(const std::optional<T> &option) {
@@ -24,7 +26,7 @@ auto map(const std::optional<T> &option, Func &&f) -> std::optional<std::invoke_
     using U = std::invoke_result_t<Func, T>;
 
     if (option.has_value()) {
-        return std::optional<U>{f(option.value())};
+        return std::optional<U>{std::forward<Func>(f)(option.value())};
     } else {
         return std::nullopt;
     }

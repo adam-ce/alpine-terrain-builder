@@ -1,0 +1,34 @@
+#pragma once
+
+#include <span>
+#include <vector>
+#include <functional>
+
+#include <opencv2/opencv.hpp>
+#include <glm/glm.hpp>
+
+#include "atlas/Plan.h"
+#include "atlas/Planner.h"
+
+using Texture = cv::Mat;
+
+namespace atlas {
+
+Plan plan(const std::span<const glm::uvec2> texture_sizes);
+Plan plan(const std::span<const glm::uvec2> texture_sizes, const Planner &planner);
+
+Texture create(const Plan &plan, const std::span<const Texture> textures);
+
+Texture plan_and_create(const std::span<const Texture> textures);
+Texture plan_and_create(const std::span<const Texture> textures, const Planner &planner);
+
+void map_uvs(
+    const Plan &plan,
+    const uint32_t slot_index,
+    std::vector<glm::dvec2>& uvs);
+
+void map_uvs(
+    const Plan &plan,
+    const std::span<std::reference_wrapper<std::vector<glm::dvec2>>> uvs);
+
+}

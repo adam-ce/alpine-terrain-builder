@@ -60,7 +60,7 @@ Clustering reparametrize_uvs(const Clustering &clustering) {
 }
 
 inline radix::geometry::Aabb3d calculate_bounds(const Clustering& clustering) {
-    return calculate_bounds(clustering.positions);
+    return mesh::calculate_bounds(clustering.positions);
 }
 
 inline std::vector<uint8_t> find_vertices_to_lock(const Clustering& clustering) {

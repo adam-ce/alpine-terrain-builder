@@ -42,46 +42,11 @@
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "srs.h"
-
-
-using Kernel = CGAL::Exact_predicates_inexact_constructions_kernel;
-using Point3 = Kernel::Point_3;
-using SurfaceMesh = CGAL::Surface_mesh<Point3>;
-
-using VertexIndex = SurfaceMesh::Vertex_index;
-using EdgeIndex = SurfaceMesh::Edge_index;
-using HalfEdgeIndex = SurfaceMesh::Halfedge_index;
-using FaceIndex = SurfaceMesh::Face_index;
-
-using VertexDescriptor = boost::graph_traits<SurfaceMesh>::vertex_descriptor;
-using HalfedgeDescriptor = boost::graph_traits<SurfaceMesh>::halfedge_descriptor;
-
-Point3 glm2cgal(glm::dvec3 point) {
-    return Point3(point[0], point[1], point[2]);
-}
-
-SurfaceMesh mesh2cgal(const SimpleMesh &mesh) {
-    SurfaceMesh cgal_mesh;
-
-    for (const glm::dvec3 &position : mesh.positions) {
-        const CGAL::SM_Vertex_index vertex = cgal_mesh.add_vertex(glm2cgal(position));
-        REQUIRE(vertex != SurfaceMesh::null_vertex());
-    }
-
-    for (const glm::uvec3 &triangle : mesh.triangles) {
-        const FaceIndex face = cgal_mesh.add_face(
-            VertexIndex(triangle.x),
-            VertexIndex(triangle.y),
-            VertexIndex(triangle.z));
-
-        REQUIRE(face != SurfaceMesh::null_face());
-    }
-
-    return cgal_mesh;
-}
+#include "mesh/cgal.h"
+#include "mesh/convert.h"
 
 void check_mesh_basics(const SimpleMesh &mesh) {
-    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
+    const cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     CHECK(cgal_mesh.is_valid(true));
     CHECK(CGAL::is_triangle_mesh(cgal_mesh));
     CHECK(CGAL::is_valid_polygon_mesh(cgal_mesh, true));
@@ -89,22 +54,11 @@ void check_mesh_basics(const SimpleMesh &mesh) {
 }
 
 void check_no_holes(const SimpleMesh &mesh) {
-    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
-    std::vector<HalfedgeDescriptor> border_cycles;
+    const cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
+    std::vector<cgal::HalfedgeDescriptor> border_cycles;
     CGAL::Polygon_mesh_processing::extract_boundary_cycles(cgal_mesh, std::back_inserter(border_cycles));
     const size_t nb_holes = border_cycles.size() - 1; // outer edge is a boundary cycle
     CHECK(nb_holes == 0);
-}
-
-size_t count_connected_components(const SimpleMesh &mesh) {
-    const SurfaceMesh cgal_mesh = mesh2cgal(mesh);
-    using CcMap = CGAL::Unique_hash_map<FaceDescriptor, size_t>;
-    using CcPropertyMap = boost::associative_property_map<CcMap>;
-
-    CcMap cc_map;
-    CcPropertyMap cc_pmap(cc_map);
-    const size_t num = CGAL::Polygon_mesh_processing::connected_components(cgal_mesh, cc_pmap);
-    return num;
 }
 
 void check_uvs(const SimpleMesh &mesh) {
@@ -122,11 +76,8 @@ void check_non_empty(const SimpleMesh &mesh) {
 }
 
 struct DVec3Hash {
-    std::size_t operator()(const glm::dvec3 &v) const {
-        std::size_t h1 = std::hash<double>{}(v.x);
-        std::size_t h2 = std::hash<double>{}(v.y);
-        std::size_t h3 = std::hash<double>{}(v.z);
-        return h1 ^ (h2 << 1) ^ (h3 << 2);
+    size_t operator()(const glm::dvec3 &v) const {
+        return hash::combine(v.x, v.y, v.z);
     }
 };
 
@@ -143,9 +94,9 @@ void check_duplicate_vertices(const std::vector<glm::dvec3> &positions) {
     }
 }
 
-void check_duplicate_triangles(std::vector<glm::uvec3> triangles) {
-    const auto duplicate_triangles = find_duplicate_triangles(triangles, true);
-    CHECK(duplicate_triangles == triangles.end());
+void check_duplicate_triangles(const SimpleMesh& mesh) {
+    const auto duplicate_triangles = mesh::find_duplicate_triangles(mesh, true);
+    CHECK(duplicate_triangles == std::vector<uint32_t>{});
 }
 
 template <glm::length_t n_dims, typename T>
@@ -214,7 +165,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
             const auto resolution = data.resolution;
 
             radix::tile::SrsBounds texture_bounds;
-            const auto result = terrainbuilder::mesh::build_reference_mesh_patch(
+            const auto result = terrainbuilder::build_reference_mesh_patch(
                 dataset,
                 mesh_srs,
                 target_srs, target_bounds,
@@ -228,7 +179,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 check_non_empty(mesh);
                 check_uvs(mesh);
                 check_duplicate_vertices(mesh.positions);
-                check_duplicate_triangles(mesh.triangles);
+                check_duplicate_triangles(mesh);
                 check_mesh_basics(mesh);
             }
 
@@ -279,7 +230,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 inside_flat_mesh.positions = flat_positions_in_ecef_srs;
                 inside_flat_mesh.triangles = filtered_triangles;
 
-                const auto avg_edge_length = estimate_average_edge_length(inside_flat_mesh);
+                const auto avg_edge_length = mesh::estimate_average_edge_length(inside_flat_mesh);
                 REQUIRE(avg_edge_length.has_value());
                 const auto expected_avg_edge_length = ((1 + 1 + std::sqrt(3)) / 3) * resolution;
                 CHECK(avg_edge_length.value() == Catch::Approx(expected_avg_edge_length).margin(expected_avg_edge_length * 0.2));
@@ -309,7 +260,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     for (const octree::Id &node : nodes) {
         const octree::Bounds node_bounds = space.get_node_bounds(node);
         radix::tile::SrsBounds output_texture_bounds;
-        const auto result = terrainbuilder::mesh::build_reference_mesh_patch(
+        const auto result = terrainbuilder::build_reference_mesh_patch(
             dataset,
             ecef_srs,
             ecef_srs, node_bounds,
@@ -322,9 +273,9 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     }
     CHECK(node_meshes.size() >= 3);
 
-    const SimpleMesh merged_mesh = merge::merge_meshes(node_meshes, 1e-6);
+    const SimpleMesh merged_mesh = mesh::merge(node_meshes, mesh::merging::create_options().epsilon(1e-6));
     check_mesh_basics(merged_mesh);
     check_non_empty(merged_mesh);
     check_no_holes(merged_mesh);
-    CHECK(count_connected_components(merged_mesh) == 1);
+    CHECK(mesh::count_connected_components(merged_mesh) == 1);
 }

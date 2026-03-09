@@ -13,7 +13,7 @@ struct Plan {
     std::vector<Rect2ui> slots;
 };
 
-void rescale(atlas::Plan& plan, const glm::uvec2& texture_size) {
+inline void rescale(atlas::Plan& plan, const glm::uvec2& texture_size) {
     if (glm::all(glm::equal(plan.size, glm::uvec2(0)))) {
         return;
     }

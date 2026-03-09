@@ -76,18 +76,18 @@ add_executable(unittests_terrainsimplify
 target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 
 
-add_executable(unittests_terrainbuilder
+add_executable(unittests_meshbuilder
     catch2_helpers.h
-    terrainbuilder/mesh.cpp
-    terrainbuilder/texture.cpp
+    mesh_builder/mesh.cpp
+    mesh_builder/texture.cpp
 )
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
-target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+target_link_libraries(unittests_meshbuilder PUBLIC meshbuilderlib terrainlib Catch2WithMain)
+target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
 
 
-add_executable(unittests_terrainmerger
+add_executable(unittests_sfmerger
     catch2_helpers.h
-    terrainmerger/sphere_projector.cpp
+    sf_merger/sphere_projector.cpp
 )
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)
+target_link_libraries(unittests_sfmerger PUBLIC sfmergerlib terrainlib Catch2WithMain)
 

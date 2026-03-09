@@ -15,6 +15,7 @@
 #include "cluster.h"
 #include "enumerate.h"
 #include "mesh/manifold.h"
+#include "mesh/topology.h"
 #include "mesh/merging/VertexMapping.h"
 #include "meshopt.h"
 #include "unwrap_atlas.h"
@@ -193,7 +194,7 @@ inline Cluster merge_clusters_simple(
                 remapped[k] = vertex_remap[cluster.vertex_indices[triangle[k]]];
                 DEBUG_ASSERT(remapped[k] != no_vertex_remap);
             }
-            if (!is_degenerate(remapped)) {
+            if (!mesh::is_degenerate(remapped)) {
                 merged.local_triangles.push_back(remapped);
             }
         }
@@ -304,7 +305,7 @@ inline Cluster merge_geometry_using_mapping(
             for (uint8_t k = 0; k < 3; k++) {
                 remapped[k] = mapping.map_forward(linear_cluster_index, triangle[k]);
             }
-            if (!is_degenerate(remapped)) {
+            if (!mesh::is_degenerate(remapped)) {
                 merged.local_triangles.push_back(remapped);
             }
         }
@@ -328,7 +329,7 @@ std::vector<std::vector<uint32_t>> create_component_backwards_mapping(const mesh
     std::vector<std::vector<uint32_t>> backward;
     backward.resize(component_count);
     const std::vector<uint32_t> vertex_counts = detail::calculate_vertex_counts(vertex_to_component, component_count);
-    for (const uint32_t component_index : std::views::iota(0, component_count)) {
+    for (const uint32_t component_index : range(component_count)) {
         std::vector<uint32_t>& component_map = backward[component_index];
         const uint32_t component_vertex_count = vertex_counts[component_index];
         component_map.resize(component_vertex_count);
@@ -404,7 +405,7 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
 
                 return new_vertex_index;
             };
-            make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
+            mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
 
             // Split into individual connecticity components
             const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
@@ -425,7 +426,7 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
                 const uint32_t original_cluster_count = cluster_indices.size();
                 std::vector<uint32_t> source_clusters;
                 source_clusters.reserve(original_cluster_count);
-                for (const uint32_t linear_cluster_index : std::views::iota(0, original_cluster_count)) {
+                for (const uint32_t linear_cluster_index : range(original_cluster_count)) {
                     const bool cluster_is_relevant = std::ranges::any_of(local_to_merged, [&](const uint32_t merged_index) {
                         const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
                         return merged_to_original.contains(merged_vertex);

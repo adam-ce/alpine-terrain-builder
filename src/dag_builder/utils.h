@@ -208,7 +208,7 @@ inline void make_manifold_inplace(Cluster &cluster) {
         return new_vertex_index;
     };
 
-    make_manifold(cluster.local_triangles, cluster.vertex_count(), duplicate_vertex);
+    mesh::make_manifold(cluster.local_triangles, cluster.vertex_count(), duplicate_vertex);
 }
 inline void make_manifold_inplace(Clustering &clustering) {
     for (Cluster &cluster : clustering.clusters) {

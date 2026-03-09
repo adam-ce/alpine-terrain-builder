@@ -112,6 +112,7 @@ SimpleMesh transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialReference &s
     srs::transform_points_inplace(transform.get(), source_mesh.positions);
     return source_mesh;
 }
+/*
 SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
     SimpleMesh target_mesh;
     target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
@@ -120,6 +121,7 @@ SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReferen
     target_mesh.texture = source_mesh.texture;
     return target_mesh;
 }
+*/
 
 std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
     std::vector<glm::dvec2> uvs = srs::transform_points_to_2d(srs::transformation(mesh_srs, texture_srs).get(), positions);

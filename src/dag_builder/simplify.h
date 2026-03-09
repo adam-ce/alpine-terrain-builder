@@ -68,9 +68,9 @@ namespace detail {
             if constexpr (std::is_same_v<T, VertexLock::None>) {
                 // Nothing to do
             } else if constexpr (std::is_same_v<T, VertexLock::Boundary>) {
-                build_boundary_vertex_mask<uint8_t>(cluster.local_triangles, cluster.vertex_count(), vertex_lock, LOCKED, UNLOCKED);
+                mesh::build_boundary_vertex_mask<uint8_t>(cluster.local_triangles, cluster.vertex_count(), vertex_lock, LOCKED, UNLOCKED);
             } else if constexpr (std::is_same_v<T, VertexLock::BoundaryTriangles>) {
-                const std::unordered_set<uint32_t> boundary_triangles = find_boundary_triangles(cluster.local_triangles);
+                const std::unordered_set<uint32_t> boundary_triangles = mesh::find_boundary_triangles(cluster.local_triangles);
                 vertex_lock.resize(cluster.vertex_count(), UNLOCKED);
                 for (const uint32_t triangle_index : boundary_triangles) {
                     const glm::uvec3 &triangle = cluster.local_triangles[triangle_index];

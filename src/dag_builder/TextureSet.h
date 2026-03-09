@@ -41,7 +41,7 @@ public:
             return id.value();
         }
         this->_textures.push_back(texture);
-        return static_cast<Id>(this->size());
+        return static_cast<Id>(this->size() - 1);
     }
 
     std::optional<Id> id_of(const Texture &texture) const {

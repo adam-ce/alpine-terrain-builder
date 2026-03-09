@@ -25,6 +25,7 @@
 #include "spatial_lookup/Grid.h"
 #include "spatial_lookup/Hashmap.h"
 #include "type_utils.h"
+#include "range_utils.h"
 
 namespace mesh::merging::detail {
 void validate_epsilon_mapping(
@@ -460,7 +461,7 @@ SimpleMesh apply_mapping(
             // Deduplicate triangles
             if (deduplicate_triangles) {
                 const bool is_first_mesh = std::ranges::none_of(
-                    std::views::iota(0u, mesh_index),
+                    range(mesh_index),
                     [&](const uint32_t i) { return mapping.find_source_triangle_in_mesh(new_triangle, i).has_value(); });
 
                 if (!is_first_mesh) {

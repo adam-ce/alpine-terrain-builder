@@ -1,7 +1,4 @@
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <ranges>
 #include <span>
 #include <type_traits>
@@ -15,6 +12,7 @@
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"
 #include "type_utils.h"
+#include "range_utils.h"
 
 namespace mesh {
 
@@ -22,7 +20,7 @@ namespace detail {
 template <typename Mapping>
 std::vector<uint32_t> calculate_triangle_counts(const uint32_t triangle_count, const uint32_t group_count, Mapping &&triangle_to_group) {
     std::vector<uint32_t> triangle_counts(group_count, 0);
-    for (const uint32_t triangle_index : std::views::iota(0, triangle_count)) {
+    for (const uint32_t triangle_index : range(triangle_count)) {
         const uint32_t group_index = triangle_to_group(triangle_index);
         DEBUG_ASSERT(group_index < group_count);
         triangle_counts[group_index]++;
@@ -85,7 +83,8 @@ template <glm::length_t n_dims, typename T, typename Mapping>
 SplitByTriangleResult<n_dims, T> split_by_triangle(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&triangle_to_group) {
     if constexpr (std::is_invocable_v<Mapping, uint32_t>) {
         return detail::split_by_triangle_impl(mesh, group_count, std::forward<Mapping>(triangle_to_group));
-    } else if constexpr (std::ranges::range<Mapping>) {
+    } else if constexpr (std::ranges::random_access_range<Mapping> &&
+                         std::ranges::sized_range<Mapping>) {
         return detail::split_by_triangle_impl(mesh, group_count, [&](const uint32_t triangle_index) {
             DEBUG_ASSERT(triangle_index < std::ranges::size(triangle_to_group));
             return triangle_to_group[triangle_index];
@@ -103,7 +102,7 @@ namespace detail {
 template <typename Mapping>
 std::vector<uint32_t> calculate_vertex_counts(const uint32_t vertex_count, const uint32_t group_count, Mapping &&vertex_to_group) {
     std::vector<uint32_t> vertex_counts(group_count, 0);
-    for (const uint32_t vertex_index : std::views::iota(0, vertex_count)) {
+    for (const uint32_t vertex_index : range(vertex_count)) {
         const uint32_t group_index = vertex_to_group(vertex_index);
         DEBUG_ASSERT(group_index < group_count);
         vertex_counts[group_index]++;
@@ -186,7 +185,8 @@ template <glm::length_t n_dims, typename T, typename Mapping>
 SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group) {
     if constexpr (std::is_invocable_v<Mapping, uint32_t>) {
         return detail::split_by_vertex_impl(mesh, group_count, std::forward<Mapping>(vertex_to_group));
-    } else if constexpr (std::ranges::range<Mapping>) {
+    } else if constexpr (std::ranges::random_access_range<Mapping> &&
+                         std::ranges::sized_range<Mapping>) {
         return detail::split_by_vertex_impl(mesh, group_count, [&](const uint32_t i) {
             DEBUG_ASSERT(i < std::ranges::size(vertex_to_group));
             return vertex_to_group[i];

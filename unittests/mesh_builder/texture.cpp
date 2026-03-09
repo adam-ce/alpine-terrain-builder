@@ -38,7 +38,7 @@ TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {
     const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
     const radix::tile::SrsBounds shifted_bounds(tile_bounds.min + glm::dvec2(-100, 420), tile_bounds.max + glm::dvec2(-100, 420));
 
-    REQUIRE(terrainbuilder::texture::estimate_zoom_level(tile.zoom_level, tile_bounds, shifted_bounds) == tile.zoom_level);
+    REQUIRE(terrainbuilder::estimate_zoom_level(tile.zoom_level, tile_bounds, shifted_bounds) == tile.zoom_level);
 }
 
 class AvailabilityListEmptyTileProvider : public TileProvider {
@@ -76,7 +76,7 @@ TEST_CASE("texture assembler takes root tile if only available ", "[terrainbuild
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::texture::find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),
@@ -104,7 +104,7 @@ TEST_CASE("texture assembler ignores parent if all children are present", "[terr
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::texture::find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),
@@ -129,7 +129,7 @@ TEST_CASE("texture assembler considers max zoom level", "[terrainbuilder]") {
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::texture::find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),
@@ -173,7 +173,7 @@ TEST_CASE("texture assembler works for arbitrary bounds", "[terrainbuilder]") {
     const ctb::Grid grid = ctb::GlobalMercator();
     const radix::tile::SrsBounds target_bounds(glm::dvec2(0, 0), glm::dvec2(100, 1));
     const radix::tile::Id root_tile = grid.findSmallestEncompassingTile(target_bounds).value();
-    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::texture::find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
         grid,
         target_bounds,
@@ -195,7 +195,7 @@ TEST_CASE("texture assembler does not fail if there are not tiles", "[terrainbui
     const ctb::Grid grid = ctb::GlobalMercator();
     const radix::tile::SrsBounds target_bounds(glm::dvec2(0, 0), glm::dvec2(100, 1));
     const radix::tile::Id root_tile = grid.findSmallestEncompassingTile(target_bounds).value();
-    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::texture::find_relevant_tiles_to_splatter_in_bounds(
+    std::vector<radix::tile::Id> actual_tiles_vec = terrainbuilder::find_relevant_tiles_to_splatter_in_bounds(
         root_tile,
         grid,
         target_bounds,
@@ -218,7 +218,7 @@ TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
 
     const ctb::Grid grid = ctb::GlobalMercator();
     const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
-    cv::Mat assembled_texture = terrainbuilder::texture::splatter_tiles_to_texture(
+    cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),
@@ -245,7 +245,7 @@ TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
 
     const ctb::Grid grid = ctb::GlobalMercator();
     const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
-    cv::Mat assembled_texture = terrainbuilder::texture::splatter_tiles_to_texture(
+    cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),
@@ -276,7 +276,7 @@ TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]
 
     const ctb::Grid grid = ctb::GlobalMercator();
     const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
-    cv::Mat assembled_texture = terrainbuilder::texture::splatter_tiles_to_texture(
+    cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
         grid.srsBounds(root_tile, false),

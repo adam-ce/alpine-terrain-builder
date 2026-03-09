@@ -9,6 +9,7 @@
 
 #include "log.h"
 #include "mesh/texture_trim.h"
+#include "range_utils.h"
 
 namespace {
 bool is_empty(const radix::geometry::Aabb2i &bounds) {
@@ -21,6 +22,9 @@ void trim_texture_impl(
     const std::span<const glm::dvec2> input_uvs,
     std::span<glm::dvec2> output_uvs,
     const uint32_t padding) {
+    const uint32_t uv_count = input_uvs.size();
+    DEBUG_ASSERT(output_uvs.size() >= uv_count);
+
     // Calculate the bounding box of the UVs in pixel space
     const radix::geometry::Aabb2d uv_bounds = radix::geometry::find_bounds(std::span<const glm::dvec2>(input_uvs));
     const glm::uvec2 texture_size(input_texture.cols, input_texture.rows);
@@ -60,7 +64,7 @@ void trim_texture_impl(
     LOG_TRACE("Trimmed texture from {}x{} to {}x{}", texture_size.x, texture_size.y, cropped_texture_size.x, cropped_texture_size.y);
     const glm::dvec2 offset = glm::dvec2(clamped_pixel_bounds.min) / glm::dvec2(texture_size);
     const glm::dvec2 scale = glm::dvec2(clamped_pixel_bounds.size()) / glm::dvec2(texture_size);
-    for (const size_t i : std::views::iota(0, input_uvs.size())) {
+    for (const size_t i : range(uv_count)) {
         output_uvs[i] = (input_uvs[i] - offset) / scale;
         DEBUG_ASSERT(output_uvs[i].x >= 0.0 && output_uvs[i].x <= 1.0);
         DEBUG_ASSERT(output_uvs[i].y >= 0.0 && output_uvs[i].y <= 1.0);

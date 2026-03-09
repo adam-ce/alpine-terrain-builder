@@ -92,3 +92,13 @@ constexpr T sum(Range &&range, T initial_value = T{}) {
     }
     return total;
 }
+
+
+template <typename T>
+constexpr auto range(T begin, T end) {
+    return std::views::iota(begin, end);
+}
+template <typename T>
+constexpr auto range(T end) {
+    return range(T{0}, end);
+}

@@ -169,7 +169,7 @@ void remove_duplicate_triangles_consider_orientation(mesh::Simple_<3, T> &mesh) 
     remove_duplicate_triangles_consider_orientation(mesh.triangles);
 }
 
-template <glm::length_t n_dims, typename T, typename Size = float>
+template <glm::length_t n_dims, typename T>
 size_t remove_isolated_vertices(SimpleMesh_<n_dims, T> &mesh) {
     const bool has_uvs = mesh.has_uvs();
     const std::vector<uint32_t> isolated = find_isolated_vertices(mesh);

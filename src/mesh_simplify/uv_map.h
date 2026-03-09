@@ -1,12 +1,15 @@
-#ifndef UV_MAP_H
-#define UV_MAP_H
+#pragma once
 
-#include "pch.h"
+#include <cstddef>
+#include <span>
+#include <string>
+#include <vector>
 
+#include <glm/vec2.hpp>
+#include <opencv2/core/mat.hpp>
 #include <CGAL/Surface_mesh_parameterization/Error_code.h>
 #include <CGAL/Unique_hash_map.h>
-
-#include "merge.h"
+#include <tl/expected.hpp>
 
 typedef cv::Mat Texture;
 

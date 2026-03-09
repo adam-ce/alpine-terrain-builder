@@ -51,7 +51,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
         return {
             .positions = input.positions,
             .clusters = {},
-            .texture = input.texture
+            .textures = input.textures
         };
     }
     if (num_parts == 1) {
@@ -165,7 +165,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
     return Clustering{
         input.positions,
         std::move(new_clusters),
-        input.texture
+        input.textures
     };
 }
 

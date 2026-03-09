@@ -40,7 +40,7 @@ static std::vector<glm::dvec2> decode_uv_map(const AttachedUvPropertyMap &uv_map
     uvs.reserve(number_of_vertices);
     for (size_t i = 0; i < number_of_vertices; i++) {
         const Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
-        uvs.push_back(convert::cgal2glm(uv));
+        uvs.push_back(convert::to_glm_point(uv));
     }
     return uvs;
 }
@@ -466,12 +466,12 @@ Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondit
         normalized_mesh.positions[i] = normalized_position;
     }
 
-    SurfaceMesh cgal_mesh = convert::mesh2cgal(normalized_mesh);
+    SurfaceMesh cgal_mesh = convert::to_cgal_mesh(normalized_mesh);
     const SurfaceMesh original_mesh(cgal_mesh);
 
     AttachedUvPropertyMap uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
     for (size_t i = 0; i < mesh.uvs.size(); i++) {
-        uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
+        uv_map[CGAL::SM_Vertex_index(i)] = convert::to_cgal_point(mesh.uvs[i]);
     }
 
     const SimplificationArgs args{
@@ -485,11 +485,7 @@ Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondit
         LOG_WARN("Failed to remove self intersections after simplification");
     }
 
-    SimpleMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
-    simplified_mesh.uvs.resize(simplified_mesh.vertex_count());
-    for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
-        simplified_mesh.uvs[i] = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(i)]);
-    }
+    SimpleMesh simplified_mesh = convert::to_simple_mesh(cgal_mesh);
     for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
         simplified_mesh.positions[i] += average_position;
     }

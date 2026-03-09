@@ -71,7 +71,7 @@ Texture plan_and_create(const std::span<const Texture> textures, const Planner &
     return create(atlas_plan, textures);
 }
 
-void map_uvs(const Plan &plan, const uint32_t slot_index, std::vector<glm::dvec2> &uvs) {
+void map_uvs(const Plan &plan, const uint32_t slot_index, std::span<glm::dvec2> uvs) {
     if (plan.size.x == 0 || plan.size.y == 0) {
         return;
     }
@@ -89,16 +89,6 @@ void map_uvs(const Plan &plan, const uint32_t slot_index, std::vector<glm::dvec2
         uv = (offset + uv * size) / atlas_size;
         DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
         DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
-    }
-}
-
-void map_uvs(
-    const Plan &p,
-    const std::span<std::reference_wrapper<std::vector<glm::dvec2>>> uvs) {
-    ASSERT(uvs.size() == p.slots.size(),
-            "atlas::map_uvs: uvs.size() must match plan.slots.size()");
-    for (uint32_t i = 0; i < uvs.size(); i++) {
-        map_uvs(p, i, uvs[i].get());
     }
 }
 

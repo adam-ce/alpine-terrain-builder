@@ -9,6 +9,8 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"
 #include "cluster.h"
+#include "atlas/atlas.h"
+#include "range_utils.h"
 
 // Normalize a set of 3D positions into the range of [-1,1] based on maximum extents of the bounding box.
 // Outputs are written as float coordinates.
@@ -49,7 +51,7 @@ inline void collect_cluster_positions(const Cluster &cluster, const std::span<co
     out_positions.clear();
     out_positions.reserve(cluster.vertex_indices.size());
     for (const uint32_t vertex_index : cluster.vertex_indices) {
-        DEBUG_ASSERT(vertex_index <= global_positions.size());
+        DEBUG_ASSERT(vertex_index < global_positions.size());
         out_positions.push_back(global_positions[vertex_index]);
     }
 }
@@ -81,7 +83,32 @@ inline std::vector<Rgb> generate_colors(const size_t count) {
     return colors;
 }
 
-inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
+inline void make_manifold_inplace(Cluster &cluster) {
+    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+        const uint32_t new_vertex_index = cluster.vertex_indices.size();
+        // No need to update cluster_positions here.
+        cluster.vertex_indices.push_back(cluster.vertex_indices[old_vertex_index]);
+        if (cluster.has_uvs()) {
+            cluster.uvs.push_back(cluster.uvs[old_vertex_index]);
+        }
+        return new_vertex_index;
+    };
+
+    mesh::make_manifold(cluster.local_triangles, cluster.vertex_count(), duplicate_vertex);
+}
+inline void make_manifold_inplace(Clustering &clustering) {
+    for (Cluster &cluster : clustering.clusters) {
+        make_manifold_inplace(cluster);
+    }
+}
+inline Clustering make_manifold(const Clustering &clustering) {
+    Clustering manifold = clustering;
+    make_manifold_inplace(manifold);
+    return manifold;
+}
+
+namespace detail {
+inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
     const size_t cluster_count = clustering.clusters.size();
     if (cluster_count == 0) {
         return {};
@@ -110,7 +137,9 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool 
         for (size_t i = 0; i < cluster.vertex_indices.size(); i++) {
             const uint32_t vertex_index = cluster.vertex_indices[i];
             mesh.positions.push_back(clustering.positions[vertex_index]);
-            mesh.uvs.emplace_back(cluster.uvs[i]);
+            if (cluster.has_uvs()) {
+                mesh.uvs.emplace_back(cluster.uvs[i]);
+            }
         }
 
         // Append triangles
@@ -118,9 +147,31 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool 
             mesh.triangles.push_back(local_triangle + base_vertex);
         }
     }
+    
+    DEBUG_ASSERT(mesh::is_manifold(mesh));
 
     if (!debug_texture) {
-        mesh.texture = clustering.texture;
+        if (clustering.textures.size() <= 1) {
+            // Just copy the single texture
+            mesh.texture = clustering.textures[0];
+        } else if (!clustering.textures.empty()) {
+            // There are multiple textures so we need to create an atlas
+            const std::vector<glm::uvec2> texture_sizes = transform_vector(clustering.textures, [](const auto &texture) {
+                return glm::uvec2(texture.cols, texture.rows);
+            });
+            const atlas::Plan plan = atlas::plan(texture_sizes);
+
+            // remap the uvs to match the atlas
+            uint32_t uv_offset = 0;
+            for (const Cluster &cluster : clustering.clusters) {
+                std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
+                atlas::map_uvs(plan, cluster.texture_id, cluster_uvs);
+                uv_offset += cluster.vertex_count();
+            }
+
+            // Create the atlas texture
+            mesh.texture = atlas::create(plan, clustering.textures);
+        }
     } else {
         mesh.uvs.clear();
 
@@ -154,6 +205,12 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool 
     }
 
     return mesh;
+}
+}
+
+inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
+    const Clustering manifold_clustering = make_manifold(clustering);
+    return detail::manifold_clustering_to_mesh(manifold_clustering, debug_texture);
 }
 
 template <glm::length_t L, typename T>
@@ -195,28 +252,4 @@ inline std::span<T> flatten(std::vector<glm::vec<L, T>> &v) {
 template <glm::length_t L, typename T>
 inline std::span<const T> flatten(const std::vector<glm::vec<L, T>> &v) {
     return flatten(std::span(v));
-}
-
-inline void make_manifold_inplace(Cluster &cluster) {
-    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
-        const uint32_t new_vertex_index = cluster.vertex_indices.size();
-        // No need to update cluster_positions here.
-        cluster.vertex_indices.push_back(cluster.vertex_indices[old_vertex_index]);
-        if (cluster.has_uvs()) {
-            cluster.uvs.push_back(cluster.uvs[old_vertex_index]);
-        }
-        return new_vertex_index;
-    };
-
-    mesh::make_manifold(cluster.local_triangles, cluster.vertex_count(), duplicate_vertex);
-}
-inline void make_manifold_inplace(Clustering &clustering) {
-    for (Cluster &cluster : clustering.clusters) {
-        make_manifold_inplace(cluster);
-    }
-}
-inline Clustering make_manifold(const Clustering &clustering) {
-    Clustering manifold = clustering;
-    make_manifold_inplace(manifold);
-    return manifold;
 }

@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 #include "cluster.h"
 #include "clusterize.h"
@@ -43,37 +44,21 @@ static_assert(std::abs(METERS_PER_PIXEL_AT_EQUATOR[10] - 152.874) < 0.001, "leve
 static_assert(std::abs(METERS_PER_PIXEL_AT_EQUATOR[20] - 0.149) < 0.001, "level 20 mismatch");
 
 
-Clustering reparametrize_uvs(const Clustering &clustering) {
-    Clustering reparametrized = clustering;
-    std::vector<glm::dvec3> cluster_positions;
-    for (Cluster &cluster : reparametrized.clusters) {
-        // Materialize positions vector
-        collect_cluster_positions(cluster, clustering.positions, cluster_positions);
-
-        std::vector<glm::dvec2> old_uvs = std::move(cluster.uvs);
-        cluster.uvs = uv::unwrap(cluster.local_triangles, cluster_positions).value();
-
-        cv::Mat new_texture;
-        cluster.uvs = old_uvs;
-    }
-    return reparametrized;
-}
-
 inline radix::geometry::Aabb3d calculate_bounds(const Clustering& clustering) {
     return mesh::calculate_bounds(clustering.positions);
 }
 
 inline std::vector<uint8_t> find_vertices_to_lock(const Clustering& clustering) {
-    // Alloate vertex lock buffer
+    // Allocate vertex lock buffer
     const uint32_t vertex_count = clustering.vertex_count();
     std::vector<uint8_t> vertex_lock(vertex_count, VertexLock::UNLOCKED);
 
     // Calculate safe bounds excluding the outer boundary of the mesh
     const radix::geometry::Aabb3d bounds = calculate_bounds(clustering);
     const glm::dvec3 center = bounds.centre();
-    const glm::dvec3 extends = bounds.size() / 2.0;
-    const glm::dvec3 unlocked_extends = extends * 0.99;
-    const radix::geometry::Aabb3d unlocked_bounds(center - unlocked_extends, center + unlocked_extends);
+    const glm::dvec3 extents = bounds.size() / 2.0;
+    const glm::dvec3 unlocked_extents = extents * 0.99;
+    const radix::geometry::Aabb3d unlocked_bounds(center - unlocked_extents, center + unlocked_extents);
 
     // Lock vertices outside safe bounds
     for (uint32_t vertex_index=0; vertex_index<vertex_count; vertex_index++) {
@@ -84,14 +69,14 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering& clustering) 
     }
 
     // Look for vertices shared between at least 2 clusters and lock them
-    constexpr const uint32_t INVALID_CLUSTER = -1;
+    constexpr uint32_t invalid_cluster = std::numeric_limits<uint32_t>::max();
     const uint32_t cluster_count = clustering.cluster_count();
-    std::vector<uint32_t> cluster_membership(cluster_count, INVALID_CLUSTER);
+    std::vector<uint32_t> cluster_membership(vertex_count, invalid_cluster);
     for (uint32_t cluster_index=0; cluster_index<cluster_count; cluster_index++) {
         const Cluster& cluster = clustering.clusters[cluster_index];
         for (const uint32_t vertex_index : cluster.vertex_indices) {
             uint32_t& other_cluster_index = cluster_membership[vertex_index];
-            if (other_cluster_index == INVALID_CLUSTER) {
+            if (other_cluster_index == invalid_cluster) {
                 // This vertex was encountered the first time
                 cluster_membership[vertex_index] = cluster_index;
             } else if (other_cluster_index == cluster_index) {
@@ -106,6 +91,40 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering& clustering) 
 
     return vertex_lock;
 }
+
+class ClusteringStageLogger {
+public:
+    explicit ClusteringStageLogger(const Clustering &clustering)
+        : _last_clusters(clustering.cluster_count()),
+          _last_vertices(clustering.vertex_count()) {}
+
+    void log_initial() {
+        LOG_INFO(
+            "stage=initial clusters={} vertices={}",
+            this->_last_clusters,
+            this->_last_vertices);
+    }
+
+    void log(int level, const char *stage, const Clustering &clustering) {
+        const uint32_t clusters = clustering.cluster_count();
+        const uint32_t vertices = clustering.vertex_count();
+
+        LOG_INFO(
+            "level={} stage={} clusters={}->{} vertices={}->{}",
+            level,
+            stage,
+            this->_last_clusters,
+            clusters,
+            this->_last_vertices,
+            vertices);
+
+        this->_last_clusters = clusters;
+        this->_last_vertices = vertices;
+    }
+private:
+    uint32_t _last_clusters;
+    uint32_t _last_vertices;
+};
 
 int main(int argc, char **argv) {
     USE(argc);
@@ -122,12 +141,14 @@ int main(int argc, char **argv) {
     auto clustering = clusterize(mesh);
     validate(clustering);
 
-    for (int level = 18; level >= 0; level--) {
-        LOG_INFO("Level {}", level);
+    ClusteringStageLogger stage_logger(clustering);
+    stage_logger.log_initial();
 
+    for (int level = 18; level >= 0; level--) {
         // Partition clusters into groups
         clustering = partition(clustering, PartitionOptions{.clusters_per_partition = 8});
         validate(clustering);
+        stage_logger.log(level, "partitioned", clustering);
 
         // Find vertices to lock
         const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering);
@@ -135,25 +156,23 @@ int main(int argc, char **argv) {
         // Simplify each cluster
         clustering = simplify(clustering, SimplifyOptions{
                                               .target_ratio = 0.5,
-                                              .vertex_lock = VertexLock::mask(vertex_lock),
-                                              /*.absolute_target_error = METERS_PER_PIXEL_AT_EQUATOR[level]*/});
-        
-        // Ensure clusters are manifold again
-        clustering = make_manifold(clustering);
-
+                                              .vertex_lock = VertexLock::mask(vertex_lock)});
         validate(clustering);
+        stage_logger.log(level, "simplified", clustering);
+
+        // Output to file
         mesh::io::save_to_path(
             clustering_to_mesh(clustering),
             (out_dir / ("level_" + std::to_string(level) + ".glb")).string());
         if (clustering.clusters.size() == 1) {
+            LOG_INFO("Stopping at single remaining cluster");
             break;
         }
 
         // Split each cluster into roughly 4 parts
         clustering = clusterize(clustering).clustering;
         validate(clustering);
-
-        // TODO: move make_manifold to here?
+        stage_logger.log(level, "reclustered", clustering);
     }
 
     return 0;

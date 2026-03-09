@@ -17,6 +17,10 @@ template <glm::length_t n_dims, typename T>
 std::vector<glm::uvec2> find_non_manifold_edges(const mesh::Simple_<n_dims, T> &mesh) {
     return find_non_manifold_edges(mesh.triangles);
 }
+template <glm::length_t n_dims, typename T>
+std::vector<glm::uvec2> find_non_manifold_edges(const mesh::View_<n_dims, T> &mesh) {
+    return find_non_manifold_edges(mesh.triangles);
+}
 
 template <glm::length_t n_dims, typename T>
 void duplicate_non_manifold_edges(mesh::Simple_<n_dims, T> &mesh) {
@@ -73,6 +77,8 @@ void duplicate_non_manifold_edges(
             }
         }
     }
+
+    DEBUG_ASSERT(is_edge_manifold(triangles));
 }
 
 template <glm::length_t n_dims, typename T>
@@ -104,12 +110,16 @@ void duplicate_non_manifold_vertices(
 template <typename Duplicate>
 void duplicate_non_manifold_vertices(
     std::span<glm::uvec3> triangles,
-    const uint32_t vertex_count,
+    uint32_t vertex_count,
     Duplicate &&duplicate_vertex) {
-    const std::vector<std::vector<uint32_t>> vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, vertex_count);
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+
+    const std::vector<std::vector<uint32_t>>
+        vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, vertex_count);
 
     // neighbor vertex -> local triangle indices sharing edge (vertex, neighbor)
     std::unordered_map<uint32_t, std::vector<uint32_t>> edge_groups;
+    UnionFind_<true, uint32_t, uint32_t> union_find;
     for (uint32_t vertex_index = 0; vertex_index < vertex_count; vertex_index++) {
         const auto &incident_triangles = vertex_to_triangles[vertex_index];
         const uint32_t incident_count = incident_triangles.size();
@@ -129,9 +139,8 @@ void duplicate_non_manifold_vertices(
             edge_groups[other_vertices.y].push_back(local_index);
         }
 
-        UnionFind_<true, uint32_t, uint32_t> union_find(incident_count);
-
         // Union triangles that share edge (vertex, neighbor)
+        union_find.reset(incident_count);
         for (const auto &[_, edge_group] : edge_groups) {
             for (uint32_t i = 1; i < edge_group.size(); i++) {
                 union_find.make_union(edge_group[0], edge_group[i]);
@@ -162,6 +171,8 @@ void duplicate_non_manifold_vertices(
             }
         }
     }
+
+    DEBUG_ASSERT(is_vertex_manifold(triangles));
 }
 
 template <glm::length_t n_dims, typename T>
@@ -181,8 +192,8 @@ void make_manifold(
     std::vector<glm::vec<n_dims, Position>> &positions,
     std::vector<glm::vec<2, Uv>> &uvs) {
     remove_degenerate_triangles(triangles);
-    duplicate_non_manifold_edges(triangles, positions, uvs);
     duplicate_non_manifold_vertices(triangles, positions, uvs);
+    duplicate_non_manifold_edges(triangles, positions, uvs);
     DEBUG_ASSERT(is_manifold(triangles));
 }
 
@@ -192,14 +203,35 @@ void make_manifold(
     const uint32_t vertex_count,
     Duplicate &&duplicate_vertex) {
     remove_degenerate_triangles(triangles);
-    duplicate_non_manifold_edges(triangles, duplicate_vertex);
     duplicate_non_manifold_vertices(triangles, vertex_count, duplicate_vertex);
+    duplicate_non_manifold_edges(triangles, duplicate_vertex);
     DEBUG_ASSERT(is_manifold(triangles));
 }
 
 template <glm::length_t n_dims, typename T>
-bool is_manifold(const SimpleMesh_<n_dims, T> &mesh) {
-    return is_manifold(mesh.triangles);
+bool is_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    return is_manifold(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
+bool is_manifold(const mesh::View_<n_dims, T> &mesh) {
+    return is_manifold(mesh.triangles, mesh.vertex_count());
 }
 
+template <glm::length_t n_dims, typename T>
+bool is_edge_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    return is_edge_manifold(mesh.triangles);
 }
+template <glm::length_t n_dims, typename T>
+bool is_edge_manifold(const mesh::View_<n_dims, T> &mesh) {
+    return is_edge_manifold(mesh.triangles);
+}
+
+template <glm::length_t n_dims, typename T>
+bool is_vertex_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    return is_vertex_manifold(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
+bool is_vertex_manifold(const mesh::View_<n_dims, T> &mesh) {
+    return is_vertex_manifold(mesh.triangles, mesh.vertex_count());
+}
+} // namespace mesh

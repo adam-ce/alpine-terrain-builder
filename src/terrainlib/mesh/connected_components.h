@@ -10,9 +10,10 @@
 #include <libassert/assert.hpp>
 
 #include "UnionFind.h"
-#include "mesh/SimpleMesh.h"
 #include "enumerate.h"
-#include "split.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/split.h"
+#include "mesh/topology.h"
 
 namespace {
 using VertexIndex = uint32_t;
@@ -27,6 +28,8 @@ struct ComponentsIndex {
 
 namespace detail {
 inline UnionFind build_union_find(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+
     UnionFind components(vertex_count);
     for (const glm::uvec3 &triangle : triangles) {
         components.make_union(triangle[0], triangle[1]);

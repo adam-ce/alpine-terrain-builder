@@ -21,35 +21,41 @@
 #include "mesh/cgal.h"
 #include "mesh/clip.h"
 #include "mesh/convert.h"
+#include "mesh/geometry.h"
+#include "mesh/topology.h"
 #include "mesh/validate.h"
 
+namespace mesh {
 namespace {
-double significant_above_epsilon(double x, double epsilon) {
+double quantized(double x, double epsilon) {
     const double residual = std::fmod(x, epsilon);
     return x - residual;
 }
-
-template <typename T>
-bool epsilon_equal(const glm::tvec3<T>& a, const glm::tvec3<T>& b, const T epsilon) {
-    return glm::all(glm::epsilonEqual(a, b, epsilon));
-    // return glm::length2(a - b) < epsilon * epsilon;
+inline glm::dvec3 quantized(const glm::dvec3 &v, const double epsilon) {
+    return {
+        quantized(v.x, epsilon),
+        quantized(v.y, epsilon),
+        quantized(v.z, epsilon)};
 }
 
 template <typename T>
-bool is_epsilon_degenerate(const std::array<glm::tvec3<T>, 3>& triangle, const T epsilon) {
+bool epsilon_equal(const glm::tvec3<T> &a, const glm::tvec3<T> &b, const T epsilon) {
+    return glm::all(glm::epsilonEqual(a, b, epsilon));
+}
+
+template <typename T>
+bool is_epsilon_degenerate(const std::array<glm::tvec3<T>, 3> &triangle, const T epsilon) {
     return epsilon_equal(triangle[0], triangle[1], epsilon) ||
-        epsilon_equal(triangle[1], triangle[2], epsilon) ||
-        epsilon_equal(triangle[2], triangle[0], epsilon);
+           epsilon_equal(triangle[1], triangle[2], epsilon) ||
+           epsilon_equal(triangle[2], triangle[0], epsilon);
 }
 
 struct DVec3Hash {
     const double epsilon;
 
     std::size_t operator()(const glm::dvec3 &v) const {
-        return hash::combine(
-            significant_above_epsilon(v.x, epsilon),
-            significant_above_epsilon(v.y, epsilon),
-            significant_above_epsilon(v.z, epsilon));
+        const glm::dvec3 q = quantized(v, epsilon);
+        return hash::combine(q.x, q.y, q.z);
     }
 };
 
@@ -57,7 +63,7 @@ struct DVec3Equal {
     const double epsilon;
 
     bool operator()(const glm::dvec3 &a, const glm::dvec3 &b) const {
-        return epsilon_equal(a, b, epsilon);
+        return quantized(a, epsilon) == quantized(b, epsilon);
     }
 };
 
@@ -87,9 +93,8 @@ Intersection<T> compute_intersection(const radix::geometry::Edge<3, T> &line, co
 
 } // namespace
 
-
-Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
-    mesh::validate(mesh);
+Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds) {
+    validate(mesh);
 
     if (mesh.vertex_count() == 0 || mesh.face_count() == 0) {
         return Cow(SimpleMesh());
@@ -337,7 +342,7 @@ Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::
                     const std::array<glm::dvec2, 3> new_uvs1 = {
                         inside1_uv,
                         inside2_uv,
-                        intersection1_uv};    ;
+                        intersection1_uv};
                     const std::array<glm::dvec2, 3> new_uvs2 = {
                         inside2_uv,
                         intersection2_uv,
@@ -407,11 +412,11 @@ Cow<const SimpleMesh> mesh::clip_on_bounds(const SimpleMesh &mesh, const radix::
     }
 
     SimpleMesh clipped_mesh(new_triangles, new_positions, new_uvs, mesh.texture);
-    mesh::validate(clipped_mesh);
+    validate(clipped_mesh);
     return Cow(std::move(clipped_mesh));
 }
 
-namespace { 
+namespace {
 template <typename TriangleMesh>
 struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinement::Default_visitor<TriangleMesh> {
     using HalfedgeDescriptor = typename boost::graph_traits<TriangleMesh>::halfedge_descriptor;
@@ -427,9 +432,9 @@ struct HasIntersectionsVisitor : public CGAL::Polygon_mesh_processing::Corefinem
         this->has_intersections = true;
     }
 };
-}
+} // namespace
 
-Cow<const SimpleMesh> mesh::clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
+Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix::geometry::Aabb3d &bounds, const bool remesh_planar_patches) {
     ASSERT(!mesh.has_uvs());
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
 
@@ -474,23 +479,23 @@ glm::vec<n_dims, T> compute_barycentric(
 ) {
     using Vec = glm::vec<n_dims, T>;
 
-    Vec v0 = b - a;
-    Vec v1 = c - a;
-    Vec v2 = point - a;
+    const Vec v0 = b - a;
+    const Vec v1 = c - a;
+    const Vec v2 = point - a;
 
-    T d00 = glm::dot(v0, v0);
-    T d01 = glm::dot(v0, v1);
-    T d11 = glm::dot(v1, v1);
-    T d20 = glm::dot(v2, v0);
-    T d21 = glm::dot(v2, v1);
+    const T d00 = glm::dot(v0, v0);
+    const T d01 = glm::dot(v0, v1);
+    const T d11 = glm::dot(v1, v1);
+    const T d20 = glm::dot(v2, v0);
+    const T d21 = glm::dot(v2, v1);
 
-    T denom = d00 * d11 - d01 * d01;
+    const T denom = d00 * d11 - d01 * d01;
     ASSERT(denom != 0);
-    T inv_denom = 1 / denom;
+    const T inv_denom = 1 / denom;
 
-    T v = (d11 * d20 - d01 * d21) * inv_denom;
-    T w = (d00 * d21 - d01 * d20) * inv_denom;
-    T u = 1 - v - w;
+    const T v = (d11 * d20 - d01 * d21) * inv_denom;
+    const T w = (d00 * d21 - d01 * d20) * inv_denom;
+    const T u = 1 - v - w;
 
     return Vec(u, v, w);
 }
@@ -594,7 +599,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
 };
 } // namespace
 
-Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
+Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &clip_mesh, const bool keep_inside) {
     // short circuit the empty mesh case
     // this is a common case since we clip the mask in the terrainmerger on the octree node bounds
     // which often results in empty masks
@@ -649,4 +654,6 @@ Cow<const SimpleMesh> mesh::clip_on_mesh(const SimpleMesh &mesh, const SimpleMes
         result.texture = mesh.texture.value();
     }
     return Cow(std::move(result));
+}
+
 }

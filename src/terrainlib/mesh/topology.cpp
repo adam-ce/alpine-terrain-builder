@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 
 #include "mesh/topology.h"
 
@@ -21,6 +22,18 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
 
     // sort triangle vector
     std::sort(triangles.begin(), triangles.end(), compare_triangles);
+}
+
+uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
+    if (triangles.empty()) {
+        return 0;
+    }
+
+    uint32_t max_vertex = 0;
+    for (const glm::uvec3 &triangle : triangles) {
+        max_vertex = glm::compMax(glm::uvec4(triangle, max_vertex));
+    }
+    return max_vertex + 1;
 }
 
 namespace {
@@ -69,6 +82,8 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
 }
 
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    
     std::vector<std::vector<uint32_t>> vertex_to_triangles(vertex_count);
 
     for (uint32_t triangle_index = 0; triangle_index < triangles.size(); triangle_index++) {
@@ -83,6 +98,8 @@ std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::
 }
 
 std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+
     std::vector<uint32_t> adjacent_triangle_count(vertex_count, 0);
 
     for (const glm::uvec3 &triangle : triangles) {
@@ -101,6 +118,8 @@ void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
 }
 
 std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+
     std::vector<bool> connected;
     connected.resize(vertex_count, false);
     for (const glm::uvec3 &triangle : triangles) {
@@ -118,5 +137,4 @@ std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> t
 
     return isolated;
 }
-
 }

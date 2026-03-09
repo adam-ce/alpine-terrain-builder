@@ -44,6 +44,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_connected_components.cpp
     terrainlib/mesh_holes.cpp
     terrainlib/mesh_io.cpp
+    terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge_mapping.cpp
     terrainlib/mesh_merge.cpp
     terrainlib/mesh_utils.cpp

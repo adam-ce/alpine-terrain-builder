@@ -14,18 +14,19 @@
 #include "OffsetTable.h"
 #include "cluster.h"
 #include "enumerate.h"
+#include "glm_utils.h"
+#include "mesh/connected_components.h"
 #include "mesh/manifold.h"
-#include "mesh/topology.h"
 #include "mesh/merging/VertexMapping.h"
+#include "mesh/split.h"
+#include "mesh/texture_trim.h"
+#include "mesh/topology.h"
 #include "meshopt.h"
+#include "opencv_utils.h"
+#include "range_utils.h"
 #include "unwrap_atlas.h"
 #include "uv.h"
 #include "vector_utils.h"
-#include "mesh/split.h"
-#include "glm_utils.h"
-#include "range_utils.h"
-#include "mesh/texture_trim.h"
-#include "opencv_utils.h"
 
 struct PartitionOptions {
     uint32_t clusters_per_partition = 4;
@@ -251,7 +252,7 @@ inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &cl
                 // This vertex was not yet remapped -> assign new merged index.
                 merged_vertex_index = next_vertex_index;
                 next_vertex_index++;
-                const mesh::merging::VertexId source_vertex{.mesh_index = cluster_index, .vertex_index = local_vertex_index};
+                const mesh::merging::VertexId source_vertex{.mesh_index = linear_cluster_index, .vertex_index = local_vertex_index};
                 mapping.add(source_vertex, merged_vertex_index);
             }
         }
@@ -275,7 +276,7 @@ inline Cluster merge_geometry_using_mapping(
     // Preallocate merged cluster
     Cluster merged;
 
-    const uint32_t unique_vertex_count = mapping.find_max_merged_index();
+    const uint32_t unique_vertex_count = mapping.find_max_merged_index() + 1;
     merged.vertex_indices.resize(unique_vertex_count);
 
     uint32_t total_triangle_count = 0;
@@ -353,7 +354,7 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
 
     // Prepare vertex remap buffer for merging
     const uint32_t no_vertex_remap = -1;
-    std::vector<uint32_t> vertex_remap;
+    std::vector<uint32_t> vertex_remap(clustering.vertex_count(), no_vertex_remap);
 
     std::vector<Cluster> partitioned_clusters;
     partitioned_clusters.reserve(partition_count);
@@ -505,17 +506,17 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
             }
 
             // Finalize uvs and texture
-            for (const auto [vertex_index, component_index] : enumerate(merged_to_component)) {
-                const mesh::Simple& component = components[component_index];
-                merged_cluster.uvs[vertex_index] = component.uvs[vertex_index];
+            merged_cluster.uvs.resize(merged_cluster.vertex_count());
+            const auto &vertex_to_component = components_index.vertex_to_component;
+            for (const auto [merged_vertex_index, local_vertex_index] : enumerate(merged_to_component)) {
+                const uint32_t component_index = vertex_to_component[merged_vertex_index];
+                const mesh::Simple &component = components[component_index];
+                merged_cluster.uvs[merged_vertex_index] = component.uvs[local_vertex_index];
             }
             merged_cluster.texture_id = textures.add(merged_texture);
 
         } else {
             // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
-            if (vertex_remap.empty()) {
-                vertex_remap.resize(clustering.positions.size(), no_vertex_remap);
-            }
             merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
             const cv::Mat& texture = clustering.get_cluster_texture(cluster_indices[0]);
             merged_cluster.texture_id = textures.add(texture);
@@ -526,7 +527,6 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
     return Clustering{
         clustering.positions,
         std::move(partitioned_clusters),
-        clustering.texture,
         textures};
 }
 

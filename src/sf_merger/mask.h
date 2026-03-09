@@ -12,6 +12,7 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "mesh/bounds.h"
 #include "srs.h"
 #include "SphereProjector.h"
 
@@ -520,7 +521,7 @@ inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const glm
 }
 
 inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const double radius) {
-    const radix::geometry::Aabb3d bounds = calculate_bounds(mesh);
+    const radix::geometry::Aabb3d bounds = mesh::calculate_bounds(mesh);
     return compute_mesh_shadow(mesh, bounds.centre(), radius);
 }
 

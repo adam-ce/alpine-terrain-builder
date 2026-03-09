@@ -15,9 +15,6 @@ public:
     using Id = size_t;
 
     TextureSet() = default;
-    explicit TextureSet(const size_t count)
-        : _textures(count) {
-    }
 
     size_t size() const noexcept {
         return this->_textures.size();
@@ -58,31 +55,23 @@ public:
 
         return static_cast<Id>(std::distance(this->_textures.begin(), it));
     }
+    
+    auto begin() noexcept { return this->_textures.begin(); }
+    auto end() noexcept { return this->_textures.end(); }
 
-    bool remove(const Texture &texture) {
-        const auto id = this->id_of(texture);
-        if (!id.has_value()) {
-            return false;
-        }
+    auto begin() const noexcept { return this->_textures.begin(); }
+    auto end() const noexcept { return this->_textures.end(); }
 
-        erase_by_index(this->_textures, id.value());
-        return true;
-    }
-
-    bool remove(const Id index) {
-        if (index >= this->_textures.size()) {
-            return false;
-        }
-
-        erase_by_index(this->_textures, index);
-        return true;
-    }
+    auto cbegin() const noexcept { return this->_textures.cbegin(); }
+    auto cend() const noexcept { return this->_textures.cend(); }
 
     cv::Mat &operator[](const Id index) {
+        ASSERT(index < this->size());
         return this->_textures[index];
     }
 
     const cv::Mat &operator[](const Id index) const {
+        ASSERT(index < this->size());
         return this->_textures[index];
     }
 

@@ -17,6 +17,7 @@
 #include "mesh/validate.h"
 #include "mesh/boundary.h"
 #include "validate.h"
+#include "range_utils.h"
 
 struct VertexLock {
     struct None {};
@@ -82,7 +83,7 @@ namespace detail {
             } else if constexpr (std::is_same_v<T, VertexLock::Mask>) {
                 ASSERT(arg.mask.size() == clustering.vertex_count());
                 vertex_lock.resize(cluster.vertex_count(), UNLOCKED);
-                for (uint32_t local_vertex_index=0; local_vertex_index <clustering.vertex_count(); local_vertex_index++) {
+                for (const uint32_t local_vertex_index : range(cluster.vertex_count())) {
                     const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
                     const uint8_t mask_value = arg.mask[global_vertex_index];
                     DEBUG_ASSERT(mask_value == LOCKED || mask_value == UNLOCKED);
@@ -100,7 +101,7 @@ inline Clustering simplify(
     const SimplifyOptions options = {}
 ) {
     Clustering simplified_clustering;
-    simplified_clustering.texture = original_clustering.texture;
+    simplified_clustering.textures = original_clustering.textures;
     simplified_clustering.positions = original_clustering.positions;
 
     std::vector<glm::dvec3> cluster_positions;
@@ -210,7 +211,9 @@ inline Clustering simplify(
             .vertex_indices = std::move(vertex_indices),
             .local_triangles = std::move(local_triangles),
             .uvs = std::move(uvs),
-            .absolute_error = absolute_error};
+            .texture_id = original_cluster.texture_id,
+            .absolute_error = absolute_error
+        };
         validate(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }

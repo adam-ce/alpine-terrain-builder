@@ -1,119 +1,43 @@
-#include <cstddef>
-#include <cstdint>
-#include <span>
-#include <unordered_map>
-#include <vector>
+#pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtx/hash.hpp>
-#include <libassert/assert.hpp>
+#include <type_traits>
 
-#include "log.h"
-#include "mesh/connected_components.h"
-#include "mesh/convert.h"
-#include "mesh/geometry.h"
-#include "mesh/manifold.h"
-#include "mesh/cleanup.h"
+#include <glm/common.hpp>
+
+#include "mesh/validate.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 namespace mesh {
 
 namespace detail {
 
-inline constexpr double EPSILON = 1e-12;
+template <glm::length_t n_dims, typename T>
+inline constexpr bool validate_supported_v = false;
 
-constexpr bool has_flag(const ValidationFlags set, const ValidationFlags flag) noexcept {
-    return (set & flag) != ValidationFlags::None;
-}
-
-inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
-    std::unordered_map<glm::uvec3, uint32_t> counts;
-    counts.reserve(triangles.size());
-
-    for (const glm::uvec3 &tri : triangles) {
-        const glm::uvec3 normalized = normalize_triangle(tri, !ignore_orientation);
-        counts[normalized] += 1u;
-    }
-
-    for (const auto &[_tri, count] : counts) {
-        if (count > 1u) {
-            return true;
-        }
-    }
-
-    return false;
-}
+template <>
+inline constexpr bool validate_supported_v<2, float> = true;
+template <>
+inline constexpr bool validate_supported_v<2, double> = true;
+template <>
+inline constexpr bool validate_supported_v<3, float> = true;
+template <>
+inline constexpr bool validate_supported_v<3, double> = true;
 
 template <glm::length_t n_dims, typename T>
-void validate_basic(const mesh::View_<n_dims, T> &mesh) {
-    using Mesh = mesh::View_<n_dims, T>;
-    using Triangle = typename Mesh::Triangle;
-    using Uv = typename Mesh::Uv;
+void validate_impl(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags);
 
-    static_assert(n_dims == 2 || n_dims == 3, "Mesh must be 2D or 3D");
-
-    if (mesh.has_uvs()) {
-        DEBUG_ASSERT(mesh.positions.size() == mesh.uvs.size());
-    }
-
-    for (const Uv &uv : mesh.uvs) {
-        for (glm::length_t k = 0; k < uv.length(); k++) {
-            DEBUG_ASSERT(uv[k] >= static_cast<typename Uv::value_type>(0));
-            DEBUG_ASSERT(uv[k] <= static_cast<typename Uv::value_type>(1));
-        }
-    }
-
-    const size_t vertex_count = mesh.vertex_count();
-    for (const Triangle &triangle : mesh.triangles) {
-        for (glm::length_t k = 0; k < triangle.length(); k++) {
-            const size_t vertex_index = static_cast<size_t>(triangle[k]);
-            DEBUG_ASSERT(vertex_index < vertex_count);
-        }
-    }
-
-    for (const Triangle &triangle : mesh.triangles) {
-        DEBUG_ASSERT(!is_degenerate(triangle));
-    }
-}
+// These impls have been moved to the cpp file, since we want to keep this file cheap since it is
+// included in lots of other files, and the validation code is unused in release anyways.
+extern template void validate_impl<2, float>(const mesh::View_<2, float> &, ValidationFlags);
+extern template void validate_impl<2, double>(const mesh::View_<2, double> &, ValidationFlags);
+extern template void validate_impl<3, float>(const mesh::View_<3, float> &, ValidationFlags);
+extern template void validate_impl<3, double>(const mesh::View_<3, double> &, ValidationFlags);
 
 template <glm::length_t n_dims, typename T>
-void validate_topology(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
-    if (has_flag(flags, ValidationFlags::SingleComponent)) {
-        DEBUG_ASSERT(is_single_component(mesh));
-    }
-
-    if (has_flag(flags, ValidationFlags::Manifold)) {
-        DEBUG_ASSERT(is_manifold(mesh.triangles));
-
-        DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, true));
-    }
-}
-
-template <glm::length_t n_dims, typename T>
-void validate_geometry(const mesh::View_<n_dims, T> &mesh) {
-    static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
-
-    DEBUG_ASSERT(find_isolated_vertices(mesh.triangles, mesh.vertex_count()).empty());
-
-    DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
-
-    const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
-    for (const glm::uvec3 &triangle : mesh.triangles) {
-        const T double_area_sq = compute_squared_triangle_area<n_dims, T>(triangle, mesh.positions);
-        DEBUG_ASSERT(double_area_sq > double_epsilon_sq);
-    }
-}
-
-template <glm::length_t n_dims, typename T>
-void validate_impl(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
-    if (detail::has_flag(flags, ValidationFlags::Basic)) {
-        detail::validate_basic(mesh);
-    }
-
-    detail::validate_topology(mesh, flags);
-
-    if (detail::has_flag(flags, ValidationFlags::Geometry)) {
-        detail::validate_geometry(mesh);
-    }
+void validate_core(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
+    static_assert(validate_supported_v<n_dims, T>, "mesh::validate is only supported for (2,float), (2,double), (3,float), (3,double)");
+    validate_impl<n_dims, T>(mesh, flags);
 }
 
 } // namespace detail
@@ -121,7 +45,7 @@ void validate_impl(const mesh::View_<n_dims, T> &mesh, const ValidationFlags fla
 template <glm::length_t n_dims, typename T>
 void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
 #ifndef NDEBUG
-    detail::validate_impl(mesh, flags);
+    detail::validate_core(mesh, flags);
 #endif
 
     USE(mesh);

@@ -4,7 +4,7 @@
 #include <optional>
 
 #include <glm/glm.hpp>
-#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
 
 #include "TextureSet.h"
 
@@ -13,7 +13,7 @@ struct Cluster {
     std::vector<glm::uvec3> local_triangles; // indices into this->vertex_indices
     std::vector<glm::dvec2> uvs; // per local vertex 
 
-    uint32_t texture_id = 0; // index into Clustering::textures
+    uint32_t texture_id; // index into Clustering::textures
     double absolute_error = 0.0; // absolute error of this cluster compared to original mesh
 
     constexpr size_t vertex_count() const noexcept {
@@ -30,7 +30,6 @@ struct Cluster {
 struct Clustering {
     std::vector<glm::dvec3> positions;
     std::vector<Cluster> clusters;
-    std::optional<cv::Mat> texture;
     TextureSet textures = {};
 
     constexpr size_t vertex_count() const noexcept {

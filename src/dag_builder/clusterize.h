@@ -17,6 +17,7 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "validate.h"
+#include "TextureSet.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
@@ -95,7 +96,7 @@ inline std::vector<Cluster> clusterize(
 inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
     const auto positions_f = to_approximate_normalized(mesh.positions);
 
-    auto clusters = clusterize(
+    std::vector<Cluster> clusters = clusterize(
         mesh.triangles,
         positions_f,
         mesh.uvs,
@@ -103,11 +104,15 @@ inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options 
         {}
     );
 
+    TextureSet textures;
+    if (mesh.texture.has_value()) {
+        textures.add(mesh.texture.value());
+    }
+
     return Clustering{
         std::move(mesh.positions),
         std::move(clusters),
-        std::move(mesh.texture)
-    };
+        std::move(textures)};
 }
 
 inline std::vector<Cluster> clusterize(
@@ -173,6 +178,7 @@ inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const Cl
         // Copy error to sub-clusters
         for (Cluster &sub_cluster : sub_clusters) {
             sub_cluster.absolute_error = cluster.absolute_error;
+            sub_cluster.texture_id = cluster.texture_id;
         }
 
         // Record new clusters and their parent
@@ -185,7 +191,7 @@ inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const Cl
     Clustering new_clustering{
         input.positions,
         std::move(new_clusters),
-        input.texture
+        input.textures
     };
     return ClusteringAndBackwardMapping{std::move(new_clustering), std::move(parent_cluster_indices)};
 }

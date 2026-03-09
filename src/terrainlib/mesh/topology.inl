@@ -13,6 +13,7 @@
 #include "FixedVector.h"
 #include "HybridVector.h"
 #include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 #include "mesh/TriangleContainer.h"
 
 namespace mesh {
@@ -34,10 +35,17 @@ void flip_orientation(mesh::Simple_<n_dims, T> &mesh) {
 }
 
 template <glm::length_t n_dims, typename T>
-std::unordered_set<typename mesh::Simple_<n_dims, T>::Edge> get_edges(const mesh::Simple_<n_dims, T> &mesh, const bool normalize) {
-    using Edge = typename mesh::Simple_<n_dims, T>::Edge;
-    std::unordered_set<Edge> edges;
-    for_each_edge(mesh, [&](const Edge &edge, const uint32_t /*triangle_index*/) { 
+std::unordered_set<glm::uvec2> get_edges(const mesh::Simple_<n_dims, T> &mesh, const bool normalize) {
+    return get_edges(mesh.triangles, normalize);
+}
+template <glm::length_t n_dims, typename T>
+std::unordered_set<glm::uvec2> get_edges(const mesh::View_<n_dims, T> &mesh, const bool normalize) {
+    return get_edges(mesh.triangles, normalize);
+}
+template <TriangleContainer Triangles, typename F>
+std::unordered_set<glm::uvec2> get_edges(const Triangles &triangles, const bool normalize) {
+    std::unordered_set<glm::uvec2> edges;
+    for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) { 
         edges.insert(edge); 
     }, normalize);
     return edges;
@@ -45,6 +53,10 @@ std::unordered_set<typename mesh::Simple_<n_dims, T>::Edge> get_edges(const mesh
 
 template <glm::length_t n_dims, typename T, typename F>
 void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F &&func, const bool normalize) {
+    for_each_edge(mesh.triangles, std::forward<F>(func), normalize);
+}
+template <glm::length_t n_dims, typename T, typename F>
+void for_each_edge(const mesh::View_<n_dims, T> &mesh, F &&func, const bool normalize) {
     for_each_edge(mesh.triangles, std::forward<F>(func), normalize);
 }
 template <TriangleContainer Triangles, typename F>
@@ -70,11 +82,23 @@ std::unordered_map<glm::uvec2, FixedVector<uint32_t, 2>> create_edge_to_triangle
     return create_edge_to_triangle_mapping_manifold(mesh.triangles);
 }
 template <glm::length_t n_dims, typename T>
+std::unordered_map<glm::uvec2, FixedVector<uint32_t, 2>> create_edge_to_triangle_mapping_manifold(const mesh::View_<n_dims, T> &mesh) {
+    return create_edge_to_triangle_mapping_manifold(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
 std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> create_edge_to_triangle_mapping_non_manifold(const mesh::Simple_<n_dims, T> &mesh) {
     return create_edge_to_triangle_mapping_non_manifold(mesh.triangles);
 }
 template <glm::length_t n_dims, typename T>
+std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> create_edge_to_triangle_mapping_non_manifold(const mesh::View_<n_dims, T> &mesh) {
+    return create_edge_to_triangle_mapping_non_manifold(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
 std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_mapping_non_manifold2(const mesh::Simple_<n_dims, T> &mesh) {
+    return create_edge_to_triangle_mapping_non_manifold2(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_mapping_non_manifold2(const mesh::View_<n_dims, T> &mesh) {
     return create_edge_to_triangle_mapping_non_manifold2(mesh.triangles);
 }
 
@@ -82,9 +106,17 @@ template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::Simple_<n_dims, T> &mesh) {
     return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
 }
+template <glm::length_t n_dims, typename T>
+std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::View_<n_dims, T> &mesh) {
+    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
+}
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::Simple_<n_dims, T> &mesh) {
+    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
+std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::View_<n_dims, T> &mesh) {
     return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
 }
 
@@ -221,16 +253,12 @@ inline constexpr void flip_triangle_orientation(glm::uvec3 &triangle) {
     std::swap(triangle.z, triangle.x);
 }
 
-inline std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const SimpleMesh &mesh) {
-    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
-}
-
-inline std::vector<uint32_t> count_vertex_adjacent_triangles(const SimpleMesh &mesh) {
-    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
-}
-
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh) {
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
+}
+template <glm::length_t n_dims, typename T>
+std::vector<uint32_t> find_isolated_vertices(const mesh::View_<n_dims, T> &mesh) {
     return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
 }
 

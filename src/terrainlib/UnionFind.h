@@ -15,8 +15,7 @@ public:
     using Index = IndexT;
     using Size = SizeT;
 
-    explicit UnionFind_(const Size size) {
-        this->_parents.resize(size);
+    explicit UnionFind_(const Size size = 0) {
         this->reset(size);
     }
 
@@ -24,6 +23,7 @@ public:
         this->reset(this->size());
     }
     void reset(const Size size) noexcept {
+        this->_parents.resize(size);
         std::iota(this->_parents.begin(), this->_parents.end(), Index{0});
         if constexpr (TrackSizes) {
             this->_sizes.assign(size, Size{1});

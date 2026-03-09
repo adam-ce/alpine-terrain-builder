@@ -213,7 +213,7 @@ add_library(terrainlib
     terrainlib/mesh/TriangleSoup.h
     terrainlib/mesh/utils.h
     terrainlib/mesh/validate_cgal.h
-    terrainlib/mesh/validate.h
+    terrainlib/mesh/validate.h terrainlib/mesh/validate.cpp
     terrainlib/mesh/View.h
     terrainlib/mesh/WindingOrder.h
 
@@ -315,7 +315,6 @@ add_library(sfmergerlib
     sf_merger/merge.h
     sf_merger/NodeLoader.h
     sf_merger/NodeWriter.h
-    sf_merger/SimpleMutex.h
     sf_merger/utils.h
 )
 target_include_directories(sfmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sf_merger)
@@ -351,7 +350,6 @@ add_library(meshsimplifylib
     mesh_simplify/uv_map.h mesh_simplify/uv_map.cpp
 )
 target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
-target_precompile_headers(meshsimplifylib PRIVATE mesh_simplify/pch.h)
 target_link_libraries(meshsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
 add_executable(mesh-simplify
     mesh_simplify/main.cpp

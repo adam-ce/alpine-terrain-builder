@@ -27,7 +27,7 @@ std::vector<glm::uvec2> find_non_manifold_edges(const std::span<const glm::uvec3
 }
 
 bool is_manifold(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
     return is_edge_manifold(triangles) && is_vertex_manifold(triangles, vertex_count);
 }
 
@@ -51,7 +51,7 @@ bool is_vertex_manifold(const std::span<const glm::uvec3> triangles) {
     return is_vertex_manifold(triangles, vertex_count);
 }
 bool is_vertex_manifold(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
     const auto vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, vertex_count);
 
     std::unordered_map<uint32_t, std::vector<uint32_t>> edge_groups;

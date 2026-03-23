@@ -11,6 +11,7 @@
 #include <glm/gtx/component_wise.hpp>
 
 #include "mesh/topology.h"
+#include "glm_utils.h"
 
 namespace mesh {
 
@@ -24,7 +25,7 @@ void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
     std::sort(triangles.begin(), triangles.end(), compare_triangles);
 }
 
-uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
+uint32_t find_max_vertex_index(const std::span<const glm::uvec3> triangles) {
     if (triangles.empty()) {
         return 0;
     }
@@ -33,7 +34,30 @@ uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
     for (const glm::uvec3 &triangle : triangles) {
         max_vertex = glm::compMax(glm::uvec4(triangle, max_vertex));
     }
-    return max_vertex + 1;
+    return max_vertex;
+}
+
+uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
+    const uint32_t max_vertex = find_max_vertex_index(triangles);
+    if (max_vertex <= triangles.size() * 3) {
+        // Dense vertex range
+        std::vector<bool> visited(max_vertex + 1, false);
+        for (const glm::uvec3 &triangle : triangles) {
+            for (const uint32_t vertex : iterate(triangle)) {
+                visited[vertex] = true;
+            }
+        }
+        return std::count(visited.begin(), visited.end(), true);
+    } else {
+        // Sparse vertex range
+        std::unordered_set<uint32_t> visited;
+        for (const glm::uvec3 &triangle : triangles) {
+            for (const uint32_t vertex : iterate(triangle)) {
+                visited.insert(vertex);
+            }
+        }
+        return visited.size();
+    }
 }
 
 namespace {
@@ -82,7 +106,7 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
 }
 
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
     
     std::vector<std::vector<uint32_t>> vertex_to_triangles(vertex_count);
 
@@ -98,7 +122,7 @@ std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::
 }
 
 std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
 
     std::vector<uint32_t> adjacent_triangle_count(vertex_count, 0);
 
@@ -111,14 +135,8 @@ std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm:
     return adjacent_triangle_count;
 }
 
-void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
-    for (auto &triangle : triangles) {
-        flip_triangle_orientation(triangle);
-    }
-}
-
 std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
 
     std::vector<bool> connected;
     connected.resize(vertex_count, false);

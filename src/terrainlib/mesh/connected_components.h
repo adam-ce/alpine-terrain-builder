@@ -28,7 +28,7 @@ struct ComponentsIndex {
 
 namespace detail {
 inline UnionFind build_union_find(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
 
     UnionFind components(vertex_count);
     for (const glm::uvec3 &triangle : triangles) {

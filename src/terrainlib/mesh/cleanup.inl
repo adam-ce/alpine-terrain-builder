@@ -23,6 +23,17 @@ std::vector<uint32_t> find_duplicate_triangles(const mesh::Simple_<3, T> &mesh, 
     return find_duplicate_triangles<T>(mesh.triangles, mesh.positions, ignore_orientation);
 }
 template <typename T>
+std::vector<uint32_t> find_duplicate_triangles(const mesh::View_<3, T> &mesh, bool ignore_orientation) {
+    return find_duplicate_triangles<T>(mesh.triangles, mesh.positions, ignore_orientation);
+}
+template <typename T>
+std::vector<uint32_t> find_duplicate_triangles(
+    const std::vector<glm::uvec3> &triangles,
+    const std::vector<glm::vec<3, T>> &positions,
+    const bool ignore_orientation) {
+    return find_duplicate_triangles(std::span(triangles), std::span(positions), ignore_orientation);
+}
+template <typename T>
 std::vector<uint32_t> find_duplicate_triangles(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::vec<3, T>> positions,
@@ -33,9 +44,32 @@ std::vector<uint32_t> find_duplicate_triangles(
         return find_duplicate_triangles_consider_orientation(triangles);
     }
 }
+
 template <typename T>
-std::vector<uint32_t> find_duplicate_triangles_consider_orientation(mesh::Simple_<3, T> &mesh) {
+std::vector<uint32_t> find_duplicate_triangles_ignore_orientation(const mesh::Simple_<3, T> &mesh) {
+    return find_duplicate_triangles_ignore_orientation(mesh.triangles, mesh.positions);
+}
+template <typename T>
+std::vector<uint32_t> find_duplicate_triangles_ignore_orientation(const mesh::View_<3, T> &mesh) {
+    return find_duplicate_triangles_ignore_orientation(mesh.triangles, mesh.positions);
+}
+template <typename T>
+std::vector<uint32_t> find_duplicate_triangles_ignore_orientation(
+    const std::vector<glm::uvec3> &triangles,
+    const std::vector<glm::vec<3, T>> &positions) {
+    return find_duplicate_triangles_ignore_orientation(std::span(triangles), std::span(positions));
+}
+
+template <typename T>
+std::vector<uint32_t> find_duplicate_triangles_consider_orientation(const mesh::Simple_<3, T> &mesh) {
     return find_duplicate_triangles_consider_orientation(mesh.triangles);
+}
+template <typename T>
+std::vector<uint32_t> find_duplicate_triangles_consider_orientation(const mesh::View_<3, T> &mesh) {
+    return find_duplicate_triangles_consider_orientation(mesh.triangles);
+}
+inline std::vector<uint32_t> find_duplicate_triangles_consider_orientation(const std::vector<glm::uvec3> &triangles) {
+    return find_duplicate_triangles_consider_orientation(std::span(triangles));
 }
 
 namespace detail {

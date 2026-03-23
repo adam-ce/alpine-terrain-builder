@@ -22,6 +22,9 @@ bool is_degenerate(const glm::uvec3 &triangle);
 template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh);
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles);
+template <glm::length_t n_dims, typename T>
+void sort_triangles(mesh::Simple_<n_dims, T> &mesh);
+void sort_triangles(std::span<glm::uvec3> triangles);
 
 template <glm::length_t n_dims, typename T>
 void flip_orientation(mesh::Simple_<n_dims, T> &mesh);
@@ -56,6 +59,8 @@ constexpr void normalize_edge_inplace(glm::uvec2 &edge);
 
 glm::uvec3 normalize_triangle(glm::uvec3 triangle, const bool keep_orientation = true);
 void normalize_triangle_inplace(glm::uvec3 &triangle, const bool keep_orientation = true);
+void normalize_triangles_inplace(std::span<glm::uvec3> triangles, const bool keep_orientation = true);
+void normalize_triangles_inplace(std::vector<glm::uvec3>& triangles, const bool keep_orientation = true);
 
 glm::uvec4 normalize_quad(glm::uvec4 quad, const bool keep_orientation = true);
 void normalize_quad_inplace(glm::uvec4 &quad, const bool keep_orientation = true);

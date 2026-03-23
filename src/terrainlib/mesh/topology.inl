@@ -28,10 +28,23 @@ template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh) {
     sort_and_normalize_triangles(mesh.triangles);
 }
+template <glm::length_t n_dims, typename T>
+void sort_triangles(mesh::Simple_<n_dims, T> &mesh) {
+    sort_triangles(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+void normalize_triangles(mesh::Simple_<n_dims, T> &mesh) {
+    normalize_triangles(mesh.triangles);
+}
 
 template <glm::length_t n_dims, typename T>
-void flip_orientation(mesh::Simple_<n_dims, T> &mesh) {
+constexpr void flip_orientation(mesh::Simple_<n_dims, T> &mesh) {
     flip_triangle_orientations(mesh.triangles);
+}
+constexpr void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
+    for (auto &triangle : triangles) {
+        flip_triangle_orientation(triangle);
+    }
 }
 
 template <glm::length_t n_dims, typename T>
@@ -208,6 +221,14 @@ inline constexpr glm::uvec2 normalize_edge(glm::uvec2 edge) {
     return edge;
 }
 
+inline void normalize_triangles_inplace(std::span<glm::uvec3> triangles, const bool keep_orientation) {
+    for (glm::uvec3& triangle : triangles) {
+        normalize_triangle_inplace(triangle, keep_orientation);
+    }
+}
+inline void normalize_triangles_inplace(std::vector<glm::uvec3> &triangles, const bool keep_orientation) {
+    normalize_triangles_inplace(std::span(triangles), keep_orientation);
+}
 inline void normalize_triangle_inplace(glm::uvec3 &triangle, const bool keep_orientation) {
     std::span<uint32_t, 3> data(glm::value_ptr(triangle), triangle.length());
     detail::normalize_face_index_rotation_impl<3>(data, keep_orientation);

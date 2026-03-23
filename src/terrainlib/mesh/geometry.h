@@ -29,6 +29,8 @@ template <glm::length_t n_dims, typename T>
 T compute_triangle_area(const std::array<glm::vec<n_dims, T>, 3> &triangle);
 template <glm::length_t n_dims, typename T>
 T compute_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions);
+template <glm::length_t n_dims, typename T>
+T compute_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>>& positions);
 
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2);
@@ -36,6 +38,8 @@ template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const std::array<glm::vec<n_dims, T>, 3> &triangle);
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions);
+template <glm::length_t n_dims, typename T>
+T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions);
 
 namespace mesh {
 

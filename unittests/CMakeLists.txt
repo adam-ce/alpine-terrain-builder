@@ -70,13 +70,6 @@ add_executable(unittests_tilebuilder
 )  
 target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
-
-add_executable(unittests_terrainsimplify
-    catch2_helpers.h
-)
-target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
-
-
 add_executable(unittests_meshbuilder
     catch2_helpers.h
     mesh_builder/mesh.cpp

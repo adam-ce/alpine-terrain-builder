@@ -7,6 +7,7 @@
 #include <typeinfo>
 #include <memory>
 #include <cstdlib>
+#include <type_traits>
 
 #ifndef _MSC_VER
     #include <cxxabi.h>
@@ -71,3 +72,13 @@ inline std::string type_name(const T &obj) {
 
 template <class>
 inline constexpr bool always_false_v = false;
+
+
+template <typename T, template <typename...> class Tmpl>
+struct is_specialization_of : std::false_type {};
+
+template <template <typename...> class Tmpl, typename... Args>
+struct is_specialization_of<Tmpl<Args...>, Tmpl> : std::true_type {};
+
+template <typename T, template <typename...> class Tmpl>
+inline constexpr bool is_specialization_of_v = is_specialization_of<T, Tmpl>::value;

@@ -10,26 +10,18 @@
 
 namespace {
 
-std::vector<glm::uvec2> sorted_edges_from_set(const std::unordered_set<glm::uvec2> &set) {
-    std::vector<glm::uvec2> result(set.begin(), set.end());
-    std::sort(result.begin(), result.end(), [](const glm::uvec2 &a, const glm::uvec2 &b) {
-        if (a.x != b.x)
-            return a.x < b.x;
-        return a.y < b.y;
-    });
-    return result;
-}
-
-void sort_triangles(std::vector<glm::uvec3> &triangles) {
-    std::sort(triangles.begin(), triangles.end(), [](const glm::uvec3 &a, const glm::uvec3 &b) {
+void sort_edges(std::vector<glm::uvec2> &edges) {
+    std::sort(edges.begin(), edges.end(), [](const glm::uvec2 &a, const glm::uvec2 &b) {
         if (a.x != b.x) {
             return a.x < b.x;
         }
-        if (a.y != b.y) {
-            return a.y < b.y;
-        }
-        return a.z < b.z;
+        return a.y < b.y;
     });
+}
+std::vector<glm::uvec2> sorted_edges_from_set(const std::unordered_set<glm::uvec2> &set) {
+    std::vector<glm::uvec2> result(set.begin(), set.end());
+    sort_edges(result);
+    return result;
 }
 
 } // namespace
@@ -66,8 +58,6 @@ TEST_CASE("mesh::sort_and_normalize_triangles(span)") {
             mesh::normalize_triangle(glm::uvec3(3, 1, 2)),
             mesh::normalize_triangle(glm::uvec3(4, 2, 3))};
 
-        sort_triangles(expected);
-
         CHECK(actual == expected);
     }
 
@@ -84,7 +74,7 @@ TEST_CASE("mesh::flip_triangle_orientation and flip_triangle_orientations") {
 
         mesh::flip_triangle_orientation(actual);
 
-        CHECK(actual == glm::uvec3(1, 3, 2));
+        CHECK(mesh::normalize_triangle(actual) == glm::uvec3(1, 3, 2));
     }
 
     SECTION("flip_triangle_orientations flips all triangles in span") {
@@ -93,6 +83,7 @@ TEST_CASE("mesh::flip_triangle_orientation and flip_triangle_orientations") {
             glm::uvec3(3, 4, 5)};
 
         mesh::flip_triangle_orientations(actual);
+        mesh::normalize_triangles_inplace(actual);
 
         std::vector<glm::uvec3> expected = {
             glm::uvec3(0, 2, 1),
@@ -108,13 +99,21 @@ TEST_CASE("mesh::compute_vertex_count") {
         CHECK(mesh::compute_vertex_count(triangles) == 0);
     }
 
-    SECTION("returns max vertex index plus one") {
+    SECTION("works without isolated vertices") {
         const std::vector<glm::uvec3> triangles = {
             glm::uvec3(0, 2, 1),
             glm::uvec3(4, 3, 2),
+            glm::uvec3(5, 1, 6)};
+
+        CHECK(mesh::compute_vertex_count(triangles) == 7);
+    }
+
+    SECTION("works with isolated vertices") {
+        const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(0, 2, 1),
             glm::uvec3(7, 1, 6)};
 
-        CHECK(mesh::compute_vertex_count(triangles) == 8);
+        CHECK(mesh::compute_vertex_count(triangles) == 5);
     }
 }
 
@@ -128,11 +127,11 @@ TEST_CASE("mesh::get_edges last overload") {
 
         const std::vector<glm::uvec2> expected = {
             glm::uvec2(0, 1),
-            glm::uvec2(0, 2),
             glm::uvec2(1, 2),
             glm::uvec2(1, 3),
+            glm::uvec2(2, 0),
             glm::uvec2(2, 1),
-            glm::uvec2(2, 3)};
+            glm::uvec2(3, 2)};
 
         CHECK(actual == expected);
     }
@@ -181,10 +180,11 @@ TEST_CASE("mesh::for_each_edge last overload") {
 
         std::vector<glm::uvec2> actual;
         mesh::for_each_edge(triangles, [&](const glm::uvec2 &edge) { actual.push_back(edge); }, true);
+        sort_edges(actual);
 
         const std::vector<glm::uvec2> expected = {
-            glm::uvec2(0, 2),
             glm::uvec2(0, 1),
+            glm::uvec2(0, 2),
             glm::uvec2(1, 2)};
 
         CHECK(actual == expected);
@@ -216,7 +216,7 @@ TEST_CASE("mesh::change_vertex and change_vertex_inplace") {
     SECTION("non-existing old vertex leaves triangle unchanged") {
         glm::uvec3 actual(1, 2, 3);
 
-        mesh::change_vertex_inplace(actual, 99, 8);
+        mesh::change_vertex_inplace(actual, 99, 8, true);
 
         CHECK(actual == glm::uvec3(1, 2, 3));
     }

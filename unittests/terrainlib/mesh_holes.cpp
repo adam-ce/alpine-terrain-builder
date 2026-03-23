@@ -220,7 +220,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
         // bottom inner
         {4, 5, 8}
     };
-    mesh::validate(mesh);
+    mesh::validate_connected(mesh);
 
     SECTION("find_boundary_edges") {
         // expected

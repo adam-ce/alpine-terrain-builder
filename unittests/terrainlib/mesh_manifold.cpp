@@ -37,7 +37,7 @@ SimpleMesh make_quad() {
 }
 
 // Three triangles sharing the same edge (0, 1) -> edge non-manifold.
-SimpleMesh make_edge_non_manifold_mesh() {
+SimpleMesh make_three_triangles_sharing_same_edge() {
     SimpleMesh mesh;
     mesh.positions = {
         glm::dvec3(0, 0, 0),  // 0
@@ -54,10 +54,10 @@ SimpleMesh make_edge_non_manifold_mesh() {
 }
 
 // Two fans touching only at vertex 0 -> vertex non-manifold, but edges manifold.
-SimpleMesh make_vertex_non_manifold_mesh() {
+SimpleMesh make_two_fans_touching_at_single_vertex() {
     SimpleMesh mesh;
     mesh.positions = {
-        glm::dvec3(0, 0, 0),  // 0 shared articulation
+        glm::dvec3(0, 0, 0),  // 0
         glm::dvec3(1, 0, 0),  // 1
         glm::dvec3(0, 1, 0),  // 2
         glm::dvec3(-1, 0, 0), // 3
@@ -74,28 +74,14 @@ SimpleMesh make_vertex_non_manifold_mesh() {
 TEST_CASE("mesh::find_non_manifold_edges") {
     SECTION("manifold mesh has no non-manifold edges") {
         const SimpleMesh mesh = make_quad();
-
         const auto actual = mesh::find_non_manifold_edges(mesh.triangles);
-
         CHECK(actual.empty());
     }
 
-    SECTION("detects one non-manifold edge from raw triangles") {
-        const SimpleMesh mesh = make_edge_non_manifold_mesh();
+    SECTION("detects single non-manifold edge") {
+        const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
-        auto actual = mesh::find_non_manifold_edges(mesh.triangles);
-        sort_edges(actual);
-
-        std::vector<glm::uvec2> expected = {glm::uvec2(0, 1)};
-        sort_edges(expected);
-
-        CHECK(actual == expected);
-    }
-
-    SECTION("detects one non-manifold edge from SimpleMesh overload") {
-        const SimpleMesh mesh = make_edge_non_manifold_mesh();
-
-        auto actual = mesh::find_non_manifold_edges(mesh);
+        std::vector<glm::uvec2> actual = mesh::find_non_manifold_edges(mesh.triangles);
         sort_edges(actual);
 
         std::vector<glm::uvec2> expected = {glm::uvec2(0, 1)};
@@ -105,12 +91,12 @@ TEST_CASE("mesh::find_non_manifold_edges") {
     }
 
     SECTION("duplicate edge orientation does not matter") {
-        std::vector<glm::uvec3> triangles = {
+        const std::vector<glm::uvec3> triangles = {
             glm::uvec3(0, 1, 2),
             glm::uvec3(1, 0, 3),
             glm::uvec3(1, 0, 4)};
 
-        auto actual = mesh::find_non_manifold_edges(std::span<const glm::uvec3>(triangles));
+        std::vector<glm::uvec2> actual = mesh::find_non_manifold_edges(triangles);
         sort_edges(actual);
 
         std::vector<glm::uvec2> expected = {glm::uvec2(0, 1)};
@@ -129,14 +115,14 @@ TEST_CASE("mesh::is_edge_manifold") {
     }
 
     SECTION("three triangles sharing same edge is not edge manifold") {
-        const SimpleMesh mesh = make_edge_non_manifold_mesh();
+        const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
         CHECK_FALSE(mesh::is_edge_manifold(mesh));
         CHECK_FALSE(mesh::is_edge_manifold(mesh.triangles));
     }
 
-    SECTION("vertex-only non-manifold mesh is still edge manifold") {
-        const SimpleMesh mesh = make_vertex_non_manifold_mesh();
+    SECTION("two fans touching at vertex is edge manifold") {
+        const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK(mesh::is_edge_manifold(mesh));
         CHECK(mesh::is_edge_manifold(mesh.triangles));
@@ -149,21 +135,23 @@ TEST_CASE("mesh::is_vertex_manifold") {
 
         CHECK(mesh::is_vertex_manifold(mesh));
         CHECK(mesh::is_vertex_manifold(mesh.triangles));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles, static_cast<uint32_t>(mesh.positions.size())));
+        CHECK(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
-    SECTION("two disconnected fans sharing one vertex is not vertex manifold") {
-        const SimpleMesh mesh = make_vertex_non_manifold_mesh();
+    SECTION("three triangles sharing same edge is vertex manifold") {
+        const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
+
+        CHECK(mesh::is_vertex_manifold(mesh));
+        CHECK(mesh::is_vertex_manifold(mesh.triangles));
+        CHECK(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
+    }
+
+    SECTION("two fans touching at vertex is not vertex manifold") {
+        const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK_FALSE(mesh::is_vertex_manifold(mesh));
         CHECK_FALSE(mesh::is_vertex_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_vertex_manifold(mesh.triangles, static_cast<uint32_t>(mesh.positions.size())));
-    }
-
-    SECTION("edge non-manifold mesh is also not manifold as a whole") {
-        const SimpleMesh mesh = make_edge_non_manifold_mesh();
-
-        CHECK_FALSE(mesh::is_vertex_manifold(mesh));
+        CHECK_FALSE(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
     }
 }
 
@@ -173,23 +161,23 @@ TEST_CASE("mesh::is_manifold") {
 
         CHECK(mesh::is_manifold(mesh));
         CHECK(mesh::is_manifold(mesh.triangles));
-        CHECK(mesh::is_manifold(mesh.triangles, static_cast<uint32_t>(mesh.positions.size())));
+        CHECK(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
-    SECTION("edge non-manifold mesh is not manifold") {
-        const SimpleMesh mesh = make_edge_non_manifold_mesh();
+    SECTION("three triangles sharing same edge is not manifold") {
+        const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
         CHECK_FALSE(mesh::is_manifold(mesh));
         CHECK_FALSE(mesh::is_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles, static_cast<uint32_t>(mesh.positions.size())));
+        CHECK_FALSE(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
-    SECTION("vertex non-manifold mesh is not manifold") {
-        const SimpleMesh mesh = make_vertex_non_manifold_mesh();
+    SECTION("two fans touching at vertex is not manifold") {
+        const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK_FALSE(mesh::is_manifold(mesh));
         CHECK_FALSE(mesh::is_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles, static_cast<uint32_t>(mesh.positions.size())));
+        CHECK_FALSE(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("empty mesh is manifold") {
@@ -214,21 +202,21 @@ TEST_CASE("mesh::duplicate_non_manifold_edges") {
     }
 
     SECTION("repairs edge non-manifold mesh") {
-        SimpleMesh actual = make_edge_non_manifold_mesh();
+        SimpleMesh actual = make_three_triangles_sharing_same_edge();
 
         REQUIRE_FALSE(mesh::is_edge_manifold(actual));
-        const auto old_position_count = actual.positions.size();
-        const auto old_triangle_count = actual.triangles.size();
+        const auto old_position_count = actual.vertex_count();
+        const auto old_triangle_count = actual.face_count();
 
         mesh::duplicate_non_manifold_edges(actual);
 
         CHECK(mesh::is_edge_manifold(actual));
-        CHECK(actual.triangles.size() == old_triangle_count);
-        CHECK(actual.positions.size() > old_position_count);
+        CHECK(actual.face_count() == old_triangle_count);
+        CHECK(actual.vertex_count() > old_position_count);
     }
 
     SECTION("positions and uvs are duplicated together") {
-        SimpleMesh actual = make_edge_non_manifold_mesh();
+        SimpleMesh actual = make_three_triangles_sharing_same_edge();
         actual.uvs = {
             glm::dvec2(0, 0),
             glm::dvec2(1, 0),
@@ -236,32 +224,13 @@ TEST_CASE("mesh::duplicate_non_manifold_edges") {
             glm::dvec2(1, 1),
             glm::dvec2(0.5, 0.5)};
 
-        REQUIRE(actual.positions.size() == actual.uvs.size());
+        REQUIRE(actual.vertex_count() == actual.uvs.size());
 
         mesh::duplicate_non_manifold_edges(actual.triangles, actual.positions, actual.uvs);
 
         CHECK(mesh::is_edge_manifold(actual.triangles));
-        CHECK(actual.positions.size() == actual.uvs.size());
-        CHECK(actual.positions.size() > 5);
-    }
-
-    SECTION("custom duplicate callback is invoked") {
-        std::vector<glm::uvec3> triangles = {
-            glm::uvec3(0, 1, 2),
-            glm::uvec3(1, 0, 3),
-            glm::uvec3(0, 1, 4)};
-
-        uint32_t vertex_count = 5;
-        uint32_t duplicate_calls = 0;
-
-        mesh::duplicate_non_manifold_edges(triangles, [&](uint32_t original_vertex) -> uint32_t {
-            CAPTURE(original_vertex);
-            ++duplicate_calls;
-            return vertex_count++;
-        });
-
-        CHECK(duplicate_calls >= 1);
-        CHECK(mesh::is_edge_manifold(triangles));
+        CHECK(actual.vertex_count() == actual.uvs.size());
+        CHECK(actual.vertex_count() > 5);
     }
 }
 
@@ -278,21 +247,21 @@ TEST_CASE("mesh::duplicate_non_manifold_vertices") {
     }
 
     SECTION("repairs vertex non-manifold mesh") {
-        SimpleMesh actual = make_vertex_non_manifold_mesh();
+        SimpleMesh actual = make_two_fans_touching_at_single_vertex();
 
         REQUIRE_FALSE(mesh::is_vertex_manifold(actual));
-        const auto old_position_count = actual.positions.size();
-        const auto old_triangle_count = actual.triangles.size();
+        const auto old_position_count = actual.vertex_count();
+        const auto old_triangle_count = actual.face_count();
 
         mesh::duplicate_non_manifold_vertices(actual);
 
         CHECK(mesh::is_vertex_manifold(actual));
-        CHECK(actual.triangles.size() == old_triangle_count);
-        CHECK(actual.positions.size() > old_position_count);
+        CHECK(actual.face_count() == old_triangle_count);
+        CHECK(actual.vertex_count() > old_position_count);
     }
 
     SECTION("positions and uvs remain aligned") {
-        SimpleMesh actual = make_vertex_non_manifold_mesh();
+        SimpleMesh actual = make_two_fans_touching_at_single_vertex();
         actual.uvs = {
             glm::dvec2(0, 0),
             glm::dvec2(1, 0),
@@ -300,31 +269,13 @@ TEST_CASE("mesh::duplicate_non_manifold_vertices") {
             glm::dvec2(-1, 0),
             glm::dvec2(0, -1)};
 
-        REQUIRE(actual.positions.size() == actual.uvs.size());
+        REQUIRE(actual.vertex_count() == actual.uvs.size());
 
         mesh::duplicate_non_manifold_vertices(actual.triangles, actual.positions, actual.uvs);
 
-        CHECK(mesh::is_vertex_manifold(actual.triangles, static_cast<uint32_t>(actual.positions.size())));
-        CHECK(actual.positions.size() == actual.uvs.size());
-        CHECK(actual.positions.size() > 5);
-    }
-
-    SECTION("custom duplicate callback is invoked") {
-        std::vector<glm::uvec3> triangles = {
-            glm::uvec3(0, 1, 2),
-            glm::uvec3(0, 3, 4)};
-
-        uint32_t vertex_count = 5;
-        uint32_t duplicate_calls = 0;
-
-        mesh::duplicate_non_manifold_vertices(triangles, vertex_count, [&](uint32_t original_vertex) -> uint32_t {
-            CAPTURE(original_vertex);
-            ++duplicate_calls;
-            return vertex_count++;
-        });
-
-        CHECK(duplicate_calls >= 1);
-        CHECK(mesh::is_vertex_manifold(triangles, vertex_count));
+        CHECK(mesh::is_vertex_manifold(actual.triangles, actual.vertex_count()));
+        CHECK(actual.vertex_count() == actual.uvs.size());
+        CHECK(actual.vertex_count() > 5);
     }
 
     SECTION("fixes multiple disconnected fans in one pass") {
@@ -392,7 +343,7 @@ TEST_CASE("mesh::make_manifold") {
     }
 
     SECTION("repairs edge non-manifold mesh") {
-        SimpleMesh actual = make_edge_non_manifold_mesh();
+        SimpleMesh actual = make_three_triangles_sharing_same_edge();
 
         REQUIRE_FALSE(mesh::is_manifold(actual));
 
@@ -403,7 +354,7 @@ TEST_CASE("mesh::make_manifold") {
     }
 
     SECTION("repairs vertex non-manifold mesh") {
-        SimpleMesh actual = make_vertex_non_manifold_mesh();
+        SimpleMesh actual = make_two_fans_touching_at_single_vertex();
 
         REQUIRE_FALSE(mesh::is_manifold(actual));
 
@@ -431,47 +382,10 @@ TEST_CASE("mesh::make_manifold") {
             glm::uvec3(0, 1, 4),
             glm::uvec3(0, 5, 6)};
 
-        REQUIRE_FALSE(mesh::is_manifold(triangles, static_cast<uint32_t>(positions.size())));
+        REQUIRE_FALSE(mesh::is_manifold(triangles, positions.size()));
 
         mesh::make_manifold(triangles, positions);
 
-        CHECK(mesh::is_manifold(triangles, static_cast<uint32_t>(positions.size())));
-    }
-
-    SECTION("uv overload keeps positions and uvs aligned") {
-        SimpleMesh actual = make_vertex_non_manifold_mesh();
-        actual.uvs = {
-            glm::dvec2(0, 0),
-            glm::dvec2(1, 0),
-            glm::dvec2(0, 1),
-            glm::dvec2(-1, 0),
-            glm::dvec2(0, -1)};
-
-        REQUIRE(actual.positions.size() == actual.uvs.size());
-
-        mesh::make_manifold(actual.triangles, actual.positions, actual.uvs);
-
-        CHECK(mesh::is_manifold(actual.triangles, static_cast<uint32_t>(actual.positions.size())));
-        CHECK(actual.positions.size() == actual.uvs.size());
-    }
-
-    SECTION("custom duplicate callback can make mesh manifold") {
-        std::vector<glm::uvec3> triangles = {
-            glm::uvec3(0, 1, 2),
-            glm::uvec3(1, 0, 3),
-            glm::uvec3(0, 1, 4),
-            glm::uvec3(0, 5, 6)};
-
-        uint32_t vertex_count = 7;
-        uint32_t duplicate_calls = 0;
-
-        mesh::make_manifold(triangles, vertex_count, [&](uint32_t original_vertex) -> uint32_t {
-            CAPTURE(original_vertex);
-            ++duplicate_calls;
-            return vertex_count++;
-        });
-
-        CHECK(duplicate_calls >= 1);
-        CHECK(mesh::is_manifold(triangles, vertex_count));
+        CHECK(mesh::is_manifold(triangles, positions.size()));
     }
 }

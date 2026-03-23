@@ -40,6 +40,9 @@ add_executable(unittests_terrainlib
     terrainlib/hybrid_vector.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
+    terrainlib/mesh_boundary.cpp
+    terrainlib/mesh_bounds.cpp
+    terrainlib/mesh_cleanup.cpp
     terrainlib/mesh_clip.cpp
     terrainlib/mesh_connected_components.cpp
     terrainlib/mesh_holes.cpp
@@ -47,7 +50,9 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge_mapping.cpp
     terrainlib/mesh_merge.cpp
-    terrainlib/mesh_utils.cpp
+    terrainlib/mesh_reindex.cpp
+    terrainlib/mesh_split.cpp
+    terrainlib/mesh_topology.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/polygon_triangulate.cpp

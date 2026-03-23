@@ -11,6 +11,8 @@
 #include <CGAL/Unique_hash_map.h>
 #include <tl/expected.hpp>
 
+#include "mesh/merge.h"
+
 typedef cv::Mat Texture;
 
 namespace uv_map {
@@ -45,29 +47,27 @@ private:
     int code;
 };
 
-typedef CGAL::Unique_hash_map<VertexDescriptor, Point2> UvMap;
+typedef CGAL::Unique_hash_map<cgal::VertexDescriptor, cgal::Point2> UvMap;
 typedef boost::associative_property_map<UvMap> UvPropertyMap;
 
 std::vector<glm::dvec2> decode_uv_map(const UvMap& uv_map, size_t number_of_vertices);
 std::vector<glm::dvec2> decode_uv_map(const UvPropertyMap& uv_map, size_t number_of_vertices);
 
 tl::expected<UvMap, UvParameterizationError> parameterize_mesh(
-    SurfaceMesh &mesh,
+    cgal::Mesh &mesh,
     Algorithm algorithm,
     Border border);
 
 tl::expected<UvMap, UvParameterizationError> parameterize_mesh(
-    const SimpleMesh &mesh,
+    const mesh::Simple &mesh,
     Algorithm algorithm,
     Border border);
 
 Texture merge_textures(
-    const std::span<const SimpleMesh> original_meshes,
-    const SimpleMesh& merged_mesh,
-    const merge::VertexMapping &mapping,
+    const std::span<const mesh::Simple> original_meshes,
+    const mesh::Simple& merged_mesh,
+    const mesh::merging::VertexMapping &mapping,
     const UvMap& uv_map,
     const glm::uvec2 merged_texture_size);
 
 }
-
-#endif

@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/topology.h"
@@ -81,6 +82,7 @@ inline uint32_t identify_triangle_to_remove(
     std::vector<uint32_t> &neighbourhood,
     const std::unordered_map<glm::uvec2, HybridVector<uint32_t, 2>> &edge_to_triangle) {
     const glm::uvec3 triangle_a = triangles[a];
+    const glm::uvec3 triangle_b = triangles[b];
 
     // Gather neighbourhood
     neighbourhood.clear();
@@ -111,9 +113,9 @@ inline uint32_t identify_triangle_to_remove(
 
     // Identify triangle with most deviating normal
     const glm::dvec3 normal_a = compute_normal(triangle_a, positions);
-    const glm::dvec3 normal_b = compute_normal(triangle_a, positions);
+    const glm::dvec3 normal_b = compute_normal(triangle_b, positions);
     uint32_t triangle_to_remove = a;
-    if (glm::dot(normal_b, average_normal) < glm::dot(normal_a, average_normal)) {
+    if (glm::dot(normal_b, average_normal) <= glm::dot(normal_a, average_normal)) {
         triangle_to_remove = b;
     }
     return triangle_to_remove;
@@ -137,8 +139,7 @@ std::vector<uint32_t> find_duplicate_triangles_ignore_orientation(
             for (uint32_t j = i + 1; j < num_triangles; j++) {
                 const uint32_t a = triangle_indices[i];
                 const uint32_t b = triangle_indices[j];
-                const bool are_equal = compare_equality_triangles_ignore_orientation(
-                    triangles[a], triangles[b]);
+                const bool are_equal = compare_equality_triangles_ignore_orientation(triangles[a], triangles[b]);
                 if (are_equal) {
                     // Determine which triangle to remove
                     const uint32_t triangle_to_remove = detail::identify_triangle_to_remove(
@@ -204,53 +205,49 @@ void remove_duplicate_triangles_consider_orientation(mesh::Simple_<3, T> &mesh) 
 }
 
 template <glm::length_t n_dims, typename T>
-size_t remove_isolated_vertices(SimpleMesh_<n_dims, T> &mesh) {
+size_t remove_isolated_vertices(mesh::Simple_<n_dims, T> &mesh) {
     const bool has_uvs = mesh.has_uvs();
     const std::vector<uint32_t> isolated = find_isolated_vertices(mesh);
+    DEBUG_ASSERT(std::is_sorted(isolated.begin(), isolated.end()));
 
-    std::vector<uint32_t> index_offset;
     for (uint32_t i : isolated | std::views::reverse) {
-        const uint32_t last_index = mesh.positions.size() - 1;
-        std::swap(mesh.positions[i], mesh.positions[last_index]);
+        const uint32_t last_index = static_cast<uint32_t>(mesh.positions.size() - 1);
+
+        if (i != last_index) {
+            std::swap(mesh.positions[i], mesh.positions[last_index]);
+            if (has_uvs) {
+                std::swap(mesh.uvs[i], mesh.uvs[last_index]);
+            }
+
+            for (glm::uvec3 &triangle : mesh.triangles) {
+                change_vertex_inplace(triangle, last_index, i);
+            }
+        }
+
         mesh.positions.pop_back();
         if (has_uvs) {
-            std::swap(mesh.uvs[i], mesh.uvs[last_index]);
-        }
-        mesh.uvs.pop_back();
-
-        for (glm::uvec3 &triangle : mesh.triangles) {
-            for (uint8_t k = 0; k < 3; k++) {
-                if (triangle[k] == last_index) {
-                    triangle[k] = i;
-                }
-            }
+            mesh.uvs.pop_back();
         }
     }
 
     return isolated.size();
 }
 
-template <glm::length_t n_dims, typename T, typename Size>
+template <glm::length_t n_dims, typename T>
 size_t remove_triangles_of_negligible_size(
-    SimpleMesh_<n_dims, T> &mesh,
-    const Size threshold_percentage_of_average) {
+    mesh::Simple_<n_dims, T> &mesh,
+    const T threshold_percentage_of_average) {
     const size_t triangle_count = mesh.triangles.size();
 
-    std::vector<Size> areas;
+    std::vector<T> areas;
     areas.reserve(triangle_count);
-
-    for (const glm::uvec3 &tri : mesh.triangles) {
-        const glm::tvec3<Size> p0 = glm::tvec3<Size>(mesh.positions[tri.x]);
-        const glm::tvec3<Size> p1 = glm::tvec3<Size>(mesh.positions[tri.y]);
-        const glm::tvec3<Size> p2 = glm::tvec3<Size>(mesh.positions[tri.z]);
-
-        const Size twice_area = p0.x * (p1.y - p2.y) + p1.x * (p2.y - p0.y) + p2.x * (p0.y - p1.y);
-        const Size area = static_cast<Size>(0.5) * std::abs(twice_area);
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        const T area = compute_triangle_area(triangle, mesh.positions);
         areas.push_back(area);
     }
 
-    const Size total_area = std::reduce(areas.begin(), areas.end(), static_cast<Size>(0));
-    const Size average_area = total_area / static_cast<Size>(areas.size());
+    const T total_area = std::reduce(areas.begin(), areas.end(), static_cast<T>(0));
+    const T average_area = total_area / static_cast<T>(areas.size());
 
     const size_t erased_count = std::erase_if(mesh.triangles,
         [&](const glm::uvec3 &tri) {

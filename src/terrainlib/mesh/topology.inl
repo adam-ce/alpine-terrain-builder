@@ -42,10 +42,10 @@ template <glm::length_t n_dims, typename T>
 std::unordered_set<glm::uvec2> get_edges(const mesh::View_<n_dims, T> &mesh, const bool normalize) {
     return get_edges(mesh.triangles, normalize);
 }
-template <TriangleContainer Triangles, typename F>
+template <TriangleContainer Triangles>
 std::unordered_set<glm::uvec2> get_edges(const Triangles &triangles, const bool normalize) {
     std::unordered_set<glm::uvec2> edges;
-    for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t /*triangle_index*/) { 
+    for_each_edge(triangles, [&](const glm::uvec2 &edge) { 
         edges.insert(edge); 
     }, normalize);
     return edges;
@@ -61,18 +61,28 @@ void for_each_edge(const mesh::View_<n_dims, T> &mesh, F &&func, const bool norm
 }
 template <TriangleContainer Triangles, typename F>
 void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
-    for (uint32_t i = 0; i < triangles.size(); i++) {
-        glm::uvec3 triangle = triangles[i];
-        if (normalize) {
-            normalize_triangle_inplace(triangle, false);
-        }
+    if constexpr (std::invocable<F&, glm::uvec2>) {
+        for_each_edge(
+            triangles,
+            [&](const glm::uvec2 edge, const uint32_t) {
+                func(edge);
+            },
+            normalize);
+    } else {
+        static_assert(std::invocable<F&, glm::uvec2, uint32_t>);
+        for (uint32_t i = 0; i < triangles.size(); i++) {
+            glm::uvec3 triangle = triangles[i];
+            if (normalize) {
+                normalize_triangle_inplace(triangle, false);
+            }
 
-        func(glm::uvec2(triangle[0], triangle[1]), i);
-        func(glm::uvec2(triangle[1], triangle[2]), i);
-        if (normalize) {
-            func(glm::uvec2(triangle[0], triangle[2]), i);
-        } else {
-            func(glm::uvec2(triangle[2], triangle[0]), i);
+            func(glm::uvec2(triangle[0], triangle[1]), i);
+            func(glm::uvec2(triangle[1], triangle[2]), i);
+            if (normalize) {
+                func(glm::uvec2(triangle[0], triangle[2]), i);
+            } else {
+                func(glm::uvec2(triangle[2], triangle[0]), i);
+            }
         }
     }
 }

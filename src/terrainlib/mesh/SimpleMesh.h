@@ -7,8 +7,8 @@
 
 namespace mesh {
     
-template <glm::length_t dimensions, typename T>
-class View_;
+template <bool IsMut, glm::length_t dimensions, typename T>
+class View__;
 
 template <glm::length_t dimensions = 3, typename T = double>
 class Simple_ {
@@ -35,7 +35,8 @@ public:
     Simple_(const Simple_ &) = default;
     Simple_ &operator=(const Simple_ &) = default;
 
-    explicit Simple_(const mesh::View_<dimensions, T>& v)
+    template <bool IsMut>
+    explicit Simple_(const mesh::View__<IsMut, dimensions, T>& v)
         : triangles(v.triangles.begin(), v.triangles.end()),
         positions(v.positions.begin(), v.positions.end()),
         uvs(v.uvs.begin(), v.uvs.end()),
@@ -59,12 +60,15 @@ public:
     size_t face_count() const {
         return this->triangles.size();
     }
+    size_t uv_count() const {
+        return this->uvs.size();
+    }
     bool is_empty() const {
         return this->vertex_count() == 0 && this->face_count() == 0;
     }
 
     bool has_uvs() const {
-        return this->uvs.size() > 0;
+        return this->uv_count() > 0;
     }
     bool has_texture() const {
         return this->texture.has_value();

@@ -49,8 +49,8 @@ void for_each_edge(const Triangles &triangles, F &&func, const bool normalize);
 
 constexpr glm::uvec2 other_vertices_in_triangle(const glm::uvec3 &triangle, const uint32_t vertex);
 
-constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex);
-constexpr void change_vertex_inplace(glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex);
+constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex, const bool allow_missing = false);
+constexpr void change_vertex_inplace(glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex, const bool allow_missing = false);
 
 void normalize_face_index_rotation(const std::span<uint32_t> face, const bool keep_orientation);
 

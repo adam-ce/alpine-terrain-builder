@@ -9,6 +9,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <libassert/assert.hpp>
 
 #include "FixedVector.h"
 #include "HybridVector.h"
@@ -18,7 +19,7 @@
 
 namespace mesh {
 
-inline bool is_degenerate(const glm::uvec3 &triangle) {
+inline constexpr bool is_degenerate(const glm::uvec3 &triangle) {
     return triangle[0] == triangle[1] ||
            triangle[1] == triangle[2] ||
            triangle[2] == triangle[0];
@@ -177,33 +178,33 @@ inline constexpr glm::uvec2 other_vertices_in_triangle(const glm::uvec3 &triangl
     if (triangle.y == vertex) {
         return glm::uvec2(triangle.x, triangle.z);
     }
+    DEBUG_ASSERT(triangle.z == vertex);
     return glm::uvec2(triangle.x, triangle.y);
 }
 
-inline constexpr void change_vertex_inplace(glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex) {
+inline constexpr void change_vertex_inplace(glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex, const bool allow_missing) {
+    DEBUG_ASSERT(!is_degenerate(triangle));
     if (triangle.x == old_vertex) {
         triangle.x = new_vertex;
-        return;
-    }
-    if (triangle.y == old_vertex) {
+    } else if (triangle.y == old_vertex) {
         triangle.y = new_vertex;
-        return;
-    }
-    if (triangle.z == old_vertex) {
+    } else if (triangle.z == old_vertex) {
         triangle.z = new_vertex;
-        return;
+    } else if (!allow_missing) {
+        UNREACHABLE();
     }
 }
 
-inline constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex) {
+inline constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint32_t old_vertex, const uint32_t new_vertex, const bool allow_missing) {
+    DEBUG_ASSERT(!is_degenerate(triangle));
     if (triangle.x == old_vertex) {
         return glm::uvec3(new_vertex, triangle.y, triangle.z);
     } else if (triangle.y == old_vertex) {
         return glm::uvec3(triangle.x, new_vertex, triangle.z);
     } else if (triangle.z == old_vertex) {
         return glm::uvec3(triangle.x, triangle.y, new_vertex);
-    } else {
-        return triangle;
+    } else if (!allow_missing) {
+        UNREACHABLE();
     }
 }
 

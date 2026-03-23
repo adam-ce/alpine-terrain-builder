@@ -111,20 +111,29 @@ std::vector<uint32_t> calculate_vertex_counts(const uint32_t vertex_count, const
 }
 
 template <typename Mapping>
-std::vector<uint32_t> calculate_triangle_counts(const std::span<const glm::uvec3> triangles, const uint32_t group_count, Mapping &&vertex_to_group) {
+std::vector<uint32_t> calculate_triangle_counts(const std::span<const glm::uvec3> triangles, const uint32_t group_count, Mapping &&vertex_to_group, const bool allow_mixed_triangles) {
     std::vector<uint32_t> triangle_counts(group_count, 0);
     for (const glm::uvec3 &triangle : triangles) {
-        const uint32_t group_index = vertex_to_group(triangle[0]);
-        DEBUG_ASSERT(group_index < group_count);
-        DEBUG_ASSERT(group_index == vertex_to_group(triangle[1]));
-        DEBUG_ASSERT(group_index == vertex_to_group(triangle[2]));
-        triangle_counts[group_index]++;
+        const uint32_t g0 = vertex_to_group(triangle[0]);
+        const uint32_t g1 = vertex_to_group(triangle[1]);
+        const uint32_t g2 = vertex_to_group(triangle[2]);
+
+        DEBUG_ASSERT(g0 < group_count);
+        DEBUG_ASSERT(g1 < group_count);
+        DEBUG_ASSERT(g2 < group_count);
+
+        if (!allow_mixed_triangles) {
+            DEBUG_ASSERT(g0 == g1);
+            DEBUG_ASSERT(g0 == g2);
+        }
+
+        triangle_counts[g0]++;
     }
     return triangle_counts;
 }
 
 template <glm::length_t n_dims, typename T, typename Mapping>
-SplitByVertexResult<n_dims, T> split_by_vertex_impl(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group) {
+SplitByVertexResult<n_dims, T> split_by_vertex_impl(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group, const bool drop_mixed_triangles) {
     const uint32_t vertex_count = mesh.vertex_count();
 
     // Allocate group meshes
@@ -139,7 +148,7 @@ SplitByVertexResult<n_dims, T> split_by_vertex_impl(const mesh::View_<n_dims, T>
             group.uvs.reserve(vertex_count);
         }
     }
-    const std::vector<uint32_t> triangle_counts = detail::calculate_triangle_counts(mesh.triangles, group_count, vertex_to_group);
+    const std::vector<uint32_t> triangle_counts = detail::calculate_triangle_counts(mesh.triangles, group_count, vertex_to_group, drop_mixed_triangles);
     for (const auto [group_index, triangle_count] : enumerate(triangle_counts)) {
         mesh::Simple_<n_dims, T> &group = groups[group_index];
         group.triangles.reserve(triangle_count);
@@ -160,12 +169,22 @@ SplitByVertexResult<n_dims, T> split_by_vertex_impl(const mesh::View_<n_dims, T>
 
     // Split and remap triangles
     for (const glm::uvec3 &triangle : mesh.triangles) {
+        const uint32_t group_index = vertex_to_group(triangle[0]);
+        if (drop_mixed_triangles) {
+            const uint32_t g0 = group_index;
+            const uint32_t g1 = vertex_to_group(triangle[1]);
+            const uint32_t g2 = vertex_to_group(triangle[2]);
+
+            if (!(g0 == g1 && g0 == g2)) {
+                continue;
+            }
+        }
+
         glm::uvec3 new_triangle;
         for (uint8_t k = 0; k < 3; k++) {
             new_triangle[k] = vertex_remap[triangle[k]];
         }
 
-        const uint32_t group_index = vertex_to_group(triangle[0]);
         mesh::Simple_<n_dims, T> &group = groups[group_index];
         group.triangles.push_back(new_triangle);
     }
@@ -182,32 +201,31 @@ SplitByVertexResult<n_dims, T> split_by_vertex_impl(const mesh::View_<n_dims, T>
 }
 
 template <glm::length_t n_dims, typename T, typename Mapping>
-SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group) {
+SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group, const bool drop_mixed_triangles) {
     if constexpr (std::is_invocable_v<Mapping, uint32_t>) {
-        return detail::split_by_vertex_impl(mesh, group_count, std::forward<Mapping>(vertex_to_group));
+        return detail::split_by_vertex_impl(mesh, group_count, std::forward<Mapping>(vertex_to_group), drop_mixed_triangles);
     } else if constexpr (std::ranges::random_access_range<Mapping> &&
                          std::ranges::sized_range<Mapping>) {
         return detail::split_by_vertex_impl(mesh, group_count, [&](const uint32_t i) {
             DEBUG_ASSERT(i < std::ranges::size(vertex_to_group));
-            return vertex_to_group[i];
-        });
+            return vertex_to_group[i]; }, drop_mixed_triangles);
     } else {
         static_assert(always_false_v<Mapping>, "vertex_to_group must be a callable or a range/container.");
     }
 }
 template <glm::length_t n_dims, typename T, typename Mapping>
-SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::Simple_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group) {
-    return split_by_vertex(mesh::View_<n_dims, T>(mesh), group_count, std::forward<Mapping>(vertex_to_group));
+SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::Simple_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group, const bool drop_mixed_triangles) {
+    return split_by_vertex(mesh::View_<n_dims, T>(mesh), group_count, std::forward<Mapping>(vertex_to_group), drop_mixed_triangles);
 }
 template <glm::length_t n_dims, typename T>
 SplitByVertexResult<n_dims, T> split_by_vertex(
     const mesh::View_<n_dims, T> &mesh,
     const uint32_t group_count,
-    const std::span<const uint32_t> vertex_to_group_map) {
+    const std::span<const uint32_t> vertex_to_group_map,
+    const bool drop_mixed_triangles = true) {
     return split_by_vertex(mesh, group_count, [&](const uint32_t vertex_index) {
         DEBUG_ASSERT(vertex_index < vertex_to_group_map.size());
-        return vertex_to_group_map[vertex_index];
-    });
+        return vertex_to_group_map[vertex_index]; }, drop_mixed_triangles);
 }
 
 } // namespace mesh

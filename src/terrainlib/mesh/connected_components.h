@@ -88,7 +88,7 @@ struct ComponentsAndMap {
 template <glm::length_t n_dims, typename T>
 ComponentsAndMap<n_dims, T> split_into_connected_components_with_map(const mesh::View_<n_dims, T> &mesh, const ComponentsIndex& components_index) {
     const auto &[vertex_to_component, component_count] = components_index;
-    auto result = split_by_vertex(mesh, component_count, vertex_to_component);
+    auto result = split_by_vertex(mesh, component_count, vertex_to_component, false);
     return ComponentsAndMap<n_dims, T>{
         .components = std::move(result.groups),
         .vertex_remap = std::move(result.vertex_remap)};

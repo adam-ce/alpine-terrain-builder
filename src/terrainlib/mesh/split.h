@@ -18,9 +18,9 @@ struct SplitByVertexResult {
 };
 
 template <glm::length_t n_dims, typename T, typename Mapping>
-SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group);
+SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::View_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group, const bool drop_mixed_triangles = true);
 template <glm::length_t n_dims, typename T, typename Mapping>
-SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::Simple_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group);
+SplitByVertexResult<n_dims, T> split_by_vertex(const mesh::Simple_<n_dims, T> &mesh, const uint32_t group_count, Mapping &&vertex_to_group, const bool drop_mixed_triangles = true);
 
 template <glm::length_t n_dims, typename T>
 struct SplitByTriangleResult {

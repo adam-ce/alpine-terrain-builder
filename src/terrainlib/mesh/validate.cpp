@@ -57,7 +57,7 @@ void validate_impl_basic(const mesh::View_<n_dims, T> &mesh) {
     }
 
     for (const Uv &uv : mesh.uvs) {
-        for (uint8_t k = 0; k < 3; k++) {
+        for (uint8_t k = 0; k < 2; k++) {
             DEBUG_ASSERT(uv[k] >= static_cast<typename Uv::value_type>(0));
             DEBUG_ASSERT(uv[k] <= static_cast<typename Uv::value_type>(1));
         }

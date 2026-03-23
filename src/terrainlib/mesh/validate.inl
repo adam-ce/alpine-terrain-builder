@@ -46,10 +46,10 @@ template <glm::length_t n_dims, typename T>
 void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
 #ifndef NDEBUG
     detail::validate_core(mesh, flags);
-#endif
-
+#else
     USE(mesh);
     USE(flags);
+#endif
 }
 template <glm::length_t n_dims, typename T>
 void validate(const mesh::Simple_<n_dims, T> &mesh, const ValidationFlags flags) {

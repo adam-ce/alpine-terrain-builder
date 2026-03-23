@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <functional>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
@@ -474,7 +475,7 @@ SimpleMesh apply_mapping(
         }
     }
 
-    mesh::validate(merged_mesh);
+    mesh::validate_basic(merged_mesh);
 
     return merged_mesh;
 }

@@ -264,25 +264,18 @@ inline constexpr bool compare_triangles(const glm::uvec3 &t1, const glm::uvec3 &
 }
 
 inline bool compare_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
-    glm::uvec3 t1s(t1);
-    glm::uvec3 t2s(t2);
-
-    std::sort(&t1s.x, &t1s.z + 1);
-    std::sort(&t2s.x, &t2s.z + 1);
-
-    return compare_triangles(t1s, t2s);
+    return compare_triangles(normalize_triangle(t1), normalize_triangle(t2));
 }
 
 inline bool compare_equality_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2) {
     return normalize_triangle(t1) == normalize_triangle(t2);
 }
-inline bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1,
-                                                                    const glm::uvec3 &t2) {
+inline bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
     return std::is_permutation(&t1.x, &t1.z + 1, &t2.x);
 }
 
 inline constexpr void flip_triangle_orientation(glm::uvec3 &triangle) {
-    std::swap(triangle.z, triangle.x);
+    std::swap(triangle.z, triangle.y);
 }
 
 template <glm::length_t n_dims, typename T>

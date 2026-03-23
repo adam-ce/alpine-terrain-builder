@@ -16,12 +16,10 @@
 namespace mesh {
 
 void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
-    // sort vertices in triangles
-    for (glm::uvec3 &triangle : triangles) {
-        triangle = normalize_triangle(triangle);
-    }
-
-    // sort triangle vector
+    normalize_triangles_inplace(triangles);
+    sort_triangles(triangles);
+}
+void sort_triangles(std::span<glm::uvec3> triangles) {
     std::sort(triangles.begin(), triangles.end(), compare_triangles);
 }
 

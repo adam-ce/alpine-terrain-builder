@@ -17,7 +17,7 @@
 
 namespace mesh {
 
-bool is_degenerate(const glm::uvec3 &triangle);
+constexpr bool is_degenerate(const glm::uvec3 &triangle);
 
 template <glm::length_t n_dims, typename T>
 void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh);
@@ -27,10 +27,11 @@ void sort_triangles(mesh::Simple_<n_dims, T> &mesh);
 void sort_triangles(std::span<glm::uvec3> triangles);
 
 template <glm::length_t n_dims, typename T>
-void flip_orientation(mesh::Simple_<n_dims, T> &mesh);
+constexpr void flip_orientation(mesh::Simple_<n_dims, T> &mesh);
 constexpr void flip_triangle_orientation(glm::uvec3 &triangle);
-void flip_triangle_orientations(std::span<glm::uvec3> triangles);
+constexpr void flip_triangle_orientations(std::span<glm::uvec3> triangles);
 
+uint32_t find_max_vertex_index(const std::span<const glm::uvec3> triangles);
 uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles);
 
 template <glm::length_t n_dims, typename T>

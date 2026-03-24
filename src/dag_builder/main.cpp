@@ -158,6 +158,8 @@ int main(int argc, char **argv) {
                                               .target_ratio = 0.5,
                                               .vertex_lock = VertexLock::mask(vertex_lock)});
         validate(clustering);
+        remove_unused_vertices_inplace(clustering);
+        validate(clustering);
         stage_logger.log(level, "simplified", clustering);
 
         // Output to file

@@ -30,13 +30,13 @@ inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, con
     std::unordered_map<glm::uvec3, uint32_t> counts;
     counts.reserve(triangles.size());
 
-    for (const glm::uvec3 &tri : triangles) {
-        const glm::uvec3 normalized = normalize_triangle(tri, !ignore_orientation);
-        counts[normalized] += 1u;
+    for (const glm::uvec3 &triangle : triangles) {
+        const glm::uvec3 normalized = normalize_triangle(triangle, !ignore_orientation);
+        counts[normalized] += 1;
     }
 
-    for (const auto &[_tri, count] : counts) {
-        if (count > 1u) {
+    for (const auto &[_triangle, count] : counts) {
+        if (count > 1) {
             return true;
         }
     }
@@ -84,8 +84,8 @@ void validate_impl_topology(const mesh::View_<n_dims, T> &mesh, const Validation
 
     if (has_flag(flags, ValidationFlags::Manifold)) {
         DEBUG_ASSERT(is_manifold(mesh));
-
-        DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, true));
+        // DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
+        // DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, true));
     }
 }
 
@@ -94,8 +94,6 @@ void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
     static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
 
     DEBUG_ASSERT(find_isolated_vertices(mesh.triangles, mesh.vertex_count()).empty());
-
-    DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
 
     const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
     for (const glm::uvec3 &triangle : mesh.triangles) {

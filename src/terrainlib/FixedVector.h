@@ -157,6 +157,20 @@ public:
         this->destroy_at(this->_size - 1);
         this->_size--;
     }
+    
+    T &back() {
+        if (this->_size == 0) {
+            throw std::out_of_range("empty vector");
+        }
+        return (*this)[this->_size - 1];
+    }
+
+    const T &back() const {
+        if (this->_size == 0) {
+            throw std::out_of_range("empty vector");
+        }
+        return (*this)[this->_size - 1];
+    }
 
     T &operator[](const size_t i) {
         return this->get_at(i);

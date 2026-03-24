@@ -49,6 +49,7 @@ inline std::vector<Cluster> clusterize(
 
     for (const auto &meshlet : meshlet_result.meshlets) {
         Cluster cluster;
+        cluster.texture_id = 0;
 
         // Map meshlet vertices to global vertex indices
         if (global_vertex_map.empty()) {

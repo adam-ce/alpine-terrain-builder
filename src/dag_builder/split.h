@@ -118,6 +118,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
         const size_t expected_part_vertex_count = int_div_ceil(vertex_count, num_parts.value());
         const size_t expected_part_triangle_count = int_div_ceil(triangle_count, num_parts.value());
         for (Cluster &partition : partitions) {
+            partition.texture_id = cluster.texture_id;
             partition.vertex_indices.reserve(expected_part_vertex_count * 3 / 2);
             partition.local_triangles.reserve(expected_part_triangle_count * 3 / 2);
             if (has_uvs) {

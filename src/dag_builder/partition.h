@@ -155,7 +155,7 @@ inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::sp
 inline Cluster merge_clusters_simple(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
-    std::vector<uint32_t> &vertex_remap) {
+    const std::span<uint32_t> vertex_remap) {
     constexpr uint32_t no_vertex_remap = -1;
 #ifndef NDEBUG
     DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
@@ -214,7 +214,7 @@ struct MergeWithBackward {
     Cluster merged;
 };
 
-inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &clustering, const std::span<const uint32_t> cluster_indices, std::vector<uint32_t> &vertex_remap) {
+inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &clustering, const std::span<const uint32_t> cluster_indices, const std::span<uint32_t> vertex_remap) {
     constexpr uint32_t no_vertex_remap = -1;
 #ifndef NDEBUG
     DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
@@ -345,6 +345,153 @@ std::vector<std::vector<uint32_t>> create_component_backwards_mapping(const mesh
     return backward;
 }
 
+struct ClusterAndTexture {
+    Cluster cluster;
+    Texture texture;
+};
+
+inline ClusterAndTexture merge_clusters_with_unwrap(
+    const Clustering &clustering,
+    const std::span<const uint32_t> cluster_indices,
+    const std::span<uint32_t> vertex_remap
+) {
+    // Merge the geometry of the clusters
+    mesh::merging::VertexMapping mapping = detail::construct_merge_mapping(clustering, cluster_indices, vertex_remap);
+    Cluster merged_cluster = detail::merge_geometry_using_mapping(clustering, cluster_indices, mapping);
+
+    // Keep only backward mapping, since we cant keep the forward mapping valid
+    auto [_, merged_to_original] = std::move(mapping).into_parts();
+
+    // Make merged geometry manifold, keeping backward mapping consitent
+    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+        const uint32_t new_vertex_index = merged_cluster.vertex_indices.size();
+
+        // Add new vertex to merged cluster
+        merged_cluster.vertex_indices.push_back(merged_cluster.vertex_indices[old_vertex_index]);
+
+        // Update backwards mapping
+        for (const auto &[linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
+            const mesh::merging::VertexId merged_vertex(linear_cluster_index, old_vertex_index);
+            const auto it = merged_to_original.find(merged_vertex);
+            if (it == merged_to_original.end()) {
+                continue;
+            }
+            const uint32_t source_vertex_index = it->second;
+            const mesh::merging::VertexId duplicated_vertex{static_cast<uint32_t>(linear_cluster_index), new_vertex_index};
+            merged_to_original[duplicated_vertex] = source_vertex_index;
+        }
+
+        return new_vertex_index;
+    };
+    mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
+
+    // Split into individual connecticity components
+    const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
+    const mesh::Simple merged_mesh = materialize_cluster(merged_cluster, clustering.positions);
+    DEBUG_ASSERT(!merged_mesh.has_uvs());
+    auto [components, merged_to_component] = mesh::split_into_connected_components_with_map(merged_mesh, components_index);
+    std::vector<std::vector<uint32_t>> component_to_merged = detail::create_component_backwards_mapping(components_index, merged_to_component);
+
+    // Prepare atlas for new texture
+    const glm::uvec2 target_texture_size(1024); // TODO:
+    const atlas::Plan atlas_plan = create_atlas_plan(target_texture_size, components);
+
+    // Perform an uv unwrap for each component
+    for (auto &[component_index, component] : enumerate(components)) {
+        const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
+
+        // Find relevant source clusters
+        const uint32_t original_cluster_count = cluster_indices.size();
+        std::vector<uint32_t> source_clusters;
+        source_clusters.reserve(original_cluster_count);
+        for (const uint32_t linear_cluster_index : range(original_cluster_count)) {
+            const bool cluster_is_relevant = std::ranges::any_of(local_to_merged, [&](const uint32_t merged_index) {
+                const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+                return merged_to_original.contains(merged_vertex);
+            });
+
+            if (cluster_is_relevant) {
+                source_clusters.push_back(linear_cluster_index);
+            }
+        }
+
+        const glm::uvec2 component_texture_size = atlas_plan.slots[component_index].size;
+        if (source_clusters.size() == 1) {
+            // If one a single cluster is relevant we dont need to perform a fresh unwrap
+            const uint32_t linear_cluster_index = source_clusters[0];
+            const uint32_t cluster_index = cluster_indices[linear_cluster_index];
+            component.uvs = transform_vector(local_to_merged, [&](const uint32_t merged_index) {
+                const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+                const auto it = merged_to_original.find(merged_vertex);
+                DEBUG_ASSERT(it != merged_to_original.end());
+                const uint32_t original_vertex_index = it->second;
+                return clustering.clusters[cluster_index].uvs[original_vertex_index];
+            });
+            const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
+            component.texture = clustering.textures[texture_id];
+            trim_texture_inplace(component);
+            rescale_texture_inplace(component.texture.value(), component_texture_size);
+        } else {
+            // If multiple clusters are relevant, we have to perform an unwrap.
+            component.uvs = uv::unwrap(component).value();
+
+            // Build new texture
+            auto map_to_original_triangle = [&](const uint32_t linear_cluster_index, const glm::uvec3 &triangle)
+                -> std::optional<glm::uvec3> {
+                glm::uvec3 original_triangle;
+                for (uint8_t k = 0; k < 3; k++) {
+                    const uint32_t merged_index = local_to_merged[triangle[k]];
+                    const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
+
+                    const auto it = merged_to_original.find(merged_vertex);
+                    if (it == merged_to_original.end()) {
+                        return std::nullopt;
+                    }
+
+                    original_triangle[k] = it->second;
+                }
+                return original_triangle;
+            };
+
+            TextureReprojector component_texture(component_texture_size);
+            for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
+                const Cluster &cluster = clustering.clusters[cluster_index];
+                const cv::Mat &cluster_texture = clustering.textures[cluster.texture_id];
+
+                for (const glm::uvec3 &triangle : component.triangles) {
+                    auto opt = map_to_original_triangle(linear_cluster_index, triangle);
+                    if (!opt.has_value()) {
+                        continue;
+                    }
+                    const glm::uvec3 &original_triangle = opt.value();
+                    component_texture.add_triangle(
+                        cluster_texture,
+                        original_triangle, cluster.uvs,
+                        triangle, component.uvs);
+                }
+            }
+            component.texture = component_texture.finish();
+        }
+    }
+
+    // Assemble texture atlas
+    const std::vector<cv::Mat> component_textures = transform_vector(components, [](const auto &component) { return component.texture.value(); });
+    const cv::Mat merged_texture = atlas::create(atlas_plan, component_textures);
+    for (auto &[component_index, component] : enumerate(components)) {
+        atlas::map_uvs(atlas_plan, component_index, component.uvs);
+    }
+
+    // Finalize uvs and texture
+    merged_cluster.uvs.resize(merged_cluster.vertex_count());
+    const auto &vertex_to_component = components_index.vertex_to_component;
+    for (const auto [merged_vertex_index, local_vertex_index] : enumerate(merged_to_component)) {
+        const uint32_t component_index = vertex_to_component[merged_vertex_index];
+        const mesh::Simple &component = components[component_index];
+        merged_cluster.uvs[merged_vertex_index] = component.uvs[local_vertex_index];
+    }
+
+    return ClusterAndTexture{merged_cluster, merged_texture};
+}
 }
 
 inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning) {
@@ -377,144 +524,9 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
         Cluster merged_cluster;
         if (needs_unwrap) {
             // We need to perform a fresh uv unwrap and generate a new texture
-
-            // Merge the geometry of the clusters
-            mesh::merging::VertexMapping mapping = detail::construct_merge_mapping(clustering, cluster_indices, vertex_remap);
-            merged_cluster = detail::merge_geometry_using_mapping(clustering, cluster_indices, mapping);
-
-            // Keep only backward mapping, since we cant keep the forward mapping valid
-            auto [_, merged_to_original] = std::move(mapping).into_parts();
-
-            // Make merged geometry manifold, keeping backward mapping consitent
-            auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
-                const uint32_t new_vertex_index = merged_cluster.vertex_indices.size();
-
-                // Add new vertex to merged cluster
-                merged_cluster.vertex_indices.push_back(merged_cluster.vertex_indices[old_vertex_index]);
-
-                // Update backwards mapping
-                for (const auto& [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
-                    const mesh::merging::VertexId merged_vertex(linear_cluster_index, old_vertex_index);
-                    const auto it = merged_to_original.find(merged_vertex);
-                    if (it == merged_to_original.end()) {
-                        continue;
-                    }
-                    const uint32_t source_vertex_index = it->second;
-                    const mesh::merging::VertexId duplicated_vertex{static_cast<uint32_t>(linear_cluster_index), new_vertex_index};
-                    merged_to_original[duplicated_vertex] = source_vertex_index;
-                }
-
-                return new_vertex_index;
-            };
-            mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
-
-            // Split into individual connecticity components
-            const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
-            const mesh::Simple merged_mesh = materialize_cluster(merged_cluster, clustering.positions);
-            DEBUG_ASSERT(!merged_mesh.has_uvs());
-            auto [components, merged_to_component] = mesh::split_into_connected_components_with_map(merged_mesh, components_index);
-            std::vector<std::vector<uint32_t>> component_to_merged = detail::create_component_backwards_mapping(components_index, merged_to_component);
-
-            // Prepare atlas for new texture
-            const glm::uvec2 target_texture_size(1024); // TODO:
-            const atlas::Plan atlas_plan = create_atlas_plan(target_texture_size, components);
-
-            // Perform an uv unwrap for each component
-            for (auto &[component_index, component] : enumerate(components)) {
-                const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
-
-                // Find relevant source clusters
-                const uint32_t original_cluster_count = cluster_indices.size();
-                std::vector<uint32_t> source_clusters;
-                source_clusters.reserve(original_cluster_count);
-                for (const uint32_t linear_cluster_index : range(original_cluster_count)) {
-                    const bool cluster_is_relevant = std::ranges::any_of(local_to_merged, [&](const uint32_t merged_index) {
-                        const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
-                        return merged_to_original.contains(merged_vertex);
-                    });
-
-                    if (cluster_is_relevant) {
-                        source_clusters.push_back(linear_cluster_index);
-                    }
-                }
-
-                const glm::uvec2 component_texture_size = atlas_plan.slots[component_index].size;
-                if (source_clusters.size() == 1) {
-                    // If one a single cluster is relevant we dont need to perform a fresh unwrap
-                    const uint32_t linear_cluster_index = source_clusters[0];
-                    const uint32_t cluster_index = cluster_indices[linear_cluster_index];
-                    component.uvs = transform_vector(local_to_merged, [&](const uint32_t merged_index) {
-                        const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
-                        const auto it = merged_to_original.find(merged_vertex);
-                        DEBUG_ASSERT(it != merged_to_original.end());
-                        const uint32_t original_vertex_index = it->second;
-                        return clustering.clusters[cluster_index].uvs[original_vertex_index];
-                    });
-                    const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
-                    component.texture = clustering.textures[texture_id];
-                    trim_texture_inplace(component);
-                    rescale_texture_inplace(component.texture.value(), component_texture_size);
-                } else {
-                    // If multiple clusters are relevant, we have to perform an unwrap.
-                    component.uvs = uv::unwrap(component).value();
-
-                    // Build new texture
-                    auto map_to_original_triangle = [&](const uint32_t linear_cluster_index, const glm::uvec3& triangle) 
-                        -> std::optional<glm::uvec3> {
-                        glm::uvec3 original_triangle;
-                        for (uint8_t k = 0; k < 3; k++) {
-                            const uint32_t merged_index = local_to_merged[triangle[k]];
-                            const mesh::merging::VertexId merged_vertex{linear_cluster_index, merged_index};
-
-                            const auto it = merged_to_original.find(merged_vertex);
-                            if (it == merged_to_original.end()) {
-                                return std::nullopt;
-                            }
-
-                            original_triangle[k] = it->second;
-                        }
-                        return original_triangle;
-                    };
-
-                    TextureReprojector component_texture(component_texture_size);
-                    for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
-                        const Cluster &cluster = clustering.clusters[cluster_index];
-                        const cv::Mat &cluster_texture = clustering.textures[cluster.texture_id];
-
-                        for (const glm::uvec3 &triangle : component.triangles) {
-                            auto opt = map_to_original_triangle(linear_cluster_index, triangle);
-                            if (!opt.has_value()) {
-                                continue;
-                            }
-                            const glm::uvec3& original_triangle = opt.value();
-                            component_texture.add_triangle(
-                                cluster_texture,
-                                original_triangle, cluster.uvs,
-                                triangle, component.uvs
-                            );
-                        }
-                    }
-                    component.texture = component_texture.finish();
-                }
-            }
-
-            // Assemble texture atlas
-            const std::vector<cv::Mat> component_textures = transform_vector(components, [](const auto& component) { return component.texture.value(); });
-            const cv::Mat merged_texture = atlas::create(atlas_plan, component_textures);
-            for (auto &[component_index, component] : enumerate(components)) {
-                atlas::map_uvs(atlas_plan, component_index, component.uvs);
-            }
-
-            // Finalize uvs and texture
-            merged_cluster.uvs.resize(merged_cluster.vertex_count());
-            const auto &vertex_to_component = components_index.vertex_to_component;
-            for (const auto [merged_vertex_index, local_vertex_index] : enumerate(merged_to_component)) {
-                const uint32_t component_index = vertex_to_component[merged_vertex_index];
-                const mesh::Simple &component = components[component_index];
-                merged_cluster.uvs[merged_vertex_index] = component.uvs[local_vertex_index];
-            }
-            merged_cluster.texture_id = textures.add(merged_texture);
-
+            const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap);
+            merged_cluster = result.cluster;
+            merged_cluster.texture_id = textures.add(result.texture);
         } else {
             // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
             merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);

@@ -16,6 +16,7 @@
 #include "mesh/bounds.h"
 #include "mesh/validate.h"
 #include "mesh/manifold.h"
+#include "mesh/geometry.h"
 #include "octree/Space.h"
 #include "octree/Id.h"
 
@@ -145,6 +146,72 @@ TEST_CASE("single triangle with single vertex in bounds") {
                                                glm::dvec3(0, 0.5, 0),
                                            }});
     }
+}
+
+TEST_CASE("clip returns empty mesh if triangle with vertices on bounds and outside") {
+    SimpleMesh mesh;
+    mesh.positions = {
+        glm::dvec3(0.0, 0.0, 0.0),  // on plane y = 0
+        glm::dvec3(1.0, 0.0, 0.0),  // on plane y = 0
+        glm::dvec3(0.5, -1.0, 0.0), // outside (below plane)
+    };
+    mesh.triangles = {
+        glm::uvec3(0, 1, 2)};
+
+    // Clip with bottom plane y >= 0
+    const radix::geometry::Aabb3d bounds(
+        glm::dvec3(-1.0, 0.0, -1.0),
+        glm::dvec3(2.0, 1.0, 1.0));
+
+    const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
+    const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
+
+    CAPTURE(clipped_soup);
+    CHECK(clipped_soup == TriangleSoup{});
+}
+
+TEST_CASE("single triangle around bounds") {
+    SimpleMesh mesh;
+    mesh.positions = {
+        glm::dvec3(0.0, 3.0, 0.0),
+        glm::dvec3(3.0, -2.0, 0.0),
+        glm::dvec3(-3.0, -2.0, 0.0),
+    };
+    mesh.triangles = {glm::uvec3(0, 1, 2)};
+
+    const radix::geometry::Aabb3d bounds(
+        glm::dvec3(-1.0),
+        glm::dvec3(1.0));
+    const radix::geometry::Aabb2d bounds2d(
+        glm::dvec2(bounds.min),
+        glm::dvec2(bounds.max));
+
+    const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
+    const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
+
+    double total_area = 0.0;
+    for (const auto &triangle : clipped_soup) {
+        const auto &a = triangle[0];
+        const auto &b = triangle[1];
+        const auto &c = triangle[2];
+
+        CAPTURE(a, b, c);
+
+        // Still on the source plane.
+        CHECK(a.z == Catch::Approx(0.0));
+        CHECK(b.z == Catch::Approx(0.0));
+        CHECK(c.z == Catch::Approx(0.0));
+
+        // Every emitted vertex must lie inside the clipping bounds.
+        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(a)));
+        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(b)));
+        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(c)));
+
+        total_area += compute_triangle_area(a, b, c);
+    }
+
+    // The clipped region is exactly a 2x2 square.
+    CHECK(total_area == Catch::Approx(4.0));
 }
 
 TEST_CASE("single triangle with two vertices in bounds") {

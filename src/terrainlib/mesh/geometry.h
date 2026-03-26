@@ -14,6 +14,21 @@
 #include "mesh/View.h"
 
 template <typename T>
+constexpr T epsilon() {
+    if constexpr (std::is_same_v<T, float>) {
+        return 1e-6f;
+    } else if constexpr (std::is_same_v<T, double>) {
+        return 1e-12;
+    } else {
+        static_assert(sizeof(T) == 0, "Unsupported type for epsilon");
+    }
+}
+template <typename T>
+constexpr T epsilon_sq() {
+    return epsilon<T>() * epsilon<T>();
+}
+
+template <typename T>
 glm::vec<3, T> compute_normal(const glm::vec<3, T> &a,
                               const glm::vec<3, T> &b,
                               const glm::vec<3, T> &c,
@@ -40,6 +55,15 @@ template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions);
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions);
+
+template <glm::length_t n_dims, typename T>
+T is_empty_triangle(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2, const T min_area = 2 * epsilon<T>());
+template <glm::length_t n_dims, typename T>
+T is_empty_triangle(const std::array<glm::vec<n_dims, T>, 3> &triangle, const T min_area = 2 * epsilon<T>());
+template <glm::length_t n_dims, typename T>
+T is_empty_triangle(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions, const T min_area = 2 * epsilon<T>());
+template <glm::length_t n_dims, typename T>
+T is_empty_triangle(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions, const T min_area = 2 * epsilon<T>());
 
 namespace mesh {
 

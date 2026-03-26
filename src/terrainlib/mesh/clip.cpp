@@ -25,6 +25,7 @@
 #include "mesh/topology.h"
 #include "mesh/validate.h"
 #include "FixedVector.h"
+#include "vector_utils.h"
 
 namespace mesh {
 namespace {
@@ -62,109 +63,225 @@ compute_intersection(const radix::geometry::Edge<3, T>& edge, const radix::geome
     return result;
 }
 
-struct EdgeAndPlane {
-    glm::uvec2 edge;
-    uint8_t plane_mask;
-};
-struct EdgeAndPlaneHash {
-    size_t operator()(const EdgeAndPlane& k) const noexcept {
-        return hash::combine(k.edge.x, k.edge.y, k.plane_mask);
-    }
-};
-struct EdgeAndPlaneEqual {
-    size_t operator()(const EdgeAndPlane &a, const EdgeAndPlane &b) const noexcept {
-        return a.edge == b.edge && a.plane_mask == b.plane_mask;
-    }
-};
-
-struct VertexProvenance {
+class VertexProvenance {
 public:
     struct Original {
         uint32_t vertex_index;
+        bool operator==(const Original &) const = default;
+        auto operator<=>(const Original &) const = default;
     };
-    struct Intersection {
+
+    struct OnEdge {
         glm::uvec2 edge;
-        uint8_t plane_mask;
+        uint8_t plane_index;
+        bool operator==(const OnEdge &) const = default;
+        std::strong_ordering operator<=>(const OnEdge &other) const {
+            if (auto c = edge.x <=> other.edge.x; c != 0) {
+                return c;
+            }
+            if (auto c = edge.y <=> other.edge.y; c != 0) {
+                return c;
+            }
+            return plane_index <=> other.plane_index;
+        }
+    };
+
+    struct Inside {
+        std::unique_ptr<std::pair<VertexProvenance, VertexProvenance>> parts;
+        uint8_t plane_index;
+
+        Inside(std::unique_ptr<std::pair<VertexProvenance, VertexProvenance>> p, uint8_t plane_index)
+            : parts(std::move(p)), plane_index(plane_index) {}
+
+        Inside(const Inside &other)
+            : parts(other.parts
+                        ? std::make_unique<std::pair<VertexProvenance, VertexProvenance>>(*other.parts)
+                        : nullptr),
+              plane_index(other.plane_index) {}
+
+        Inside &operator=(const Inside &other) {
+            if (this != &other) {
+                parts = other.parts
+                            ? std::make_unique<std::pair<VertexProvenance, VertexProvenance>>(*other.parts)
+                            : nullptr;
+                plane_index = other.plane_index;
+            }
+            return *this;
+        }
+
+        Inside(Inside &&) noexcept = default;
+        Inside &operator=(Inside &&) noexcept = default;
+        std::strong_ordering operator<=>(const Inside& other) const {
+            if (auto c = plane_index <=> other.plane_index; c != 0) {
+                return c;
+            }
+
+            if (!parts && !other.parts) {
+                return std::strong_ordering::equal;
+            }
+            if (!parts) {
+                return std::strong_ordering::less;
+            }
+            if (!other.parts) {
+                return std::strong_ordering::greater;
+            }
+
+            if (auto c = parts->first <=> other.parts->first; c != 0) {
+                return c;
+            }
+            return parts->second <=> other.parts->second;
+        }
+        
+        bool operator==(const Inside& other) const {
+            if (plane_index != other.plane_index) {
+                return false;
+            }
+            if (static_cast<bool>(parts) != static_cast<bool>(other.parts)) {
+                return false;
+            }
+            if (!parts) {
+                return true;
+            }
+            return parts->first == other.parts->first &&
+                parts->second == other.parts->second;
+        }
     };
 
     VertexProvenance(const Original &v) : _v(v) {}
-    VertexProvenance(const Intersection &v) : _v(v) {}
+    VertexProvenance(const OnEdge &v) : _v(v) {}
+    VertexProvenance(const Inside &v) : _v(v) {}
 
-    static VertexProvenance make_original(uint32_t vertex_index) {
+    bool operator==(const VertexProvenance &) const = default;
+    std::strong_ordering operator<=>(const VertexProvenance &other) const {
+        if (auto c = _v.index() <=> other._v.index(); c != 0) {
+            return c;
+        }
+
+        return std::visit(
+            [](const auto &a, const auto &b) -> std::strong_ordering {
+                using A = std::decay_t<decltype(a)>;
+                using B = std::decay_t<decltype(b)>;
+                if constexpr (std::is_same_v<A, B>) {
+                    return a <=> b;
+                } else {
+                    UNREACHABLE();
+                }
+            },
+            _v, other._v);
+    }
+
+    bool is_original() const {
+        return std::holds_alternative<Original>(_v);
+    }
+
+    bool is_on_edge() const {
+        return std::holds_alternative<OnEdge>(_v);
+    }
+
+    bool is_inside() const {
+        return std::holds_alternative<Inside>(_v);
+    }
+
+    static VertexProvenance make_original(const uint32_t vertex_index) {
         return VertexProvenance{Original{vertex_index}};
     }
 
-    static VertexProvenance make_intersection(uint32_t a, uint32_t b, uint8_t plane_index) {
-        return VertexProvenance{Intersection{
-            mesh::normalize_edge({a, b}),
-            to_plane_mask(plane_index)}};
+    static VertexProvenance make_on_edge(const uint32_t a, const uint32_t b, const uint8_t plane_index) {
+        return make_on_edge(glm::uvec2(a, b), plane_index);
     }
 
-    template <class FOriginal, class FIntersection>
-    decltype(auto) visit(FOriginal &&f_original, FIntersection &&f_intersection) {
-        if (auto *p = std::get_if<Original>(&_v)) {
-            return std::forward<FOriginal>(f_original)(*p);
-        }
-        return std::forward<FIntersection>(f_intersection)(std::get<Intersection>(_v));
+    static VertexProvenance make_on_edge(const glm::uvec2 &edge, const uint8_t plane_index) {
+        return VertexProvenance{OnEdge{normalize_edge(edge), plane_index}};
     }
 
-    template <class FOriginal, class FIntersection>
-    decltype(auto) visit(FOriginal &&f_original, FIntersection &&f_intersection) const {
-        if (const auto *p = std::get_if<Original>(&_v)) {
-            return std::forward<FOriginal>(f_original)(*p);
-        }
-        return std::forward<FIntersection>(f_intersection)(std::get<Intersection>(_v));
+    static VertexProvenance make_inside(const VertexProvenance &a, const VertexProvenance &b, const uint8_t plane_index) {
+        auto parts = (a < b)
+                         ? std::make_unique<std::pair<VertexProvenance, VertexProvenance>>(a, b)
+                         : std::make_unique<std::pair<VertexProvenance, VertexProvenance>>(b, a);
+        return VertexProvenance{Inside{std::move(parts), plane_index}};
     }
 
     static VertexProvenance make_intersection(const VertexProvenance &a, const VertexProvenance &b, const uint8_t plane_index, const double t) {
-        const uint8_t plane_mask = to_plane_mask(plane_index);
-
         if (t == 0) {
             return a;
         }
-
         if (t == 1) {
             return b;
         }
-
-        return a.visit(
-            [&](const Original &lhs) -> VertexProvenance {
-                return b.visit(
-                    [&](const Original &rhs) -> VertexProvenance {
-                        if (lhs.vertex_index == rhs.vertex_index) {
-                            return lhs;
-                        }
-                        return make_intersection(lhs.vertex_index, rhs.vertex_index, plane_index);
-                    },
-                    [&](const Intersection &rhs) -> VertexProvenance {
-                        DEBUG_ASSERT(point_lies_on_edge(lhs.vertex_index, rhs.edge));
-                        return Intersection{rhs.edge, static_cast<uint8_t>(rhs.plane_mask | plane_mask)};
-                    });
-            },
-            [&](const Intersection &lhs) -> VertexProvenance {
-                return b.visit(
-                    [&](const Original &rhs) -> VertexProvenance {
-                        DEBUG_ASSERT(point_lies_on_edge(rhs.vertex_index, lhs.edge));
-                        return Intersection{lhs.edge, static_cast<uint8_t>(lhs.plane_mask | plane_mask)};
-                    },
-                    [&](const Intersection &rhs) -> VertexProvenance {
-                        DEBUG_ASSERT(lhs.edge == rhs.edge);
-                        return Intersection{
-                            .edge = lhs.edge,
-                            .plane_mask = static_cast<uint8_t>(lhs.plane_mask | rhs.plane_mask | plane_mask),
-                        };
-                    });
-            });
+        return make_intersection(a, b, plane_index);
     }
+
+    static VertexProvenance make_intersection(
+        const VertexProvenance &a,
+        const VertexProvenance &b,
+        uint8_t plane_index) {
+        return std::visit(
+            [&](const auto &av, const auto &bv) -> VertexProvenance {
+                using A = std::decay_t<decltype(av)>;
+                using B = std::decay_t<decltype(bv)>;
+
+                if constexpr (std::is_same_v<A, Original> && std::is_same_v<B, Original>) {
+                    if (av.vertex_index == bv.vertex_index) {
+                        return a;
+                    }
+                    return make_on_edge(av.vertex_index, bv.vertex_index, plane_index);
+                }
+
+                else if constexpr (std::is_same_v<A, Original> && std::is_same_v<B, OnEdge>) {
+                    if (point_lies_on_edge(av.vertex_index, bv.edge)) {
+                        return make_on_edge(bv.edge, plane_index);
+                    }
+                    return make_inside(a, b, plane_index);
+                }
+
+                else if constexpr (std::is_same_v<A, OnEdge> && std::is_same_v<B, Original>) {
+                    return make_intersection(b, a, plane_index);
+                }
+
+                else {
+                    return make_inside(a, b, plane_index);
+                }
+            },
+            a._v, b._v);
+    }
+
+    template <typename F>
+    decltype(auto) visit(F &&f) {
+        return std::visit(std::forward<F>(f), _v);
+    }
+
+    template <typename F>
+    decltype(auto) visit(F &&f) const {
+        return std::visit(std::forward<F>(f), _v);
+    }
+
+    struct Hash {
+        size_t operator()(const VertexProvenance &v) const {
+            return std::visit(*this, v._v);
+        }
+
+        size_t operator()(const Original &v) const {
+            return v.vertex_index;
+        }
+
+        size_t operator()(const OnEdge &v) const {
+            return hash::combine(v.edge.x, v.edge.y, v.plane_index);
+        }
+
+        size_t operator()(const Inside &v) const {
+            size_t h = hash::combine(v.plane_index);
+            if (v.parts) {
+                hash::append(h, (*this)(v.parts->first));
+                hash::append(h, (*this)(v.parts->second));
+            }
+            return h;
+        }
+    };
 
 private:
-    std::variant<Original, Intersection> _v;
+    std::variant<Original, OnEdge, Inside> _v;
 
-    static uint8_t to_plane_mask(const uint8_t plane_index) {
-        DEBUG_ASSERT(plane_index < 8);
-        return static_cast<uint8_t>(1 << plane_index);
-    }
-    static bool point_lies_on_edge(const uint32_t vertex_index, const glm::uvec2& edge) {
+    static bool point_lies_on_edge(const uint32_t vertex_index, const glm::uvec2 &edge) {
         return vertex_index == edge.x || vertex_index == edge.y;
     }
 };
@@ -201,19 +318,18 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
     new_triangles.reserve(mesh.face_count());
 
     // Prepare a spatial hash map to deduplicate intersection vertices
-    std::unordered_map<EdgeAndPlane, uint32_t, EdgeAndPlaneHash, EdgeAndPlaneEqual> seen_vertices(mesh.positions.size());
-    auto add_intersection_vertex = [&](const glm::uvec2 &edge, const uint8_t plane_mask, const glm::dvec3 &vertex, const glm::dvec2 &uv) {
-        const EdgeAndPlane key{edge, plane_mask};
-        const auto it = seen_vertices.find(key);
+    std::unordered_map<VertexProvenance, uint32_t, VertexProvenance::Hash> seen_vertices(mesh.positions.size());
+    auto add_intersection_vertex = [&](const VertexProvenance &provenance, const glm::dvec3 &position, const glm::dvec2 &uv) {
+        const auto it = seen_vertices.find(provenance);
         if (it != seen_vertices.cend()) {
             return it->second;
         } else {
             const uint32_t vertex_index = new_positions.size();
-            new_positions.push_back(vertex);
+            new_positions.push_back(position);
             if (mesh.has_uvs()) {
                 new_uvs.push_back(uv);
             }
-            seen_vertices.emplace(key, vertex_index);
+            seen_vertices.emplace(provenance, vertex_index);
             return vertex_index;
         }
     };
@@ -377,7 +493,14 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const std::array<VertexProvenance, 3> new_vertex_provenance = {inside_prov, intersection1_prov, intersection2_prov};
                     const std::array<glm::dvec3, 3> new_vertices = {inside_vertex, intersection1.point, intersection2.point};
                     const std::array<glm::dvec2, 3> new_uvs = {inside_uv, intersection1_uv, intersection2_uv};
-                    current_triangle_and_vertices = {new_vertex_provenance, new_vertices, new_uvs, static_cast<uint8_t>(plane_index + 1)};
+
+                    if (is_empty_triangle(new_vertices)) {
+                        skip_triangle = true;
+                        break;
+                    }
+
+                    const uint8_t next_plane_index = static_cast<uint8_t>(plane_index + 1);
+                    current_triangle_and_vertices = {new_vertex_provenance, new_vertices, new_uvs, next_plane_index};
                 } else if (inside_count == 2) {
                     // Two vertices is inside the plane, cut the last one off and split the triangle.
 
@@ -423,10 +546,30 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const std::array<glm::dvec2, 3> new_uvs1 = {inside1_uv, inside2_uv, intersection1_uv};
                     const std::array<glm::dvec2, 3> new_uvs2 = {inside2_uv, intersection2_uv, intersection1_uv};
 
+                    const uint8_t next_plane_index = static_cast<uint8_t>(plane_index + 1);
+                    const TriangleAndVertices new_triangle1{new_vertex_provenance1, new_vertices1, new_uvs1, next_plane_index};
+                    const TriangleAndVertices new_triangle2{new_vertex_provenance2, new_vertices2, new_uvs2, next_plane_index};
+
                     // Set the first triangle as the current one
                     // Push the second triangle to the list of triangles left to clip
-                    current_triangle_and_vertices = {new_vertex_provenance1, new_vertices1, new_uvs1, static_cast<uint8_t>(plane_index + 1)};
-                    triangles_left_to_clip.emplace_back(new_vertex_provenance2, new_vertices2, new_uvs2, static_cast<uint8_t>(plane_index + 1));
+                    const bool empty1 = is_empty_triangle(new_triangle1.positions);
+                    const bool empty2 = is_empty_triangle(new_triangle2.positions);
+                    if (empty2) {
+                        if (empty1) {
+                            skip_triangle = true;
+                            break;
+                        } else {
+                            current_triangle_and_vertices = new_triangle1;
+                        }
+                    }
+                    else {
+                        if (empty1) {
+                            current_triangle_and_vertices = new_triangle2;
+                        } else {
+                            current_triangle_and_vertices = new_triangle1;
+                            triangles_left_to_clip.push_back(new_triangle2);
+                        }
+                    }
                 } else {
                     UNREACHABLE();
                 }
@@ -444,20 +587,20 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                 const VertexProvenance &provenance = vertex_provenance[k];
                 const auto &position = vertices[k];
                 const auto &uv = uvs[k];
-                indices[k] = provenance.visit(
-                    [&](const VertexProvenance::Original &original) -> uint32_t {
+                indices[k] = provenance.visit([&](const auto &v) -> uint32_t {
+                    using V = std::decay_t<decltype(v)>;
+                    if constexpr (std::is_same_v<V, VertexProvenance::Original>) {
                         // We have a vertex in the original mesh -> look up in the boolean vector
-                        return add_original_vertex(original.vertex_index, position, uv);
-                    },
-                    [&](const VertexProvenance::Intersection &intersection) -> uint32_t {
+                        return add_original_vertex(v.vertex_index, position, uv);
+                    } else {
                         // We have a vertex not in the original mesh -> look up in the spatial hash map
-                        return add_intersection_vertex(intersection.edge, intersection.plane_mask, position, uv);
-                    });
+                        return add_intersection_vertex(v, position, uv);
+                    }
+                });
             }
 
-            if (!is_degenerate(indices)) {
-                new_triangles.push_back(indices);
-            }
+            DEBUG_ASSERT(!is_degenerate(indices));
+            new_triangles.push_back(indices);
 
             // Continue with the next triangle if there are any left to clip
             if (triangles_left_to_clip.empty()) {

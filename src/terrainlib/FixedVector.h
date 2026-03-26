@@ -14,6 +14,22 @@
 template <typename T, std::size_t N>
 class FixedVector {
 public:
+    using value_type = T;
+    using size_type = std::size_t;
+    using difference_type = std::ptrdiff_t;
+
+    using reference = value_type &;
+    using const_reference = const value_type &;
+
+    using pointer = value_type *;
+    using const_pointer = const value_type *;
+
+    using iterator = value_type *;
+    using const_iterator = const value_type *;
+
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+    
     constexpr FixedVector() = default;
 
     FixedVector(std::initializer_list<T> init) {
@@ -154,8 +170,7 @@ public:
         if (this->_size == 0) {
             throw std::out_of_range("empty vector");
         }
-        this->destroy_at(this->_size - 1);
-        this->_size--;
+        this->destroy_back();
     }
     
     T &back() {
@@ -235,6 +250,52 @@ public:
     }
     constexpr bool full() const {
         return this->_size == N;
+    }
+
+    void erase(const size_t index) {
+        if (index >= this->_size) {
+            throw std::out_of_range("index out of range");
+        }
+
+        for (size_t i = index; i + 1 < this->_size; i++) {
+            (*this)[i] = std::move((*this)[i + 1]);
+        }
+        this->pop_back();
+    }
+    T* erase(const T* it) {
+        const T* first = this->begin();
+        const T* last = this->end();
+
+        if (it < first || it >= last) {
+            throw std::out_of_range("iterator out of range");
+        }
+
+        const size_t index = static_cast<size_t>(it - first);
+        this->erase(index);
+        return this->data() + index;
+    }
+    T *erase(const T *first, const T *last) {
+        T* begin = this->begin();
+        T* end =  this->end();
+
+        if (first < begin || first > end || last < first || last > end) {
+            throw std::out_of_range("invalid range");
+        }
+
+        const size_t first_index = static_cast<size_t>(first - begin);
+        const size_t last_index = static_cast<size_t>(last - end);
+
+        const size_t count = last_index - first_index;
+        if (count == 0) {
+            return begin + first_index;
+        }
+
+        for (size_t i = first_index; i + count < this->size(); i++) {
+            (*this)[i] = std::move((*this)[i + count]);
+        }
+
+        this->resize(this->size() - count);
+        return begin + first_index;
     }
 
     T *begin() {

@@ -84,8 +84,6 @@ void validate_impl_topology(const mesh::View_<n_dims, T> &mesh, const Validation
 
     if (has_flag(flags, ValidationFlags::Manifold)) {
         DEBUG_ASSERT(is_manifold(mesh));
-        // DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, false));
-        // DEBUG_ASSERT(!has_duplicate_faces(mesh.triangles, true));
     }
 }
 
@@ -95,10 +93,8 @@ void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
 
     DEBUG_ASSERT(find_isolated_vertices(mesh.triangles, mesh.vertex_count()).empty());
 
-    const T double_epsilon_sq = static_cast<T>(4) * EPSILON * EPSILON;
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        const T double_area_sq = compute_squared_triangle_area<n_dims, T>(triangle, mesh.positions);
-        DEBUG_ASSERT(double_area_sq > double_epsilon_sq);
+        DEBUG_ASSERT(!is_empty_triangle(triangle, mesh.positions));
     }
 }
 }

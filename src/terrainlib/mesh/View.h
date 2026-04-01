@@ -73,20 +73,20 @@ public:
     }
 
     size_t vertex_count() const {
-        return positions.size();
+        return this->positions.size();
     }
     size_t face_count() const {
-        return triangles.size();
+        return this->triangles.size();
     }
     size_t uv_count() const {
-        return uvs.size();
+        return this->uvs.size();
     }
 
     bool is_empty() const {
-        return vertex_count() == 0 && face_count() == 0;
+        return this->vertex_count() == 0 && this->face_count() == 0;
     }
     bool has_uvs() const {
-        return uv_count() > 0;
+        return this->uv_count() > 0;
     }
     bool has_texture() const {
         return texture.has_value();

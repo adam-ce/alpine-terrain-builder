@@ -33,7 +33,7 @@ Texture create(const Plan &plan, const std::span<const Texture> textures) {
     const int type = textures[0].type();
     Texture atlas_img(atlas_h, atlas_w, type, cv::Scalar::all(0));
 
-    for (size_t i = 0; i < textures.size(); ++i) {
+    for (size_t i = 0; i < textures.size(); i++) {
         const auto &texture = textures[i];
         const auto &slot = plan.slots[i];
 

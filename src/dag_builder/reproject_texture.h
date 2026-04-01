@@ -231,7 +231,6 @@ inline cv::Mat reproject_texture(
     const std::span<const glm::dvec2> new_uvs,
     const cv::Mat &old_texture,
     const glm::uvec2 new_texture_size) {
-
     cv::Mat new_texture = cv::Mat::zeros(new_texture_size.y, new_texture_size.x, old_texture.type());
     reproject_texture(triangles, old_uvs, new_uvs, old_texture, new_texture);
     return new_texture;

@@ -27,7 +27,7 @@ std::vector<glm::uvec2> find_non_manifold_edges(const std::span<const glm::uvec3
 }
 
 bool is_manifold(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
     return is_edge_manifold(triangles) && is_vertex_manifold(triangles, vertex_count);
 }
 
@@ -68,7 +68,7 @@ bool is_vertex_manifold(const std::span<const glm::uvec3> triangles, const uint3
         edge_groups.reserve(incident_count * 2);
 
         // Group incident triangles by edge (vertex, neighbor)
-        for (uint32_t local_index = 0; local_index < incident_count; ++local_index) {
+        for (uint32_t local_index = 0; local_index < incident_count; local_index++) {
             const glm::uvec3 &triangle = triangles[incident_triangles[local_index]];
             const glm::uvec2 neighbors = other_vertices_in_triangle(triangle, vertex_index);
 
@@ -78,7 +78,7 @@ bool is_vertex_manifold(const std::span<const glm::uvec3> triangles, const uint3
 
         union_find.reset(incident_count);
         for (const auto &[_, group] : edge_groups) {
-            for (uint32_t i = 1; i < (uint32_t)group.size(); ++i) {
+            for (uint32_t i = 1; i < group.size(); i++) {
                 union_find.make_union(group[0], group[i]);
             }
         }
@@ -86,8 +86,8 @@ bool is_vertex_manifold(const std::span<const glm::uvec3> triangles, const uint3
         return union_find.is_joint();
     };
 
-    for (uint32_t v = 0; v < vertex_count; ++v) {
-        if (!is_vertex_manifold_at(v)) {
+    for (uint32_t vertex = 0; vertex < vertex_count; vertex++) {
+        if (!is_vertex_manifold_at(vertex)) {
             return false;
         }
     }

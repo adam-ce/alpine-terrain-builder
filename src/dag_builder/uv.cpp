@@ -47,7 +47,6 @@ using CgalUvMap = CGAL::Unique_hash_map<cgal::VertexDescriptor, cgal::Point2>;
 using CgalUvPropMap = boost::associative_property_map<CgalUvMap>;
 
 tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
-
     const cgal::HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
 
     CgalUvMap uv_uhm;

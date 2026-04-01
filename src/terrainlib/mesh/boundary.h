@@ -43,6 +43,10 @@ template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> find_boundaries(const mesh::Simple_<n_dims, T> &mesh);
 std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uvec3> triangles);
 
+template <glm::length_t n_dims, typename T>
+std::vector<std::vector<uint32_t>> find_boundaries_non_manifold(const mesh::Simple_<n_dims, T> &mesh);
+std::vector<std::vector<uint32_t>> find_boundaries_non_manifold(const std::span<const glm::uvec3> triangles);
+
 }
 
 #include "boundary.inl"

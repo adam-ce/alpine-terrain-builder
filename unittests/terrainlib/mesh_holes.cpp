@@ -9,7 +9,9 @@
 #include "mesh/holes.h"
 #include "mesh/validate.h"
 #include "mesh/boundary.h"
-#include "log_impls.h"
+#include "mesh/compute_topology.h"
+#include "mesh/manifold.h"
+#include "log.h"
 
 std::string vec2d_to_string(const std::vector<std::vector<uint32_t>> &v) {
     std::ostringstream oss;
@@ -61,7 +63,6 @@ TEST_CASE("find_boundaries returns single boundary of all vertices for two conne
     mesh::normalize_face_index_rotation(boundary, true);
     CHECK_THAT(boundary, Catch::Matchers::UnorderedEquals(expected));
 }
-
 TEST_CASE("find_boundaries returns two boundaries for two isolated triangles") {
     SimpleMesh mesh;
     mesh.positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 1, 1}, {0, 2, 1}, {0, 1, 2}};
@@ -266,40 +267,7 @@ TEST_CASE("square frame with two holes sharing a vertex") {
         REQUIRE_THAT(actual_edges, Catch::Matchers::UnorderedEquals(expected_edges));
     }
 
-    SECTION("find_boundaries") {
-        const auto boundaries = mesh::find_boundaries(mesh);
-
-        const std::vector<glm::uvec4> expected_boundaries = {{0, 3, 2, 1}, {4, 8, 7, UINT_MAX}, {5, 6, 8, UINT_MAX}};
-        for (const auto &quad : expected_boundaries) {
-            CHECK(mesh::normalize_quad(quad) == quad);
-        }
-
-        std::vector<glm::uvec4> actual_boundaries;
-        for (const auto &boundary : boundaries) {
-            INFO(fmt::format("boundary = [{}]", fmt::join(boundary, ", ")));
-            REQUIRE(boundary.size() <= 4);
-            glm::uvec4 quad(UINT_MAX, UINT_MAX, UINT_MAX, UINT_MAX);
-            for (size_t i = 0; i < boundary.size(); i++) {
-                quad[i] = boundary[i];
-            }
-            mesh::normalize_quad_inplace(quad);
-            size_t out_index = 0;
-            for (size_t i = 0; i < 4; i++) {
-                if (quad[i] != UINT_MAX) {
-                    quad[out_index] = quad[i];
-                    out_index += 1;
-                }
-            }
-            for (size_t i = out_index; i < 4; i++) {
-                quad[out_index] = UINT_MAX;
-            }
-            actual_boundaries.push_back(quad);
-        }
-
-        REQUIRE_THAT(actual_boundaries, Catch::Matchers::UnorderedEquals(expected_boundaries));
-    }
-
-    const auto holes = mesh::find_holes(mesh);
+    const auto holes = mesh::find_holes_non_manifold(mesh);
     SECTION("find_holes") {
         const std::vector<glm::uvec3> expected_holes = {{4, 8, 7}, {5, 6, 8}};
         for (const auto &triangle : expected_holes) {

@@ -17,6 +17,7 @@
 #include "mesh/connected_components.h"
 #include "mesh/holes.h"
 #include "mesh/boundary.h"
+#include "mesh/manifold.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
 #include "vector_utils.h"
@@ -27,10 +28,10 @@ namespace {
 using Edge = glm::uvec2;
 using VertexIndex = uint32_t;
 using ComponentIndex = uint32_t;
-} // namespace
+}
 
-std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
-    std::vector<std::vector<VertexIndex>> boundaries = find_boundaries(mesh);
+namespace detail {
+void remove_largest_boundaries(const SimpleMesh &mesh, std::vector<std::vector<VertexIndex>> &boundaries) {
     const auto& [vertex_to_component, component_count] = find_connected_components(mesh);
 
     // For each component, find index of largest boundary
@@ -61,8 +62,31 @@ std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
     for (auto it = to_delete.rbegin(); it != to_delete.rend(); ++it) {
         boundaries.erase(boundaries.begin() + *it);
     }
+}
 
+std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh, const bool non_manifold) {
+    std::vector<std::vector<VertexIndex>> boundaries;
+    if (non_manifold) {
+        boundaries = find_boundaries_non_manifold(mesh);
+    } else {
+        boundaries = find_boundaries(mesh);
+    }
+    detail::remove_largest_boundaries(mesh, boundaries);
+    for (auto &boundary : boundaries) {
+        // holes should be in reverse order of edges
+        std::reverse(boundary.begin(), boundary.end());
+    }
     return boundaries;
+}
+}
+
+std::vector<std::vector<VertexIndex>> find_holes(const SimpleMesh &mesh) {
+    DEBUG_ASSERT(is_manifold(mesh));
+    return detail::find_holes(mesh, /* non_manifold */ false);
+}
+
+std::vector<std::vector<VertexIndex>> find_holes_non_manifold(const SimpleMesh &mesh) {
+    return detail::find_holes(mesh, /* non_manifold */ true);
 }
 
 namespace {
@@ -99,7 +123,7 @@ std::vector<std::vector<VertexIndex>> find_holes_on_merge_border(
     const SimpleMesh &mesh,
     const mesh::merging::VertexMapping &mapping
 ) {
-    std::vector<std::vector<VertexIndex>> holes = find_holes(mesh);
+    std::vector<std::vector<VertexIndex>> holes = find_holes_non_manifold(mesh);
     for (auto it = holes.rbegin(); it != holes.rend(); it++) {
         const auto &hole = *it;
 

@@ -96,4 +96,9 @@ std::vector<std::vector<uint32_t>> find_boundaries(const mesh::Simple_<n_dims, T
     return find_boundaries(mesh.triangles);
 }
 
+template <glm::length_t n_dims, typename T>
+std::vector<std::vector<uint32_t>> find_boundaries_non_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    return find_boundaries_non_manifold(mesh.triangles);
+}
+
 }

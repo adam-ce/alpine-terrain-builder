@@ -8,6 +8,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/boundary.h"
 #include "mesh/topology.h"
+#include "mesh/manifold.h"
 #include "vector_utils.h"
 
 namespace mesh {
@@ -47,6 +48,52 @@ void find_boundary_vertices(const std::span<const glm::uvec3> triangles, std::un
 }
 
 std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uvec3> triangles) {
+    DEBUG_ASSERT(is_manifold(triangles));
+    std::unordered_set<glm::uvec2> boundary_edges = find_boundary_edges(triangles);
+    std::unordered_map<uint32_t, std::vector<uint32_t>> adjacencies;
+    adjacencies.reserve((boundary_edges.size() * 3) / 2);
+    for (const glm::uvec2 &edge : boundary_edges) {
+        adjacencies[edge[0]].push_back(edge[1]);
+    }
+
+    auto remove_edge = [&](const auto edge) {
+        boundary_edges.erase(edge);
+        remove_first(adjacencies[edge[0]], edge[1]);
+    };
+
+    std::vector<std::vector<uint32_t>> boundaries;
+    while (!boundary_edges.empty()) {
+        std::vector<uint32_t> boundary;
+        
+        const glm::uvec2 starting_edge = *boundary_edges.begin();
+        remove_edge(starting_edge);
+
+        const uint32_t starting_vertex_id = starting_edge[0];
+
+        uint32_t current_vertex_id = starting_edge[1];
+        boundary.push_back(current_vertex_id);
+        while (true) {
+            const auto& neighbours = adjacencies[current_vertex_id];
+            DEBUG_ASSERT(neighbours.size() >= 1);
+            
+            const uint32_t next_vertex_id = neighbours[0];
+            const glm::uvec2 edge(current_vertex_id, next_vertex_id);
+            remove_edge(edge);
+
+            boundary.push_back(next_vertex_id);
+            if (next_vertex_id == starting_vertex_id) {
+                break;
+            }
+            current_vertex_id = next_vertex_id;
+        }
+
+        boundaries.push_back(std::move(boundary));
+    }
+
+    return boundaries;
+}
+
+std::vector<std::vector<uint32_t>> find_boundaries_non_manifold(const std::span<const glm::uvec3> triangles) {
     std::unordered_set<glm::uvec2> boundary_edges = find_boundary_edges(triangles);
     std::unordered_map<uint32_t, std::vector<uint32_t>> adjacencies;
     adjacencies.reserve((boundary_edges.size() * 3) / 2);
@@ -67,40 +114,35 @@ std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uv
         std::vector<uint32_t> boundary;
         const uint32_t starting_vertex_id = starting_edge[0];
 
-        glm::uvec2 current_edge = starting_edge;
         uint32_t current_vertex_id = starting_edge[1];
         boundary.push_back(current_vertex_id);
         while (true) {
-            const auto neighbours = adjacencies[current_vertex_id];
+            const auto &neighbours = adjacencies[current_vertex_id];
             if (neighbours.empty()) {
-                // non-manifold
                 break;
             }
             const uint32_t next_vertex_id = neighbours[0];
-            const glm::uvec2 next_edge(current_vertex_id, next_vertex_id);
-            remove_edge(next_edge);
+            const glm::uvec2 edge(current_vertex_id, next_vertex_id);
+            remove_edge(edge);
 
             boundary.push_back(next_vertex_id);
             if (next_vertex_id == starting_vertex_id) {
                 break;
             }
             current_vertex_id = next_vertex_id;
-            current_edge = next_edge;
         }
 
         if (boundary.empty()) {
             continue;
         }
 
-        std::reverse(boundary.begin(), boundary.end());
-
         // split boundary into individual loops
-        std::unordered_map<uint32_t, size_t> visited;
-        for (size_t i = 0; i < boundary.size(); i++) {
+        std::unordered_map<uint32_t, uint32_t> visited;
+        for (uint32_t i = 0; i < boundary.size(); i++) {
             const uint32_t vertex = boundary[i];
             auto it = visited.find(vertex);
             if (it != visited.end()) {
-                const size_t first_occurance = it->second;
+                const uint32_t first_occurance = it->second;
                 // finished current loop
                 DEBUG_ASSERT(first_occurance < i);
                 auto loop_start = boundary.begin() + first_occurance;
@@ -123,5 +165,4 @@ std::vector<std::vector<uint32_t>> find_boundaries(const std::span<const glm::uv
 
     return boundaries;
 }
-
 }

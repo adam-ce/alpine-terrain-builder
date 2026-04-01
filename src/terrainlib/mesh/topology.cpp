@@ -64,9 +64,9 @@ std::unordered_map<glm::uvec2, IndexContainer>
 create_edge_to_triangle_mapping_impl(const std::span<const glm::uvec3> triangles) {
     std::unordered_map<glm::uvec2, IndexContainer> edges_to_triangles;
 
-    for_each_edge(triangles, [&](const glm::uvec2 &edge, const size_t triangle_index) {
-        auto result = edges_to_triangles.try_emplace(edge, IndexContainer{}).first;
-        result->second.push_back(triangle_index); }, true);
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge, const uint32_t triangle_index) {
+        edges_to_triangles[edge].push_back(triangle_index);
+    }, true);
 
 #ifndef NDEBUG
     // Validate the mapping

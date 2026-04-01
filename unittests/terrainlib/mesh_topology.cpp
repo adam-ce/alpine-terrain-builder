@@ -123,7 +123,8 @@ TEST_CASE("mesh::get_edges last overload") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3)};
 
-        const auto actual = sorted_edges_from_set(mesh::get_edges(triangles, false));
+        auto actual = mesh::get_halfedges(triangles);
+        sort_edges(actual);
 
         const std::vector<glm::uvec2> expected = {
             glm::uvec2(0, 1),
@@ -141,7 +142,7 @@ TEST_CASE("mesh::get_edges last overload") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3)};
 
-        const auto actual = sorted_edges_from_set(mesh::get_edges(triangles, true));
+        const auto actual = sorted_edges_from_set(mesh::get_edges(triangles));
 
         const std::vector<glm::uvec2> expected = {
             glm::uvec2(0, 1),
@@ -154,14 +155,14 @@ TEST_CASE("mesh::get_edges last overload") {
     }
 }
 
-TEST_CASE("mesh::for_each_edge last overload") {
+TEST_CASE("mesh::for_each_halfedge") {
     SECTION("iterates all directed edges in triangle order") {
         const std::vector<glm::uvec3> triangles = {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3)};
 
         std::vector<glm::uvec2> actual;
-        mesh::for_each_edge(triangles, [&](const glm::uvec2 &edge) { actual.push_back(edge); }, false);
+        mesh::for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { actual.push_back(edge); }, false);
 
         const std::vector<glm::uvec2> expected = {
             glm::uvec2(0, 1),
@@ -179,7 +180,7 @@ TEST_CASE("mesh::for_each_edge last overload") {
             glm::uvec3(2, 0, 1)};
 
         std::vector<glm::uvec2> actual;
-        mesh::for_each_edge(triangles, [&](const glm::uvec2 &edge) { actual.push_back(edge); }, true);
+        mesh::for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { actual.push_back(edge); }, true);
         sort_edges(actual);
 
         const std::vector<glm::uvec2> expected = {
@@ -369,14 +370,13 @@ TEST_CASE("mesh::create_vertex_to_triangle_mapping") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3)};
 
-        const auto actual = mesh::create_vertex_to_triangle_mapping(triangles, 5);
+        const auto actual = mesh::create_vertex_to_triangle_mapping(triangles);
 
-        REQUIRE(actual.size() == 5);
+        REQUIRE(actual.size() == 4);
         CHECK(actual[0] == std::vector<uint32_t>{0});
         CHECK(actual[1] == std::vector<uint32_t>{0, 1});
         CHECK(actual[2] == std::vector<uint32_t>{0, 1});
         CHECK(actual[3] == std::vector<uint32_t>{1});
-        CHECK(actual[4].empty());
     }
 }
 

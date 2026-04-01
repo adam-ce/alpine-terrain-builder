@@ -49,34 +49,78 @@ constexpr void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
 }
 
 template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> get_edges(const mesh::Simple_<n_dims, T> &mesh, const bool normalize) {
-    return get_edges(mesh.triangles, normalize);
+std::unordered_set<glm::uvec2> get_edges(const mesh::Simple_<n_dims, T> &mesh) {
+    return get_edges2(mesh.triangles);
 }
 template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> get_edges(const mesh::View_<n_dims, T> &mesh, const bool normalize) {
-    return get_edges(mesh.triangles, normalize);
+std::unordered_set<glm::uvec2> get_edges(const mesh::View_<n_dims, T> &mesh) {
+    return get_edges2(mesh.triangles);
 }
 template <TriangleContainer Triangles>
-std::unordered_set<glm::uvec2> get_edges(const Triangles &triangles, const bool normalize) {
+std::unordered_set<glm::uvec2> get_edges(const Triangles &triangles) {
     std::unordered_set<glm::uvec2> edges;
-    for_each_edge(triangles, [&](const glm::uvec2 &edge) { 
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { 
         edges.insert(edge); 
-    }, normalize);
+    }, true);
     return edges;
 }
 
+template <glm::length_t n_dims, typename T>
+std::vector<glm::uvec2> get_halfedges(const mesh::Simple_<n_dims, T> &mesh) {
+    return get_halfedges(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+std::vector<glm::uvec2> get_halfedges(const mesh::View_<n_dims, T> &mesh) {
+    return get_halfedges(mesh.triangles);
+}
+template <TriangleContainer Triangles>
+std::vector<glm::uvec2> get_halfedges(const Triangles &triangles) {
+    std::vector<glm::uvec2> edges;
+    edges.reserve(3 * triangles.size());
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { edges.push_back(edge); }, false);
+    return edges;
+}
+
+template <glm::length_t n_dims, typename T>
+uint32_t compute_edge_count(const mesh::Simple_<n_dims, T> &mesh) {
+    return compute_edge_count(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+uint32_t compute_edge_count(const mesh::View_<n_dims, T> &mesh) {
+    return compute_edge_count(mesh.triangles);
+}
+template <TriangleContainer Triangles>
+uint32_t compute_edge_count(const Triangles &triangles) {
+    return get_edges(triangles).size();
+}
+
+template <glm::length_t n_dims, typename T>
+uint32_t compute_halfedge_count(const mesh::Simple_<n_dims, T> &mesh) {
+    return compute_halfedge_count(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+uint32_t compute_halfedge_count(const mesh::View_<n_dims, T> &mesh) {
+    return compute_halfedge_count(mesh.triangles);
+}
+template <TriangleContainer Triangles>
+uint32_t compute_halfedge_count(const Triangles &triangles) {
+    uint32_t count = 0;
+    for_each_halfedge(triangles, [&](const glm::uvec2 &) { count++; });
+    return count;
+}
+
 template <glm::length_t n_dims, typename T, typename F>
-void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F &&func, const bool normalize) {
-    for_each_edge(mesh.triangles, std::forward<F>(func), normalize);
+void for_each_halfedge(const mesh::Simple_<n_dims, T> &mesh, F &&func, const bool normalize) {
+    for_each_halfedge(mesh.triangles, std::forward<F>(func), normalize);
 }
 template <glm::length_t n_dims, typename T, typename F>
-void for_each_edge(const mesh::View_<n_dims, T> &mesh, F &&func, const bool normalize) {
-    for_each_edge(mesh.triangles, std::forward<F>(func), normalize);
+void for_each_halfedge(const mesh::View_<n_dims, T> &mesh, F &&func, const bool normalize) {
+    for_each_halfedge(mesh.triangles, std::forward<F>(func), normalize);
 }
 template <TriangleContainer Triangles, typename F>
-void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
+void for_each_halfedge(const Triangles &triangles, F &&func, const bool normalize) {
     if constexpr (std::invocable<F&, glm::uvec2>) {
-        for_each_edge(
+        for_each_halfedge(
             triangles,
             [&](const glm::uvec2 edge, const uint32_t) {
                 func(edge);
@@ -98,6 +142,23 @@ void for_each_edge(const Triangles &triangles, F &&func, const bool normalize) {
                 func(glm::uvec2(triangle[2], triangle[0]), i);
             }
         }
+    }
+}
+
+template <glm::length_t n_dims, typename T, typename F>
+void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F &&func) {
+    for_each_edge(mesh.triangles, std::forward<F>(func));
+}
+template <glm::length_t n_dims, typename T, typename F>
+void for_each_edge(const mesh::View_<n_dims, T> &mesh, F &&func) {
+    for_each_edge(mesh.triangles, std::forward<F>(func));
+}
+template <TriangleContainer Triangles, typename F>
+void for_each_edge(const Triangles &triangles, F &&func) {
+    static_assert(std::invocable<F &, glm::uvec2>);
+    const auto edges = get_edges(triangles);
+    for (const auto &edge : edges) {
+        func(edge);
     }
 }
 

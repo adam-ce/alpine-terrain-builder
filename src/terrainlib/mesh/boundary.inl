@@ -66,7 +66,7 @@ inline void build_boundary_vertex_mask(const std::span<const glm::uvec3> triangl
 namespace detail {
 inline std::unordered_map<glm::uvec2, uint32_t> find_boundary_edges_and_triangles(const std::span<const glm::uvec3> triangles) {
     std::unordered_map<glm::uvec2, uint32_t> edge_to_triangle;
-    for_each_edge(triangles, [&](const glm::uvec2 &edge, const uint32_t triangle_index) {
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge, const uint32_t triangle_index) {
         auto it = edge_to_triangle.find(glm::uvec2(edge.y, edge.x));
         if (it != edge_to_triangle.end()) {
             edge_to_triangle.erase(it);

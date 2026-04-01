@@ -14,7 +14,7 @@ namespace mesh {
 
 void find_boundary_edges(const std::span<const glm::uvec3> triangles, std::unordered_set<glm::uvec2>& boundary) {
     boundary.clear();
-    for_each_edge(triangles, [&](const glm::uvec2 &edge) {
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) {
         auto it = boundary.find(glm::uvec2(edge.y, edge.x));
         if (it != boundary.end()) {
             // Edge already there -> shared egde -> remove it

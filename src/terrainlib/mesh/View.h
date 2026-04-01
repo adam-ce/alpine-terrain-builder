@@ -65,13 +65,6 @@ public:
     UvSpan uvs;
     std::optional<Texture> texture;
 
-    void clear() requires(IsMut) {
-        triangles = {};
-        positions = {};
-        uvs = {};
-        texture = std::nullopt;
-    }
-
     size_t vertex_count() const {
         return this->positions.size();
     }

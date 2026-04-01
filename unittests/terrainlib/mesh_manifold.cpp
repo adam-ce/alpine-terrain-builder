@@ -111,21 +111,18 @@ TEST_CASE("mesh::is_edge_manifold") {
         const SimpleMesh mesh = make_quad();
 
         CHECK(mesh::is_edge_manifold(mesh));
-        CHECK(mesh::is_edge_manifold(mesh.triangles));
     }
 
     SECTION("three triangles sharing same edge is not edge manifold") {
         const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
         CHECK_FALSE(mesh::is_edge_manifold(mesh));
-        CHECK_FALSE(mesh::is_edge_manifold(mesh.triangles));
     }
 
     SECTION("two fans touching at vertex is edge manifold") {
         const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK(mesh::is_edge_manifold(mesh));
-        CHECK(mesh::is_edge_manifold(mesh.triangles));
     }
 }
 
@@ -134,24 +131,18 @@ TEST_CASE("mesh::is_vertex_manifold") {
         const SimpleMesh mesh = make_quad();
 
         CHECK(mesh::is_vertex_manifold(mesh));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("three triangles sharing same edge is vertex manifold") {
         const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
         CHECK(mesh::is_vertex_manifold(mesh));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("two fans touching at vertex is not vertex manifold") {
         const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK_FALSE(mesh::is_vertex_manifold(mesh));
-        CHECK_FALSE(mesh::is_vertex_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_vertex_manifold(mesh.triangles, mesh.vertex_count()));
     }
 }
 
@@ -160,32 +151,24 @@ TEST_CASE("mesh::is_manifold") {
         const SimpleMesh mesh = make_quad();
 
         CHECK(mesh::is_manifold(mesh));
-        CHECK(mesh::is_manifold(mesh.triangles));
-        CHECK(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("three triangles sharing same edge is not manifold") {
         const SimpleMesh mesh = make_three_triangles_sharing_same_edge();
 
         CHECK_FALSE(mesh::is_manifold(mesh));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("two fans touching at vertex is not manifold") {
         const SimpleMesh mesh = make_two_fans_touching_at_single_vertex();
 
         CHECK_FALSE(mesh::is_manifold(mesh));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles));
-        CHECK_FALSE(mesh::is_manifold(mesh.triangles, mesh.vertex_count()));
     }
 
     SECTION("empty mesh is manifold") {
         const SimpleMesh mesh;
 
         CHECK(mesh::is_manifold(mesh));
-        CHECK(mesh::is_edge_manifold(mesh.triangles));
-        CHECK(mesh::is_vertex_manifold(mesh.triangles, 0));
     }
 }
 
@@ -382,10 +365,10 @@ TEST_CASE("mesh::make_manifold") {
             glm::uvec3(0, 1, 4),
             glm::uvec3(0, 5, 6)};
 
-        REQUIRE_FALSE(mesh::is_manifold(triangles, positions.size()));
+        REQUIRE_FALSE(mesh::is_manifold(triangles));
 
         mesh::make_manifold(triangles, positions);
 
-        CHECK(mesh::is_manifold(triangles, positions.size()));
+        CHECK(mesh::is_manifold(triangles));
     }
 }

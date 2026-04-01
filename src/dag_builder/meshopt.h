@@ -7,7 +7,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <meshoptimizer.h>
 
-#include "utils.h"
+#include "glm_utils.h"
 
 namespace meshopt {
 

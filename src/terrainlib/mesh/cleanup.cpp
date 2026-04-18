@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/cleanup.h"
+#include "mesh/normalize.h"
 #include "mesh/topology.h"
 
 namespace mesh {

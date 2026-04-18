@@ -23,6 +23,7 @@
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
 #include "mesh/topology.h"
+#include "mesh/normalize.h"
 #include "mesh/validate.h"
 #include "FixedVector.h"
 #include "vector_utils.h"

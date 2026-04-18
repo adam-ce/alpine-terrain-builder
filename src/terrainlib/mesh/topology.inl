@@ -1,21 +1,16 @@
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <unordered_map>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <libassert/assert.hpp>
 
 #include "FixedVector.h"
 #include "HybridVector.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
-#include "mesh/TriangleContainer.h"
 
 namespace mesh {
 
@@ -26,139 +21,12 @@ inline constexpr bool is_degenerate(const glm::uvec3 &triangle) {
 }
 
 template <glm::length_t n_dims, typename T>
-void sort_and_normalize_triangles(mesh::Simple_<n_dims, T> &mesh) {
-    sort_and_normalize_triangles(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-void sort_triangles(mesh::Simple_<n_dims, T> &mesh) {
-    sort_triangles(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-void normalize_triangles(mesh::Simple_<n_dims, T> &mesh) {
-    normalize_triangles(mesh.triangles);
-}
-
-template <glm::length_t n_dims, typename T>
 constexpr void flip_orientation(mesh::Simple_<n_dims, T> &mesh) {
     flip_triangle_orientations(mesh.triangles);
 }
 constexpr void flip_triangle_orientations(std::span<glm::uvec3> triangles) {
     for (auto &triangle : triangles) {
         flip_triangle_orientation(triangle);
-    }
-}
-
-template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> get_edges(const mesh::Simple_<n_dims, T> &mesh) {
-    return get_edges2(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-std::unordered_set<glm::uvec2> get_edges(const mesh::View_<n_dims, T> &mesh) {
-    return get_edges2(mesh.triangles);
-}
-template <TriangleContainer Triangles>
-std::unordered_set<glm::uvec2> get_edges(const Triangles &triangles) {
-    std::unordered_set<glm::uvec2> edges;
-    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { 
-        edges.insert(edge); 
-    }, true);
-    return edges;
-}
-
-template <glm::length_t n_dims, typename T>
-std::vector<glm::uvec2> get_halfedges(const mesh::Simple_<n_dims, T> &mesh) {
-    return get_halfedges(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-std::vector<glm::uvec2> get_halfedges(const mesh::View_<n_dims, T> &mesh) {
-    return get_halfedges(mesh.triangles);
-}
-template <TriangleContainer Triangles>
-std::vector<glm::uvec2> get_halfedges(const Triangles &triangles) {
-    std::vector<glm::uvec2> edges;
-    edges.reserve(3 * triangles.size());
-    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) { edges.push_back(edge); }, false);
-    return edges;
-}
-
-template <glm::length_t n_dims, typename T>
-uint32_t compute_edge_count(const mesh::Simple_<n_dims, T> &mesh) {
-    return compute_edge_count(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-uint32_t compute_edge_count(const mesh::View_<n_dims, T> &mesh) {
-    return compute_edge_count(mesh.triangles);
-}
-template <TriangleContainer Triangles>
-uint32_t compute_edge_count(const Triangles &triangles) {
-    return get_edges(triangles).size();
-}
-
-template <glm::length_t n_dims, typename T>
-uint32_t compute_halfedge_count(const mesh::Simple_<n_dims, T> &mesh) {
-    return compute_halfedge_count(mesh.triangles);
-}
-template <glm::length_t n_dims, typename T>
-uint32_t compute_halfedge_count(const mesh::View_<n_dims, T> &mesh) {
-    return compute_halfedge_count(mesh.triangles);
-}
-template <TriangleContainer Triangles>
-uint32_t compute_halfedge_count(const Triangles &triangles) {
-    uint32_t count = 0;
-    for_each_halfedge(triangles, [&](const glm::uvec2 &) { count++; });
-    return count;
-}
-
-template <glm::length_t n_dims, typename T, typename F>
-void for_each_halfedge(const mesh::Simple_<n_dims, T> &mesh, F &&func, const bool normalize) {
-    for_each_halfedge(mesh.triangles, std::forward<F>(func), normalize);
-}
-template <glm::length_t n_dims, typename T, typename F>
-void for_each_halfedge(const mesh::View_<n_dims, T> &mesh, F &&func, const bool normalize) {
-    for_each_halfedge(mesh.triangles, std::forward<F>(func), normalize);
-}
-template <TriangleContainer Triangles, typename F>
-void for_each_halfedge(const Triangles &triangles, F &&func, const bool normalize) {
-    if constexpr (std::invocable<F&, glm::uvec2>) {
-        for_each_halfedge(
-            triangles,
-            [&](const glm::uvec2 edge, const uint32_t) {
-                func(edge);
-            },
-            normalize);
-    } else {
-        static_assert(std::invocable<F&, glm::uvec2, uint32_t>);
-        for (uint32_t i = 0; i < triangles.size(); i++) {
-            glm::uvec3 triangle = triangles[i];
-            if (normalize) {
-                normalize_triangle_inplace(triangle, false);
-            }
-
-            func(glm::uvec2(triangle[0], triangle[1]), i);
-            func(glm::uvec2(triangle[1], triangle[2]), i);
-            if (normalize) {
-                func(glm::uvec2(triangle[0], triangle[2]), i);
-            } else {
-                func(glm::uvec2(triangle[2], triangle[0]), i);
-            }
-        }
-    }
-}
-
-template <glm::length_t n_dims, typename T, typename F>
-void for_each_edge(const mesh::Simple_<n_dims, T> &mesh, F &&func) {
-    for_each_edge(mesh.triangles, std::forward<F>(func));
-}
-template <glm::length_t n_dims, typename T, typename F>
-void for_each_edge(const mesh::View_<n_dims, T> &mesh, F &&func) {
-    for_each_edge(mesh.triangles, std::forward<F>(func));
-}
-template <TriangleContainer Triangles, typename F>
-void for_each_edge(const Triangles &triangles, F &&func) {
-    static_assert(std::invocable<F &, glm::uvec2>);
-    const auto edges = get_edges(triangles);
-    for (const auto &edge : edges) {
-        func(edge);
     }
 }
 
@@ -189,48 +57,21 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
 
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::Simple_<n_dims, T> &mesh) {
-    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
+    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count() - 1);
 }
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::View_<n_dims, T> &mesh) {
-    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
+    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count() - 1);
 }
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::Simple_<n_dims, T> &mesh) {
-    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
+    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count() - 1);
 }
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::View_<n_dims, T> &mesh) {
-    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
+    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count() - 1);
 }
-
-// micro utils we want to be inlined
-namespace detail {
-template <size_t N>
-inline void normalize_face_index_rotation_impl(std::span<uint32_t, N> face, bool keep_orientation) {
-    if (keep_orientation) {
-        if (face.empty()) {
-            return;
-        }
-
-        // find index of minimum element
-        size_t min_index = 0;
-        for (size_t k = 1; k < face.size(); k++) {
-            if (face[k] < face[min_index]) {
-                min_index = k;
-            }
-        }
-
-        // rotate so minimum is first
-        if (min_index != 0) {
-            std::rotate(face.begin(), face.begin() + min_index, face.end());
-        }
-    } else {
-        std::sort(face.begin(), face.end());
-    }
-}
-} // namespace detail
 
 inline constexpr glm::uvec2 other_vertices_in_triangle(const glm::uvec3 &triangle, const uint32_t vertex) {
     if (triangle.x == vertex) {
@@ -269,83 +110,35 @@ inline constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint
     }
 }
 
-inline void normalize_face_index_rotation(const std::span<uint32_t> face, bool keep_orientation) {
-    detail::normalize_face_index_rotation_impl<std::dynamic_extent>(face, keep_orientation);
-}
-
-inline constexpr void normalize_edge_inplace(glm::uvec2 &edge) {
-    if (edge.x > edge.y) {
-        std::swap(edge.x, edge.y);
-    }
-}
-inline constexpr glm::uvec2 normalize_edge(glm::uvec2 edge) {
-    normalize_edge_inplace(edge);
-    return edge;
-}
-
-inline void normalize_triangles_inplace(std::span<glm::uvec3> triangles, const bool keep_orientation) {
-    for (glm::uvec3& triangle : triangles) {
-        normalize_triangle_inplace(triangle, keep_orientation);
-    }
-}
-inline void normalize_triangles_inplace(std::vector<glm::uvec3> &triangles, const bool keep_orientation) {
-    normalize_triangles_inplace(std::span(triangles), keep_orientation);
-}
-inline void normalize_triangle_inplace(glm::uvec3 &triangle, const bool keep_orientation) {
-    std::span<uint32_t, 3> data(glm::value_ptr(triangle), triangle.length());
-    detail::normalize_face_index_rotation_impl<3>(data, keep_orientation);
-}
-inline glm::uvec3 normalize_triangle(glm::uvec3 triangle, const bool keep_orientation) {
-    normalize_triangle_inplace(triangle, keep_orientation);
-    return triangle;
-}
-
-inline void normalize_quad_inplace(glm::uvec4 &quad, const bool keep_orientation) {
-    std::span<uint32_t, 4> data(glm::value_ptr(quad), quad.length());
-    detail::normalize_face_index_rotation_impl<4>(data, keep_orientation);
-}
-inline glm::uvec4 normalize_quad(glm::uvec4 quad, const bool keep_orientation) {
-    normalize_quad_inplace(quad, keep_orientation);
-    return quad;
-}
-
-inline constexpr bool compare_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2) {
-    // First, compare by x
-    if (t1.x != t2.x) {
-        return t1.x < t2.x;
-    }
-
-    // If x is equal, compare by y
-    if (t1.y != t2.y) {
-        return t1.y < t2.y;
-    }
-
-    // If x and y are equal, compare by z
-    return t1.z < t2.z;
-}
-
-inline bool compare_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
-    return compare_triangles(normalize_triangle(t1), normalize_triangle(t2));
-}
-
-inline bool compare_equality_triangles(const glm::uvec3 &t1, const glm::uvec3 &t2) {
-    return normalize_triangle(t1) == normalize_triangle(t2);
-}
-inline bool compare_equality_triangles_ignore_orientation(const glm::uvec3 &t1, const glm::uvec3 &t2) {
-    return std::is_permutation(&t1.x, &t1.z + 1, &t2.x);
-}
-
 inline constexpr void flip_triangle_orientation(glm::uvec3 &triangle) {
     std::swap(triangle.z, triangle.y);
 }
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh) {
-    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count() - 1);
 }
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::View_<n_dims, T> &mesh) {
-    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count() - 1);
+}
+
+template <glm::length_t n_dims, typename T>
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::Simple_<n_dims, T> &mesh) {
+    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count() - 1);
+}
+template <glm::length_t n_dims, typename T>
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::View_<n_dims, T> &mesh) {
+    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count() - 1);
+}
+
+template <glm::length_t n_dims, typename T>
+bool is_orientable(const mesh::Simple_<n_dims, T> &mesh) {
+    return is_orientable(mesh.triangles);
+}
+template <glm::length_t n_dims, typename T>
+bool is_orientable(const mesh::View_<n_dims, T> &mesh) {
+    return is_orientable(mesh.triangles);
 }
 
 }

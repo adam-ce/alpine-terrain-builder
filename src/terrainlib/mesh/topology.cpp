@@ -1,62 +1,22 @@
-#include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
-#include <glm/gtx/component_wise.hpp>
+#include <glm/gtx/hash.hpp>
+#include <libassert/assert.hpp>
 
+#include "FixedVector.h"
+#include "HybridVector.h"
+#include "mesh/edges.h"
+#include "mesh/manifold.h"
 #include "mesh/topology.h"
-#include "glm_utils.h"
+#include "mesh/vertex_index_range.h"
+#include "vector_utils.h"
 
 namespace mesh {
-
-void sort_and_normalize_triangles(std::span<glm::uvec3> triangles) {
-    normalize_triangles_inplace(triangles);
-    sort_triangles(triangles);
-}
-void sort_triangles(std::span<glm::uvec3> triangles) {
-    std::sort(triangles.begin(), triangles.end(), compare_triangles);
-}
-
-uint32_t find_max_vertex_index(const std::span<const glm::uvec3> triangles) {
-    if (triangles.empty()) {
-        return 0;
-    }
-
-    uint32_t max_vertex = 0;
-    for (const glm::uvec3 &triangle : triangles) {
-        max_vertex = glm::compMax(glm::uvec4(triangle, max_vertex));
-    }
-    return max_vertex;
-}
-
-uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
-    const uint32_t max_vertex = find_max_vertex_index(triangles);
-    if (max_vertex <= triangles.size() * 3) {
-        // Dense vertex range
-        std::vector<bool> visited(max_vertex + 1, false);
-        for (const glm::uvec3 &triangle : triangles) {
-            for (const uint32_t vertex : iterate(triangle)) {
-                visited[vertex] = true;
-            }
-        }
-        return std::count(visited.begin(), visited.end(), true);
-    } else {
-        // Sparse vertex range
-        std::unordered_set<uint32_t> visited;
-        for (const glm::uvec3 &triangle : triangles) {
-            for (const uint32_t vertex : iterate(triangle)) {
-                visited.insert(vertex);
-            }
-        }
-        return visited.size();
-    }
-}
 
 namespace {
 template <typename IndexContainer>
@@ -103,10 +63,13 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
     return create_edge_to_triangle_mapping_impl<std::vector<uint32_t>>(triangles);
 }
 
-std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
-    
-    std::vector<std::vector<uint32_t>> vertex_to_triangles(vertex_count);
+std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles) {
+    return create_vertex_to_triangle_mapping(triangles, find_max_vertex_index(triangles));
+}
+std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
+    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
+
+    std::vector<std::vector<uint32_t>> vertex_to_triangles(max_vertex_index + 1);
 
     for (uint32_t triangle_index = 0; triangle_index < triangles.size(); triangle_index++) {
         const glm::uvec3 &triangle = triangles[triangle_index];
@@ -119,10 +82,13 @@ std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::
     return vertex_to_triangles;
 }
 
-std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles) {
+    return count_vertex_adjacent_triangles(triangles, find_max_vertex_index(triangles));
+}
+std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
+    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
 
-    std::vector<uint32_t> adjacent_triangle_count(vertex_count, 0);
+    std::vector<uint32_t> adjacent_triangle_count(max_vertex_index + 1, 0);
 
     for (const glm::uvec3 &triangle : triangles) {
         for (uint8_t k = 0; k < 3; k++) {
@@ -133,8 +99,12 @@ std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm:
     return adjacent_triangle_count;
 }
 
-std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles) {
+    return find_isolated_vertices(triangles, find_max_vertex_index(triangles));
+}
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
+    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
+    const uint32_t vertex_count = max_vertex_index + 1;
 
     std::vector<bool> connected;
     connected.resize(vertex_count, false);
@@ -153,4 +123,49 @@ std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> t
 
     return isolated;
 }
+
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles) {
+    return build_vertex_adjacency(triangles, find_max_vertex_index(triangles));
+}
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
+    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
+    const uint32_t vertex_count = max_vertex_index + 1;
+    std::vector<std::vector<uint32_t>> adjacency(vertex_count);
+
+    auto add_edge = [&](const uint32_t a, const uint32_t b) {
+        adjacency[a].push_back(b);
+        adjacency[b].push_back(a);
+    };
+
+    for (const glm::uvec3 &triangle : triangles) {
+        add_edge(triangle.x, triangle.y);
+        add_edge(triangle.y, triangle.z);
+        add_edge(triangle.z, triangle.x);
+    }
+
+    for (auto &neighbours : adjacency) {
+        dedup_by_sort(neighbours);
+    }
+
+    return adjacency;
+}
+
+bool is_orientable(const std::span<const glm::uvec3> triangles) {
+    if (!is_edge_manifold(triangles)) {
+        return false;
+    }
+
+    std::unordered_set<glm::uvec2> observed;
+    bool duplicate_found = false;
+    for_each_halfedge(triangles, [&](const glm::uvec2 &edge) {
+        const auto [_, inserted] = observed.emplace(edge);
+        if (!inserted) {
+            duplicate_found = true;
+            return false;
+        }
+        return true;
+    });
+    return !duplicate_found;
+}
+
 }

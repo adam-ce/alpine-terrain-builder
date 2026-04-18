@@ -4,7 +4,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology.h"
+#include "mesh/edges.h"
 
 namespace mesh {
     

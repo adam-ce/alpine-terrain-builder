@@ -12,8 +12,10 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology.h"
 #include "mesh/geometry.h"
+#include "mesh/normalize.h"
+#include "mesh/topology.h"
+#include "mesh/triangle_compare.h"
 #include "vector_utils.h"
 #include "HybridVector.h"
 

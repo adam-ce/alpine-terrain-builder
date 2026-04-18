@@ -7,7 +7,7 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/boundary.h"
-#include "mesh/topology.h"
+#include "mesh/edges.h"
 #include "mesh/manifold.h"
 #include "vector_utils.h"
 

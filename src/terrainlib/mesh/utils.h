@@ -8,3 +8,7 @@
 #include "mesh/manifold.h"
 #include "mesh/reindex.h"
 #include "mesh/topology.h"
+#include "mesh/normalize.h"
+#include "mesh/triangle_compare.h"
+#include "mesh/edges.h"
+#include "mesh/vertex_index_range.h"

@@ -14,7 +14,7 @@
 #include "mesh/VertexMap.h"
 #include "mesh/View.h"
 #include "mesh/reindex.h"
-#include "mesh/topology.h"
+#include "mesh/vertex_index_range.h"
 
 namespace mesh {
 

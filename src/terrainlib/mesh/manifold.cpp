@@ -6,10 +6,11 @@
 
 #include <glm/glm.hpp>
 
-#include "mesh/SimpleMesh.h"
-#include "mesh/topology.h"
 #include "UnionFind.h"
+#include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"
+#include "mesh/topology.h"
+#include "mesh/vertex_index_range.h"
 
 namespace mesh {
     
@@ -51,8 +52,14 @@ bool is_vertex_manifold(const std::span<const glm::uvec3> triangles) {
     return is_vertex_manifold(triangles, vertex_count);
 }
 bool is_vertex_manifold(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
-    const auto vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, vertex_count);
+    if (triangles.empty()) {
+        return true;
+    }
+    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count == find_max_vertex_index(triangles) + 1);
+
+    const uint32_t max_vertex_index = vertex_count - 1;
+    const auto vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, max_vertex_index);
 
     std::unordered_map<uint32_t, std::vector<uint32_t>> edge_groups;
     UnionFind_<true, uint32_t, uint32_t> union_find;

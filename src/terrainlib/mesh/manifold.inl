@@ -75,15 +75,6 @@ void duplicate_non_manifold_edges(
                 glm::uvec2 new_edge(duplicate_vertex_index, edge[1]);
                 triangle[edge_indices[0]] = duplicate_vertex_index;
                 triangles_per_edge[normalize_edge(new_edge)]++;
-                /*
-                glm::uvec2 new_edge;
-                for (uint8_t i = 0; i < 2; i++) {
-                    const uint32_t vertex_index = edge[i];
-                    const uint32_t duplicate_vertex_index = new_edge[i] = duplicate_vertex(vertex_index);
-                    triangle[edge_indices[i]] = duplicate_vertex_index;
-                }
-                triangles_per_edge[normalize_edge(new_edge)]++;
-                */
             }
         }
     }

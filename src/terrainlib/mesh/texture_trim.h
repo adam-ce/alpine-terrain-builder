@@ -9,18 +9,6 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 
-#include <cstdint>
-#include <span>
-#include <vector>
-
-#include <glm/glm.hpp>
-#include <libassert/assert.hpp>
-#include <opencv2/opencv.hpp>
-#include <radix/geometry.h>
-
-#include "log.h"
-#include "mesh/texture_trim.h"
-
 struct TrimResult {
     cv::Mat texture;
     std::vector<glm::dvec2> uvs;

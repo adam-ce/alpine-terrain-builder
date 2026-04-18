@@ -12,6 +12,26 @@
 
 #include "glm_utils.h"
 
+namespace detail {
+struct ImageKey {
+    const uint8_t *data = nullptr;
+    int32_t rows = 0;
+    int32_t cols = 0;
+    size_t step = 0;
+    int32_t type = 0;
+
+    ImageKey() = default;
+    ImageKey(const cv::Mat &mat) {
+        this->data = mat.data;
+        this->rows = mat.rows;
+        this->cols = mat.cols;
+        this->step = mat.step;
+        this->type = mat.type();
+    }
+
+    bool operator==(const ImageKey &other) const = default;
+};
+}
 class TextureReprojector {
 public:
     // Construct with size and optional type
@@ -60,8 +80,9 @@ public:
         // Convert source image into floating point and cache
         // This assumes that this method is often called with the same texture sequentially and that
         // most of the texture is used.
-        if (!shallow_mat_equals(this->cached_source_image, source_image)) {
+        if (this->cached_source_image_key != detail::ImageKey(source_image)) {
             source_image.convertTo(this->cached_source_image, CV_32FC3);
+            this->cached_source_image_key = detail::ImageKey(source_image);
         }
 
         // Read source region from source image
@@ -185,6 +206,7 @@ public:
     }
 
 private:
+    detail::ImageKey cached_source_image_key;
     cv::Mat cached_source_image;
     cv::Mat target_image;
     cv::Mat weight_image;
@@ -201,9 +223,6 @@ private:
     static inline cv::Point2f glm_to_cv(const glm::dvec2 &vec) {
         return cv::Point2f(static_cast<float>(vec.x), static_cast<float>(vec.y));
     };
-    static inline bool shallow_mat_equals(const cv::Mat& a, const cv::Mat b) {
-        return a.data == b.data && a.size == b.size && a.type() == b.type();
-    }
 };
 
 inline void reproject_texture(

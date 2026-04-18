@@ -21,7 +21,7 @@ public:
     // Construct with an existing texture to draw onto
     TextureReprojector(cv::Mat texture)
         : target_image(std::move(texture)) {
-        this->weight_image = cv::Mat::ones(this->target_image.size(), CV_32FC1);
+        this->weight_image = cv::Mat::zeros(this->target_image.size(), CV_32FC1);
         this->target_type = this->target_image.type();
         this->target_image.convertTo(this->target_image, CV_32FC3);
         this->cached_source_image = cv::Mat();

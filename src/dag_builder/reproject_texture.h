@@ -31,7 +31,31 @@ struct ImageKey {
 
     bool operator==(const ImageKey &other) const = default;
 };
+
+template <typename Vec>
+inline void scale_triangle_inplace(Vec &v1, Vec &v2, Vec &v3,
+                                   const typename Vec::value_type factor) {
+    const Vec centroid = (v1 + v2 + v3) / static_cast<typename Vec::value_type>(3);
+    v1 = (v1 - centroid) * factor + centroid;
+    v2 = (v2 - centroid) * factor + centroid;
+    v3 = (v3 - centroid) * factor + centroid;
 }
+template <typename Vec>
+inline void scale_triangle_inplace(std::array<Vec, 3>& triangle, const typename Vec::value_type factor) {
+    scale_triangle_inplace(triangle[0], triangle[1], triangle[2], factor);
+}
+
+cv::Rect expand_rect(const cv::Rect &r, int padding) {
+    return cv::Rect(
+        r.x - padding,
+        r.y - padding,
+        r.width + 2 * padding,
+        r.height + 2 * padding);
+}
+}
+
+constexpr uint32_t PADDING_PIXELS = 3;
+
 class TextureReprojector {
 public:
     // Construct with size and optional type
@@ -49,13 +73,17 @@ public:
 
     // Warps a single triangle from the source image onto the internal target texture.
     void add_scaled_triangle(const cv::Mat &source_image,
-                      const std::array<cv::Point2f, 3> source_triangle,
-                      const std::array<cv::Point2f, 3> target_triangle) {
+                      std::array<cv::Point2f, 3> source_triangle,
+                      std::array<cv::Point2f, 3> target_triangle) {
         ASSERT(!this->target_image.empty());
 
         // Find bounding rectangle for each triangle
-        const cv::Rect source_rect = clamp_rect_to_mat_bounds(cv::boundingRect(source_triangle), source_image);
-        const cv::Rect target_rect = clamp_rect_to_mat_bounds(cv::boundingRect(target_triangle), target_image);
+        cv::Rect source_rect = cv::boundingRect(source_triangle);
+        cv::Rect target_rect = cv::boundingRect(target_triangle);
+        source_rect = detail::expand_rect(source_rect, PADDING_PIXELS);
+        target_rect = detail::expand_rect(target_rect, PADDING_PIXELS);
+        source_rect = clamp_rect_to_mat_bounds(source_rect, source_image);
+        target_rect = clamp_rect_to_mat_bounds(target_rect, target_image);
 
         if (source_rect.width <= 0 || source_rect.height <= 0 ||
             target_rect.width <= 0 || target_rect.height <= 0) {
@@ -97,7 +125,10 @@ public:
 
         // Get mask by filling triangle
         cv::Mat mask = cv::Mat::zeros(target_rect.height, target_rect.width, CV_32FC1);
-        cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1.0), 16, 0);
+        cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1.0), cv::LINE_AA, 0);
+
+        // grow mask a bit
+        cv::dilate(mask, mask, cv::Mat(), cv::Point(-1, -1), PADDING_PIXELS);
 
         // Prepare 3-channel mask for color accumulation
         cv::Mat mask_color;

@@ -25,7 +25,7 @@ struct PackingMetric {
 template <std::ranges::input_range Range>
 std::vector<PackingMetric> calculate_packing_metrics(Range &&meshes) {
     const std::vector<double> areas = transform_vector(meshes, [&](const auto &mesh) {
-        return compute_surface_area(mesh::View(mesh));
+        return mesh::compute_surface_area(mesh::View(mesh));
     });
 
     const double total_area = sum(areas);

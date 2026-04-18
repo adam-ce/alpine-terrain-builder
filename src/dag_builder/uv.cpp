@@ -16,6 +16,7 @@
 #include "mesh/convert.h"
 #include "mesh/validate.h"
 #include "uv.h"
+#include "mesh/compute_topology.h"
 
 namespace uv {
 
@@ -116,6 +117,8 @@ tl::expected<Map, UnwrapError> unwrap(
     Border border) {
     const mesh::View mesh(triangles, positions);
     mesh::validate_manifold(mesh);
+    DEBUG_ASSERT(mesh::compute_topology(mesh).is_disk(true));
+    
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     auto result = parameterize_mesh(cgal_mesh, algorithm, border);
     if (!result) {

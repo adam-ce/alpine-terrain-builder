@@ -15,6 +15,10 @@ namespace {
 bool is_empty(const radix::geometry::Aabb2i &bounds) {
     return bounds.min.x >= bounds.max.x || bounds.min.y >= bounds.max.y;
 }
+void check_uv(const glm::uvec2 &uv) {
+    DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
+    DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
+}
 
 void trim_texture_impl(
     const cv::Mat &input_texture,
@@ -65,9 +69,9 @@ void trim_texture_impl(
     const glm::dvec2 offset = glm::dvec2(clamped_pixel_bounds.min) / glm::dvec2(texture_size);
     const glm::dvec2 scale = glm::dvec2(clamped_pixel_bounds.size()) / glm::dvec2(texture_size);
     for (const size_t i : range(uv_count)) {
+        check_uv(input_uvs[i]);
         output_uvs[i] = (input_uvs[i] - offset) / scale;
-        DEBUG_ASSERT(output_uvs[i].x >= 0.0 && output_uvs[i].x <= 1.0);
-        DEBUG_ASSERT(output_uvs[i].y >= 0.0 && output_uvs[i].y <= 1.0);
+        check_uv(output_uvs[i]);
     }
 }
 }

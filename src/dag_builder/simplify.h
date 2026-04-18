@@ -239,7 +239,7 @@ inline void remove_unused_vertices_inplace(Clustering& clustering) {
 
     const uint32_t new_vertex_count = next_index;
     std::vector<glm::dvec3> new_positions(new_vertex_count);
-    for (const auto [old_index, new_index] : enumerate(range(new_vertex_count))) {
+    for (const auto [old_index, new_index] : enumerate(vertex_remap)) {
         if (new_index == invalid_vertex) {
             continue;
         }

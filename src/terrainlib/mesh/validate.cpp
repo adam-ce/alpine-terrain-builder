@@ -91,7 +91,7 @@ template <glm::length_t n_dims, typename T>
 void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
     static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
 
-    DEBUG_ASSERT(find_isolated_vertices(mesh.triangles, mesh.vertex_count()).empty());
+    DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
 
     for (const glm::uvec3 &triangle : mesh.triangles) {
         DEBUG_ASSERT(!is_empty_triangle(triangle, mesh.positions));

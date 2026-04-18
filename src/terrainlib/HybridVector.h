@@ -130,6 +130,7 @@ private:
         this->_is_on_stack = false;
     }
 
+    // TODO: use std::variant
     FixedVector<T, N> _stack;
     std::vector<T> _heap;
     bool _is_on_stack;

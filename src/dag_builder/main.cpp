@@ -138,6 +138,7 @@ int main(int argc, char **argv) {
 
     auto mesh = mesh::io::load_from_path(input).value();
 
+    // Perform initial clustering
     auto clustering = clusterize(mesh);
     validate(clustering);
 
@@ -155,7 +156,7 @@ int main(int argc, char **argv) {
 
         // Simplify each cluster
         clustering = simplify(clustering, SimplifyOptions{
-                                              .target_ratio = 0.5,
+                                              .target_ratio = 0.25,
                                               .vertex_lock = VertexLock::mask(vertex_lock)});
         validate(clustering);
         remove_unused_vertices_inplace(clustering);

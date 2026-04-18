@@ -1,6 +1,8 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
+#include <functional>
 #include <cstdint>
 #include <iterator>
 #include <optional>
@@ -9,7 +11,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include <concepts>
 
 template <typename Iterator, typename T>
 Iterator find_single(Iterator begin, Iterator end, const T &value) {
@@ -84,15 +85,25 @@ auto transform_vector(Range &&range, Op&& op) {
     return result;
 }
 
-template <std::ranges::input_range Range, typename T = std::ranges::range_value_t<Range>>
-constexpr T sum(Range &&range, T initial_value = T{}) {
-    T total = initial_value;
-    for (const auto &value : range) {
-        total += value;
+template <std::ranges::input_range Range, typename T, typename F>
+constexpr T sum(Range &&range, T init, F &&f) {
+    for (auto &&v : range) {
+        init += std::invoke(f, v);
     }
-    return total;
+    return init;
 }
 
+template <std::ranges::input_range Range, typename F>
+constexpr auto sum(Range &&range, F &&f) {
+    using T = std::decay_t<std::invoke_result_t<F &, std::ranges::range_reference_t<Range>>>;
+    return sum(std::forward<Range>(range), T{}, std::forward<F>(f));
+}
+
+template <std::ranges::input_range Range, typename T = std::ranges::range_value_t<Range>>
+    requires std::convertible_to<std::ranges::range_value_t<Range>, T>
+constexpr T sum(Range &&range, T init = T{}) {
+    return sum(std::forward<Range>(range), init, std::identity{});
+}
 
 template <typename T>
 constexpr auto range(T begin, T end) {

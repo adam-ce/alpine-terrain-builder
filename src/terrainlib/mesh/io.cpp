@@ -25,7 +25,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     const SaveOptions &options) {
     LOG_TRACE("Saving mesh to path {}", path);
 
-    mesh::validate(mesh);
+    mesh::validate_basic(mesh);
 
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>

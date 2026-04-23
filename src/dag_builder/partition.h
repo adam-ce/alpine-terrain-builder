@@ -366,14 +366,8 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     // Keep only backward mapping, since we cant keep the forward mapping valid
     auto [_, merged_to_original] = std::move(mapping).into_parts();
 
-    // Make merged geometry manifold, keeping backward mapping consitent
-    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
-        const uint32_t new_vertex_index = merged_cluster.vertex_indices.size();
-
-        // Add new vertex to merged cluster
-        merged_cluster.vertex_indices.push_back(merged_cluster.vertex_indices[old_vertex_index]);
-
-        // Update backwards mapping
+    // Make merged geometry manifold, keeping backward mapping consistent
+    auto add_duplicate_vertex_to_mapping = [&](const uint32_t old_vertex_index, const uint32_t new_vertex_index) {
         for (const auto &[linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
             const mesh::merging::VertexId merged_vertex(linear_cluster_index, old_vertex_index);
             const auto it = merged_to_original.find(merged_vertex);
@@ -384,15 +378,38 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
             const mesh::merging::VertexId duplicated_vertex{static_cast<uint32_t>(linear_cluster_index), new_vertex_index};
             merged_to_original[duplicated_vertex] = source_vertex_index;
         }
+    };
+    auto duplicate_vertex = [&](const uint32_t old_vertex_index) {
+        const uint32_t new_vertex_index = merged_cluster.vertex_indices.size();
+
+        // Add new vertex to merged cluster
+        merged_cluster.vertex_indices.push_back(merged_cluster.vertex_indices[old_vertex_index]);
+
+        // Update backwards mapping
+        add_duplicate_vertex_to_mapping(old_vertex_index, new_vertex_index);
 
         return new_vertex_index;
     };
     mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
 
-    // Split into individual connecticity components
-    const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
+
+    // Ensure each connectivity component is open and of genus 1 (topological disk)
+    mesh::cut_to_disk(
+        merged_cluster.local_triangles,
+        [&](const uint32_t new_vertex_count) {
+            merged_cluster.vertex_indices.resize(new_vertex_count);
+        },
+        [&](const uint32_t old_vertex_index, const uint32_t new_vertex_index) {
+            merged_cluster.vertex_indices[new_vertex_index] = merged_cluster.vertex_indices[old_vertex_index];
+            add_duplicate_vertex_to_mapping(old_vertex_index, new_vertex_index);
+        });
+
+    // Materialize cluster mesh
     const mesh::Simple merged_mesh = materialize_cluster(merged_cluster, clustering.positions);
     DEBUG_ASSERT(!merged_mesh.has_uvs());
+
+    // Split into individual connectivity components
+    const mesh::ComponentsIndex components_index = mesh::find_connected_components(merged_cluster.local_triangles, merged_cluster.vertex_count());
     auto [components, merged_to_component] = mesh::split_into_connected_components_with_map(merged_mesh, components_index);
     std::vector<std::vector<uint32_t>> component_to_merged = detail::create_component_backwards_mapping(components_index, merged_to_component);
 

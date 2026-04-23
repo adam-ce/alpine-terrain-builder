@@ -110,6 +110,10 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
+set(LIBIGL_COPYLEFT_CORE ON)
+set(LIBIGL_RESTRICTED_TRIANGLE ON)
+alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
+
 alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
 
 set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
@@ -177,6 +181,10 @@ add_library(terrainlib
     terrainlib/io/serialize.h
     terrainlib/io/utils.h terrainlib/io/utils.cpp
 
+    terrainlib/mesh/igl/convert.h
+    terrainlib/mesh/igl/cut_to_disk.h
+    terrainlib/mesh/igl/cut.h
+    terrainlib/mesh/igl/igl.cpp
     terrainlib/mesh/io/error.h
     terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
     terrainlib/mesh/io/options.h
@@ -265,8 +273,7 @@ add_library(terrainlib
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
 target_link_libraries(terrainlib PUBLIC 
-    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum
-    meshoptimizer)
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

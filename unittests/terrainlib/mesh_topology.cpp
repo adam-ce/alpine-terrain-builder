@@ -7,6 +7,11 @@
 
 #include "../catch2_helpers.h"
 #include "mesh/topology.h"
+#include "mesh/compute_topology.h"
+#include "mesh/edges.h"
+#include "mesh/triangle_compare.h"
+#include "mesh/vertex_index_range.h"
+#include "mesh/normalize.h"
 
 namespace {
 
@@ -383,22 +388,80 @@ TEST_CASE("mesh::create_vertex_to_triangle_mapping") {
 TEST_CASE("mesh::count_vertex_adjacent_triangles") {
     SECTION("counts incident triangles per vertex") {
         const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(1, 2, 3),
+            glm::uvec3(3, 2, 4)};
+
+        const auto actual = mesh::count_vertex_adjacent_triangles(triangles);
+
+        CHECK(actual == std::vector<uint32_t>{0, 1, 2, 2, 1});
+    }
+}
+
+TEST_CASE("mesh::is_orientable") {
+    SECTION("empty mesh is orientable") {
+        const std::vector<glm::uvec3> triangles = {};
+        CHECK(mesh::is_orientable(triangles));
+    }
+
+    SECTION("single triangle is orientable") {
+        const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(0, 1, 2)};
+        CHECK(mesh::is_orientable(triangles));
+    }
+
+    SECTION("two properly oriented adjacent triangles are orientable") {
+        const std::vector<glm::uvec3> triangles = {
             glm::uvec3(0, 1, 2),
-            glm::uvec3(2, 1, 3)};
+            glm::uvec3(2, 1, 3) // opposite orientation along shared edge (1,2)
+        };
+        CHECK(mesh::is_orientable(triangles));
+    }
 
-        const auto actual = mesh::count_vertex_adjacent_triangles(triangles, 5);
+    SECTION("two triangles with same directed edge are not orientable") {
+        const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(0, 1, 2),
+            glm::uvec3(0, 1, 3) // same directed edge (0 -> 1)
+        };
 
-        CHECK(actual == std::vector<uint32_t>{1, 2, 2, 1, 0});
+        CHECK_FALSE(mesh::is_orientable(triangles));
+    }
+
+    SECTION("identical triangles are not orientable") {
+        const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(0, 1, 2),
+            glm::uvec3(0, 1, 2)};
+
+        CHECK_FALSE(mesh::is_orientable(triangles));
+    }
+
+    SECTION("edge shared by more than two triangles") {
+        const std::vector<glm::uvec3> triangles = {
+            glm::uvec3(0, 1, 2),
+            glm::uvec3(2, 1, 3),
+            glm::uvec3(4, 1, 2) // third triangle sharing edge (1,2)
+        };
+
+        CHECK_FALSE(mesh::is_orientable(triangles));
     }
 }
 
 TEST_CASE("mesh::find_isolated_vertices") {
     SECTION("returns vertices not referenced by any triangle") {
-        const std::vector<glm::uvec3> triangles = {
-            glm::uvec3(0, 1, 2),
-            glm::uvec3(2, 1, 3)};
+        const mesh::Simple mesh(
+            {
+                glm::uvec3(0, 1, 2),
+                glm::uvec3(2, 1, 3)
+            }, {
+                glm::dvec3(0),
+                glm::dvec3(1),
+                glm::dvec3(2),
+                glm::dvec3(3),
+                glm::dvec3(4),
+                glm::dvec3(5),
+            }
+        );
 
-        const auto actual = mesh::find_isolated_vertices(triangles, 6);
+        const auto actual = mesh::find_isolated_vertices(mesh);
 
         CHECK(actual == std::vector<uint32_t>{4, 5});
     }
@@ -408,8 +471,223 @@ TEST_CASE("mesh::find_isolated_vertices") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3)};
 
-        const auto actual = mesh::find_isolated_vertices(triangles, 4);
+        const auto actual = mesh::find_isolated_vertices(triangles);
 
         CHECK(actual.empty());
     }
+}
+
+TEST_CASE("mesh::compute_topology empty mesh") {
+    const std::vector<glm::uvec3> triangles;
+
+    const auto t = mesh::compute_topology(triangles);
+
+    CHECK(t.component_count() == 0);
+    CHECK(t.boundary_count() == 0);
+    CHECK(t.chi() == 0);
+    CHECK(t.genus() == 0);
+
+    CHECK(t.is_empty());
+    CHECK_FALSE(t.is_open());
+    CHECK_FALSE(t.is_closed());
+    CHECK_FALSE(t.is_disk(false));
+    CHECK_FALSE(t.is_disk(true));
+    CHECK_FALSE(t.is_annulus());
+    CHECK_FALSE(t.is_sphere());
+    CHECK_FALSE(t.is_torus());
+}
+
+TEST_CASE("mesh::compute_topology single triangle") {
+    const std::vector<glm::uvec3> triangles = {
+        glm::uvec3(0, 1, 2)};
+
+    const auto t = mesh::compute_topology(triangles);
+
+    REQUIRE_FALSE(t.is_empty());
+    REQUIRE(t.is_single_component());
+
+    const auto &c = t.component(0);
+
+    CHECK(c.vertex_count() == 3);
+    CHECK(c.edge_count() == 3);
+    CHECK(c.halfedge_count() == 3);
+    CHECK(c.triangle_count() == 1);
+    CHECK(c.boundary_count() == 1);
+    CHECK(c.boundary_edge_count() == 3);
+    CHECK(c.chi() == 1);
+    CHECK(c.genus() == 0);
+
+    CHECK(t.component_count() == 1);
+    CHECK(t.boundary_count() == 1);
+    CHECK(t.chi() == 1);
+    CHECK(t.genus() == 0);
+
+    CHECK_FALSE(t.is_empty());
+    CHECK(t.is_open());
+    CHECK_FALSE(t.is_closed());
+    CHECK(t.is_disk(false));
+    CHECK(t.is_disk(true));
+    CHECK_FALSE(t.is_annulus());
+    CHECK_FALSE(t.is_sphere());
+    CHECK_FALSE(t.is_torus());
+}
+
+TEST_CASE("mesh::compute_topology square patch") {
+    const std::vector<glm::uvec3> triangles = {
+        glm::uvec3(0, 1, 2),
+        glm::uvec3(2, 1, 3)};
+
+    const auto t = mesh::compute_topology(triangles);
+
+    REQUIRE_FALSE(t.is_empty());
+    REQUIRE(t.is_single_component());
+
+    const auto &c = t.component(0);
+
+    CHECK(c.vertex_count() == 4);
+    CHECK(c.edge_count() == 5);
+    CHECK(c.halfedge_count() == 6);
+    CHECK(c.triangle_count() == 2);
+    CHECK(c.boundary_count() == 1);
+    CHECK(c.boundary_edge_count() == 4);
+    CHECK(c.chi() == 1);
+    CHECK(c.genus() == 0);
+
+    CHECK(t.component_count() == 1);
+    CHECK(t.boundary_count() == 1);
+    CHECK(t.chi() == 1);
+    CHECK(t.genus() == 0);
+
+    CHECK_FALSE(t.is_empty());
+    CHECK(t.is_open());
+    CHECK_FALSE(t.is_closed());
+    CHECK(t.is_disk(false));
+    CHECK(t.is_disk(true));
+    CHECK_FALSE(t.is_annulus());
+    CHECK_FALSE(t.is_sphere());
+    CHECK_FALSE(t.is_torus());
+}
+
+TEST_CASE("mesh::compute_topology annulus") {
+    const std::vector<glm::uvec3> triangles = {
+        glm::uvec3(0, 1, 5),
+        glm::uvec3(0, 5, 4),
+        glm::uvec3(1, 2, 6),
+        glm::uvec3(1, 6, 5),
+        glm::uvec3(2, 3, 7),
+        glm::uvec3(2, 7, 6),
+        glm::uvec3(3, 0, 4),
+        glm::uvec3(3, 4, 7)};
+
+    const auto t = mesh::compute_topology(triangles);
+
+    REQUIRE_FALSE(t.is_empty());
+    REQUIRE(t.is_single_component());
+
+    const auto &c = t.component(0);
+
+    CHECK(c.vertex_count() == 8);
+    CHECK(c.edge_count() == 16);
+    CHECK(c.triangle_count() == 8);
+    CHECK(c.boundary_count() == 2);
+    CHECK(c.boundary_edge_count() == 8);
+    CHECK(c.chi() == 0);
+    CHECK(c.genus() == 0);
+
+    CHECK(t.component_count() == 1);
+    CHECK(t.boundary_count() == 2);
+    CHECK(t.chi() == 0);
+    CHECK(t.genus() == 0);
+
+    CHECK_FALSE(t.is_empty());
+    CHECK(t.is_open());
+    CHECK_FALSE(t.is_closed());
+    CHECK_FALSE(t.is_disk(false));
+    CHECK(t.is_disk(true));
+    CHECK(t.is_annulus());
+    CHECK_FALSE(t.is_sphere());
+    CHECK_FALSE(t.is_torus());
+}
+
+TEST_CASE("mesh::compute_topology tetrahedron sphere") {
+    const std::vector<glm::uvec3> triangles = {
+        glm::uvec3(0, 2, 1),
+        glm::uvec3(0, 3, 2),
+        glm::uvec3(1, 2, 3),
+        glm::uvec3(0, 1, 3)};
+
+    const auto t = mesh::compute_topology(triangles);
+
+    REQUIRE_FALSE(t.is_empty());
+    REQUIRE(t.is_single_component());
+
+    const auto &c = t.component(0);
+
+    CHECK(c.vertex_count() == 4);
+    CHECK(c.edge_count() == 6);
+    CHECK(c.triangle_count() == 4);
+    CHECK(c.boundary_count() == 0);
+    CHECK(c.boundary_edge_count() == 0);
+    CHECK(c.chi() == 2);
+    CHECK(c.genus() == 0);
+
+    CHECK(t.component_count() == 1);
+    CHECK(t.boundary_count() == 0);
+    CHECK(t.chi() == 2);
+    CHECK(t.genus() == 0);
+
+    CHECK_FALSE(t.is_empty());
+    CHECK_FALSE(t.is_open());
+    CHECK(t.is_closed());
+    CHECK_FALSE(t.is_disk(false));
+    CHECK_FALSE(t.is_disk(true));
+    CHECK_FALSE(t.is_annulus());
+    CHECK(t.is_sphere());
+    CHECK_FALSE(t.is_torus());
+}
+
+TEST_CASE("mesh::compute_topology torus") {
+    // 3x3 periodic torus grid:
+    // V = 9, F = 18, E = 27, chi = 0, genus = 1
+    const std::vector<glm::uvec3> triangles = {
+        glm::uvec3(0, 1, 4), glm::uvec3(0, 4, 3),
+        glm::uvec3(1, 2, 5), glm::uvec3(1, 5, 4),
+        glm::uvec3(2, 0, 3), glm::uvec3(2, 3, 5),
+
+        glm::uvec3(3, 4, 7), glm::uvec3(3, 7, 6),
+        glm::uvec3(4, 5, 8), glm::uvec3(4, 8, 7),
+        glm::uvec3(5, 3, 6), glm::uvec3(5, 6, 8),
+
+        glm::uvec3(6, 7, 1), glm::uvec3(6, 1, 0),
+        glm::uvec3(7, 8, 2), glm::uvec3(7, 2, 1),
+        glm::uvec3(8, 6, 0), glm::uvec3(8, 0, 2)};
+
+    const auto t = mesh::compute_topology(triangles);
+
+    REQUIRE_FALSE(t.is_empty());
+    REQUIRE(t.is_single_component());
+
+    const auto &c = t.component(0);
+
+    CHECK(c.vertex_count() == 9);
+    CHECK(c.edge_count() == 27);
+    CHECK(c.triangle_count() == 18);
+    CHECK(c.boundary_count() == 0);
+    CHECK(c.boundary_edge_count() == 0);
+    CHECK(c.chi() == 0);
+    CHECK(c.genus() == 1);
+
+    CHECK(t.component_count() == 1);
+    CHECK(t.boundary_count() == 0);
+    CHECK(t.chi() == 0);
+    CHECK(t.genus() == 1);
+
+    CHECK_FALSE(t.is_empty());
+    CHECK_FALSE(t.is_open());
+    CHECK(t.is_closed());
+    CHECK_FALSE(t.is_disk(false));
+    CHECK_FALSE(t.is_disk(true));
+    CHECK_FALSE(t.is_annulus());
+    CHECK_FALSE(t.is_sphere());
+    CHECK(t.is_torus());
 }

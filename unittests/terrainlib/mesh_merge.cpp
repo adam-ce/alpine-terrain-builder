@@ -22,7 +22,7 @@
 #include "../catch2_helpers.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/merge.h"
-#include "mesh/topology.h"
+#include "mesh/normalize.h"
 
 TEST_CASE("mesh::merge") {
     SECTION("two tris with shared edge") {

@@ -9,7 +9,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/validate.h"
 #include "polygon/triangulate.h"
-#include "mesh/topology.h"
+#include "mesh/triangle_compare.h"
 
 
 TEST_CASE("triangulate handles minimal input") {

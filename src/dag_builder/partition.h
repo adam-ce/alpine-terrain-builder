@@ -392,6 +392,8 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     };
     mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
 
+    // Ensure merged geometry is consistently oriented
+    mesh::orient_triangles_inplace(merged_cluster.local_triangles);
 
     // Ensure each connectivity component is open and of genus 1 (topological disk)
     mesh::cut_to_disk(

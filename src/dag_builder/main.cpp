@@ -15,7 +15,6 @@
 #include "split.h"
 #include "utils.h"
 #include "validate.h"
-#include "uv.h"
 #include "atlas/atlas.h"
 #include "log.h"
 

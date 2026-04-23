@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 # TODO: This is needed to avoid NDEBUG being undefined on Release
 if (CMAKE_BUILD_TYPE MATCHES Release)
-    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+    set(ALP_ENABLE_ASSERTS ON CACHE BOOL "" FORCE)
 endif()
 
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
@@ -267,6 +267,9 @@ add_library(terrainlib
     terrainlib/spatial_lookup/NDLoopHelper.h
     terrainlib/spatial_lookup/SpatialLookup.h
 
+    terrainlib/uv/unwrap.h terrainlib/uv/unwrap.cpp
+    terrainlib/uv/fit.h
+
     terrainlib/Dataset.h terrainlib/Dataset.cpp
     terrainlib/hash_utils.h
     terrainlib/init.h terrainlib/init.cpp
@@ -405,7 +408,6 @@ add_library(dagbuilderlib
     dag_builder/partition.h
     dag_builder/simplify.h
     dag_builder/split.h
-    dag_builder/uv.h dag_builder/uv.cpp
     dag_builder/validate.h
 )
 target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)

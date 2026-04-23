@@ -29,7 +29,7 @@
 #include "range_utils.h"
 #include "unwrap_atlas.h"
 #include "reproject_texture.h"
-#include "uv.h"
+#include "uv/unwrap.h"
 #include "vector_utils.h"
 
 struct PartitionOptions {

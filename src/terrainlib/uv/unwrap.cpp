@@ -18,7 +18,8 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
-#include "uv.h"
+#include "unwrap.h"
+#include "fit.h"
 #include "mesh/compute_topology.h"
 
 namespace uv {

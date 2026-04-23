@@ -10,7 +10,6 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 #include "mesh/manifold.h"
-#include "uv.h"
 #include "atlas/atlas.h"
 #include "mesh/geometry.h"
 #include "mesh/bounds.h"

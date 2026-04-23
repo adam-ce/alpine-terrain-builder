@@ -14,8 +14,15 @@ enum class Algorithm {
     TutteBarycentricMapping,
     DiscreteAuthalic,
     DiscreteConformalMap,
-    FloaterMeanValueCoordinates
+    FloaterMeanValueCoordinates,
+    LeastSquaresConformalMap,
+    AsRigidAsPossible
 };
+
+inline constexpr bool is_free_border(Algorithm algorithm) {
+    return algorithm == Algorithm::LeastSquaresConformalMap ||
+           algorithm == Algorithm::AsRigidAsPossible;
+}
 
 enum class Border {
     Circle,

@@ -15,7 +15,10 @@
 #include "cluster.h"
 #include "enumerate.h"
 #include "glm_utils.h"
+#include "mesh/boundary.h"
 #include "mesh/connected_components.h"
+#include "mesh/igl/cut_to_disk.h"
+#include "mesh/igl/orient.h"
 #include "mesh/manifold.h"
 #include "mesh/merging/VertexMapping.h"
 #include "mesh/split.h"
@@ -25,6 +28,7 @@
 #include "opencv_utils.h"
 #include "range_utils.h"
 #include "unwrap_atlas.h"
+#include "reproject_texture.h"
 #include "uv.h"
 #include "vector_utils.h"
 
@@ -152,6 +156,8 @@ inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::sp
     return false;
 }
 
+using VertexId = mesh::merging::VertexId;
+
 inline Cluster merge_clusters_simple(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
@@ -209,11 +215,6 @@ inline Cluster merge_clusters_simple(
     return merged;
 }
 
-struct MergeWithBackward {
-    std::vector<mesh::merging::VertexId> backwards;
-    Cluster merged;
-};
-
 inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &clustering, const std::span<const uint32_t> cluster_indices, const std::span<uint32_t> vertex_remap) {
     constexpr uint32_t no_vertex_remap = -1;
 #ifndef NDEBUG
@@ -221,7 +222,6 @@ inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &cl
     for (const uint32_t vertex_index : vertex_remap) {
         DEBUG_ASSERT(vertex_index == no_vertex_remap);
     }
-    DEBUG_ASSERT(check_consistent_uvs(clustering, cluster_indices));
 #endif
 
     const uint32_t cluster_count = cluster_indices.size();
@@ -236,25 +236,76 @@ inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &cl
     }
     mapping.init(vertex_counts);
 
+    if (cluster_indices.empty()) {
+        return mapping;
+    }
+
+    // Init extra scratch buffers
+    const uint32_t max_vertex_count = *std::max_element(vertex_counts.begin(), vertex_counts.end());
+    struct VertexIndex {
+        uint32_t local_index;
+        uint32_t global_index;
+    };
+    std::vector<VertexIndex> cluster_vertices; // sorted vertex indices
+    cluster_vertices.reserve(max_vertex_count);
+    // vertex_remap[g] stores the merged index for the first occurrence (occurrence_index == 0)
+    // vertex_remap_multi[g][i] stores merged indices for occurrence_index == i+1
+    std::unordered_map<uint32_t, std::vector<uint32_t>> vertex_remap_multi;
+
     // Create actual mapping
     uint32_t next_vertex_index = 0;
     for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
         const uint32_t cluster_index = cluster_indices[linear_cluster_index];
         const Cluster &cluster = clustering.clusters[cluster_index];
-        const uint32_t vertex_count = cluster.vertex_count();
+
+        // There can be multiple local vertices referencing the same global index
+        // we want to detect this to assign separate new indices, thus we first sort the index list
+        cluster_vertices.clear();
+        for (const auto [local_vertex_index, global_vertex_index] : enumerate(cluster.vertex_indices)) {
+            cluster_vertices.emplace_back(local_vertex_index, global_vertex_index);
+        }
+        std::sort(cluster_vertices.begin(), cluster_vertices.end(),
+                  [&](const auto &a, const auto &b) { return a.global_index < b.global_index; });
+        uint32_t occurance_index = 0;
+        uint32_t last_global_vertex_index = no_vertex_remap;
 
         // Create vertex remapping from original vertex indices to merged vertex indices
-        for (uint32_t local_vertex_index = 0; local_vertex_index < vertex_count; local_vertex_index++) {
-            const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
-            uint32_t &merged_vertex_index = vertex_remap[global_vertex_index];
-
-            if (merged_vertex_index == no_vertex_remap) {
-                // This vertex was not yet remapped -> assign new merged index.
-                merged_vertex_index = next_vertex_index;
-                next_vertex_index++;
-                const mesh::merging::VertexId source_vertex{.mesh_index = linear_cluster_index, .vertex_index = local_vertex_index};
-                mapping.add(source_vertex, merged_vertex_index);
+        for (const auto [local_vertex_index, global_vertex_index] : cluster_vertices) {
+            // Adjust occurance index if duplicate index
+            if (global_vertex_index == last_global_vertex_index) {
+                occurance_index++;
+            } else {
+                occurance_index = 0;
             }
+            last_global_vertex_index = global_vertex_index;
+
+            uint32_t& first_merged_vertex_index = vertex_remap[global_vertex_index];
+            uint32_t merged_vertex_index = first_merged_vertex_index;
+            if (merged_vertex_index == no_vertex_remap) {
+                // This vertex was not encountered until now
+                DEBUG_ASSERT(occurance_index == 0);
+                merged_vertex_index = first_merged_vertex_index = next_vertex_index;
+                next_vertex_index++;
+            } else if (occurance_index == 0) {
+                // This is not a duplicate and there is already a remap set
+                // -> nothing to do
+            } else {
+                // This is a duplicate vertex in the current cluster
+                const uint32_t index = occurance_index - 1;
+                std::vector<uint32_t> &new_indices = vertex_remap_multi[global_vertex_index];
+
+                if (index < new_indices.size()) {
+                    merged_vertex_index = new_indices[index];
+                } else {
+                    DEBUG_ASSERT(new_indices.size() == index);
+                    merged_vertex_index = next_vertex_index;
+                    new_indices.push_back(next_vertex_index);
+                    next_vertex_index++;
+                }
+            }
+
+            const VertexId source_vertex{.mesh_index = linear_cluster_index, .vertex_index = local_vertex_index};
+            mapping.add(source_vertex, merged_vertex_index);
         }
     }
 
@@ -266,6 +317,7 @@ inline mesh::merging::VertexMapping construct_merge_mapping(const Clustering &cl
         }
     }
 
+    mapping.validate();
     return mapping;
 }
 
@@ -273,6 +325,8 @@ inline Cluster merge_geometry_using_mapping(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
     const mesh::merging::VertexMapping &mapping) {
+    DEBUG_ASSERT(mapping.mesh_count() == cluster_indices.size());
+
     // Preallocate merged cluster
     Cluster merged;
     if (mapping.empty()) {
@@ -456,7 +510,15 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
             rescale_texture_inplace(component.texture.value(), component_texture_size);
         } else {
             // If multiple clusters are relevant, we have to perform an unwrap.
-            component.uvs = uv::unwrap(component).value();
+            auto result = uv::unwrap(component);
+            if (!result.has_value()) {
+                LOG_WARN("Failed to unwrap using ARAP: {}", result.error().description());
+                result = uv::unwrap(component);
+            }
+            if (!result.has_value()) {
+                LOG_ERROR_AND_EXIT("Failed to unwrap using default: {}", result.error().description());
+            }
+            component.uvs = result.value();
 
             // Build new texture
             auto map_to_original_triangle = [&](const uint32_t linear_cluster_index, const glm::uvec3 &triangle)
@@ -476,7 +538,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
                 return original_triangle;
             };
 
-            TextureReprojector component_texture(component_texture_size);
+            TextureReprojector component_texture(component_texture_size, CV_8UC3);
             for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
                 const Cluster &cluster = clustering.clusters[cluster_index];
                 const cv::Mat &cluster_texture = clustering.textures[cluster.texture_id];
@@ -493,6 +555,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
                         triangle, component.uvs);
                 }
             }
+
             component.texture = component_texture.finish();
         }
     }
@@ -569,3 +632,4 @@ inline Clustering partition(const Clustering &clustering, const PartitionOptions
     const Partitioning partitioning = create_partitioning(clustering, options);
     return apply_partitioning(clustering, partitioning);
 }
+

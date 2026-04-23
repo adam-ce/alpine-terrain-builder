@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology.h"
+#include "mesh/normalize.h"
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
 

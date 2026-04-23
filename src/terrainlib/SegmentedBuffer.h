@@ -1,34 +1,47 @@
 #pragma once
 
-#include <libassert/assert.hpp>
+#include <algorithm>
 #include <span>
+#include <utility>
 #include <vector>
+
+#include <libassert/assert.hpp>
 
 #include "OffsetTable.h"
 
 // Contiguous buffer partitioned into segments using an OffsetTable for range-based indexing.
-template <typename TValue, typename TValueIndex = size_t, typename TSectionIndex = TValueIndex>
+template <typename TValue, typename TValueIndex = size_t, typename TSegmentIndex = TValueIndex>
 class SegmentedBuffer {
 public:
     using value_type = TValue;
     using index_type = TValueIndex;
-    using segment_index = TSectionIndex;
-    using offset_range = typename OffsetTable<segment_index>::range_type;
+    using segment_index = TSegmentIndex;
+    using offset_range = typename OffsetTable<index_type>::range_type;
 
     SegmentedBuffer() {
+        this->reset();
+    }
+
+    // Resets the buffer to its default state.
+    void reset() {
+        this->_offsets.clear();
+        this->_data.clear();
+
         this->_offsets.append_length(0);
-        this->_counts.push_back(0);
     }
 
     // Initializes the buffer with pre-defined segment sizes and pre-allocates backing storage.
-    void init(const std::span<const segment_index> segment_sizes, const value_type &value = {}) {
+    void init(const std::span<const index_type> segment_sizes, const value_type &value = {}) {
+        if (segment_sizes.empty()) {
+            this->reset();
+            return;
+        }
+
         this->_offsets.clear();
         this->_data.clear();
-        this->_counts.clear();
 
         this->_offsets.append_lengths(segment_sizes);
         this->_data.resize(this->_offsets.total_size(), value);
-        this->_counts.resize(this->segment_count(), 0);
     }
 
     // Reserve size in the global backing storage.
@@ -36,21 +49,16 @@ public:
         this->_data.reserve(size);
     }
 
-    // Reserve size for the last segment.
+    // Resize the last segment.
     void resize_last_segment(const index_type size, const value_type &value = {}) {
         if (size == 0) {
             return;
         }
 
         const segment_index last_segment = this->segment_count() - 1;
-        const index_type segment_size = this->segment_size(last_segment); 
-        
-        // Only reallocate if the requested size exceeds current capacity
-        if (size > segment_size) {
-            const index_type new_end = this->_offsets.range(last_segment).begin + size;
-            this->_offsets.set_end(new_end);
-            this->_data.resize(new_end, value);
-        }
+        const index_type new_end = this->_offsets.range(last_segment).begin + size;
+        this->_offsets.set_end(new_end);
+        this->_data.resize(new_end, value);
     }
 
     // Adds a new empty segment with a pre-allocated capacity.
@@ -72,46 +80,24 @@ public:
         const segment_index last_segment = this->segment_count() - 1;
         auto destination = this->segment(last_segment);
         std::copy(container.begin(), container.end(), destination.begin());
-
-        // update the fill count
-        this->_counts[last_segment] = added_size;
     }
 
-    // Pushes an element into a specific segment's reserved space.
-    void push_to_segment(const segment_index section_index, value_type &&value) {
-        if (section_index + 1 == this->segment_count()) {
-            this->push_to_last_segment(std::forward<value_type>(value));
-            return;
-        }
+    // Appends an item to the end of the last segment in the data buffer.
+    void push_to_last_segment(const value_type &value) {
+        const segment_index last_segment = this->segment_count() - 1;
+        const offset_range range = this->_offsets.range(last_segment);
 
-        const offset_range range = this->_offsets.range(section_index);
-        const segment_index segment_fill = this->_counts[section_index];
-        DEBUG_ASSERT(segment_fill < (range.end - range.begin));
-
-        const index_type flat_index = range.begin + segment_fill;
-        this->_data[flat_index] = std::forward<value_type>(value);
-        this->_counts[section_index]++;
+        this->_data.push_back(value);
+        this->_offsets.set_end(last_segment, range.end + 1);
     }
 
-    // Appends an item to the end of the last segment in the data buffer, extending it if full.
+    // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(value_type &&value) {
         const segment_index last_segment = this->segment_count() - 1;
         const offset_range range = this->_offsets.range(last_segment);
-        index_type &last_segment_fill = this->_counts[last_segment];
-        const index_type reserved_size = range.end - range.begin;
 
-        if (last_segment_fill < reserved_size) {
-            // We have reserved space that hasn't been filled yet
-            const index_type flat_index = range.begin + last_segment_fill;
-            this->_data[flat_index] = std::forward<value_type>(value);
-        } else {
-            // No reserved space left, append to the end of the vector
-            this->_data.push_back(std::forward<value_type>(value));
-            // Update the offset table to reflect the new vector size
-            this->_offsets.set_end(last_segment, this->total_size());
-        }
-
-        last_segment_fill++;
+        this->_data.push_back(std::forward<value_type>(value));
+        this->_offsets.set_end(last_segment, range.end + 1);
     }
 
     // Finalizes the current segment and starts a new one at the current buffer position.
@@ -119,11 +105,10 @@ public:
         if (this->segment_count() == 1 && this->segment_size(0) == 0) {
             return;
         }
-        
+
         const segment_index last_segment = this->segment_count() - 1;
-        this->_offsets.set_end(last_segment, this->_data.size());
+        this->_offsets.set_end(last_segment, this->total_size());
         this->_offsets.append_length(0);
-        this->_counts.push_back(0);
     }
 
     // Accesses an element using segment-relative indexing.
@@ -142,13 +127,13 @@ public:
     }
 
     // Returns the number of elements contained within a specific segment.
-    segment_index segment_size(const segment_index segment_index) const noexcept {
+    index_type segment_size(const segment_index segment_index) const noexcept {
         return this->_offsets.element_size(segment_index);
     }
 
     // Returns the total number of elements across all segments.
     index_type total_size() const noexcept {
-        return static_cast<index_type>(this->_data.size());
+        return this->_data.size();
     }
 
     // Returns a readonly view of one segment of the buffer.
@@ -172,24 +157,26 @@ public:
 private:
     template <typename Self>
     static inline auto &get_impl(Self &self, const segment_index segment_index, const index_type element_index) {
-        const offset_range range = self._offsets.range(segment_index);
-        const index_type flat_index = static_cast<index_type>(range.begin) + element_index;
+        DEBUG_ASSERT(segment_index < self._offsets.size());
 
-        DEBUG_ASSERT(flat_index < static_cast<index_type>(range.end));
+        const offset_range range = self._offsets.range(segment_index);
+        const index_type flat_index = range.begin + element_index;
+
+        DEBUG_ASSERT(flat_index < range.end);
         return self._data[flat_index];
     }
 
     template <typename Self>
-    static inline auto &get_segment_impl(Self &self, const segment_index segment_index) {
+    static inline auto get_segment_impl(Self &self, const segment_index segment_index) {
+        DEBUG_ASSERT(segment_index < self._offsets.size());
+
         const offset_range range = self._offsets.range(segment_index);
         const index_type length = range.end - range.begin;
         return std::span(self._data.data() + range.begin, length);
     }
 
     // Manages the boundaries of each segment.
-    OffsetTable<segment_index> _offsets;
-    // Counts for each segment.
-    std::vector<index_type> _counts;
+    OffsetTable<index_type> _offsets;
 
     // The contiguous backing storage for all segments.
     std::vector<value_type> _data;

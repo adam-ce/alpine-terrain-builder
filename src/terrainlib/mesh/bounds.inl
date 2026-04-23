@@ -70,6 +70,11 @@ radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const glm::vec
 }
 
 template <glm::length_t n_dims, typename T>
+radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<glm::vec<n_dims, T>> positions) {
+    return calculate_bounds(std::span<const glm::vec<n_dims, T>>(positions));
+}
+
+template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::vector<glm::vec<n_dims, T>>& positions) {
     return calculate_bounds(std::span<const glm::vec<n_dims, T>>(positions));
 }

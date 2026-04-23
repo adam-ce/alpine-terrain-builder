@@ -20,7 +20,7 @@ uint32_t find_min_vertex_index(const std::span<const glm::uvec3> triangles) {
 
     uint32_t min_vertex = UINT32_MAX;
     for (const glm::uvec3 &triangle : triangles) {
-        min_vertex = glm::compMin(glm::uvec4(triangle, min_vertex));
+        min_vertex = std::min(glm::compMin(triangle), min_vertex);
         if (min_vertex == 0) {
             return 0;
         }
@@ -35,7 +35,7 @@ uint32_t find_max_vertex_index(const std::span<const glm::uvec3> triangles) {
 
     uint32_t max_vertex = 0;
     for (const glm::uvec3 &triangle : triangles) {
-        max_vertex = glm::compMax(glm::uvec4(triangle, max_vertex));
+        max_vertex = std::max(glm::compMax(triangle), max_vertex);
     }
     return max_vertex;
 }

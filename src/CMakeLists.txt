@@ -185,6 +185,7 @@ add_library(terrainlib
     terrainlib/mesh/igl/cut_to_disk.h
     terrainlib/mesh/igl/cut.h
     terrainlib/mesh/igl/igl.cpp
+
     terrainlib/mesh/io/error.h
     terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
     terrainlib/mesh/io/options.h
@@ -198,12 +199,15 @@ add_library(terrainlib
     terrainlib/mesh/merging/VertexMapping.h
     terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
 
+    terrainlib/mesh/bfs.h terrainlib/mesh/bfs.cpp
     terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
     terrainlib/mesh/bounds.h
     terrainlib/mesh/boundary.h terrainlib/mesh/boundary.cpp
     terrainlib/mesh/cgal.h
     terrainlib/mesh/cleanup.h terrainlib/mesh/cleanup.cpp
     terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
+    terrainlib/mesh/combine.h
+    terrainlib/mesh/compute_topology.h terrainlib/mesh/compute_topology.cpp
     terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
     terrainlib/mesh/encode.h
     terrainlib/mesh/EncodedMesh.h
@@ -212,6 +216,7 @@ add_library(terrainlib
     terrainlib/mesh/io.h terrainlib/mesh/io.cpp
     terrainlib/mesh/manifold.h terrainlib/mesh/manifold.cpp
     terrainlib/mesh/merge.h
+    terrainlib/mesh/normalize.h
     terrainlib/mesh/PointWithMeta.h
     terrainlib/mesh/reindex.h
     terrainlib/mesh/SimpleMesh.h
@@ -222,6 +227,7 @@ add_library(terrainlib
     terrainlib/mesh/utils.h
     terrainlib/mesh/validate_cgal.h
     terrainlib/mesh/validate.h terrainlib/mesh/validate.cpp
+    terrainlib/mesh/vertex_index_range.h terrainlib/mesh/vertex_index_range.cpp
     terrainlib/mesh/View.h
     terrainlib/mesh/WindingOrder.h
 

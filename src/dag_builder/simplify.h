@@ -56,6 +56,7 @@ struct SimplifyOptions {
     float target_ratio = 0.5;
     float absolute_target_error = meshopt::NO_TARGET_ERROR;
     VertexLock vertex_lock = VertexLock::none();
+    float uv_weight = 0.5;
 };
 
 namespace detail {
@@ -106,26 +107,34 @@ inline Clustering simplify(
 
     std::vector<glm::dvec3> cluster_positions;
     std::vector<glm::vec3> cluster_positions_f;
+    std::vector<glm::vec2> cluster_uvs_f;
     std::vector<uint32_t> vertex_remap;
     for (const Cluster &original_cluster : original_clustering.clusters) {
         const size_t original_vertex_count = original_cluster.vertex_indices.size();
 
         // Materialize positions vector
-        cluster_positions.clear();
-        cluster_positions.reserve(original_vertex_count);
-        for (const uint32_t vertex_index : original_cluster.vertex_indices) {
-            cluster_positions.push_back(original_clustering.positions[vertex_index]);
-        }
-
-        cluster_positions_f.clear();
-        cluster_positions_f.reserve(original_vertex_count);
+        collect_cluster_positions(original_cluster, original_clustering.positions, cluster_positions);
 
         // Normalize positions and adjust target error accordingly
         radix::geometry::Aabb3d bounds;
+        cluster_positions_f.clear();
+        cluster_positions_f.reserve(original_vertex_count);
         to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
         const float max_extents = glm::compMax(bounds.size());
         const float relative_target_error = options.absolute_target_error == meshopt::NO_TARGET_ERROR ?
             meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
+
+        // Prepare vertex attributes (uv)
+        cluster_uvs_f.clear();
+        to_approximate_normalized(original_cluster.uvs, cluster_uvs_f);
+        std::span<const float> vertex_attributes = {};
+        size_t vertex_attribute_stride = 0;
+        std::vector<float> vertex_attribute_weights = {};
+        if (options.uv_weight != 0.0f) {
+            vertex_attributes = flatten(cluster_uvs_f);
+            vertex_attribute_stride = sizeof(glm::vec2);
+            vertex_attribute_weights = {options.uv_weight};
+        }
 
         // Set up vertex locks
         std::vector<uint8_t> vertex_locks = detail::resolve_vertex_lock(options.vertex_lock, original_clustering, original_cluster);
@@ -136,9 +145,9 @@ inline Clustering simplify(
         meshopt::SimplifyResult result = meshopt::simplify_with_attributes(
             original_cluster.local_triangles,
             cluster_positions_f,
-            {},
-            0,
-            {},
+            vertex_attributes,
+            vertex_attribute_stride,
+            vertex_attribute_weights,
             vertex_locks,
             target_triangle_count,
             relative_target_error,

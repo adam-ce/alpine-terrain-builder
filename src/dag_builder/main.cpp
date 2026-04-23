@@ -159,7 +159,9 @@ int main(int argc, char **argv) {
         // Simplify each cluster
         clustering = simplify(clustering, SimplifyOptions{
                                               .target_ratio = 0.25,
-                                              .vertex_lock = VertexLock::mask(vertex_lock)});
+                                              .vertex_lock = VertexLock::mask(vertex_lock),
+                                              .uv_weight = 0.5
+                                          });
         validate(clustering);
         remove_unused_vertices_inplace(clustering);
         validate(clustering);

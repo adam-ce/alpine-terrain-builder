@@ -93,9 +93,8 @@ public:
     size_t find_source_vertices(const uint32_t mapped_index, std::vector<VertexId> &source_vertices) const {
         source_vertices.clear();
         for (uint32_t mesh_index = 0; mesh_index < this->mesh_count(); mesh_index++) {
-            const std::optional<uint32_t> vertex_index = this->map_backward(mesh_index, mapped_index);
-            if (vertex_index.has_value()) {
-                source_vertices.push_back(VertexId{mesh_index, vertex_index.value()});
+            if (const auto vertex_index = this->map_backward(mesh_index, mapped_index)) {
+                source_vertices.push_back(VertexId{mesh_index, *vertex_index});
             }
         }
         DEBUG_ASSERT(!source_vertices.empty());
@@ -139,13 +138,23 @@ public:
         return this->_forward.segment_count();
     }
 
+    bool empty() const {
+        return this->_forward.total_size() == 0;
+    }
+
     // Finds the maximum vertex index in the merged mesh.
     uint32_t find_max_merged_index() const {
+        DEBUG_ASSERT(!this->empty());
         const std::span<const uint32_t> mapped_indices = this->_forward.flat();
-        if (mapped_indices.empty()) {
+        return *std::max_element(mapped_indices.begin(), mapped_indices.end());
+    }
+
+    // Finds the maximum vertex index in the merged mesh.
+    uint32_t merged_vertex_count() const {
+        if (this->empty()) {
             return 0;
         }
-        return *std::max_element(mapped_indices.begin(), mapped_indices.end());
+        return this->find_max_merged_index() + 1;
     }
 
     // Returns the number of vertices in a specific source mesh.
@@ -156,6 +165,8 @@ public:
     // Performs internal consistency checks in debug mode.
     void validate() const {
 #ifndef NDEBUG
+
+        // Check backward(forward(x)) == x
         for (uint32_t i = 0; i < this->mesh_count(); i++) {
             const uint32_t vertex_count = this->mesh_vertex_count(i);
             for (uint32_t j = 0; j < vertex_count; j++) {
@@ -165,6 +176,27 @@ public:
                 DEBUG_ASSERT(inv_mapped.value() == j);
             }
         }
+
+        // Check forward(backward(x)) == x
+        for (const auto &[key, source_vertex_index] : this->_backward) {
+            DEBUG_ASSERT(key.mesh_index < this->mesh_count());
+            DEBUG_ASSERT(source_vertex_index < this->mesh_vertex_count(key.mesh_index));
+            DEBUG_ASSERT(this->map_forward(VertexId{.mesh_index = key.mesh_index, .vertex_index = source_vertex_index}) == key.vertex_index);
+        }
+
+        // Check forward(x) != forward(y)
+        for (uint32_t i = 0; i < this->mesh_count(); i++) {
+            const uint32_t vertex_count = this->mesh_vertex_count(i);
+            for (uint32_t j = 0; j < vertex_count; j++) {
+                const uint32_t mapped_j = this->map_forward(VertexId{.mesh_index = i, .vertex_index = j});
+                for (uint32_t k = j + 1; k < vertex_count; k++) {
+                    const uint32_t mapped_k = this->map_forward(VertexId{.mesh_index = i, .vertex_index = k});
+                    DEBUG_ASSERT(mapped_j != mapped_k);
+                }
+            }
+        }
+
+        DEBUG_ASSERT(this->_backward.size() == this->_forward.total_size());
 #endif
     }
 

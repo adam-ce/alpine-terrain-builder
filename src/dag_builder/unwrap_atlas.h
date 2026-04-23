@@ -11,7 +11,6 @@
 #include "mesh/View.h"
 #include "mesh/manifold.h"
 #include "uv.h"
-#include "reproject_texture.h"
 #include "atlas/atlas.h"
 #include "mesh/geometry.h"
 #include "mesh/bounds.h"
@@ -37,9 +36,12 @@ std::vector<PackingMetric> calculate_packing_metrics(Range &&meshes) {
         const double area = areas[i];
         const double relative_area = (total_area > 0.0) ? (area / total_area) : 0.0;
 
-        const radix::geometry::Aabb2d uv_bounds = mesh::calculate_bounds(mesh.uvs);
-        const glm::dvec2 uv_size = uv_bounds.size();
-        const double aspect_ratio = std::max(uv_size.x / uv_size.y, 1e-6);
+        double aspect_ratio = 1;
+        if (mesh.has_uvs()) {
+            const radix::geometry::Aabb2d uv_bounds = mesh::calculate_bounds(mesh.uvs);
+            const glm::dvec2 uv_size = uv_bounds.size();
+            aspect_ratio = std::max(uv_size.x / uv_size.y, 1e-6);
+        }
 
         result.push_back(PackingMetric{aspect_ratio, relative_area});
     }

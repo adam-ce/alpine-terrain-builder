@@ -47,10 +47,9 @@ std::vector<PackingMetric> calculate_packing_metrics(Range &&meshes) {
 }
 
 atlas::Plan plan_from_metrics(const std::span<const PackingMetric> metrics, const glm::uvec2 &texture_size) {
-    const size_t total_pixels = static_cast<size_t>(texture_size.x) * texture_size.y;
-    const double pixel_budget = static_cast<double>(total_pixels);
+    const double pixel_budget = texture_size.x * texture_size.y;
 
-    const std::vector<glm::uvec2> target_sizes = transform_vector(metrics, [&](const PackingMetric&metric) {
+    const std::vector<glm::uvec2> target_sizes = transform_vector(metrics, [&](const PackingMetric &metric) {
         const double target_pixel_area = metric.relative_area * pixel_budget;
         const double height = std::sqrt(target_pixel_area / metric.aspect_ratio);
         const double width = height * metric.aspect_ratio;

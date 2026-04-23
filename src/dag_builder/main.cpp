@@ -83,7 +83,7 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering& clustering) 
                 // This vertex occurs multiple times in the same cluster -> ignore
             } else {
                 // This vertex was already encountered in a different cluster -> lock it
-                // we dont remark the cluster since we dont care how often the evrtex is referenced
+                // we dont remark the cluster since we dont care how often the vertex is referenced
                 vertex_lock[vertex_index] = VertexLock::LOCKED;
             }
         }
@@ -131,9 +131,12 @@ int main(int argc, char **argv) {
     USE(argv);
 
     const std::filesystem::path input =
-        "/home/user/master/meshes/innenstadt8/13/6478/4796/6856.glb";
+        // "/home/user/master/meshes/innenstadt8/13/6478/4796/6856.glb";
+        // "/home/user/master/meshes/innenstadt10/15/25917/19184/27423.glb";
+        // "/home/user/master/meshes/innenstadt10/15/25914/19185/27426.glb";
+        "/home/user/master/meshes/innenstadt11/15/25917/19185/27422.glb";
     const std::filesystem::path out_dir =
-        "/home/user/master/meshes/lod_tree";
+            "/home/user/master/meshes/lod_tree";
     std::filesystem::create_directories(out_dir);
 
     auto mesh = mesh::io::load_from_path(input).value();

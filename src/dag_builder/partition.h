@@ -275,8 +275,11 @@ inline Cluster merge_geometry_using_mapping(
     const mesh::merging::VertexMapping &mapping) {
     // Preallocate merged cluster
     Cluster merged;
+    if (mapping.empty()) {
+        return merged;
+    }
 
-    const uint32_t unique_vertex_count = mapping.find_max_merged_index() + 1;
+    const uint32_t unique_vertex_count = mapping.merged_vertex_count();
     merged.vertex_indices.resize(unique_vertex_count);
 
     uint32_t total_triangle_count = 0;
@@ -304,6 +307,7 @@ inline Cluster merge_geometry_using_mapping(
         for (const auto &triangle : cluster.local_triangles) {
             glm::uvec3 remapped;
             for (uint8_t k = 0; k < 3; k++) {
+                DEBUG_ASSERT(triangle[k] < vertex_count);
                 remapped[k] = mapping.map_forward(linear_cluster_index, triangle[k]);
             }
             if (!mesh::is_degenerate(remapped)) {

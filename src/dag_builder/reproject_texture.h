@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -45,7 +46,7 @@ inline void scale_triangle_inplace(std::array<Vec, 3>& triangle, const typename 
     scale_triangle_inplace(triangle[0], triangle[1], triangle[2], factor);
 }
 
-cv::Rect expand_rect(const cv::Rect &r, int padding) {
+inline cv::Rect expand_rect(const cv::Rect &r, int padding) {
     return cv::Rect(
         r.x - padding,
         r.y - padding,
@@ -125,7 +126,7 @@ public:
 
         // Get mask by filling triangle
         cv::Mat mask = cv::Mat::zeros(target_rect.height, target_rect.width, CV_32FC1);
-        cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1.0), cv::LINE_AA, 0);
+        cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1), cv::LINE_8, 0);
 
         // grow mask a bit
         cv::dilate(mask, mask, cv::Mat(), cv::Point(-1, -1), PADDING_PIXELS);
@@ -245,11 +246,13 @@ private:
 
     template <typename T>
     static cv::Rect_<T> clamp_rect_to_mat_bounds(const cv::Rect_<T> &rect, const cv::Mat &mat) {
-        const T x = std::max(rect.x, static_cast<T>(0));
-        const T y = std::max(rect.y, static_cast<T>(0));
-        const T width = std::max(std::min(rect.width, static_cast<T>(mat.cols) - x), static_cast<T>(0));
-        const T height = std::max(std::min(rect.height, static_cast<T>(mat.rows) - y), static_cast<T>(0));
-        return cv::Rect_<T>(x, y, width, height);
+        T x0 = std::clamp(rect.x, T(0), T(mat.cols));
+        T y0 = std::clamp(rect.y, T(0), T(mat.rows));
+        T x1 = std::clamp(rect.x + rect.width, T(0), T(mat.cols));
+        T y1 = std::clamp(rect.y + rect.height, T(0), T(mat.rows));
+        T width = std::max(T(0), x1 - x0);
+        T height = std::max(T(0), y1 - y0);
+        return cv::Rect_<T>(x0, y0, width, height);
     }
     static inline cv::Point2f glm_to_cv(const glm::dvec2 &vec) {
         return cv::Point2f(static_cast<float>(vec.x), static_cast<float>(vec.y));

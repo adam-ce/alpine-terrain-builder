@@ -141,7 +141,7 @@ inline bool check_consistent_uvs(const Clustering &clustering, const std::span<c
     return true;
 }
 inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
-    if (cluster_indices.empty()) {
+    if (cluster_indices.empty() || clustering.textures.empty()) {
         return false;
     }
 
@@ -541,7 +541,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
             TextureReprojector component_texture(component_texture_size, CV_8UC3);
             for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
                 const Cluster &cluster = clustering.clusters[cluster_index];
-                const cv::Mat &cluster_texture = clustering.textures[cluster.texture_id];
+                const cv::Mat &cluster_texture = clustering.get_cluster_texture(cluster_index).value();
 
                 for (const glm::uvec3 &triangle : component.triangles) {
                     auto opt = map_to_original_triangle(linear_cluster_index, triangle);

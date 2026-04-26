@@ -168,7 +168,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
     DEBUG_ASSERT(mesh::is_manifold(mesh));
 
     if (!debug_texture) {
-        if (clustering.textures.size() <= 1) {
+        if (clustering.textures.size() == 1) {
             // Just copy the single texture
             mesh.texture = clustering.textures[0];
         } else if (!clustering.textures.empty()) {

@@ -592,7 +592,7 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
     std::vector<Cluster> partitioned_clusters;
     partitioned_clusters.reserve(partition_count);
 
-    TextureSet textures;
+    std::vector<cv::Mat> textures;
 
     std::vector<uint32_t> cluster_indices;
     for (uint32_t partition_index = 0; partition_index < partition_count; partition_index++) {
@@ -612,12 +612,14 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
             // We need to perform a fresh uv unwrap and generate a new texture
             const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap);
             merged_cluster = result.cluster;
-            merged_cluster.texture_id = textures.add(result.texture);
+            merged_cluster.texture_id = textures.size();
+            textures.push_back(result.texture);
         } else {
             // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
             merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
             const cv::Mat& texture = clustering.get_cluster_texture(cluster_indices[0]);
-            merged_cluster.texture_id = textures.add(texture);
+            merged_cluster.texture_id = textures.size();
+            textures.push_back(texture);
         }
         partitioned_clusters.push_back(std::move(merged_cluster));
     }

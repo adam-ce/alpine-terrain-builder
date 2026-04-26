@@ -6,8 +6,6 @@
 #include <glm/glm.hpp>
 #include <opencv2/core.hpp>
 
-#include "TextureSet.h"
-
 struct Cluster {
     std::vector<uint32_t> vertex_indices; // indices into Clustering::positions
     std::vector<glm::uvec3> local_triangles; // indices into this->vertex_indices
@@ -30,7 +28,7 @@ struct Cluster {
 struct Clustering {
     std::vector<glm::dvec3> positions;
     std::vector<Cluster> clusters;
-    TextureSet textures = {};
+    std::vector<cv::Mat> textures;
 
     constexpr size_t vertex_count() const noexcept {
         return this->positions.size();

@@ -17,7 +17,6 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "validate.h"
-#include "TextureSet.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
@@ -105,9 +104,9 @@ inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options 
         {}
     );
 
-    TextureSet textures;
+    std::vector<cv::Mat> textures;
     if (mesh.texture.has_value()) {
-        textures.add(mesh.texture.value());
+        textures.push_back(mesh.texture.value());
     }
 
     return Clustering{

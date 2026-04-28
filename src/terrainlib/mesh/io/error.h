@@ -28,25 +28,26 @@ public:
     constexpr bool operator!=(LoadMeshError other) const {
         return this->kind != other.kind;
     }
-
-    std::string description() const {
-        switch (kind) {
-        case LoadMeshErrorKind::UnsupportedFormat:
-            return "format not supported";
-        case LoadMeshErrorKind::FileNotFound:
-            return "file not found";
-        case LoadMeshErrorKind::InvalidFormat:
-            return "invalid file format";
-        case LoadMeshErrorKind::OutOfMemory:
-            return "out of memory";
-        default:
-            return "undefined error";
-        }
+    constexpr bool operator==(LoadMeshErrorKind other) const {
+        return this->kind == other;
+    }
+    constexpr bool operator!=(LoadMeshErrorKind other) const {
+        return this->kind != other;
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const LoadMeshError &err) {
-        os << err.description();
-        return os;
+    const char* description() const {
+        switch (kind) {
+            case LoadMeshErrorKind::UnsupportedFormat:
+                return "format not supported";
+            case LoadMeshErrorKind::FileNotFound:
+                return "file not found";
+            case LoadMeshErrorKind::InvalidFormat:
+                return "invalid file format";
+            case LoadMeshErrorKind::OutOfMemory:
+                return "out of memory";
+            default:
+                return "undefined error";
+        }
     }
 
 private:
@@ -75,25 +76,26 @@ public:
     constexpr bool operator!=(SaveMeshError other) const {
         return this->kind != other.kind;
     }
-
-    std::string description() const {
-        switch (kind) {
-        case SaveMeshErrorKind::UnsupportedFormat:
-            return "format not supported";
-        case SaveMeshErrorKind::OpenFile:
-            return "failed to open output file";
-        case SaveMeshErrorKind::WriteFile:
-            return "failed to write to output file";
-        case SaveMeshErrorKind::OutOfMemory:
-            return "out of memory";
-        default:
-            return "undefined error";
-        }
+    constexpr bool operator==(SaveMeshErrorKind other) const {
+        return this->kind == other;
     }
-    
-    friend std::ostream &operator<<(std::ostream &os, const SaveMeshError &error) {
-        os << error.description();
-        return os;
+    constexpr bool operator!=(SaveMeshErrorKind other) const {
+        return this->kind != other;
+    }
+
+    const char* description() const {
+        switch (kind) {
+            case SaveMeshErrorKind::UnsupportedFormat:
+                return "format not supported";
+            case SaveMeshErrorKind::OpenFile:
+                return "failed to open output file";
+            case SaveMeshErrorKind::WriteFile:
+                return "failed to write to output file";
+            case SaveMeshErrorKind::OutOfMemory:
+                return "out of memory";
+            default:
+                return "undefined error";
+        }
     }
 
 private:
@@ -101,3 +103,42 @@ private:
 };
 
 } // namespace mesh::io
+
+#include <fmt/format.h>
+template <>
+struct fmt::formatter<mesh::io::SaveMeshError> {
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext &ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const mesh::io::SaveMeshError &error, FormatContext &ctx) {
+        return fmt::format_to(ctx.out(), "{}", error.description());
+    }
+};
+
+template <>
+struct fmt::formatter<mesh::io::LoadMeshError> {
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext &ctx) {
+        return ctx.begin();
+    }
+
+    template <typename FormatContext>
+    auto format(const mesh::io::LoadMeshError &error, FormatContext &ctx) {
+        return fmt::format_to(ctx.out(), "{}", error.description());
+    }
+};
+
+#include <fmt/ostream.h>
+#include <iostream>
+inline std::ostream &operator<<(std::ostream &os, const mesh::io::SaveMeshError &error) {
+    fmt::print(os, "{}", error);
+    return os;
+}
+
+inline std::ostream &operator<<(std::ostream &os, const mesh::io::LoadMeshError &error) {
+    fmt::print(os, "{}", error);
+    return os;
+}

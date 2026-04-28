@@ -5,6 +5,7 @@
 #include <igl/bfs_orient.h>
 
 #include "mesh/igl/convert.h"
+#include "mesh/topology.h"
 
 namespace mesh {
 
@@ -17,6 +18,7 @@ void orient_triangles_core(
     Eigen::VectorXi C;
     igl::bfs_orient(F, FF, C);
     to_stl_glm_span(FF, triangles_out);
+    DEBUG_ASSERT(is_consistently_oriented(triangles_out));
 }
 }
 

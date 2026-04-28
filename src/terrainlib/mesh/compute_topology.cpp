@@ -20,7 +20,7 @@ namespace detail {
 ComponentTopology compute_component_topology(const std::span<const glm::uvec3> triangles) {
     DEBUG_ASSERT(is_single_component(triangles));
     DEBUG_ASSERT(is_manifold(triangles));
-    DEBUG_ASSERT(is_orientable(triangles));
+    DEBUG_ASSERT(is_consistently_oriented(triangles));
 
     const uint32_t vertex_count = compute_vertex_count(triangles);
     const uint32_t face_count = triangles.size();

@@ -133,12 +133,12 @@ std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::View_<n_di
 }
 
 template <glm::length_t n_dims, typename T>
-bool is_orientable(const mesh::Simple_<n_dims, T> &mesh) {
-    return is_orientable(mesh.triangles);
+bool is_consistently_oriented(const mesh::Simple_<n_dims, T> &mesh) {
+    return is_consistently_oriented(mesh.triangles);
 }
 template <glm::length_t n_dims, typename T>
-bool is_orientable(const mesh::View_<n_dims, T> &mesh) {
-    return is_orientable(mesh.triangles);
+bool is_consistently_oriented(const mesh::View_<n_dims, T> &mesh) {
+    return is_consistently_oriented(mesh.triangles);
 }
 
 }

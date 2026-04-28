@@ -150,7 +150,7 @@ std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const 
     return adjacency;
 }
 
-bool is_orientable(const std::span<const glm::uvec3> triangles) {
+bool is_consistently_oriented(const std::span<const glm::uvec3> triangles) {
     if (!is_edge_manifold(triangles)) {
         return false;
     }

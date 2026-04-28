@@ -397,16 +397,16 @@ TEST_CASE("mesh::count_vertex_adjacent_triangles") {
     }
 }
 
-TEST_CASE("mesh::is_orientable") {
+TEST_CASE("mesh::is_consistently_oriented") {
     SECTION("empty mesh is orientable") {
         const std::vector<glm::uvec3> triangles = {};
-        CHECK(mesh::is_orientable(triangles));
+        CHECK(mesh::is_consistently_oriented(triangles));
     }
 
     SECTION("single triangle is orientable") {
         const std::vector<glm::uvec3> triangles = {
             glm::uvec3(0, 1, 2)};
-        CHECK(mesh::is_orientable(triangles));
+        CHECK(mesh::is_consistently_oriented(triangles));
     }
 
     SECTION("two properly oriented adjacent triangles are orientable") {
@@ -414,7 +414,7 @@ TEST_CASE("mesh::is_orientable") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(2, 1, 3) // opposite orientation along shared edge (1,2)
         };
-        CHECK(mesh::is_orientable(triangles));
+        CHECK(mesh::is_consistently_oriented(triangles));
     }
 
     SECTION("two triangles with same directed edge are not orientable") {
@@ -423,7 +423,7 @@ TEST_CASE("mesh::is_orientable") {
             glm::uvec3(0, 1, 3) // same directed edge (0 -> 1)
         };
 
-        CHECK_FALSE(mesh::is_orientable(triangles));
+        CHECK_FALSE(mesh::is_consistently_oriented(triangles));
     }
 
     SECTION("identical triangles are not orientable") {
@@ -431,7 +431,7 @@ TEST_CASE("mesh::is_orientable") {
             glm::uvec3(0, 1, 2),
             glm::uvec3(0, 1, 2)};
 
-        CHECK_FALSE(mesh::is_orientable(triangles));
+        CHECK_FALSE(mesh::is_consistently_oriented(triangles));
     }
 
     SECTION("edge shared by more than two triangles") {
@@ -441,7 +441,7 @@ TEST_CASE("mesh::is_orientable") {
             glm::uvec3(4, 1, 2) // third triangle sharing edge (1,2)
         };
 
-        CHECK_FALSE(mesh::is_orientable(triangles));
+        CHECK_FALSE(mesh::is_consistently_oriented(triangles));
     }
 }
 

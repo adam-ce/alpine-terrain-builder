@@ -74,10 +74,10 @@ std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const 
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index);
 
 template <glm::length_t n_dims, typename T>
-bool is_orientable(const mesh::Simple_<n_dims, T> &mesh);
+bool is_consistently_oriented(const mesh::Simple_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
-bool is_orientable(const mesh::View_<n_dims, T> &mesh);
-bool is_orientable(const std::span<const glm::uvec3> triangles);
+bool is_consistently_oriented(const mesh::View_<n_dims, T> &mesh);
+bool is_consistently_oriented(const std::span<const glm::uvec3> triangles);
 
 }
 

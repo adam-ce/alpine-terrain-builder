@@ -19,10 +19,10 @@ public:
     Component epsilon() const {
         return this->_epsilon;
     }
-    virtual void add(const Vec &point, const Meta meta) override {
+    virtual void insert(const Vec &point, const Meta meta) override {
         DEBUG_ASSERT_VAL(this->_lookup.insert(point, meta));
     }
-    virtual bool get(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
+    virtual bool find(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
         return this->_lookup.find_all_near(point, this->_epsilon, duplicates);
     }
 

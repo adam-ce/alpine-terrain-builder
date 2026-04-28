@@ -11,22 +11,24 @@ template <glm::length_t n_dims, typename Component, typename Meta>
 class VertexDeduplicate {
 public:
     using Vec = glm::vec<n_dims, Component>;
+    using Duplicate = std::reference_wrapper<const Meta>;
+    using Duplicates = std::vector<Duplicate>;
 
     virtual ~VertexDeduplicate() = default;
 
-    virtual void add(const Vec& point, const Meta meta) = 0;
-    virtual bool get(const Vec& point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const = 0;
-    virtual bool get_or_add(const Vec &point, const Meta meta, std::vector<std::reference_wrapper<const Meta>> &duplicates) {
-        if (this->get(point, duplicates)) {
+    virtual void insert(const Vec& point, const Meta meta) = 0;
+    virtual bool find(const Vec& point, Duplicates &duplicates) const = 0;
+    virtual bool find_or_insert(const Vec &point, const Meta meta, Duplicates &duplicates) {
+        if (this->find(point, duplicates)) {
             return false;
         } else {
-            this->add(point, meta);
+            this->insert(point, meta);
             return true;
         }
     }
-    std::vector<std::reference_wrapper<const Meta>> get(const Vec &point) const {
-        std::vector<std::reference_wrapper<const Meta>> duplicates;
-        this->get(point, duplicates);
+    Duplicates find(const Vec &point) const {
+        Duplicates duplicates;
+        this->find(point, duplicates);
         return duplicates;
     }
 };

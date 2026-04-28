@@ -148,8 +148,8 @@ VertexMapping create_mapping(
                 add_unique_vertex(current_vertex);
             } else if (mesh_index == 0) {
                 add_unique_vertex(current_vertex);
-                deduplicate.add(position, current_vertex);
-            } else if (!deduplicate.get_or_add(position, current_vertex, duplicate_vertices)) {
+                deduplicate.insert(position, current_vertex);
+            } else if (!deduplicate.find_or_insert(position, current_vertex, duplicate_vertices)) {
                 // Duplicates detected
                 std::optional<std::pair<VertexId, double>> nearest_duplicate;
                 for (const auto &other_vertex : duplicate_vertices) {
@@ -175,7 +175,7 @@ VertexMapping create_mapping(
                     DEBUG_ASSERT(!mapping.map_backward(mesh_index, mapped).has_value());
                     mapping.add(current_vertex, mapped);
                 } else {
-                    deduplicate.add(position, current_vertex);
+                    deduplicate.insert(position, current_vertex);
                     add_unique_vertex(current_vertex);
                 }
                 duplicate_vertices.clear();
@@ -200,191 +200,6 @@ VertexMapping create_mapping(
 
     return mapping;
 }
-
-/*
-namespace {
-radix::geometry::Aabb3d pad_bounds(const radix::geometry::Aabb3d &bounds, const double percentage) {
-    const glm::dvec3 bounds_padding = bounds.size() * percentage;
-    const radix::geometry::Aabb3d padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
-    return padded_bounds;
-}
-
-bool are_all_bounds_connected(std::span<std::reference_wrapper<const SimpleMesh>> meshes) {
-    if (meshes.size() <= 1) {
-        return true;
-    }
-
-    std::vector<radix::geometry::Aabb3d> mesh_bounds;
-    mesh_bounds.reserve(meshes.size());
-    std::transform(meshes.begin(), meshes.end(),
-                   std::back_inserter(mesh_bounds),
-                   [](const SimpleMesh &mesh) { return pad_bounds(calculate_bounds(mesh), 0.01); });
-    for (uint32_t i = 0; i < mesh_bounds.size(); i++) {
-        bool intersect_any_other = false;
-        for (uint32_t j = 0; j < mesh_bounds.size(); j++) {
-            if (i == j) {
-                continue;
-            }
-
-            if (radix::geometry::intersect(mesh_bounds[i], mesh_bounds[j])) {
-                intersect_any_other = true;
-                break;
-            }
-        }
-        if (!intersect_any_other) {
-            LOG_WARN("Mesh at index {} is not close to any other mesh", i);
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool are_all_meshes_merged(const VertexMapping &mapping) {
-    UnionFind union_find(mapping.mesh_count());
-
-    const uint32_t maximal_merged_mesh_index = mapping.find_max_merged_index();
-
-    std::unordered_set<uint32_t> observed_sources;
-    observed_sources.reserve(mapping.mesh_count());
-    for (uint32_t vertex_index = 0; vertex_index < maximal_merged_mesh_index; vertex_index++) {
-        observed_sources.clear();
-        for (uint32_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
-            if (auto opt = mapping.map_inverse(mesh_index, vertex_index); opt.has_value()) {
-                observed_sources.insert(mesh_index);
-                if (observed_sources.size() > 1) {
-                    for (uint32_t observed_source : observed_sources) {
-                        if (observed_source == mesh_index) {
-                            continue;
-                        }
-
-                        union_find.make_union(observed_source, mesh_index);
-                    }
-                }
-            }
-        }
-    }
-
-    return union_find.is_joint();
-}
-
-template <spatial_lookup::SpatialLookup<> Lookup>
-double estimate_min_vertex_separation_between_meshes_after_merge(const Lookup &lookup, const VertexMapping &mapping) {
-    double min_squared_distance = std::numeric_limits<double>::infinity();
-    lookup.for_all_cells([&](const Vec& point, const Value& value) {
-
-    });
-    for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
-        for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
-            for (auto second = first + 1; second != cell.items.end(); ++second) {
-                const uint32_t mesh1 = first->value.mesh_index;
-                const uint32_t mesh2 = second->value.mesh_index;
-
-                if (mesh1 == mesh2) {
-                    continue;
-                }
-
-                const glm::dvec3 &point1 = first->point;
-                const glm::dvec3 &point2 = second->point;
-
-                const double squared_distance = glm::distance2(point1, point2);
-                min_squared_distance = std::min(min_squared_distance, squared_distance);
-            }
-        }
-    }
-
-    return std::sqrt(min_squared_distance);
-}
-
-double estimate_min_vertex_separation_between_meshes_after_merge(const std::span<const SimpleMesh> meshes, const VertexMapping &mapping) {
-    Grid3d<VertexId> grid = construct_grid_for_meshes<VertexId>(meshes);
-
-    for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
-        const SimpleMesh &mesh = meshes[mesh_index];
-        for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
-            const glm::dvec3 &position = mesh.positions[vertex_index];
-            grid.insert(position, VertexId{mesh_index, vertex_index});
-        }
-    }
-
-    double min_squared_distance = std::numeric_limits<double>::infinity();
-    for (const Grid3d<VertexId>::GridCell &cell : grid.cells()) {
-        for (auto first = cell.items.begin(); first != cell.items.end(); ++first) {
-            for (auto second = first + 1; second != cell.items.end(); ++second) {
-                const uint32_t mesh1 = first->value.mesh_index;
-                const uint32_t mesh2 = second->value.mesh_index;
-
-                if (mesh1 == mesh2) {
-                    // Both vertices from the same mesh
-                    continue;
-                }
-
-                const uint32_t mapped1 = mapping.map(first->value);
-                const uint32_t mapped2 = mapping.map(second->value);
-                if (mapped1 == mapped2) {
-                    // Vertices were already merged
-                    continue;
-                }
-
-                const glm::dvec3 &point1 = first->point;
-                const glm::dvec3 &point2 = second->point;
-                const double squared_distance = glm::distance2(point1, point2);
-                min_squared_distance = std::min(min_squared_distance, squared_distance);
-            }
-        }
-    }
-
-    return std::sqrt(min_squared_distance);
-}
-
-} // namespace
-
-VertexMapping create_connecting_mapping(std::span<std::reference_wrapper<const SimpleMesh>> meshes) {
-    LOG_DEBUG("Finding shared vertices between {} meshes (epsilon=auto)", meshes.size());
-
-    const double inf = std::numeric_limits<double>::infinity();
-    const double min_edge_length_sq = std::transform_reduce(
-        meshes.begin(),
-        meshes.end(),
-        inf,
-        [](const double a, const double b) { return std::min(a, b); },
-        [](const SimpleMesh &m) { return calculate_min_edge_length_squared(m).value_or(inf); });
-    if (min_edge_length_sq == inf) {
-        return {};
-    }
-    const double min_edge_length = std::sqrt(min_edge_length_sq.value());
-    DEBUG_ASSERT(min_edge_length > 0);
-    double distance_epsilon = min_edge_length / 1000;
-    LOG_TRACE("Starting with distance epsilon of {:g}", distance_epsilon);
-
-    VertexMapping mapping;
-    bool success = false;
-    for (uint32_t i = 0; i < 10; i++) {
-        mapping = create_mapping(meshes, distance_epsilon);
-
-        if (are_all_meshes_merged(mapping)) {
-            LOG_TRACE("Found distance epsilon that connects all meshes");
-
-            const double min_vertex_separation_after_merge = estimate_min_vertex_separation_between_meshes_after_merge(meshes, mapping);
-            if (min_vertex_separation_after_merge > min_edge_length / 2) {
-                LOG_TRACE("Found vertices in merged mesh that are much closer than in the source meshes, suggesting an incomplete merge");
-                continue;
-            }
-
-            success = true;
-            break;
-        }
-        distance_epsilon *= 10;
-        LOG_TRACE("Increasing distance epsilon to {:g}", distance_epsilon);
-    }
-
-    if (!success) {
-        LOG_TRACE("Failed to find appropriate distance epsilon");
-    }
-
-    return mapping;
-}
-*/
 
 SimpleMesh apply_mapping(
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,

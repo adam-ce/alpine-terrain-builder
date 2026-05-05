@@ -9,6 +9,8 @@ namespace octree::cache {
    
 class ICache {
 public:
+    virtual ~ICache() = default;
+
     virtual std::optional<Node> get(const Id& id) noexcept = 0;
     virtual bool put(const Id &id, const Node &node) noexcept = 0;
     virtual bool remove(const Id &id) noexcept = 0;

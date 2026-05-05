@@ -13,12 +13,9 @@ struct IdAndNode {
     IdAndNode() = default;
     IdAndNode(Id id, Node node) : id(std::move(id)), node(std::move(node)) {}
     
-    operator Node() const {
-        return std::move(node);
-    }
-    operator Id() const {
-        return id;
-    }
+    operator Node() const { return node; }
+    operator Node() && { return std::move(node); }
+    operator Id() const { return id; }
 };
 
 } // namespace octree

@@ -14,10 +14,8 @@ enum class CopyMeshErrorKind {
     Write
 };
 
-// TODO: store the std::error_code in the CopyMeshError
 class CopyMeshError {
 public:
-    CopyMeshError() = default;
     constexpr CopyMeshError(CopyMeshErrorKind kind)
         : kind(kind) {}
 

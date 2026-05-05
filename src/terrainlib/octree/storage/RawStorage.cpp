@@ -66,12 +66,15 @@ tl::expected<void, CopyMeshError> RawStorage::copy_node_to(const Id &id, RawStor
 }
 
 bool RawStorage::remove_node(const Id &id) const noexcept {
-    const auto node_path = this->get_node_path(id);
-    return std::filesystem::remove(node_path);
+    std::error_code ec;
+    const auto removed = std::filesystem::remove(this->get_node_path(id), ec);
+    return !ec && removed;
 }
 
 bool RawStorage::has_node(const Id &id) const noexcept {
-    return std::filesystem::exists(this->get_node_path(id));
+    std::error_code ec;
+    const auto exists = std::filesystem::exists(this->get_node_path(id), ec);
+    return !ec && exists;
 }
 
 std::filesystem::path RawStorage::get_node_path(const Id &id) const noexcept {

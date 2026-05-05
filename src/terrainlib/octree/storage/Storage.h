@@ -1,8 +1,9 @@
 #pragma once
 
 #include <filesystem>
-#include <optional>
 #include <list>
+#include <memory>
+#include <optional>
 #include <unordered_map>
 
 #include <tl/expected.hpp>
@@ -29,19 +30,23 @@ struct MaybeIndex {
         : map(std::move(map)) {}
 
     bool add(const Id &id) noexcept {
-        if (this->map.has_value()) {
-            this->dirty = true;
-            return this->map->add(id);
+        if (!map.has_value()) {
+            return false;
         }
-        return false;
+
+        const bool changed = map->add(id);
+        dirty = dirty || changed;
+        return changed;
     }
 
     bool remove(const Id &id) noexcept {
-        if (this->map.has_value()) {
-            this->dirty = true;
-            return this->map->remove(id);
+        if (!map.has_value()) {
+            return false;
         }
-        return false;
+
+        const bool changed = map->remove(id);
+        dirty = dirty || changed;
+        return changed;
     }
 
     bool contains(const Id &id, const bool def = false) const noexcept {
@@ -53,11 +58,11 @@ struct MaybeIndex {
 };
 
 struct MaybeCache : public cache::ICache {
-    std::optional<std::unique_ptr<ICache>> cache;
+    std::optional<std::unique_ptr<cache::ICache>> cache;
 
     explicit MaybeCache()
         : cache(std::nullopt) {}
-    explicit MaybeCache(std::unique_ptr<ICache> cache)
+    explicit MaybeCache(std::unique_ptr<cache::ICache> cache)
         : cache(std::move(cache)) {}
 
     std::optional<Node> get(const Id& id) noexcept override {

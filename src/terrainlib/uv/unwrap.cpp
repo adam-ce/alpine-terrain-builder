@@ -124,6 +124,7 @@ void clamp_uv_map(UvMap &map, size_t vertex_count) {
 
 tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
     const cgal::HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
+    DEBUG_ASSERT(bhd != boost::graph_traits<cgal::Mesh>::null_halfedge());
 
     CgalUvMap uv_uhm;
     CgalUvPropMap uv_map(uv_uhm);

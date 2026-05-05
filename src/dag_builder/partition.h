@@ -420,6 +420,8 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     // Keep only backward mapping, since we cant keep the forward mapping valid
     auto [_, merged_to_original] = std::move(mapping).into_parts();
 
+    // TODO: use an index mesh here
+
     // Make merged geometry manifold, keeping backward mapping consistent
     auto add_duplicate_vertex_to_mapping = [&](const uint32_t old_vertex_index, const uint32_t new_vertex_index) {
         for (const auto &[linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
@@ -470,7 +472,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     std::vector<std::vector<uint32_t>> component_to_merged = detail::create_component_backwards_mapping(components_index, merged_to_component);
 
     // Prepare atlas for new texture
-    const glm::uvec2 target_texture_size(1024); // TODO:
+    const glm::uvec2 target_texture_size(2048);
     const atlas::Plan atlas_plan = create_atlas_plan(target_texture_size, components);
 
     // Perform an uv unwrap for each component
@@ -541,7 +543,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
             TextureReprojector component_texture(component_texture_size, CV_8UC3);
             for (const auto [linear_cluster_index, cluster_index] : enumerate(cluster_indices)) {
                 const Cluster &cluster = clustering.clusters[cluster_index];
-                const cv::Mat &cluster_texture = clustering.get_cluster_texture(cluster_index).value();
+                const cv::Mat &cluster_texture = clustering.get_cluster_texture(cluster_index);
 
                 for (const glm::uvec3 &triangle : component.triangles) {
                     auto opt = map_to_original_triangle(linear_cluster_index, triangle);
@@ -589,10 +591,13 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
     const uint32_t no_vertex_remap = -1;
     std::vector<uint32_t> vertex_remap(clustering.vertex_count(), no_vertex_remap);
 
+    // Prepare texture remap buffer for merging
+    const uint32_t no_texture_remap = -1;
+    std::vector<uint32_t> texture_remap(clustering.textures.size(), no_texture_remap);
+    std::vector<cv::Mat> textures;
+
     std::vector<Cluster> partitioned_clusters;
     partitioned_clusters.reserve(partition_count);
-
-    std::vector<cv::Mat> textures;
 
     std::vector<uint32_t> cluster_indices;
     for (uint32_t partition_index = 0; partition_index < partition_count; partition_index++) {
@@ -617,9 +622,16 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
         } else {
             // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
             merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
-            const cv::Mat& texture = clustering.get_cluster_texture(cluster_indices[0]);
-            merged_cluster.texture_id = textures.size();
-            textures.push_back(texture);
+
+            // Add texture to new clustering, ensuring no duplicates.
+            const uint32_t original_texture_id = clustering.clusters[cluster_indices[0]].texture_id;
+            uint32_t& new_texture_id = texture_remap[original_texture_id];
+            if (new_texture_id == no_texture_remap) {
+                new_texture_id = textures.size();
+                const cv::Mat &texture = clustering.textures[original_texture_id];
+                textures.push_back(texture);
+            }
+            merged_cluster.texture_id = new_texture_id;
         }
         partitioned_clusters.push_back(std::move(merged_cluster));
     }

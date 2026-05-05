@@ -91,6 +91,13 @@ std::optional<Id> Space::find_node_at_level_containing_point(const glm::dvec3& p
     return current;
 }
 
+glm::dvec3 Space::get_node_size_at_level(const uint32_t level) const {
+    const uint32_t resolution = 1 << level;
+    const glm::dvec3 bounds_size = this->_bounds.size();
+    return bounds_size / glm::dvec3(resolution);
+}
+
+
 Bounds Space::get_node_bounds(const Id &id) const {
     const auto coords = id.coords();
     const uint32_t level = id.level();

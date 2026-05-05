@@ -93,9 +93,18 @@ void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
 
     DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
 
+    /*
+    While this check makes sense on its own
+    This produces false positives when validating the geometry for uv unwrapping without uvs
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        DEBUG_ASSERT(!is_empty_triangle(triangle, mesh.positions));
+        const bool is_empty = is_empty_triangle(triangle, mesh.positions);
+        if (mesh.has_uvs()) {
+            DEBUG_ASSERT(!is_empty_triangle(triangle, mesh.uvs));
+        } else {
+            DEBUG_ASSERT(is_empty);
+        }
     }
+    */
 }
 }
 

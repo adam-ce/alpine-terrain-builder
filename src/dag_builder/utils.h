@@ -6,10 +6,11 @@
 #include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 
+#include "atlas/atlas.h"
+#include "cluster.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"
-#include "cluster.h"
-#include "atlas/atlas.h"
+#include "mesh/texture_trim.h"
 #include "range_utils.h"
 
 // Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
@@ -228,4 +229,41 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
 inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
     const Clustering manifold_clustering = make_manifold(clustering);
     return detail::manifold_clustering_to_mesh(manifold_clustering, debug_texture);
+}
+
+inline void trim_textures_inplace(Clustering &clustering) {
+    // Group clusters by texture
+    std::vector<std::vector<uint32_t>> clusters_per_texture(clustering.textures.size());
+    for (const auto& [i, cluster] : enumerate(clustering.clusters)) {
+        clusters_per_texture[cluster.texture_id].push_back(i);
+    }
+
+    // Trim each texture one by one
+    for (const auto& [texture_id, clusters] : enumerate(clusters_per_texture)) {
+        // Compute UV bounds for this texture
+        radix::geometry::Aabb2d uv_bounds;
+        for (const uint32_t cluster_index : clusters) {
+            const Cluster &cluster = clustering.clusters[cluster_index];
+            const std::span<const glm::dvec2> cluster_uvs = cluster.uvs;
+            const radix::geometry::Aabb2d cluster_uv_bounds = radix::geometry::find_bounds(cluster_uvs);
+            uv_bounds.expand_by(cluster_uv_bounds);
+        }
+
+        // Trim the texture and calculate the UV remap
+        cv::Mat &texture = clustering.textures[texture_id];
+        TextureTrim trim = compute_texture_trim(texture, uv_bounds);
+        texture = trim.texture;
+
+        // Apply the trim to all clusters using this texture
+        for (const uint32_t cluster_index : clusters) {
+            Cluster &cluster = clustering.clusters[cluster_index];
+            std::span<glm::dvec2> cluster_uvs = cluster.uvs;
+            trim.uv_remap.remap_uvs_inplace(cluster_uvs);
+        }
+    }
+}
+inline Clustering trim_textures(const Clustering &clustering) {
+    Clustering trimmed = clustering;
+    trim_textures_inplace(trimmed);
+    return trimmed;
 }

@@ -230,4 +230,75 @@ inline PartitionClustersResult partition_clusters(
     return PartitionClustersResult{std::move(partitions), static_cast<uint32_t>(partition_count)};
 }
 
+template <typename T>
+inline std::vector<uint8_t> encode_vertex_buffer(const std::span<const T> data) {
+    static_assert(std::is_trivially_copyable_v<T>, "Vertex type must be trivially copyable");
+
+    const size_t vertex_count = data.size();
+    const size_t vertex_size = sizeof(T);
+    const size_t buffer_bound = meshopt_encodeVertexBufferBound(vertex_count, vertex_size);
+    std::vector<uint8_t> buf(buffer_bound);
+    const size_t written = meshopt_encodeVertexBuffer(buf.data(), buf.size(), data.data(), vertex_count, vertex_size);
+    DEBUG_ASSERT(written <= buffer_bound);
+    buf.resize(written);
+    return buf;
+}
+template <typename T>
+inline std::vector<uint8_t> encode_vertex_buffer(const std::vector<T>& data) {
+    return encode_vertex_buffer(std::span<const T>(data));
+}
+
+template <typename T>
+inline void decode_vertex_buffer(std::span<T> data, const std::span<const uint8_t> encoded) {
+    static_assert(std::is_trivially_copyable_v<T>, "Vertex type must be trivially copyable");
+
+    const size_t vertex_count = data.size();
+    const size_t vertex_size = sizeof(T);
+    const int result = meshopt_decodeVertexBuffer(data.data(), vertex_count, vertex_size, encoded.data(), encoded.size());
+    ASSERT(result == 0, "Vertex buffer decoding failed");
+}
+template <typename T>
+inline void decode_vertex_buffer(std::vector<T>& data, size_t vertex_count, const std::span<const uint8_t> encoded) {
+    data.resize(vertex_count);
+    decode_vertex_buffer(std::span<T>(data), encoded);
+}
+template <typename T>
+inline std::vector<T> decode_vertex_buffer(size_t vertex_count, const std::span<const uint8_t> encoded) {
+    std::vector<T> data;
+    decode_vertex_buffer(data, vertex_count, encoded);
+    return data;
+}
+
+inline std::vector<uint8_t> encode_index_buffer(const std::span<const uint32_t> indices) {
+    const size_t index_count = indices.size();
+    const size_t buffer_bound = meshopt_encodeIndexBufferBound(index_count, sizeof(uint32_t));
+    std::vector<uint8_t> buf(buffer_bound);
+    const size_t written = meshopt_encodeIndexBuffer(buf.data(), buf.size(), indices.data(), index_count);
+    DEBUG_ASSERT(written <= buf.size());
+    buf.resize(written);
+    return buf;
+}
+inline std::vector<uint8_t> encode_index_buffer(const std::span<const glm::uvec3> triangles) {
+    std::span<const uint32_t> indices = flatten(triangles);
+    return encode_index_buffer(indices);
+}
+
+inline void decode_index_buffer(std::span<uint32_t> indices, const std::span<const uint8_t> encoded) {
+    const int result = meshopt_decodeIndexBuffer(indices.data(), indices.size(), sizeof(uint32_t), encoded.data(), encoded.size());
+    ASSERT(result == 0, "Index buffer decoding failed");
+}
+inline void decode_index_buffer(std::span<glm::uvec3> triangles, const std::span<const uint8_t> encoded) {
+    std::span<uint32_t> indices = flatten(triangles);
+    decode_index_buffer(indices, encoded);
+}
+inline void decode_index_buffer(std::vector<glm::uvec3>& triangles, const size_t triangle_count, const std::span<const uint8_t> encoded) {
+    triangles.resize(triangle_count);
+    decode_index_buffer(std::span<glm::uvec3>(triangles), encoded);
+}
+inline std::vector<glm::uvec3> decode_index_buffer(const size_t triangle_count, const std::span<const uint8_t> encoded) {
+    std::vector<glm::uvec3> triangles;
+    decode_index_buffer(triangles, triangle_count, encoded);
+    return triangles;
+}
+
 } // namespace meshopt

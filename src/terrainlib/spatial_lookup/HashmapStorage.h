@@ -1,14 +1,15 @@
 #pragma once
 
+#include <cmath>
 #include <unordered_map>
 
 #include <glm/glm.hpp>
 
 #include "spatial_lookup/CellBasedStorage.h"
-#include "hash_utils.h"
+#include "VecHash.h"
 
 namespace spatial_lookup {
-namespace {
+namespace detail {
 template <typename T>
 T quantize(const T x, const T epsilon) {
     //  x - remainder(x, epsilon) is not idempotent
@@ -25,26 +26,28 @@ glm::vec<n_dims, T> quantize(const glm::vec<n_dims, T> &v, const T epsilon) {
 }
 
 template <glm::length_t n_dims, typename T>
-struct VecHash {
+struct QuantizedVecHash {
     using Vec = glm::vec<n_dims, T>;
 
-    explicit VecHash(T epsilon) : epsilon(epsilon) {}
+    explicit QuantizedVecHash(T epsilon) : epsilon(epsilon) {}
 
     T epsilon;
 
     size_t operator()(const Vec &v) const noexcept {
-        size_t seed = hash::default_seed();
-        for (glm::length_t i = 0; i < n_dims; i++) {
-            hash::append(seed, quantize(v[i], this->epsilon));
-        }
-        return seed;
+        const Vec quantized = quantize(v, this->epsilon);
+        return VecHash<n_dims, T>{}(quantized);
     }
 };
 
-template <typename T>
-struct NeverEqual {
-    bool operator()(const T &, const T &) const noexcept {
-        return false;
+template <glm::length_t n_dims, typename T>
+struct QuantizedVecEqual {
+    using Vec = glm::vec<n_dims, T>;
+
+    explicit QuantizedVecEqual(T epsilon) : epsilon(epsilon) {}
+
+    T epsilon;
+    bool operator()(const Vec& a, const Vec& b) const noexcept {
+        return quantize(a, this->epsilon) == quantize(b, this->epsilon);
     }
 };
 
@@ -64,7 +67,7 @@ public:
     };
 
     explicit HashmapStorage(Component epsilon)
-        : _epsilon(epsilon), _store(0, Hash(epsilon), Equal()) {
+        : _epsilon(epsilon), _store(0, Hash(epsilon), Equal(epsilon)) {
     }
 
     void clear() {
@@ -80,7 +83,7 @@ public:
     }
 
     [[nodiscard]] CellIndex point_to_cell_index(const Vec &point) const {
-        return CellIndex(quantize(point, this->_epsilon));
+        return CellIndex(detail::quantize(point, this->_epsilon));
     }
     [[nodiscard]] CellIndex offset_cell_index(const CellIndex index, const glm::vec<n_dims, int32_t> &offset) const {
         return point_to_cell_index(index.quantized + (Vec(offset) + Component(0.5)) * this->_epsilon);
@@ -100,36 +103,34 @@ public:
 
     template <typename Func>
     bool for_all_in_cell(const CellIndex index, Func &&func) const {
-        const size_t bucket_idx = this->_store.bucket(index.quantized + Vec(0.5 * this->_epsilon));
+        return for_all_in_cell_impl(*this, index, std::forward<Func>(func));
+    }
+
+    template <typename Func>
+    bool for_all_in_cell(const CellIndex index, Func &&func) {
+        return for_all_in_cell_impl(*this, index, std::forward<Func>(func));
+    }
+
+private:
+    template <typename SelfT, typename Func>
+    static bool for_all_in_cell_impl(SelfT &self, const CellIndex index, Func &&func) {
+        auto [begin, end] = self._store.equal_range(index.quantized);
+
         bool any_found = false;
 
-        for (auto it = this->_store.begin(bucket_idx); it != this->_store.end(bucket_idx); it++) {
-            const Vec &point = it->first;
-            const Value &value = it->second;
-
-            if (index.quantized != quantize(point, this->_epsilon)) {
-                continue; // Skip if the key does not match
-            }
-
+        for (auto it = begin; it != end; ++it) {
             any_found = true;
-            func(point, value);
+            func(it->first, it->second);
         }
 
         return any_found;
     }
-    template <typename Func>
-    bool for_all_in_cell(const CellIndex index, Func &&func) {
-        return const_cast<const Self *>(this)->for_all_in_cell(index, [&](const Vec &vec, const Value &value) {
-            func(vec, const_cast<Value &>(value));
-        });
-    }
 
-private:
-    using Hash = VecHash<n_dims, Component>;
-    using Equal = NeverEqual<Vec>;
+    using Hash = detail::QuantizedVecHash<n_dims, Component>;
+    using Equal = detail::QuantizedVecEqual<n_dims, Component>;
 
     Component _epsilon; 
-    std::unordered_map<Vec, Value, Hash, Equal> _store;
+    std::unordered_multimap<Vec, Value, Hash, Equal> _store;
 
     // static_assert(CellBasedStorage<Self, n_dims, Component, Value>);
 };

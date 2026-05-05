@@ -251,6 +251,7 @@ add_library(terrainlib
     terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
     terrainlib/octree/NodeStatus.h
     terrainlib/octree/Space.h terrainlib/octree/Space.cpp
+    terrainlib/octree/OddLevelShifted.h terrainlib/octree/OddLevelShifted.cpp
     terrainlib/octree/traverse.h
     terrainlib/octree/utils.h
 

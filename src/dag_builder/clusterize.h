@@ -107,6 +107,8 @@ inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options 
     std::vector<cv::Mat> textures;
     if (mesh.texture.has_value()) {
         textures.push_back(mesh.texture.value());
+    } else {
+        textures.push_back(cv::Mat::zeros(1, 1, CV_8UC3));
     }
 
     return Clustering{

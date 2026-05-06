@@ -7,6 +7,7 @@
 #include <opencv2/opencv.hpp>
 
 #include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 namespace uv {
 

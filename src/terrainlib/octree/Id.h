@@ -11,6 +11,7 @@
 #include <libassert/assert.hpp>
 
 #include "hash_utils.h"
+#include "int_math.h"
 
 namespace octree {
 
@@ -148,6 +149,50 @@ public:
 
     [[nodiscard]] static constexpr Id root() {
         return Id(0, 0);
+    }
+
+    [[nodiscard]] constexpr std::optional<Id> ancestor_on_level(const Level target_level) const {
+        if (target_level > this->level()) {
+            return std::nullopt;
+        }
+        const Level level_diff = this->level() - target_level;
+        const auto ancestor_coords = this->coords() / ipow2<Coord>(level_diff);
+        return Id(target_level, ancestor_coords);
+    }
+    [[nodiscard]] std::vector<Id> descendants_on_level(const Level target_level) const {
+        if (target_level < this->level()) {
+            return {};
+        }
+
+        const Level level_diff = target_level - this->level();
+
+        const Index count = ipow2<Index>(level_diff * 3u);
+        const Index first_index = this->index_on_level() * count;
+
+        std::vector<Id> descendants;
+        descendants.reserve(count);
+
+        for (Index offset = 0; offset < count; offset++) {
+            descendants.emplace_back(target_level, first_index | offset);
+        }
+
+        return descendants;
+    }
+    [[nodiscard]] constexpr bool is_descendant_of(const Id &other, const bool include_self = false) const {
+        return other.is_ancestor_of(*this, include_self);
+    }
+
+    [[nodiscard]] constexpr bool is_ancestor_of(const Id &other, const bool include_self = false) const {
+        if (this->is_root()) {
+            return true;
+        }
+        if (include_self && *this == other) {
+            return true;
+        }
+        if (this->level() >= other.level()) {
+            return false;
+        }
+        return other.ancestor_on_level(this->level()) == *this;
     }
 
     constexpr bool operator==(const Id &other) const {

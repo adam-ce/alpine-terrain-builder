@@ -4,18 +4,21 @@
 #include <unordered_set>
 #include <vector>
 
+#include <tl/expected.hpp>
+
 #include "io/serialize.h"
 #include "log.h"
-#include "mesh/io.h"
+#include "io/Error.h"
 #include "octree/disk/IndexFile.h"
 #include "octree/disk/layout/StrategyRegister.h"
 #include "octree/storage/IndexedStorage.h"
 #include "octree/storage/helpers.h"
-#include "octree/storage/open.h"
+#include "octree/storage/defaults.h"
 
 namespace octree {
 
-tl::expected<IndexedStorage, io::Error> open_index(const std::filesystem::path &index_path) {
+template <typename T, CodecFor<T> Codec>
+tl::expected<IndexedStorage<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path) {
     LOG_TRACE("Opening storage index {}", index_path);
 
     const auto result = io::read_from_path<disk::v1::IndexFile>(index_path);
@@ -29,11 +32,12 @@ tl::expected<IndexedStorage, io::Error> open_index(const std::filesystem::path &
     const auto base_path = index_path.parent_path();
     auto layout_strategy = disk::layout::StrategyRegister::instance().create(index_file.layout_strategy_id);
     disk::Layout layout(base_path, std::move(layout_strategy), index_file.preferred_extension);
-    RawStorage raw_storage(std::move(layout));
-    return IndexedStorage(std::move(raw_storage), std::move(index_map));
+    RawStorage<T, Codec> raw_storage(std::move(layout));
+    return IndexedStorage<T, Codec>(std::move(raw_storage), std::move(index_map));
 }
 
-Storage open_folder(
+template <typename T, CodecFor<T> Codec>
+Storage<T, Codec> open_folder(
     const std::filesystem::path &base_path,
     bool create_index,
     OpenOptions options) {
@@ -49,10 +53,10 @@ Storage open_folder(
     }
 
     const std::filesystem::path index_path = base_path / disk::v1::index_file_name();
-    auto storage_opt = open_index(index_path);
+    auto storage_opt = open_index<T, Codec>(index_path);
     if (storage_opt.has_value()) {
         LOG_TRACE("Loaded existing index");
-        return Storage(std::move(storage_opt.value()));
+        return Storage<T, Codec>(std::move(storage_opt.value()));
     }
 
     auto layout_info_opt = helpers::guess_layout_strategy(base_path);
@@ -75,7 +79,7 @@ Storage open_folder(
 
     disk::Layout layout(base_path, std::move(layout_info_opt->strategy), layout_info_opt->extension_with_dot);
     if (!create_index) {
-        return Storage(RawStorage(std::move(layout)));
+        return Storage<T, Codec>(RawStorage<T, Codec>(std::move(layout)));
     }
 
     IndexMap map;
@@ -83,13 +87,14 @@ Storage open_folder(
     if (!map.empty()) {
         helpers::save_index_map(map, layout);
     }
-    return Storage(RawStorage(std::move(layout)), std::move(map));
+    return Storage<T, Codec>(RawStorage<T, Codec>(std::move(layout)), std::move(map));
 }
 
-IndexedStorage open_folder_indexed(
+template <typename T, CodecFor<T> Codec>
+IndexedStorage<T, Codec> open_folder_indexed(
     const std::filesystem::path &base_path,
     OpenOptions options) {
-    return IndexedStorage(open_folder(base_path, true, std::move(options)));
+    return IndexedStorage<T, Codec>(open_folder<T, Codec>(base_path, true, std::move(options)));
 }
 
 } // namespace octree

@@ -11,11 +11,13 @@
 #include "mesh/io.h"
 #include "octree/Id.h"
 #include "octree/IndexMap.h"
-#include "octree/storage/cache/ICache.h"
-#include "octree/storage/RawStorage.h"
-#include "octree/storage/helpers.h"
 #include "octree/disk/Layout.h"
 #include "octree/disk/layout/strategy/Default.h"
+#include "octree/storage/RawStorage.h"
+#include "octree/storage/cache/ICache.h"
+#include "octree/storage/codec/Codec.h"
+#include "octree/storage/defaults.h"
+#include "octree/storage/helpers.h"
 
 namespace octree {
 
@@ -24,10 +26,8 @@ struct MaybeIndex {
     std::optional<IndexMap> map;
     mutable bool dirty = false;
 
-    explicit MaybeIndex()
-        : map(std::nullopt) {}
-    explicit MaybeIndex(IndexMap map)
-        : map(std::move(map)) {}
+    explicit MaybeIndex() : map(std::nullopt) {}
+    explicit MaybeIndex(IndexMap map) : map(std::move(map)) {}
 
     bool add(const Id &id) noexcept {
         if (!map.has_value()) {
@@ -57,24 +57,23 @@ struct MaybeIndex {
     }
 };
 
-struct MaybeCache : public cache::ICache {
-    std::optional<std::unique_ptr<cache::ICache>> cache;
+template <typename T>
+struct MaybeCache : public cache::ICache<T> {
+    std::optional<std::unique_ptr<cache::ICache<T>>> cache;
 
-    explicit MaybeCache()
-        : cache(std::nullopt) {}
-    explicit MaybeCache(std::unique_ptr<cache::ICache> cache)
-        : cache(std::move(cache)) {}
+    explicit MaybeCache() : cache(std::nullopt) {}
+    explicit MaybeCache(std::unique_ptr<cache::ICache<T>> cache) : cache(std::move(cache)) {}
 
-    std::optional<Node> get(const Id& id) noexcept override {
+    std::optional<T> get(const Id& id) noexcept override {
         if (this->cache.has_value()) {
             return this->cache->get()->get(id);
         }
         return std::nullopt;
     }
 
-    bool put(const Id &id, const Node &node) noexcept override {
+    bool put(const Id &id, const T &value) noexcept override {
         if (this->cache.has_value()) {
-            return this->cache->get()->put(id, node);
+            return this->cache->get()->put(id, value);
         }
         return false;
     }
@@ -95,17 +94,27 @@ struct MaybeCache : public cache::ICache {
 };
 }
 
+struct StorageSettings {
+    bool allow_overwrite = false;
+};
+
+template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
 class Storage {
 public:
-    explicit Storage(RawStorage inner)
+    using value_type = T;
+    using codec_type = Codec;
+    using load_error = typename Codec::load_error;
+    using save_error = typename Codec::save_error;
+
+    explicit Storage(RawStorage<T, Codec> inner)
         : _inner(std::move(inner)) {}
-    explicit Storage(RawStorage inner, IndexMap index)
+    explicit Storage(RawStorage<T, Codec> inner, IndexMap index)
         : _inner(std::move(inner)), _index(detail::MaybeIndex(std::move(index))) {}
 
-    Storage& operator=(const Storage&) = delete;
-    Storage(const Storage&) = delete;
-    Storage(Storage&&) = default;
-    Storage& operator=(Storage&&) = default;
+    Storage &operator=(const Storage &) = delete;
+    Storage(const Storage &) = delete;
+    Storage(Storage &&) = default;
+    Storage &operator=(Storage &&) = default;
 
     virtual ~Storage() {
         if (this->_index.map.has_value() && this->_index.dirty) {
@@ -116,40 +125,47 @@ public:
         }
     }
 
-    tl::expected<Node, mesh::io::LoadMeshError> read_node(const Id &id) const noexcept {
-        if (const auto node_opt = this->_cache.get(id)) {
-            return node_opt.value();
+    tl::expected<value_type, load_error> load(const Id &id) const noexcept {
+        if (const auto value_opt = this->_cache.get(id)) {
+            return value_opt.value();
         }
 
         if (!this->_index.contains(id, true)) {
-            return tl::unexpected(mesh::io::LoadMeshErrorKind::FileNotFound);
+            return tl::unexpected(Codec::file_not_found());
         }
 
-        const auto result = this->_inner.read_node(id);
+        const auto result = this->_inner.load(id);
         if (result.has_value()) {
             this->_cache.put(id, result.value());
         }
         return result;
     }
 
-    tl::expected<void, mesh::io::SaveMeshError> write_node(const Id &id, const Node &node, const bool overwrite = false) noexcept {
-        // TODO: implement overwrite
-        ASSERT(!overwrite);
+    tl::expected<void, save_error> save(const Id &id, const value_type &value) noexcept {
+        if (!this->check_overwrite(id)) {
+            // TODO: proper error
+            LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
+        }
 
-        const auto result = this->_inner.write_node(id, node);
+        const auto result = this->_inner.save(id, value);
         if (result.has_value()) {
-            this->_cache.put(id, node);
+            this->_cache.put(id, value);
             this->_index.add(id);
         }
         return result;
     }
 
-    tl::expected<void, CopyMeshError> copy_node_from(const Id &id, const Storage &source) noexcept {
+    tl::expected<void, CopyError> copy_from(const Id &id, const Storage<T, Codec> &source) noexcept {
         if (!source._index.contains(id, true)) {
-            return tl::unexpected(CopyMeshErrorKind::FileNotFound);
+            return tl::unexpected(CopyErrorKind::FileNotFound);
         }
-        // TODO: check overwrite
-        const auto result = this->_inner.copy_node_from(id, source._inner);
+
+        if (!this->check_overwrite(id)) {
+            // TODO: proper error
+            LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
+        }
+
+        const auto result = this->_inner.copy_from(id, source._inner);
         if (result.has_value() && this->is_indexed()) {
             auto& index = this->_index.map.value();
             index.add(id);
@@ -158,25 +174,25 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyMeshError> copy_node_to(const Id &id, Storage &target) const noexcept {
-        return target.copy_node_from(id, *this);
+    tl::expected<void, CopyError> copy_to(const Id &id, Storage<T, Codec> &target) const noexcept {
+        return target.copy_from(id, *this);
     }
 
-    bool remove_node(const Id &id) noexcept {
+    bool remove(const Id &id) noexcept {
         this->_cache.remove(id);
         this->_index.remove(id);
-        return this->_inner.remove_node(id);
+        return this->_inner.remove(id);
     }
   
-    bool has_node(const Id &id) const noexcept {
+    bool has(const Id &id) const noexcept {
         return 
             this->_cache.contains(id) ||
             this->_index.contains(id, false) ||
-            this->_inner.has_node(id);
+            this->_inner.has(id);
     }
 
-    std::filesystem::path get_node_path(const Id &id) const noexcept {
-        return this->_inner.get_node_path(id);
+    std::filesystem::path path_for(const Id &id) const noexcept {
+        return this->_inner.path_for(id);
     }
 
     std::filesystem::path base_path() const noexcept {
@@ -208,11 +224,11 @@ public:
         }
     }
 
-    std::optional<std::unique_ptr<cache::ICache>> &cache() noexcept {
+    std::optional<std::unique_ptr<cache::ICache<T>>> &cache() noexcept {
         return this->_cache.cache;
     }
 
-    std::optional<std::reference_wrapper<const cache::ICache>> cache() const noexcept {
+    std::optional<std::reference_wrapper<const cache::ICache<T>>> cache() const noexcept {
         if (this->_cache.cache.has_value()) {
             return *this->_cache.cache.value();
         } else {
@@ -238,7 +254,18 @@ public:
         return this->_inner.layout();
     }
 
+    const StorageSettings& settings() const noexcept {
+        return this->_settings;
+    }
+    StorageSettings& settings() noexcept {
+        return this->_settings;
+    }
+
 protected:
+    bool check_overwrite(const Id &id) noexcept {
+        return !this->_settings.allow_overwrite && this->has(id);
+    }
+
     std::optional<IndexMap> &index_mut() noexcept {
         return this->_index.map;
     }
@@ -260,9 +287,10 @@ protected:
     }
 
 private:
-    RawStorage _inner;
+    RawStorage<T, Codec> _inner;
     detail::MaybeIndex _index = detail::MaybeIndex();
-    mutable detail::MaybeCache _cache = detail::MaybeCache();
+    mutable detail::MaybeCache<T> _cache = detail::MaybeCache<T>();
+    StorageSettings _settings = {};
 };
 
 } // namespace octree

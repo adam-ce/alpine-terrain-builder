@@ -5,7 +5,7 @@
 
 namespace octree {
 
-enum class CopyMeshErrorKind {
+enum class CopyErrorKind {
     FileNotFound,
     CreateLink,
     CreateDirectories,
@@ -14,42 +14,42 @@ enum class CopyMeshErrorKind {
     Write
 };
 
-class CopyMeshError {
+class CopyError {
 public:
-    constexpr CopyMeshError(CopyMeshErrorKind kind)
+    constexpr CopyError(CopyErrorKind kind)
         : kind(kind) {}
 
-    operator CopyMeshErrorKind() const {
+    operator CopyErrorKind() const {
         return this->kind;
     }
-    constexpr bool operator==(CopyMeshError other) const {
+    constexpr bool operator==(CopyError other) const {
         return this->kind == other.kind;
     }
-    constexpr bool operator!=(CopyMeshError other) const {
+    constexpr bool operator!=(CopyError other) const {
         return this->kind != other.kind;
     }
 
     std::string description() const {
         switch (kind) {
-        case CopyMeshErrorKind::FileNotFound:
+        case CopyErrorKind::FileNotFound:
             return "file not found";
-        case CopyMeshErrorKind::CreateLink:
+        case CopyErrorKind::CreateLink:
             return "cannot create hard link";
-        case CopyMeshErrorKind::CreateDirectories:
+        case CopyErrorKind::CreateDirectories:
             return "cannot create directories";
-        case CopyMeshErrorKind::RemoveOld:
+        case CopyErrorKind::RemoveOld:
             return "cannot remove current file";
         default:
             return "undefined error";
         }
     }
 
-    friend std::ostream &operator<<(std::ostream &os, const CopyMeshError &err) {
+    friend std::ostream &operator<<(std::ostream &os, const CopyError &err) {
         return os << err.description();
     }
 
 private:
-    CopyMeshErrorKind kind;
+    CopyErrorKind kind;
 };
 
 } // namespace octree

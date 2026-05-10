@@ -21,6 +21,7 @@ public:
     glm::dvec3 get_node_size_at_level(const uint32_t level) const;
     Bounds get_node_bounds(const Id &id) const;
     const Bounds &bounds() const;
+    bool contains(const glm::dvec3 &point) const;
 
 private:
     const Bounds _bounds;

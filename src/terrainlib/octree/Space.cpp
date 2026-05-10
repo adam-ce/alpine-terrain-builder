@@ -117,4 +117,8 @@ const Bounds& Space::bounds() const {
     return this->_bounds;
 }
 
+bool Space::contains(const glm::dvec3 &point) const {
+    return this->_bounds.contains(point);
+}
+
 } // namespace octree

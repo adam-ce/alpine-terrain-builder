@@ -176,109 +176,48 @@ add_library(terrainlib
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
 
-    terrainlib/io/bytes.h terrainlib/io/bytes.cpp
-    terrainlib/io/Error.h
-    terrainlib/io/serialize.h
-    terrainlib/io/utils.h terrainlib/io/utils.cpp
+    terrainlib/io/bytes.cpp
+    terrainlib/io/utils.cpp
 
-    terrainlib/mesh/igl/convert.h
-    terrainlib/mesh/igl/cut_to_disk.h
-    terrainlib/mesh/igl/cut.h
     terrainlib/mesh/igl/igl.cpp
 
-    terrainlib/mesh/io/error.h
-    terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
-    terrainlib/mesh/io/options.h
-    terrainlib/mesh/io/terrain.h terrainlib/mesh/io/terrain.cpp
-    terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
-    terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
+    terrainlib/mesh/io/gltf.cpp
+    terrainlib/mesh/io/terrain.cpp
+    terrainlib/mesh/io/texture.cpp
+    terrainlib/mesh/io/utils.cpp
     
-    terrainlib/mesh/merging/VertexDeduplicate.h
-    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
-    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
-    terrainlib/mesh/merging/VertexMapping.h
-    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
+    terrainlib/mesh/merging/mapping.cpp
 
-    terrainlib/mesh/bfs.h terrainlib/mesh/bfs.cpp
-    terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
-    terrainlib/mesh/bounds.h
-    terrainlib/mesh/boundary.h terrainlib/mesh/boundary.cpp
-    terrainlib/mesh/cgal.h
-    terrainlib/mesh/cleanup.h terrainlib/mesh/cleanup.cpp
-    terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
-    terrainlib/mesh/combine.h
-    terrainlib/mesh/compute_topology.h terrainlib/mesh/compute_topology.cpp
-    terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
-    terrainlib/mesh/encode.h
-    terrainlib/mesh/EncodedMesh.h
-    terrainlib/mesh/geometry.h terrainlib/mesh/geometry.cpp
-    terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
-    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
-    terrainlib/mesh/manifold.h terrainlib/mesh/manifold.cpp
-    terrainlib/mesh/merge.h
-    terrainlib/mesh/normalize.h
-    terrainlib/mesh/PointWithMeta.h
-    terrainlib/mesh/reindex.h
-    terrainlib/mesh/SimpleMesh.h
-    terrainlib/mesh/texture_trim.h terrainlib/mesh/texture_trim.cpp
-    terrainlib/mesh/topology.h terrainlib/mesh/topology.cpp
-    terrainlib/mesh/TriangleContainer.h
-    terrainlib/mesh/TriangleSoup.h
-    terrainlib/mesh/utils.h
-    terrainlib/mesh/validate_cgal.h
-    terrainlib/mesh/validate.h terrainlib/mesh/validate.cpp
-    terrainlib/mesh/vertex_index_range.h terrainlib/mesh/vertex_index_range.cpp
-    terrainlib/mesh/View.h
-    terrainlib/mesh/WindingOrder.h
+    terrainlib/mesh/bfs.cpp
+    terrainlib/mesh/boolean.cpp
+    terrainlib/mesh/boundary.cpp
+    terrainlib/mesh/cleanup.cpp
+    terrainlib/mesh/clip.cpp
+    terrainlib/mesh/compute_topology.cpp
+    terrainlib/mesh/convert.cpp
+    terrainlib/mesh/geometry.cpp
+    terrainlib/mesh/holes.cpp
+    terrainlib/mesh/io.cpp
+    terrainlib/mesh/manifold.cpp
+    terrainlib/mesh/texture_trim.cpp
+    terrainlib/mesh/topology.cpp
+    terrainlib/mesh/validate.cpp
+    terrainlib/mesh/vertex_index_range.cpp
 
-    terrainlib/octree/disk/layout/strategy/Default.h
-    terrainlib/octree/disk/layout/strategy/Flat.h
-    terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
-    terrainlib/octree/disk/layout/Strategy.h
-    terrainlib/octree/disk/layout/StrategyRegister.h
-    terrainlib/octree/disk/IndexFile.h
-    terrainlib/octree/disk/Layout.h
-    terrainlib/octree/storage/cache/Dummy.h
-    terrainlib/octree/storage/cache/ICache.h
-    terrainlib/octree/storage/cache/LruCache.h
-    terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
-    terrainlib/octree/storage/IndexedStorage.h
-    terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
-    terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
-    terrainlib/octree/storage/Storage.h
-    terrainlib/octree/Id.h
-    terrainlib/octree/Storage.h
-    terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
-    terrainlib/octree/NodeStatus.h
-    terrainlib/octree/Space.h terrainlib/octree/Space.cpp
-    terrainlib/octree/OddLevelShifted.h terrainlib/octree/OddLevelShifted.cpp
-    terrainlib/octree/traverse.h
-    terrainlib/octree/utils.h
+    terrainlib/octree/storage/helpers.cpp
+    terrainlib/octree/IndexMap.cpp
+    terrainlib/octree/Space.cpp
+    terrainlib/octree/OddLevelShifted.cpp
 
-    terrainlib/polygon/Polygon.h 
-    terrainlib/polygon/triangulate.h terrainlib/polygon/triangulate.cpp 
-    terrainlib/polygon/utils.h terrainlib/polygon/utils.cpp 
+    terrainlib/polygon/triangulate.cpp 
+    terrainlib/polygon/utils.cpp 
 
-    terrainlib/spatial_lookup/CellBased.h
-    terrainlib/spatial_lookup/CellBasedStorage.h
-    terrainlib/spatial_lookup/Grid.h
-    terrainlib/spatial_lookup/GridStorage.h
-    terrainlib/spatial_lookup/Hashmap.h
-    terrainlib/spatial_lookup/HashmapStorage.h
-    terrainlib/spatial_lookup/NDLoopHelper.h
-    terrainlib/spatial_lookup/SpatialLookup.h
+    terrainlib/uv/unwrap.cpp
 
-    terrainlib/uv/unwrap.h terrainlib/uv/unwrap.cpp
-    terrainlib/uv/fit.h
-
-    terrainlib/Dataset.h terrainlib/Dataset.cpp
-    terrainlib/hash_utils.h
-    terrainlib/init.h terrainlib/init.cpp
-    terrainlib/log.h terrainlib/log.cpp
-    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
-    terrainlib/SphereProjector.h
-    terrainlib/srs.h
-    terrainlib/string_utils.h
+    terrainlib/Dataset.cpp
+    terrainlib/init.cpp
+    terrainlib/log.cpp
+    terrainlib/ProgressIndicator.cpp
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
@@ -291,19 +230,14 @@ endif()
 
 
 add_library(tilebuilderlib
-    tile_builder/alpine_raster.h tile_builder/alpine_raster.cpp
-    tile_builder/DatasetReader.h tile_builder/DatasetReader.cpp
-    tile_builder/depth_first_tile_traverser.h
-    tile_builder/Exception.h
-    tile_builder/Image.h tile_builder/Image.cpp
-    tile_builder/ParallelTileGenerator.h tile_builder/ParallelTileGenerator.cpp
-    tile_builder/ParallelTiler.h tile_builder/ParallelTiler.cpp
-    tile_builder/srs.h
-    tile_builder/TileHeightsGenerator.h tile_builder/TileHeightsGenerator.cpp
-    tile_builder/Tiler.h tile_builder/Tiler.cpp
-    tile_builder/TopDownTiler.h tile_builder/TopDownTiler.cpp
-    tile_builder/algorithms/primitives.h
-    tile_builder/algorithms/raster_triangle_scanline.h
+    tile_builder/alpine_raster.cpp
+    tile_builder/DatasetReader.cpp
+    tile_builder/Image.cpp
+    tile_builder/ParallelTileGenerator.cpp
+    tile_builder/ParallelTiler.cpp
+    tile_builder/TileHeightsGenerator.cpp
+    tile_builder/Tiler.cpp
+    tile_builder/TopDownTiler.cpp
 )
 target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tile_builder)
 target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
@@ -313,44 +247,19 @@ add_executable(tile-builder
 target_link_libraries(tile-builder PUBLIC tilebuilderlib)
 
 
-add_library(sfmergerlib
-    sf_merger/atlas/build.h
-    sf_merger/atlas/HorizontalStripLayoutPlanner.h
-    sf_merger/atlas/Layout.h
-    sf_merger/atlas/LayoutPlanner.h
-    sf_merger/atlas/Sheet.h
-
-    sf_merger/merge/visitor/Masked.h
-    sf_merger/merge/visitor/Simple.h
-    sf_merger/merge/visitor/Visitor.h
-    sf_merger/merge/NodeData.h
-    sf_merger/merge/Result.h
-
-    sf_merger/cut.h
-    sf_merger/earth.h
-    sf_merger/mask.h
-    sf_merger/merge.h
-    sf_merger/NodeLoader.h
-    sf_merger/NodeWriter.h
-    sf_merger/utils.h
-)
+add_library(sfmergerlib sf_merger/merge.h)
 target_include_directories(sfmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sf_merger)
 target_link_libraries(sfmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
 add_executable(sf-merger
     sf_merger/main.cpp
-    sf_merger/cli.h sf_merger/cli.cpp
+    sf_merger/cli.cpp
 )
 target_link_libraries(sf-merger PUBLIC sfmergerlib)
 
 
 add_library(meshbuilderlib
-    mesh_builder/tile_provider.h
-    mesh_builder/terrainbuilder.h mesh_builder/terrainbuilder.cpp
-    mesh_builder/raw_dataset_reader.h
-    mesh_builder/texture_assembler.h
-    mesh_builder/border.h
-    mesh_builder/raster.h
-    mesh_builder/mesh_builder.h mesh_builder/mesh_builder.cpp
+    mesh_builder/terrainbuilder.cpp
+    mesh_builder/mesh_builder.cpp
 )
 target_include_directories(meshbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_builder)
 target_link_libraries(meshbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
@@ -361,10 +270,9 @@ target_link_libraries(mesh-builder PUBLIC meshbuilderlib)
 
 
 add_library(meshsimplifylib
-    mesh_simplify/cli.h
     mesh_simplify/cli.cpp
-    mesh_simplify/simplify.h mesh_simplify/simplify.cpp
-    mesh_simplify/uv_map.h mesh_simplify/uv_map.cpp
+    mesh_simplify/simplify.cpp
+    mesh_simplify/uv_map.cpp
 )
 target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
 target_link_libraries(meshsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
@@ -379,42 +287,34 @@ add_executable(tile-downloader
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 
 add_executable(mesh-convert
-    mesh_convert/cli.h mesh_convert/cli.cpp
+    mesh_convert/cli.cpp
     mesh_convert/main.cpp
 )
 target_link_libraries(mesh-convert PUBLIC terrainlib CLI11::CLI11)
 
 add_executable(mesh_merger
-    mesh_merger/cli.h mesh_merger/cli.cpp
+    mesh_merger/cli.cpp
     mesh_merger/main.cpp
 )
 target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
 
 add_executable(index-browser
-    index_browser/cli.h index_browser/cli.cpp
+    index_browser/cli.cpp
     index_browser/main.cpp
 )
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_library(dagbuilderlib
-    dag_builder/atlas/atlas.h dag_builder/atlas/atlas.cpp
-    dag_builder/atlas/HorizontalStripPlanner.h dag_builder/atlas/HorizontalStripPlanner.cpp
-    dag_builder/atlas/PackingPlanner.h dag_builder/atlas/PackingPlanner.cpp
-    dag_builder/atlas/Plan.h
-    dag_builder/atlas/Planner.h
-    dag_builder/cluster.h
-    dag_builder/clusterize.h
-    dag_builder/meshopt.h
-    dag_builder/optimize.h
-    dag_builder/partition.h
-    dag_builder/simplify.h
-    dag_builder/split.h
-    dag_builder/validate.h
+    dag_builder/atlas/atlas.cpp
+    dag_builder/atlas/HorizontalStripPlanner.cpp
+    dag_builder/atlas/PackingPlanner.cpp
+    dag_builder/build.cpp
+    dag_builder/merge.cpp
 )
 target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)
 target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis rectpack2D meshoptimizer)
 add_executable(dag-builder
-    # dag_builder/cli.h index_browser/cli.cpp
+    dag_builder/cli.cpp
     dag_builder/main.cpp
 )
 target_link_libraries(dag-builder PUBLIC dagbuilderlib CLI11::CLI11)

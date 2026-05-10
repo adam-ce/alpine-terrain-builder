@@ -10,7 +10,6 @@
 namespace octree {
 using Bounds = radix::geometry::Aabb3d;
 
-// TODO: add srs to this?
 class Space {
 public:
     explicit Space(Bounds bounds);
@@ -21,7 +20,7 @@ public:
 
     glm::dvec3 get_node_size_at_level(const uint32_t level) const;
     Bounds get_node_bounds(const Id &id) const;
-    const Bounds& bounds() const;
+    const Bounds &bounds() const;
 
 private:
     const Bounds _bounds;

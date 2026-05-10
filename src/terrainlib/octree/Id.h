@@ -25,21 +25,22 @@ public:
     [[nodiscard]] static constexpr Level max_level() {
         return (sizeof(Index) * 8) / 3;
     }
-    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
-        return (1ull << level) - 1;
-    }
     [[nodiscard]] static constexpr Index max_index_on_level(const Level level) {
         return (1ull << (3 * level)) - 1;
     }
+    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
+        return (1ull << level) - 1;
+    }
+    [[nodiscard]] static constexpr Coords max_coords_on_level(const Level level) {
+        return Coords(max_coord_on_level(level));
+    }
 
     constexpr Id() = default; // zpp::bits requires a default constructor
-    constexpr Id(const Level level, const Coords coords)
-        : Id(level, interleave3(coords)) {
-    }
-    constexpr Id(const Level level, const Index index)
-        : _level(level), _index(index) {
+    constexpr Id(const Level level, const Coord x, const Coord y, const Coord z) : Id(level, Coords(x, y, z)) {}
+    constexpr Id(const Level level, const Coords coords) : Id(level, interleave3(coords)) {}
+    constexpr Id(const Level level, const Index index) : _level(level), _index(index) {
         DEBUG_ASSERT(level <= Id::max_level());
-        DEBUG_ASSERT(index <= Id::max_index_on_level(this->_level));
+        DEBUG_ASSERT(index <= Id::max_index_on_level(level));
     }
 
     [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords) {
@@ -87,6 +88,24 @@ public:
             return std::nullopt;
         }
         return Id(this->level(), Coords(new_coords));
+    }
+    [[nodiscard]] constexpr std::optional<Id> prev() const {
+        const Level level = this->level();
+        const Index index = this->index_on_level();
+        const Index min_index = 0;
+        if (index == min_index) {
+            return std::nullopt;
+        }
+        return Id(level, index-1);
+    }
+    [[nodiscard]] constexpr std::optional<Id> next() const {
+        const Level level = this->level();
+        const Index index = this->index_on_level();
+        const Index max_index = Id::max_index_on_level(level);
+        if (index == max_index) {
+            return std::nullopt;
+        }
+        return Id(level, index+1);
     }
 
     [[nodiscard]] std::vector<Id> neighbours() const {

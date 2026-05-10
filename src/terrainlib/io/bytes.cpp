@@ -15,7 +15,7 @@ tl::expected<void, Error> write_bytes_to_path(const std::span<const uint8_t> byt
     
     std::ofstream file(path, std::ios::binary);
     if (!file.is_open()) {
-        LOG_ERROR("Failed to open file {}", path);
+        LOG_DEBUG("Failed to open file for writing {}", path);
         return tl::unexpected(Error::OpenFile);
     }
 
@@ -33,7 +33,7 @@ tl::expected<std::vector<uint8_t>, Error> read_bytes_from_path(const std::filesy
 
     std::ifstream file(path, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
-        LOG_ERROR("Failed to open file {}", path);
+        LOG_DEBUG("Failed to open file for reading {}", path);
         return tl::unexpected(Error::OpenFile);
     }
 

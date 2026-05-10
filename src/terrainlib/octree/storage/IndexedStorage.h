@@ -15,35 +15,35 @@
 namespace octree {
 
 template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-class IndexedStorage : public Storage<T, Codec> {
+class IndexedStorage_ : public Storage_<T, Codec> {
 public:
-    explicit IndexedStorage(Storage<T, Codec> inner) noexcept
-        : Storage<T, Codec>(std::move(inner)) {
+    explicit IndexedStorage_(Storage_<T, Codec> inner) noexcept
+        : Storage_<T, Codec>(std::move(inner)) {
         this->ensure_indexed();
         DEBUG_ASSERT(this->is_indexed());
     }
-    explicit IndexedStorage(RawStorage<T, Codec> inner, IndexMap map) noexcept
-        : Storage<T, Codec>(std::move(inner), std::move(map)) {
+    explicit IndexedStorage_(RawStorage_<T, Codec> inner, IndexMap map) noexcept
+        : Storage_<T, Codec>(std::move(inner), std::move(map)) {
         DEBUG_ASSERT(this->is_indexed());
     }
 
-    IndexedStorage<T, Codec> &operator=(const IndexedStorage<T, Codec> &) = delete;
-    IndexedStorage(const IndexedStorage<T, Codec> &) = delete;
-    IndexedStorage(IndexedStorage<T, Codec> &&) = default;
-    IndexedStorage<T, Codec> &operator=(IndexedStorage<T, Codec> &&) = default;
+    IndexedStorage_<T, Codec> &operator=(const IndexedStorage_<T, Codec> &) = delete;
+    IndexedStorage_(const IndexedStorage_<T, Codec> &) = delete;
+    IndexedStorage_(IndexedStorage_<T, Codec> &&) = default;
+    IndexedStorage_<T, Codec> &operator=(IndexedStorage_<T, Codec> &&) = default;
 
-    ~IndexedStorage() override {
+    ~IndexedStorage_() override {
         if (this->is_index_dirty()) {
-            LOG_WARN("Index was not saved upon IndexedStorage destruction, use save_index().");
+            LOG_WARN("Index was not saved upon IndexedStorage_ destruction, use save_index().");
         }
     }
 
     const IndexMap& index() const noexcept {
         DEBUG_ASSERT(this->is_indexed());
-        return Storage<T, Codec>::index().value();
+        return Storage_<T, Codec>::index().value();
     }
     void update_index() noexcept {
-        Storage<T, Codec>::update_index();
+        Storage_<T, Codec>::update_index();
     }
     tl::expected<void, io::Error> save_index() const noexcept {
         if (!this->is_index_dirty()) {
@@ -60,7 +60,7 @@ public:
 private:
     IndexMap& index_mut() noexcept {
         DEBUG_ASSERT(this->is_indexed());
-        return Storage<T, Codec>::index_mut().value();
+        return Storage_<T, Codec>::index_mut().value();
     }
 };
 

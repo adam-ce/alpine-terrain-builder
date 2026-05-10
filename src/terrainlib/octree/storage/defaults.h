@@ -12,6 +12,6 @@ template <typename T>
 using DefaultCodecFor = std::conditional_t<
     std::is_same_v<T, mesh::Simple>,
     MeshCodec,
-    DefaultCodec<T>>;
+    ZppBitsCodec<T>>;
 
 } // namespace octree

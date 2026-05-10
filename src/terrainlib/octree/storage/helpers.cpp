@@ -54,7 +54,7 @@ std::optional<LayoutWithoutBase> guess_layout_strategy(
         }
 
         const auto ext = entry.path().extension();
-        if (ext == ".index") {
+        if (ext == disk::v1::index_extension()) {
             continue;
         }
         extension_counters[ext]++;
@@ -119,7 +119,7 @@ void update_index_map(IndexMap &index, const disk::Layout &layout) {
         }
 
         const auto ext = entry.path().extension();
-        if (ext != ".terrain" && ext != ".glb" && ext != ".gltf") {
+        if (ext == disk::v1::index_extension()) {
             continue;
         }
 

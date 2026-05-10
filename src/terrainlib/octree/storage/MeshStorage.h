@@ -6,7 +6,7 @@
 
 namespace octree {
 
-using MeshStorage = Storage<mesh::Simple>;
-using IndexedMeshStorage = IndexedStorage<mesh::Simple>;
+using MeshStorage = Storage_<mesh::Simple>;
+using IndexedMeshStorage = IndexedStorage_<mesh::Simple>;
 
 }

@@ -14,20 +14,20 @@
 namespace octree {
 
 template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-class RawStorage {
+class RawStorage_ {
 public:
     using value_type = T;
     using codec_type = Codec;
     using load_error = typename Codec::load_error;
     using save_error = typename Codec::save_error;
 
-    explicit RawStorage(disk::Layout layout) noexcept : _layout(std::move(layout)) {}
+    explicit RawStorage_(disk::Layout layout) noexcept : _layout(std::move(layout)) {}
 
-    ~RawStorage() = default;
-    RawStorage &operator=(const RawStorage &) = delete;
-    RawStorage(const RawStorage &) = delete;
-    RawStorage(RawStorage &&) = default;
-    RawStorage &operator=(RawStorage &&) = default;
+    ~RawStorage_() = default;
+    RawStorage_ &operator=(const RawStorage_ &) = delete;
+    RawStorage_(const RawStorage_ &) = delete;
+    RawStorage_(RawStorage_ &&) = default;
+    RawStorage_ &operator=(RawStorage_ &&) = default;
     
     tl::expected<T, load_error> load(const Id &id) const noexcept {
         const auto path = this->path_for(id);
@@ -39,11 +39,11 @@ public:
         return Codec::save_to_path(node, path);
     }
 
-    tl::expected<void, CopyError> copy_to(const Id &id, const RawStorage &target) noexcept {
+    tl::expected<void, CopyError> copy_to(const Id &id, RawStorage_ &target) const noexcept {
         return target.copy_from(id, *this);
     }
 
-    tl::expected<void, CopyError> copy_from(const Id &id, RawStorage &source) const noexcept {
+    tl::expected<void, CopyError> copy_from(const Id &id, const RawStorage_ &source) noexcept {
         if (!source.has(id)) {
             return tl::unexpected(CopyErrorKind::FileNotFound);
         }

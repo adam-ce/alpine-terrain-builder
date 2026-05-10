@@ -77,7 +77,7 @@ public:
         parent.expanded = true;
 
         if (parent.status == octree::NodeStatusOrMissing::Leaf) {
-            auto result = this->_storage.read_node(parent.id);
+            auto result = this->_storage.load(parent.id);
             DisplayEntry entry;
             if (result.has_value()) {
                 const auto &mesh = result.value();

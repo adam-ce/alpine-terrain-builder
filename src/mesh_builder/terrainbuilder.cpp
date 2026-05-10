@@ -262,7 +262,7 @@ void build_all_patches(
 
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (!overwrite_existing && storage.has_node(node)) {
+        if (!overwrite_existing && storage.has(node)) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
             return;
         }
@@ -284,7 +284,7 @@ void build_all_patches(
         if (mesh_result.has_value()) {
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
-            storage.write_node(node, mesh);
+            storage.save(node, mesh);
         }
 
         progress.task_finished();

@@ -13,6 +13,7 @@
 #include "octree/IndexMap.h"
 #include "octree/disk/Layout.h"
 #include "octree/disk/layout/strategy/Default.h"
+#include "octree/NodeStatusOrMissing.h"
 #include "octree/storage/RawStorage.h"
 #include "octree/storage/cache/ICache.h"
 #include "octree/storage/codec/Codec.h"
@@ -51,7 +52,8 @@ struct MaybeIndex {
 
     bool contains(const Id &id, const bool def = false) const noexcept {
         if (this->map.has_value()) {
-            return this->map->is_present(id);
+            const octree::NodeStatusOrMissing status = this->map->get(id);
+            return status == octree::NodeStatusOrMissing::Leaf || status == NodeStatusOrMissing::Inner;
         }
         return def;
     }
@@ -99,24 +101,24 @@ struct StorageSettings {
 };
 
 template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-class Storage {
+class Storage_ {
 public:
     using value_type = T;
     using codec_type = Codec;
     using load_error = typename Codec::load_error;
     using save_error = typename Codec::save_error;
 
-    explicit Storage(RawStorage<T, Codec> inner)
+    explicit Storage_(RawStorage_<T, Codec> inner)
         : _inner(std::move(inner)) {}
-    explicit Storage(RawStorage<T, Codec> inner, IndexMap index)
+    explicit Storage_(RawStorage_<T, Codec> inner, IndexMap index)
         : _inner(std::move(inner)), _index(detail::MaybeIndex(std::move(index))) {}
 
-    Storage &operator=(const Storage &) = delete;
-    Storage(const Storage &) = delete;
-    Storage(Storage &&) = default;
-    Storage &operator=(Storage &&) = default;
+    Storage_ &operator=(const Storage_ &) = delete;
+    Storage_(const Storage_ &) = delete;
+    Storage_(Storage_ &&) = default;
+    Storage_ &operator=(Storage_ &&) = default;
 
-    virtual ~Storage() {
+    virtual ~Storage_() {
         if (this->_index.map.has_value() && this->_index.dirty) {
             auto result = helpers::save_index_map(this->_index.map.value(), this->_inner.layout());
             if (!result.has_value()) {
@@ -142,7 +144,7 @@ public:
     }
 
     tl::expected<void, save_error> save(const Id &id, const value_type &value) noexcept {
-        if (!this->check_overwrite(id)) {
+        if (this->check_overwrite(id)) {
             // TODO: proper error
             LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
         }
@@ -155,12 +157,12 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyError> copy_from(const Id &id, const Storage<T, Codec> &source) noexcept {
+    tl::expected<void, CopyError> copy_from(const Id &id, const Storage_<T, Codec> &source) noexcept {
         if (!source._index.contains(id, true)) {
             return tl::unexpected(CopyErrorKind::FileNotFound);
         }
 
-        if (!this->check_overwrite(id)) {
+        if (this->check_overwrite(id)) {
             // TODO: proper error
             LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
         }
@@ -174,7 +176,7 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyError> copy_to(const Id &id, Storage<T, Codec> &target) const noexcept {
+    tl::expected<void, CopyError> copy_to(const Id &id, Storage_<T, Codec> &target) const noexcept {
         return target.copy_from(id, *this);
     }
 
@@ -287,7 +289,7 @@ protected:
     }
 
 private:
-    RawStorage<T, Codec> _inner;
+    RawStorage_<T, Codec> _inner;
     detail::MaybeIndex _index = detail::MaybeIndex();
     mutable detail::MaybeCache<T> _cache = detail::MaybeCache<T>();
     StorageSettings _settings = {};

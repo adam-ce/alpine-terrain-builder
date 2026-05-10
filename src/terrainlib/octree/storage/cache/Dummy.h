@@ -8,12 +8,13 @@
 
 namespace octree::cache {
 
-class Dummy : public ICache {
+ template <typename T>
+class Dummy : public ICache<T> {
 public:
-    std::optional<Node> get(const Id &) noexcept override {
+    std::optional<T> get(const Id &) noexcept override {
         return std::nullopt;
     }
-    bool put(const Id &, const Node &) noexcept override {
+    bool put(const Id &, const T &) noexcept override {
         return false;
     }
     bool remove(const Id &) noexcept override {

@@ -13,7 +13,7 @@
 namespace octree {
 
 template <typename T>
-struct DefaultCodec {
+struct ZppBitsCodec {
     using value_type = T;
     using load_error = io::Error;
     using save_error = io::Error;

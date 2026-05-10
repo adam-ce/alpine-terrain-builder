@@ -17,9 +17,9 @@
 
 class NodeLoader {
 public:
-    NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache &cache, octree::Space space)
+    NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache<mesh::Simple> &cache, octree::Space space)
         : _storage(storage), _cache(cache), _space(space) {
-        if (storage.cache().has_value() && dynamic_cast<octree::cache::Dummy *>(&cache) != nullptr) {
+        if (storage.cache().has_value() && dynamic_cast<octree::cache::Dummy<mesh::Simple> *>(&cache) != nullptr) {
             LOG_WARN("Backing storage for NodeLoader instance is cached, but another cache was provided leading to double caching.");
         }
     }
@@ -37,7 +37,7 @@ public:
         }
 
         // Try storage
-        auto mesh_opt = this->_storage.read_node(id);
+        auto mesh_opt = this->_storage.load(id);
         if (mesh_opt.has_value()) {
             auto mesh = mesh_opt.value();
             this->_cache.put(id, mesh);
@@ -54,7 +54,7 @@ public:
             }
 
             // Try storage
-            auto parent_mesh_opt = this->_storage.read_node(parent_id);
+            auto parent_mesh_opt = this->_storage.load(parent_id);
             if (parent_mesh_opt.has_value()) {
                 auto parent_mesh = parent_mesh_opt.value();
                 const auto bounds = this->_space.get_node_bounds(id);
@@ -75,6 +75,6 @@ public:
 
 private:
     const octree::IndexedStorage &_storage;
-    octree::cache::ICache &_cache;
+    octree::cache::ICache<mesh::Simple> &_cache;
     const octree::Space _space;
 };

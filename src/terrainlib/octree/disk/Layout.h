@@ -14,7 +14,7 @@ namespace octree::disk {
     
 class Layout {
 public:
-    Layout(std::filesystem::path base_path, std::unique_ptr<layout::Strategy> strategy, std::string extension_with_dot = ".terrain")
+    Layout(std::filesystem::path base_path, std::unique_ptr<layout::Strategy> strategy, std::string extension_with_dot)
         : _base_path(std::move(base_path)), _strategy(std::move(strategy)), _extension_with_dot(std::move(extension_with_dot)) {
         DEBUG_ASSERT(!_extension_with_dot.empty() && _extension_with_dot[0] == '.');
     }

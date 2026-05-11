@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include <opencv2/core.hpp>
 
+#include "TextureSet.h"
 #include "cluster.h"
 #include "io/bytes.h"
 #include "io/serialize.h"
@@ -20,21 +21,44 @@
 namespace zpp::bits {
 
 template <typename Archive>
-auto serialize(Archive &archive, const cv::Mat &image) {
-    std::vector<uint8_t> encoded = mesh::io::write_texture_to_encoded_buffer(image, ".png");
-    return archive(encoded);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, cv::Mat &image) {
-    std::vector<uint8_t> encoded;
-
-    auto result = archive(encoded);
+auto serialize(Archive &archive, const TextureSet &textures) {
+    size_t size = textures.size();
+    auto result = archive(size);
     if (failure(result)) {
         return result;
     }
 
-    image = mesh::io::read_texture_from_encoded_bytes(encoded);
+    for (const auto &texture : textures) {
+        const mesh::io::ImageAndExt item{texture, ".jpeg"};
+        result = archive(item);
+        if (failure(result)) {
+            return result;
+        }
+    }
+
+    return result;
+}
+template <typename Archive>
+auto serialize(Archive &archive, TextureSet &textures) {
+    size_t size;
+    auto result = archive(size);
+    if (failure(result)) {
+        return result;
+    }
+
+    std::vector<cv::Mat> images;
+    images.reserve(size);
+    for (size_t i = 0; i < size; i++) {
+        mesh::io::ImageAndExt item;
+        result = archive(item);
+        if (failure(result)) {
+            return result;
+        }
+
+        images.push_back(item.image);
+    }
+    textures = TextureSet(images);
+
     return result;
 }
 

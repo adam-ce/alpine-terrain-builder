@@ -49,14 +49,19 @@ Clustering merge_clusterings(const std::span<const Clustering> clusterings, cons
         }
     }
 
+    const size_t unique_count = new_positions.size();
+    const size_t shared_count = vertex_count_bound - unique_count;
+    LOG_DEBUG("Merging with {} shared and {} unique vertices", shared_count, unique_count);
+
     Clustering merged;
     merged.positions = new_positions;
 
     for (const Clustering &clustering : clusterings) {
         // Merge textures
-        const uint32_t texture_offset = merged.textures.size();
+        std::vector<uint32_t> new_texture_ids;
+        new_texture_ids.reserve(clustering.textures.size());
         for (const cv::Mat &texture : clustering.textures) {
-            merged.textures.push_back(texture);
+            new_texture_ids.push_back(merged.textures.add(texture));
         }
 
         // Merge clusters with adjusted indices
@@ -66,7 +71,7 @@ Clustering merge_clusterings(const std::span<const Clustering> clusterings, cons
             new_cluster.uvs = cluster.uvs;
 
             new_cluster.id = cluster.id;
-            new_cluster.texture_id = cluster.texture_id + texture_offset;
+            new_cluster.texture_id = new_texture_ids[cluster.texture_id];
 
             new_cluster.vertex_indices.reserve(cluster.vertex_count());
             for (const uint32_t vertex_index : cluster.vertex_indices) {

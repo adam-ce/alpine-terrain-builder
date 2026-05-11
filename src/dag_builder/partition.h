@@ -32,6 +32,8 @@
 #include "uv/unwrap.h"
 #include "vector_utils.h"
 
+#include "mesh/igl/manifold.h"
+
 struct PartitionOptions {
     uint32_t clusters_per_partition = 4;
 };
@@ -468,6 +470,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     const mesh::Simple merged_mesh3 = materialize_cluster(merged_cluster, clustering.positions);
     mesh::io::save_to_path(merged_mesh3, "/home/user/master/meshes/post.glb");
 */
+
     // Ensure each connectivity component is open and of genus 1 (topological disk)
     mesh::cut_to_disk(
         merged_cluster.local_triangles,
@@ -513,7 +516,7 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
 
         const glm::uvec2 component_texture_size = atlas_plan.slots[component_index].size;
         if (source_clusters.size() == 1) {
-            // If one a single cluster is relevant we dont need to perform a fresh unwrap
+            // If one single cluster is relevant we dont need to perform a fresh unwrap
             const uint32_t linear_cluster_index = source_clusters[0];
             const uint32_t cluster_index = cluster_indices[linear_cluster_index];
             component.uvs = transform_vector(local_to_merged, [&](const uint32_t merged_index) {
@@ -608,11 +611,7 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
     const uint32_t no_vertex_remap = -1;
     std::vector<uint32_t> vertex_remap(clustering.vertex_count(), no_vertex_remap);
 
-    // Prepare texture remap buffer for merging
-    const uint32_t no_texture_remap = -1;
-    std::vector<uint32_t> texture_remap(clustering.textures.size(), no_texture_remap);
-    std::vector<cv::Mat> textures;
-
+    TextureSet textures;
     std::vector<Cluster> partitioned_clusters;
     partitioned_clusters.reserve(partition_count);
 
@@ -634,20 +633,15 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
             // We need to perform a fresh uv unwrap and generate a new texture
             const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap);
             merged_cluster = result.cluster;
-            merged_cluster.texture_id = textures.size();
-            textures.push_back(result.texture);
+            merged_cluster.texture_id = textures.add(result.texture);
         } else {
             // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
             merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
 
             // Add texture to new clustering, ensuring no duplicates.
             const uint32_t original_texture_id = clustering.clusters[cluster_indices[0]].texture_id;
-            uint32_t& new_texture_id = texture_remap[original_texture_id];
-            if (new_texture_id == no_texture_remap) {
-                new_texture_id = textures.size();
-                const cv::Mat &texture = clustering.textures[original_texture_id];
-                textures.push_back(texture);
-            }
+            const cv::Mat &texture = clustering.textures[original_texture_id];
+            const uint32_t new_texture_id = textures.add(texture);
             merged_cluster.texture_id = new_texture_id;
         }
         partitioned_clusters.push_back(std::move(merged_cluster));

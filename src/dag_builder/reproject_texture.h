@@ -11,27 +11,11 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include "ImageKey.h"
 #include "glm_utils.h"
+#include "opencv_utils.h"
 
 namespace detail {
-struct ImageKey {
-    const uint8_t *data = nullptr;
-    int32_t rows = 0;
-    int32_t cols = 0;
-    size_t step = 0;
-    int32_t type = 0;
-
-    ImageKey() = default;
-    ImageKey(const cv::Mat &mat) {
-        this->data = mat.data;
-        this->rows = mat.rows;
-        this->cols = mat.cols;
-        this->step = mat.step;
-        this->type = mat.type();
-    }
-
-    bool operator==(const ImageKey &other) const = default;
-};
 
 template <typename Vec>
 inline void scale_triangle_inplace(Vec &v1, Vec &v2, Vec &v3,
@@ -109,9 +93,9 @@ public:
         // Convert source image into floating point and cache
         // This assumes that this method is often called with the same texture sequentially and that
         // most of the texture is used.
-        if (this->cached_source_image_key != detail::ImageKey(source_image)) {
+        if (this->cached_source_image_key != ImageKey(source_image)) {
             source_image.convertTo(this->cached_source_image, CV_32FC3);
-            this->cached_source_image_key = detail::ImageKey(source_image);
+            this->cached_source_image_key = ImageKey(source_image);
         }
 
         // Read source region from source image
@@ -238,7 +222,7 @@ public:
     }
 
 private:
-    detail::ImageKey cached_source_image_key;
+    ImageKey cached_source_image_key;
     cv::Mat cached_source_image;
     cv::Mat target_image;
     cv::Mat weight_image;

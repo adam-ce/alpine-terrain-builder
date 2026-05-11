@@ -2,9 +2,12 @@
 
 #include <vector>
 #include <optional>
+#include <cstdint>
 
 #include <glm/glm.hpp>
 #include <opencv2/core.hpp>
+
+#include "TextureSet.h"
 
 struct Cluster {
     uint32_t id = -1;
@@ -29,7 +32,7 @@ struct Cluster {
 struct Clustering {
     std::vector<glm::dvec3> positions;
     std::vector<Cluster> clusters;
-    std::vector<cv::Mat> textures;
+    TextureSet textures;
 
     constexpr size_t vertex_count() const noexcept {
         return this->positions.size();

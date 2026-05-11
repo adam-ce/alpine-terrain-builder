@@ -37,8 +37,7 @@ inline Clustering slice_clusters(const Clustering &clustering, const std::span<c
         uint32_t &new_texture_id = texture_remap[cluster.texture_id];
         if (new_texture_id == invalid_remap) {
             const cv::Mat &texture = clustering.textures[cluster.texture_id];
-            new_texture_id = new_clustering.textures.size();
-            new_clustering.textures.push_back(texture);
+            new_texture_id = new_clustering.textures.add(texture);
         }
 
         Cluster new_cluster{

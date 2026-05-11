@@ -145,7 +145,6 @@ public:
 
     tl::expected<void, save_error> save(const Id &id, const value_type &value) noexcept {
         if (this->check_overwrite(id)) {
-            // TODO: proper error
             LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
         }
 
@@ -168,10 +167,8 @@ public:
         }
 
         const auto result = this->_inner.copy_from(id, source._inner);
-        if (result.has_value() && this->is_indexed()) {
-            auto& index = this->_index.map.value();
-            index.add(id);
-            this->set_index_dirty();
+        if (result.has_value()) {
+            this->_index.add(id);
         }
         return result;
     }

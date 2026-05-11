@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <span>
 #include <vector>
 
@@ -16,19 +18,123 @@
 #include "opencv_utils.h"
 
 namespace detail {
+template <typename Vec>
+inline typename Vec::value_type cross2d(const Vec &a, const Vec &b) {
+    return a.x * b.y - a.y * b.x;
+}
 
 template <typename Vec>
-inline void scale_triangle_inplace(Vec &v1, Vec &v2, Vec &v3,
-                                   const typename Vec::value_type factor) {
-    const Vec centroid = (v1 + v2 + v3) / static_cast<typename Vec::value_type>(3);
-    v1 = (v1 - centroid) * factor + centroid;
-    v2 = (v2 - centroid) * factor + centroid;
-    v3 = (v3 - centroid) * factor + centroid;
+inline typename Vec::value_type len_sq(const Vec &v) {
+    return v.x * v.x + v.y * v.y;
 }
+
 template <typename Vec>
-inline void scale_triangle_inplace(std::array<Vec, 3>& triangle, const typename Vec::value_type factor) {
-    scale_triangle_inplace(triangle[0], triangle[1], triangle[2], factor);
+inline Vec normalized(const Vec &v) {
+    using T = typename Vec::value_type;
+    const T len = static_cast<T>(std::sqrt(len_sq(v)));
+    if (len <= std::numeric_limits<T>::epsilon()) {
+        return Vec(0, 0);
+    }
+    return v / len;
 }
+
+template <typename Vec>
+inline bool intersect_lines(
+    const std::array<Vec, 2> &line_a,
+    const std::array<Vec, 2> &line_b,
+    Vec &intersection) {
+    using T = typename Vec::value_type;
+
+    const Vec a_dir = line_a[1] - line_a[0];
+    const Vec b_dir = line_b[1] - line_b[0];
+
+    const T denominator = cross2d(a_dir, b_dir);
+    if (std::abs(denominator) <= std::numeric_limits<T>::epsilon()) {
+        return false;
+    }
+
+    const Vec delta = line_b[0] - line_a[0];
+    const T distance_along_a = cross2d(delta, b_dir) / denominator;
+
+    intersection = line_a[0] + a_dir * distance_along_a;
+    return true;
+}
+
+template <typename Vec>
+inline std::array<Vec, 3> pad_triangle(
+    const std::array<Vec, 3> &triangle,
+    const typename Vec::value_type padding,
+    const typename Vec::value_type max_vertex_offset =
+        std::numeric_limits<typename Vec::value_type>::max()) {
+    using T = typename Vec::value_type;
+
+    std::array<std::array<Vec, 2>, 3> offset_edges{};
+
+    for (uint8_t k = 0; k < 3; k++) {
+        const Vec a = triangle[k];
+        const Vec b = triangle[(k + 1) % 3];
+
+        const Vec edge = b - a;
+        const Vec dir = normalized(edge);
+
+        const Vec normal = Vec(dir.y, -dir.x);
+
+        offset_edges[k] = {
+            a + normal * padding,
+            b + normal * padding};
+    }
+
+    std::array<Vec, 3> result{};
+
+    for (uint8_t k = 0; k < 3; k++) {
+        const uint8_t prev = (k + 2) % 3;
+        const bool ok = intersect_lines(
+            offset_edges[prev],
+            offset_edges[k],
+            result[k]);
+
+        if (!ok) {
+            result[k] = triangle[k];
+        }
+
+        const Vec offset = result[k] - triangle[k];
+        const T offset_sq = len_sq(offset);
+        const T max_offset_sq = max_vertex_offset * max_vertex_offset;
+
+        if (offset_sq > max_offset_sq) {
+            result[k] = triangle[k] + normalized(offset) * max_vertex_offset;
+        }
+    }
+
+    return result;
+}
+
+template <typename T>
+inline cv::Point_<T> clamp_point_to_rect(const cv::Point_<T> point, const cv::Rect_<T> &rect) {
+    const T x = std::clamp(point.x, rect.x, rect.x + rect.width);
+    const T y = std::clamp(point.y, rect.y, rect.y + rect.height);
+    return cv::Point_<T>(x, y);
+}
+
+template <typename T>
+inline cv::Rect_<T> clamp_rect_to_mat_bounds(const cv::Rect_<T> &rect, const cv::Mat &mat) {
+    T x0 = std::clamp(rect.x, T(0), T(mat.cols));
+    T y0 = std::clamp(rect.y, T(0), T(mat.rows));
+    T x1 = std::clamp(rect.x + rect.width, T(0), T(mat.cols));
+    T y1 = std::clamp(rect.y + rect.height, T(0), T(mat.rows));
+    T width = std::max(T(0), x1 - x0);
+    T height = std::max(T(0), y1 - y0);
+    return cv::Rect_<T>(x0, y0, width, height);
+}
+
+inline cv::Point2f glm_to_cv(const glm::dvec2 &vec) {
+    return cv::Point2f(static_cast<float>(vec.x), static_cast<float>(vec.y));
+};
+
+template <typename T>
+inline cv::Point_<T> rect_to_point(const cv::Rect_<T> &rect) {
+    return cv::Point_<T>(rect.x, rect.y);
+};
 
 inline cv::Rect expand_rect(const cv::Rect &r, int padding) {
     return cv::Rect(
@@ -67,8 +173,10 @@ public:
         cv::Rect target_rect = cv::boundingRect(target_triangle);
         source_rect = detail::expand_rect(source_rect, PADDING_PIXELS);
         target_rect = detail::expand_rect(target_rect, PADDING_PIXELS);
-        source_rect = clamp_rect_to_mat_bounds(source_rect, source_image);
-        target_rect = clamp_rect_to_mat_bounds(target_rect, target_image);
+        source_rect = detail::clamp_rect_to_mat_bounds(source_rect, source_image);
+        target_rect = detail::clamp_rect_to_mat_bounds(target_rect, target_image);
+        const cv::Rect_<float> source_rect_f = source_rect;
+        const cv::Rect_<float> target_rect_f = target_rect;
 
         if (source_rect.width <= 0 || source_rect.height <= 0 ||
             target_rect.width <= 0 || target_rect.height <= 0) {
@@ -76,33 +184,38 @@ public:
         }
 
         // Relativize triangles to bounds
-        std::array<cv::Point2f, 3> source_triangle_cropped;
-        std::array<cv::Point2f, 3> target_triangle_cropped;
-        for (uint8_t i = 0; i < 3; i++) {
-            source_triangle_cropped[i] = cv::Point2f(source_triangle[i].x - source_rect.x, source_triangle[i].y - source_rect.y);
-            target_triangle_cropped[i] = cv::Point2f(target_triangle[i].x - target_rect.x, target_triangle[i].y - target_rect.y);
+        std::array<cv::Point2f, 3> source_triangle_rel;
+        std::array<cv::Point2f, 3> target_triangle_rel;
+        for (uint8_t k = 0; k < 3; k++) {
+            source_triangle_rel[k] = source_triangle[k] - source_rect_f.tl();
+            target_triangle_rel[k] = target_triangle[k] - target_rect_f.tl();
         }
 
-        // Convert points to int triangles as fillConvexPoly needs a vector of Point and not Point2f
-        std::array<cv::Point2i, 3> target_triangle_cropped_int;
-        for (uint8_t i = 0; i < 3; i++) {
-            target_triangle_cropped_int[i] = cv::Point2i(static_cast<int32_t>(target_triangle[i].x - target_rect.x),
-                                                         static_cast<int32_t>(target_triangle[i].y - target_rect.y));
+        // Convert triangle to int (for fillConvexPoly) and add padding for masking
+        std::array<cv::Point2f, 3> target_triangle_padded = detail::pad_triangle(target_triangle, PADDING_PIXELS, PADDING_PIXELS * 3);
+        std::array<cv::Point2i, 3> target_triangle_mask;
+        for (uint8_t k = 0; k < 3; k++) {
+            target_triangle_mask[k] = cv::Point2i(
+                detail::clamp_point_to_rect(target_triangle_padded[k], target_rect_f) - target_rect_f.tl());
         }
 
         // Convert source image into floating point and cache
         // This assumes that this method is often called with the same texture sequentially and that
         // most of the texture is used.
         if (this->cached_source_image_key != ImageKey(source_image)) {
+            convert_misses++;
             source_image.convertTo(this->cached_source_image, CV_32FC3);
             this->cached_source_image_key = ImageKey(source_image);
+        } else {
+            convert_hits++;
         }
+        LOG_INFO("hits = {}/{}", convert_hits, convert_hits + convert_misses);
 
         // Read source region from source image
         const cv::Mat source_image_cropped = this->cached_source_image(source_rect);
 
         // Given a pair of triangles, find the affine transform
-        const cv::Mat warp_transform = cv::getAffineTransform(source_triangle_cropped, target_triangle_cropped);
+        const cv::Mat warp_transform = cv::getAffineTransform(source_triangle_rel, target_triangle_rel);
 
         // Apply the affine transform just found to the source image
         cv::Mat target_image_cropped = cv::Mat::zeros(target_rect.height, target_rect.width, CV_32FC3);
@@ -110,10 +223,11 @@ public:
 
         // Get mask by filling triangle
         cv::Mat mask = cv::Mat::zeros(target_rect.height, target_rect.width, CV_32FC1);
-        cv::fillConvexPoly(mask, target_triangle_cropped_int, cv::Scalar(1), cv::LINE_8, 0);
+        cv::fillConvexPoly(mask, target_triangle_mask, cv::Scalar(1), cv::LINE_8, 0);
 
         // grow mask a bit
-        cv::dilate(mask, mask, cv::Mat(), cv::Point(-1, -1), PADDING_PIXELS);
+        // Replaced by expanding triangle above
+        // cv::dilate(mask, mask, cv::Mat(), cv::Point(-1, -1), PADDING_PIXELS);
 
         // Prepare 3-channel mask for color accumulation
         cv::Mat mask_color;
@@ -134,8 +248,8 @@ public:
         std::array<cv::Point2f, 3> cv_target_triangle;
 
         for (uint8_t k = 0; k < 3; k++) {
-            cv_source_triangle[k] = glm_to_cv(source_triangle[k]);
-            cv_target_triangle[k] = glm_to_cv(target_triangle[k]);
+            cv_source_triangle[k] = detail::glm_to_cv(source_triangle[k]);
+            cv_target_triangle[k] = detail::glm_to_cv(target_triangle[k]);
         }
 
         this->add_scaled_triangle(source_image, cv_source_triangle, cv_target_triangle);
@@ -154,8 +268,8 @@ public:
         for (uint8_t k = 0; k < 3; k++) {
             const glm::dvec2 source_pixel = source_uv_triangle[k] * source_texture_size;
             const glm::dvec2 target_pixel = target_uv_triangle[k] * target_texture_size;
-            source_pixel_triangle[k] = glm_to_cv(source_pixel);
-            target_pixel_triangle[k] = glm_to_cv(target_pixel);
+            source_pixel_triangle[k] = detail::glm_to_cv(source_pixel);
+            target_pixel_triangle[k] = detail::glm_to_cv(target_pixel);
         }
 
         this->add_scaled_triangle(source_image, source_pixel_triangle, target_pixel_triangle);
@@ -228,19 +342,8 @@ private:
     cv::Mat weight_image;
     int32_t target_type;
 
-    template <typename T>
-    static cv::Rect_<T> clamp_rect_to_mat_bounds(const cv::Rect_<T> &rect, const cv::Mat &mat) {
-        T x0 = std::clamp(rect.x, T(0), T(mat.cols));
-        T y0 = std::clamp(rect.y, T(0), T(mat.rows));
-        T x1 = std::clamp(rect.x + rect.width, T(0), T(mat.cols));
-        T y1 = std::clamp(rect.y + rect.height, T(0), T(mat.rows));
-        T width = std::max(T(0), x1 - x0);
-        T height = std::max(T(0), y1 - y0);
-        return cv::Rect_<T>(x0, y0, width, height);
-    }
-    static inline cv::Point2f glm_to_cv(const glm::dvec2 &vec) {
-        return cv::Point2f(static_cast<float>(vec.x), static_cast<float>(vec.y));
-    };
+    size_t convert_hits = 0;
+    size_t convert_misses = 0;
 };
 
 inline void reproject_texture(

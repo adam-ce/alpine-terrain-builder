@@ -3,3 +3,4 @@
 #include "cut.cpp"
 #include "cut_to_disk.cpp"
 #include "orient.cpp"
+#include "manifold.cpp"

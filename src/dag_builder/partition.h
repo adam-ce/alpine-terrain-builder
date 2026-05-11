@@ -446,11 +446,28 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
 
         return new_vertex_index;
     };
+
+    const auto [manifold_triangles, backwards] = mesh::igl::make_manifold(merged_cluster.local_triangles);
+    std::vector<uint32_t> manifold_vertex_indices(backwards.size());
+    for (const auto [i, original_index] : enumerate(backwards)) {
+        manifold_vertex_indices[i] = merged_cluster.vertex_indices[original_index];
+        add_duplicate_vertex_to_mapping(original_index, i);
+    }
+    merged_cluster.local_triangles = manifold_triangles;
+    merged_cluster.vertex_indices = manifold_vertex_indices;
+
+    /*
     mesh::make_manifold(merged_cluster.local_triangles, merged_cluster.vertex_count(), duplicate_vertex);
+
+    const mesh::Simple merged_mesh2 = materialize_cluster(merged_cluster, clustering.positions);
+    mesh::io::save_to_path(merged_mesh2, "/home/user/master/meshes/pre.glb");
 
     // Ensure merged geometry is consistently oriented
     mesh::orient_triangles_inplace(merged_cluster.local_triangles);
 
+    const mesh::Simple merged_mesh3 = materialize_cluster(merged_cluster, clustering.positions);
+    mesh::io::save_to_path(merged_mesh3, "/home/user/master/meshes/post.glb");
+*/
     // Ensure each connectivity component is open and of genus 1 (topological disk)
     mesh::cut_to_disk(
         merged_cluster.local_triangles,

@@ -7,6 +7,9 @@
 #include "mesh/igl/convert.h"
 #include "mesh/topology.h"
 
+#include "mesh/manifold.h"
+#include "mesh/igl/manifold.h"
+
 namespace mesh {
 
 namespace detail {
@@ -16,7 +19,7 @@ void orient_triangles_core(
     auto F = convert_triangles(triangles_in);
     Eigen::MatrixX3i FF;
     Eigen::VectorXi C;
-    igl::bfs_orient(F, FF, C);
+    ::igl::bfs_orient(F, FF, C);
     to_stl_glm_span(FF, triangles_out);
     DEBUG_ASSERT(is_consistently_oriented(triangles_out));
 }

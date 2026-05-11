@@ -171,6 +171,8 @@ void build_range_impl(
     const Range<uint32_t> valid_range(0, MAX_LEVEL);
     level_range = level_range.intersection(valid_range);
 
+    octree::Storage debug_output = octree::open_folder(storage.base_path().string() + "-debug", false, octree::OpenOptions { .preferred_extension_with_dot = ".glb"});
+
     std::vector<std::unordered_set<octree::Id>> nodes_by_level = make_nodes_by_level(storage.index());
     const auto leaf_level_range = find_level_range_of_nodes(nodes_by_level);
 
@@ -292,6 +294,7 @@ void build_range_impl(
                 });
             });
 
+            debug_output.save(target_id, clustering_to_mesh(final_clustering));
             const auto result = storage.save(target_id, dag::ClusterBatch(final_clustering, child_id_map));
             DEBUG_ASSERT_VAL(result);
         }
@@ -317,26 +320,37 @@ void build_leaves(
     octree::DagStorage &output_storage,
     const octree::Id &root_node,
     const bool resume) {
-
-    std::vector<octree::Id> input_nodes;
-    input_nodes.reserve(input_storage.index().size());
+    // Prepare the list of leave nodes to generate and which input nodes are relevant.
+    std::unordered_map<octree::Id, FixedVector<octree::Id, 8>> target_nodes;
+    target_nodes.reserve(input_storage.index().size());
     for (const auto &[id, status] : input_storage.index()) {
-        if (status == octree::NodeStatus::Leaf && root_node.is_ancestor_of(id)) {
-            input_nodes.push_back(id);
+        if (status != octree::NodeStatus::Leaf) {
+            // Not a leaf node
+            continue;
+        }
+
+        if (!root_node.is_ancestor_of(id)) {
+            // Not relevant to selected region
+            continue;
+        }
+
+        if (is_even(id.level())) {
+            // Even nodes have the same bounds on the shifted octree so we only clusterize
+            target_nodes[id].push_back(id);
+        } else {
+            // For odd levels we merge and construct the parent instead, since that one is aligned
+            target_nodes[id.parent().value()].push_back(id);
         }
     }
 
-    ProgressIndicator progress(input_nodes.size());
+    // Prepare the progress bar and calculate initial progress if resuming
+    ProgressIndicator progress(target_nodes.size());
     auto handle = progress.start_monitoring();
-
-    struct Node {
-        octree::Id id;
-        dag::ClusterBatch clusters;
-    };
 
     size_t start_index = 0;
     if (resume) {
-        for (const auto& [i, id] : enumerate(input_nodes)) {
+        for (const auto &[i, e] : enumerate(target_nodes)) {
+            const auto &id = e.first;
             if (output_storage.has(id)) {
                 start_index = i + 1;
             }
@@ -346,6 +360,11 @@ void build_leaves(
         }
     }
 
+    // We use a helper to ensure writes to the Storage are not concurrent.
+    struct Node {
+        octree::Id id;
+        dag::ClusterBatch clusters;
+    };
     tbb::flow::graph g;
     tbb::flow::function_node<Node> save_node(
         g,
@@ -355,35 +374,42 @@ void build_leaves(
                 return;
             }
             const auto result = output_storage.save(node.id, node.clusters);
+            progress.task_finished();
             DEBUG_ASSERT_VAL(result);
         });
 
-    parallel_for(start_index, input_nodes.size(), [&](const size_t i) {
-        const octree::Id id = input_nodes[i];
+    // Now iterate over all target nodes and build them.
+    const octree::Space space = octree::Space::earth();
+    parallel_for(start_index, target_nodes.size(), [&](const size_t i) {
+        auto it = target_nodes.begin();
+        std::advance(it, i);
+        const auto& [id, input_nodes] = *it;
 
-        const auto result = load_and_clusterize_mesh(input_storage, id);
-        if (!result.has_value()) {
+        FixedVector<Clustering, 8> clusterings;
+        for (const octree::Id& input_id : input_nodes) {
+            const auto result = load_and_clusterize_mesh(input_storage, input_id);
+            if (!result.has_value()) {
+                LOG_WARN("Failed to load or clusterize {}, Skipping.", input_id);
+                continue;
+            }
+            clusterings.push_back(result.value());
+        }
+
+        Clustering clustering;
+        if (clusterings.size() == 1) {
+            clustering = std::move(clusterings[0]);
+        } else {
+            const octree::Bounds node_bounds = space.get_node_bounds(id);
+            const double epsilon = glm::compAdd(node_bounds.size()) / (3 * 1e6);
+            clustering = merge_clusterings(clusterings, epsilon);
+        }
+
+        if (clustering.is_empty()) {
             progress.task_finished();
             return;
         }
-        const auto clustering = result.value();
 
-        if (is_even(id.level())) {
-            save_node.try_put({id, dag::ClusterBatch::make_leaves(clustering)});
-        } else {
-            const auto assignment = partition_clusters_to_children(clustering, id);
-            for (const auto &[child_index, cluster_indices] : enumerate(assignment)) {
-                const Clustering child_clustering = slice_clusters(clustering, cluster_indices);
-                const octree::Id child_id = id.child(child_index).value();
-                if (child_clustering.is_empty()) {
-                    progress.task_finished();
-                    return;
-                }
-                save_node.try_put({child_id, dag::ClusterBatch::make_leaves(child_clustering)});
-            }
-        }
-        
-        progress.task_finished();
+        save_node.try_put({id, dag::ClusterBatch::make_leaves(clustering)});
     });
 
     handle.join();

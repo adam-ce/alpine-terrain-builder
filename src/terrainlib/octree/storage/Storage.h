@@ -187,10 +187,11 @@ public:
     }
   
     bool has(const Id &id) const noexcept {
-        return 
-            this->_cache.contains(id) ||
-            this->_index.contains(id, false) ||
-            this->_inner.has(id);
+        if (this->is_indexed()) {
+            return this->_index.contains(id, false);
+        } else {
+            return this->_inner.has(id);
+        }
     }
 
     std::filesystem::path path_for(const Id &id) const noexcept {

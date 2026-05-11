@@ -1,42 +1,57 @@
 #pragma once
 
+#include <bit>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <stdexcept>
 #include <type_traits>
 
 #include <libassert/assert.hpp>
 
-constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
-    if (n <= 1)
-        return 1;
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    return n + 1;
+inline constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint32_t{1} << 31));
+    return std::bit_ceil(n);
 }
 
-constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
-    if (n <= 1)
-        return 1;
-    n--;
-    n |= n >> 1;
-    n |= n >> 2;
-    n |= n >> 4;
-    n |= n >> 8;
-    n |= n >> 16;
-    n |= n >> 32;
-    return n + 1;
+inline constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint64_t{1} << 63));
+    return std::bit_ceil(n);
 }
 
-constexpr size_t next_power_of_two(size_t n) noexcept {
-    if constexpr (std::is_same_v<size_t, uint32_t>) {
-        return static_cast<size_t>(next_power_of_two(static_cast<uint32_t>(n)));
-    } else if constexpr (std::is_same_v<size_t, uint64_t>) {
-        return static_cast<size_t>(next_power_of_two(static_cast<uint64_t>(n)));
+inline constexpr uint32_t prev_power_of_two(uint32_t n) noexcept {
+    return std::bit_floor(n);
+}
+
+inline constexpr uint64_t prev_power_of_two(uint64_t n) noexcept {
+    return std::bit_floor(n);
+}
+
+template <typename T>
+T next_higher(T x) {
+    static_assert(std::is_arithmetic_v<T>, "T must be a primitive numeric type");
+
+    if constexpr (std::is_integral_v<T>) {
+        if (x == std::numeric_limits<T>::max()) {
+            throw std::overflow_error("No higher value exists for this type");
+        }
+        return x + 1;
     } else {
-        UNREACHABLE();
+        return std::nextafter(x, std::numeric_limits<T>::infinity());
+    }
+}
+
+template <typename T>
+T next_lower(T x) {
+    static_assert(std::is_arithmetic_v<T>, "T must be a primitive numeric type");
+
+    if constexpr (std::is_integral_v<T>) {
+        if (x == std::numeric_limits<T>::lowest()) {
+            throw std::underflow_error("No lower value exists for this type");
+        }
+        return x - 1;
+    } else {
+        return std::nextafter(x, -std::numeric_limits<T>::infinity());
     }
 }

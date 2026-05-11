@@ -6,12 +6,15 @@
 #include <limits>
 #include <type_traits>
 
+#include "number_utils.h"
+
 template <typename T>
 struct Range {
     T min;
     T max;
 
-    constexpr Range() : min(std::numeric_limits<T>::max()), max(std::numeric_limits<T>::lowest()) {}
+    constexpr Range() : Range(std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest()) {}
+    constexpr Range(T value) : Range(Range::from_single(value)) {}
     constexpr Range(T min_value, T max_value) : min(min_value), max(max_value) {}
 
     [[nodiscard]] constexpr bool empty() const noexcept {
@@ -90,8 +93,18 @@ struct Range {
     }
 
     [[nodiscard]] static constexpr Range from_single(T value) noexcept {
-        return {value, value + T{1}};
+        return {value, next_higher(value)};
     }
 
     [[nodiscard]] constexpr bool operator==(const Range &) const noexcept = default;
 };
+
+template <typename T>
+constexpr Range<T> full_range() {
+    return Range<T>(std::numeric_limits<T>::lowest(), std::numeric_limits<T>::max());
+}
+
+template <typename T>
+constexpr Range<T> empty_range() {
+    return Range<T>(std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest());
+}

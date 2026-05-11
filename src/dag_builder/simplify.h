@@ -227,37 +227,6 @@ inline Clustering simplify(
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
+    validate(simplified_clustering);
     return simplified_clustering;
-}
-
-inline void remove_unused_vertices_inplace(Clustering& clustering) {
-    const uint32_t vertex_count = clustering.vertex_count();
-    constexpr uint32_t invalid_vertex = -1;
-    std::vector<uint32_t> vertex_remap(vertex_count, invalid_vertex);
-    uint32_t next_index = 0;
-    for (Cluster& cluster : clustering.clusters) {
-        for (uint32_t& vertex_index : cluster.vertex_indices) {
-            uint32_t& new_index = vertex_remap[vertex_index];
-            if (new_index == invalid_vertex) {
-                new_index = next_index;
-                next_index++;
-            }
-            vertex_index = new_index;
-        }
-    }
-
-    const uint32_t new_vertex_count = next_index;
-    std::vector<glm::dvec3> new_positions(new_vertex_count);
-    for (const auto [old_index, new_index] : enumerate(vertex_remap)) {
-        if (new_index == invalid_vertex) {
-            continue;
-        }
-        new_positions[new_index] = clustering.positions[old_index];
-    }
-    clustering.positions = new_positions;
-}
-inline Clustering remove_unused_vertices(const Clustering &clustering) {
-    Clustering copy = clustering;
-    remove_unused_vertices_inplace(copy);
-    return copy;
 }

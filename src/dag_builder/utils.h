@@ -12,6 +12,7 @@
 #include "mesh/manifold.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
+#include "enumerate.h"
 
 // Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
 // Outputs are written as float coordinates.

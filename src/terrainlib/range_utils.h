@@ -12,6 +12,13 @@
 #include <utility>
 #include <vector>
 
+template <std::ranges::input_range Range, typename T>
+bool contains(Range &&range, const T &value) {
+    const auto begin = std::ranges::begin(range);
+    const auto end = std::ranges::end(range);
+    return std::find(begin, end, value) != end;
+}
+
 template <typename Iterator, typename T>
 Iterator find_single(Iterator begin, Iterator end, const T &value) {
     // Find first occurrence

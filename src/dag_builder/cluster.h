@@ -7,6 +7,7 @@
 #include <opencv2/core.hpp>
 
 struct Cluster {
+    uint32_t id = -1;
     std::vector<uint32_t> vertex_indices; // indices into Clustering::positions
     std::vector<glm::uvec3> local_triangles; // indices into this->vertex_indices
     std::vector<glm::dvec2> uvs; // per local vertex 
@@ -35,6 +36,9 @@ struct Clustering {
     }
     constexpr size_t cluster_count() const noexcept {
         return this->clusters.size();
+    }
+    constexpr bool is_empty() const noexcept {
+        return this->vertex_count() == 0 || this->cluster_count() == 0;
     }
     cv::Mat get_cluster_texture(const uint32_t cluster_index) const noexcept {
         return this->textures[this->clusters[cluster_index].texture_id];

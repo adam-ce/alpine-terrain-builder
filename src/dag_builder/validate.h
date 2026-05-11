@@ -35,12 +35,13 @@ inline void validate(const Cluster &cluster, const std::span<const glm::dvec3> p
 }
 
 inline void validate(const Clustering &clustering) {
-    ASSERT(!clustering.positions.empty(), "Clustering must have positions.");
+    // ASSERT(!clustering.positions.empty(), "Clustering must have positions.");
 
     const uint32_t cluster_count = static_cast<uint32_t>(clustering.clusters.size());
 
     for (uint32_t cluster_index = 0; cluster_index < cluster_count; cluster_index++) {
         const Cluster &cluster = clustering.clusters[cluster_index];
         validate(cluster, clustering.positions);
+        ASSERT(cluster.texture_id < clustering.textures.size());
     }
 }

@@ -636,10 +636,12 @@ inline Clustering apply_partitioning(const Clustering &clustering, const Partiti
         partitioned_clusters.push_back(std::move(merged_cluster));
     }
 
-    return Clustering{
+    const Clustering new_clustering {
         clustering.positions,
         std::move(partitioned_clusters),
         textures};
+    validate(new_clustering);
+    return new_clustering;
 }
 
 inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}) {

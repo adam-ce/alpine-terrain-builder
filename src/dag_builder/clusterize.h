@@ -17,6 +17,7 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "validate.h"
+#include "range_utils.h"
 
 struct ClusterOptions {
     static constexpr uint32_t MAX_VERTEX_LIMIT = UINT8_MAX;
@@ -49,6 +50,7 @@ inline std::vector<Cluster> clusterize(
     for (const auto &meshlet : meshlet_result.meshlets) {
         Cluster cluster;
         cluster.texture_id = 0;
+        cluster.id = clusters.size();
 
         // Map meshlet vertices to global vertex indices
         if (global_vertex_map.empty()) {
@@ -135,20 +137,13 @@ inline std::vector<Cluster> clusterize(
 struct ClusteringAndBackwardMapping {
     Clustering clustering;
     std::vector<uint32_t> backward_mapping; // new cluster index -> original cluster index
-
-    operator const Clustering &() const & {
-        return this->clustering;
-    }
-    operator Clustering &&() && {
-        return std::move(this->clustering);
-    }
 };
 
 inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const ClusterOptions &options = {}) {
     std::vector<Cluster> new_clusters;
 
     const auto counts = input.clusters | std::views::transform(&Cluster::vertex_count);
-    const size_t combined_vertex_count = std::accumulate(counts.begin(), counts.end(), size_t{0});
+    const size_t combined_vertex_count = sum(counts);
     const size_t max_cluster_vertex_count = input.clusters.empty() ? 0 : std::ranges::max(counts);
 
     // Preallocate position buffers
@@ -195,5 +190,6 @@ inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const Cl
         std::move(new_clusters),
         input.textures
     };
+    validate(new_clustering);
     return ClusteringAndBackwardMapping{std::move(new_clustering), std::move(parent_cluster_indices)};
 }

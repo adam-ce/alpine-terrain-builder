@@ -55,6 +55,7 @@ auto serialize(Archive &archive, const Cluster &cluster) {
         encoded_triangles,
         encoded_vertex_indices,
         encoded_uvs,
+        cluster.id,
         cluster.texture_id,
         cluster.absolute_error);
 }
@@ -75,6 +76,7 @@ auto serialize(Archive &archive, Cluster &cluster) {
         encoded_triangles,
         encoded_vertex_indices,
         encoded_uvs,
+        cluster.id,
         cluster.texture_id,
         cluster.absolute_error);
 

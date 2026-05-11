@@ -1,10 +1,14 @@
 #pragma once
 
 #include <vector>
+#include <cstdint>
+
+#include <glm/glm.hpp>
 
 #include "cluster.h"
+#include "slice.h"
 
-void compact_cluster(Cluster &cluster) {
+inline void compact_cluster_inplace(Cluster &cluster) {
     const size_t vertex_count = cluster.vertex_count();
     if (vertex_count == 0) {
         return;
@@ -49,4 +53,38 @@ void compact_cluster(Cluster &cluster) {
     // Replace data
     cluster.vertex_indices = std::move(new_vertex_indices);
     cluster.uvs = std::move(new_uvs);
+}
+
+inline void remove_unused_vertices_inplace(Clustering &clustering) {
+    const uint32_t vertex_count = clustering.vertex_count();
+    constexpr uint32_t invalid_vertex = -1;
+    std::vector<uint32_t> vertex_remap(vertex_count, invalid_vertex);
+    uint32_t next_index = 0;
+    for (Cluster &cluster : clustering.clusters) {
+        for (uint32_t &vertex_index : cluster.vertex_indices) {
+            uint32_t &new_index = vertex_remap[vertex_index];
+            if (new_index == invalid_vertex) {
+                new_index = next_index;
+                next_index++;
+            }
+            vertex_index = new_index;
+        }
+    }
+
+    const uint32_t new_vertex_count = next_index;
+    std::vector<glm::dvec3> new_positions(new_vertex_count);
+    for (const auto [old_index, new_index] : enumerate(vertex_remap)) {
+        if (new_index == invalid_vertex) {
+            continue;
+        }
+        new_positions[new_index] = clustering.positions[old_index];
+    }
+    clustering.positions = new_positions;
+
+    validate(clustering);
+}
+inline Clustering remove_unused_vertices(const Clustering &clustering) {
+    Clustering copy = clustering;
+    remove_unused_vertices_inplace(copy);
+    return copy;
 }

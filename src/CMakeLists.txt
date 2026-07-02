@@ -283,6 +283,7 @@ target_link_libraries(mesh-simplify PUBLIC meshsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
+    tile_downloader/cli.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 

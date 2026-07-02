@@ -19,6 +19,7 @@
 
 #include "mesh/convert.h"
 #include "mesh/bounds.h"
+#include "opencv_utils.h"
 #include "log.h"
 #include "simplify.h"
 #include "uv_map.h"
@@ -508,9 +509,7 @@ Result simplify_mesh(const mesh::Simple&mesh, std::span<const StopCondition> sto
 }
 
 cv::Mat simplify_texture(const cv::Mat &texture, glm::uvec2 target_resolution) {
-    cv::Mat simplified_texture;
-    cv::resize(texture, simplified_texture, cv::Size(target_resolution.x, target_resolution.y), cv::INTER_LINEAR);
-    return simplified_texture;
+    return rescale_texture(texture, target_resolution);
 }
 
 void simplify_mesh_texture(mesh::Simple &mesh, glm::uvec2 target_resolution) {

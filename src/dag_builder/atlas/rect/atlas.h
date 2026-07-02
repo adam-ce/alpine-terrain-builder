@@ -6,8 +6,8 @@
 #include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
 
-#include "atlas/Plan.h"
-#include "atlas/Planner.h"
+#include "atlas/rect/Plan.h"
+#include "atlas/rect/Planner.h"
 
 using Texture = cv::Mat;
 

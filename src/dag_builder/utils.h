@@ -6,7 +6,7 @@
 #include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 
-#include "atlas/atlas.h"
+#include "atlas/rect/atlas.h"
 #include "cluster.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"

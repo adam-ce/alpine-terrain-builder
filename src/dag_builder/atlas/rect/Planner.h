@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#include "atlas/Plan.h"
+#include "atlas/rect/Plan.h"
 
 namespace atlas {
 

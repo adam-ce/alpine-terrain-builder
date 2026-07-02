@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#include "atlas/HorizontalStripPlanner.h"
+#include "atlas/rect/HorizontalStripPlanner.h"
 
 namespace atlas {
 

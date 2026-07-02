@@ -8,7 +8,7 @@
 #include <glm/gtx/component_wise.hpp>
 #include <rectpack2D/finders_interface.h>
 
-#include "atlas/PackingPlanner.h"
+#include "atlas/rect/PackingPlanner.h"
 
 namespace atlas {
 
@@ -65,7 +65,7 @@ Plan PackingPlanner::plan(const std::span<const glm::uvec2> texture_sizes) const
     std::optional<rectpack2D::rect_wh> result;
 
     // Expand search square until we succeed.
-    for (uint32_t attempt = 0; attempt < 256u; ++attempt) {
+    for (uint32_t attempt = 0; attempt < 256u; attempt++) {
         bool any_unsuccessful = false;
 
         auto report_successful = [&](rect_type &) {

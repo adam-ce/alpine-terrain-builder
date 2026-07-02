@@ -8,8 +8,8 @@
 #include <libassert/assert.hpp>
 #include <rectpack2D/finders_interface.h>
 
-#include "atlas/atlas.h"
-#include "atlas/PackingPlanner.h"
+#include "atlas/rect/atlas.h"
+#include "atlas/rect/PackingPlanner.h"
 
 namespace atlas {
 

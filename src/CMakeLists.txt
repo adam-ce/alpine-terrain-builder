@@ -305,9 +305,9 @@ add_executable(index-browser
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_library(dagbuilderlib
-    dag_builder/atlas/atlas.cpp
-    dag_builder/atlas/HorizontalStripPlanner.cpp
-    dag_builder/atlas/PackingPlanner.cpp
+    dag_builder/atlas/rect/atlas.cpp
+    dag_builder/atlas/rect/HorizontalStripPlanner.cpp
+    dag_builder/atlas/rect/PackingPlanner.cpp
     dag_builder/build.cpp
     dag_builder/merge.cpp
 )

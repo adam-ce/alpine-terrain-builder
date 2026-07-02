@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
+#include <ranges>
 
 #include <libassert/assert.hpp>
 

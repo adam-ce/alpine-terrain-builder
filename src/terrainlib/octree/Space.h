@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "octree/Id.h"
+#include "octree/IdRect.h"
 
 namespace octree {
 using Bounds = radix::geometry::Aabb3d;

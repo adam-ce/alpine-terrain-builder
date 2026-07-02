@@ -1,4 +1,5 @@
-#include <queue>
+#include <numeric>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -9,6 +10,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include "log.h"
 #include "octree/Id.h"
 #include "octree/NodeStatus.h"
 #include "octree/NodeStatusOrMissing.h"

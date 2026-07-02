@@ -1,6 +1,7 @@
+#include <filesystem>
+#include <numeric>
 #include <string>
 #include <vector>
-#include <filesystem>
 
 #include "cli.h"
 #include "cut.h"

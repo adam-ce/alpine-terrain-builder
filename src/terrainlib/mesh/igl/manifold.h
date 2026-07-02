@@ -4,6 +4,10 @@
 #include <vector>
 
 #include <glm/common.hpp>
+#include <libassert/assert.hpp>
+
+#include "enumerate.h"
+#include "mesh/SimpleMesh.h"
 
 namespace mesh::igl {
 

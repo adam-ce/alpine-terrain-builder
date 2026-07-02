@@ -5,6 +5,8 @@
 
 #include <glm/common.hpp>
 
+#include "mesh/SimpleMesh.h"
+
 namespace mesh {
 
 void orient_triangles_inplace(const std::span<glm::uvec3> triangles);

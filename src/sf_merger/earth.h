@@ -1,5 +1,7 @@
 #pragma once
 
+#include <glm/glm.hpp>
+
 namespace earth {
     constexpr double largest_radius() {
         // Chimborazo

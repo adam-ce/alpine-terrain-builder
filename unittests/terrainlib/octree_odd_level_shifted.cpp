@@ -6,6 +6,7 @@
 
 #include "octree/Id.h"
 #include "octree/OddLevelShifted.h"
+#include "octree/Space.h"
 
 using namespace octree;
 

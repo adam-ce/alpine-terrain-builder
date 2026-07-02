@@ -5,6 +5,8 @@
 
 #include <opencv2/core.hpp>
 
+#include "hash_utils.h"
+
 struct ImageKey {
     const uint8_t *data = nullptr;
     int32_t rows = 0;

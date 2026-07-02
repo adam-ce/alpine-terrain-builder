@@ -1,3 +1,6 @@
+#include <numeric>
+#include <string>
+
 #include "cli.h"
 #include "mesh/convert.h"
 #include "log.h"

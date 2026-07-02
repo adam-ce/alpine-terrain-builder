@@ -3,6 +3,7 @@
 #include <vector>
 #include <cstdint>
 #include <array>
+#include <span>
 
 #include <glm/glm.hpp>
 #include <radix/geometry.h>

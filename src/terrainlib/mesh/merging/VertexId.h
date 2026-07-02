@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "hash_utils.h"
 
 namespace mesh::merging {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <libassert/assert.hpp>
+
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/VertexDeduplicate.h"
 #include "spatial_lookup/SpatialLookup.h"

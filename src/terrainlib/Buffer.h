@@ -4,6 +4,8 @@
 #include <memory>
 #include <span>
 
+#include <libassert/assert.hpp>
+
 #include "Size.h"
 
 template <typename T, Size S>

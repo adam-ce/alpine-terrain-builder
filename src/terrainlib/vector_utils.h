@@ -1,7 +1,9 @@
 #pragma once
 
-#include <vector>
 #include <algorithm>
+#include <vector>
+
+#include <libassert/assert.hpp>
 
 template <typename Vector>
 void erase_by_index(Vector &vec, size_t index) {

@@ -1,8 +1,10 @@
-#include <span>
-#include <vector>
-#include <functional>
 #include <algorithm>
 #include <filesystem>
+#include <functional>
+#include <numeric>
+#include <span>
+#include <string>
+#include <vector>
 
 #include "cli.h"
 #include "log.h"

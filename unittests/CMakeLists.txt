@@ -37,6 +37,7 @@ add_executable(unittests_terrainlib
     terrainlib/dataset.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/grid.cpp
+    terrainlib/hash_utils.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp

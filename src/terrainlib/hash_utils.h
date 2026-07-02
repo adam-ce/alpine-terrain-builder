@@ -56,14 +56,14 @@ inline void append(size_t &seed, const T &v) {
 // modified from https://stackoverflow.com/questions/2590677/how-do-i-combine-hash-values-in-c0x/57595105#57595105
 template <typename T, typename... Rest>
 void append(size_t &seed, const T &v, const Rest &...rest) {
-    seed = mix(seed, v);
+    append(seed, v);
     (append(seed, rest), ...);
 }
 
 template <typename... Rest>
 size_t combine(const Rest &...rest) {
     size_t h = default_seed();
-    (append(h, rest), ...);
+    append(h, rest...);
     return h;
 }
 

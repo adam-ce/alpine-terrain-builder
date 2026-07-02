@@ -44,6 +44,7 @@ add_executable(unittests_terrainlib
     terrainlib/mesh_bounds.cpp
     terrainlib/mesh_cleanup.cpp
     terrainlib/mesh_clip.cpp
+    terrainlib/mesh_combine.cpp
     terrainlib/mesh_connected_components.cpp
     terrainlib/mesh_cut.cpp
     terrainlib/mesh_cut_to_disk.cpp

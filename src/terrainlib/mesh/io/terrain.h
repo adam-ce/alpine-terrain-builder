@@ -8,7 +8,6 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/io/error.h"
 #include "mesh/io/options.h"
-#include "mesh/io/texture.h"
 
 namespace mesh::io::terrain {
 

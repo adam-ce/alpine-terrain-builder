@@ -47,7 +47,6 @@ inline std::vector<uint32_t> identity_map(const std::span<const glm::uvec3> tria
 }
 inline void assert_disks(const std::span<const glm::uvec3> triangles) {
     const Topology topology = compute_topology(triangles);
-    const auto c = split_into_connected_components(triangles);
     for (const auto &component : topology.components()) {
         DEBUG_ASSERT(component.is_disk(true));
     }

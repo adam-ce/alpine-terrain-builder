@@ -646,7 +646,6 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix
     HasIntersectionsVisitor<cgal::Mesh> visitor;
     const auto clip_params = CGAL::Polygon_mesh_processing::parameters::clip_volume(true)
         .visitor(visitor);
-    cgal::Mesh result_cgal_mesh;
     const bool success = CGAL::Polygon_mesh_processing::clip(cgal_mesh, cgal_bounds, clip_params);
     if (!success) {
         throw std::runtime_error("CGAL::Polygon_mesh_processing::clip failed");

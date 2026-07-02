@@ -242,7 +242,7 @@ glm::dvec2 calculate_radius_squared_range(const std::span<const SimpleMesh3d> me
     for (const SimpleMesh3d &mesh : meshes) {
         const auto radius_sq_range = calculate_radius_squared_range(mesh);
         min_radius_sq = std::min(min_radius_sq, radius_sq_range.x);
-        max_radius_sq = std::min(max_radius_sq, radius_sq_range.y);
+        max_radius_sq = std::max(max_radius_sq, radius_sq_range.y);
     }
 
     return glm::dvec2(min_radius_sq, max_radius_sq);

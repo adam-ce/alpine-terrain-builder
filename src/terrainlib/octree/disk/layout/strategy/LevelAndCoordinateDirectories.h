@@ -41,14 +41,14 @@ public:
         ++it;
 
         const auto y_opt = from_chars<Id::Coord>(it->native());
-        if (!x_opt) {
+        if (!y_opt) {
             return std::nullopt;
         }
         const Id::Coord y = *y_opt;
         ++it;
 
         const auto z_opt = from_chars<Id::Coord>(it->stem().native());
-        if (!x_opt) {
+        if (!z_opt) {
             return std::nullopt;
         }
         const Id::Coord z = *z_opt;

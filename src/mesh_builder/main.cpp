@@ -206,7 +206,7 @@ int run(std::span<char *> args) {
         ->check(CLI::ExistingDirectory);
     app.add_option("--mesh-srs", mesh_srs_input, "EPSG code of the target srs of the mesh positions")
         ->default_val("EPSG:4978");
-    app.add_option("--min-texture-level", max_texture_level, "Minimum texture zoom level to use for assembling textures.")
+    app.add_option("--min-texture-level", min_texture_level, "Minimum texture zoom level to use for assembling textures.")
         ->needs("--textures");
     app.add_option("--max-texture-level", max_texture_level, "Maximum texture zoom level to use for assembling textures.")
         ->needs("--textures");

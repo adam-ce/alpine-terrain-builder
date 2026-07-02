@@ -65,7 +65,7 @@ public:
         if (element == 0) {
             throw std::out_of_range("cannot modify begin of first element");
         }
-        if (element > this->size()) {
+        if (element >= this->size()) {
             throw std::out_of_range("element out of range");
         }
 

@@ -21,7 +21,7 @@ public:
 
     std::optional<cv::Mat> get_tile(const radix::tile::Id tile) const override {
         const std::optional<std::filesystem::path> tile_path = this->get_tile_path(tile);
-        if (!tile_path.has_value() && !TilePathProvider::is_usable_tile_path(tile_path.value())) {
+        if (!tile_path.has_value() || !TilePathProvider::is_usable_tile_path(tile_path.value())) {
             return std::nullopt;
         }
         auto tile_img = cv::imread(tile_path.value());

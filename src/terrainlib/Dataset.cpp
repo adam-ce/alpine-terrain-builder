@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
-#include <regex>
 #include <stdexcept>
 
 #include <gdal_priv.h>
@@ -141,7 +140,7 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     if (result != CE_None) {
         const char *unit = band->GetUnitType();
         ASSERT(unit != nullptr);
-        ASSERT(strcmp(unit, "m") || strcmp(unit, "meters"));
+        ASSERT(strcmp(unit, "m") == 0 || strcmp(unit, "meters") == 0);
         height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
     }
 
@@ -192,7 +191,7 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 
     const auto transformer = srs::transformation(srs(), targetSrs);
     if (!transformer->Transform(int(x.size()), x.data(), y.data())) {
-        throw std::string("Could not transform dataset bounds to target SRS");
+        throw std::runtime_error("Could not transform dataset bounds to target SRS");
     }
 
     DEBUG_ASSERT(!x.empty());

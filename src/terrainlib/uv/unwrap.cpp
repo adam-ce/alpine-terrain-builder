@@ -75,7 +75,7 @@ inline cgal::Point2 min(const cgal::Point2 &a, const cgal::Point2 &b) {
     return cgal::Point2(std::min(a.x(), b.x()), std::min(a.y(), b.y()));
 }
 
-inline void check_uv(const glm::uvec2 &uv) {
+inline void check_uv(const glm::dvec2 &uv) {
     DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
     DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
 }

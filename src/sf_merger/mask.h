@@ -391,7 +391,7 @@ inline glm::dvec2 calculate_radius_range(const radix::geometry::Aabb3d& bounds) 
 }
 
 inline glm::dvec2 pad_radius_range(const glm::dvec2& radius_range, double padding_fraction) {
-    DEBUG_ASSERT(radius_range.x >= 0 || radius_range.y >= 0);
+    DEBUG_ASSERT(radius_range.x >= 0 && radius_range.y >= 0);
     DEBUG_ASSERT(radius_range.y > radius_range.x);
 
     if (padding_fraction == 0.0) {

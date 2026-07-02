@@ -10,7 +10,7 @@ public:
     using Point = glm::vec<dimensions, T>;
 
     Polygon_() = default;
-    Polygon_(std::vector<Point> points) : Polygon_(points) {}
+    Polygon_(std::vector<Point> points) : points(std::move(points)) {}
 
     std::vector<Point> points;
 

@@ -7,7 +7,7 @@
 
 namespace octree {
 
-void for_each_descendant_at_level(const Id &node, const Id::Level target_level, const std::function<void(const Id &)> &callback) {
+inline void for_each_descendant_at_level(const Id &node, const Id::Level target_level, const std::function<void(const Id &)> &callback) {
     if (target_level <= node.level()) {
         return;
     }
@@ -21,7 +21,7 @@ void for_each_descendant_at_level(const Id &node, const Id::Level target_level, 
     }
 }
 
-std::vector<Id> list_descendant_at_level(const Id &node, const Id::Level target_level) {
+inline std::vector<Id> list_descendant_at_level(const Id &node, const Id::Level target_level) {
     if (target_level <= node.level()) {
         return {};
     }

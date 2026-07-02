@@ -142,7 +142,7 @@ void build_and_save_patch(
         exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
-    LOG_INFO("Done", output_path);
+    LOG_INFO("Done writing mesh to {}", output_path);
 }
 
 namespace {

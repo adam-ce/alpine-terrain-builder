@@ -80,12 +80,11 @@ inline std::unordered_map<glm::uvec2, uint32_t> find_boundary_edges_and_triangle
 
 template <typename MaskT>
 inline void build_boundary_triangle_mask(const std::span<const glm::uvec3> triangles,
-                                        const size_t vertex_count,
                                         std::vector<MaskT> &boundary,
                                         const MaskT on_boundary,
                                         const MaskT not_on_boundary) {
     const std::unordered_map<glm::uvec2, uint32_t> edge_to_triangle = detail::find_boundary_edges_and_triangles(triangles);
-    boundary.assign(vertex_count, not_on_boundary);
+    boundary.assign(triangles.size(), not_on_boundary);
     for (const auto &[_, triangle_index] : edge_to_triangle) {
         boundary[triangle_index] = on_boundary;
     }

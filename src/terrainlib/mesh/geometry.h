@@ -57,13 +57,13 @@ template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions);
 
 template <glm::length_t n_dims, typename T>
-T is_empty_triangle(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2, const T min_area = 2 * epsilon<T>());
+bool is_empty_triangle(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2, const T min_area = 2 * epsilon<T>());
 template <glm::length_t n_dims, typename T>
-T is_empty_triangle(const std::array<glm::vec<n_dims, T>, 3> &triangle, const T min_area = 2 * epsilon<T>());
+bool is_empty_triangle(const std::array<glm::vec<n_dims, T>, 3> &triangle, const T min_area = 2 * epsilon<T>());
 template <glm::length_t n_dims, typename T>
-T is_empty_triangle(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions, const T min_area = 2 * epsilon<T>());
+bool is_empty_triangle(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions, const T min_area = 2 * epsilon<T>());
 template <glm::length_t n_dims, typename T>
-T is_empty_triangle(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions, const T min_area = 2 * epsilon<T>());
+bool is_empty_triangle(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>> &positions, const T min_area = 2 * epsilon<T>());
 
 namespace mesh {
 

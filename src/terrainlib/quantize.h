@@ -15,8 +15,8 @@ glm::vec<n_dims, T> quantize_round(const glm::vec<n_dims, T> &v, const T epsilon
 }
 
 template <typename T>
-T quantize_index(const T x, const T epsilon) {
-    return static_cast<std::int64_t>(std::floor(x / epsilon));
+int64_t quantize_index(const T x, const T epsilon) {
+    return static_cast<int64_t>(std::floor(x / epsilon));
 }
 
 template <glm::length_t n_dims, typename T>

@@ -76,7 +76,7 @@ std::optional<double> calculate_min_edge_length_squared(const SimpleMesh &mesh) 
         return std::nullopt;
     }
 
-    double min_length_sq = 0.0;
+    double min_length_sq = std::numeric_limits<double>::max();
     for (const auto &triangle : mesh.triangles) {
         const glm::dvec3 &a = mesh.positions[triangle.x];
         const glm::dvec3 &b = mesh.positions[triangle.y];

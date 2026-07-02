@@ -12,7 +12,7 @@ cv::Mat read_texture_from_encoded_bytes(std::span<const uint8_t> buffer) {
 void write_texture_to_encoded_buffer(const cv::Mat &image, std::vector<uint8_t> &buffer, const std::string& extension) {
     cv::Mat converted;
     image.convertTo(converted, CV_8UC3);
-    cv::imencode(extension, image, buffer);
+    cv::imencode(extension, converted, buffer);
 }
 void write_texture_to_encoded_buffer(const ImageAndExt &item, std::vector<uint8_t> &buffer) {
     write_texture_to_encoded_buffer(item.image, buffer, item.ext);

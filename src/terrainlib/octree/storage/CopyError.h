@@ -39,6 +39,10 @@ public:
             return "cannot create directories";
         case CopyErrorKind::RemoveOld:
             return "cannot remove current file";
+        case CopyErrorKind::Read:
+            return "cannot read file";
+        case CopyErrorKind::Write:
+            return "cannot write file";
         default:
             return "undefined error";
         }

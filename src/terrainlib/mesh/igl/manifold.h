@@ -29,7 +29,7 @@ void make_manifold(
     triangles = new_triangles;
     
     const size_t old_position_count = positions.size();
-    positions.resize(backwards.size());
+    positions.reserve(backwards.size());
     for (const auto [i, original_index] : enumerate(backwards)) {
         if (i < old_position_count) {
             DEBUG_ASSERT(original_index == i);

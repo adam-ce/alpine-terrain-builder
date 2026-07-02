@@ -202,10 +202,10 @@ public:
     }
 
     [[nodiscard]] constexpr bool is_ancestor_of(const Id &other, const bool include_self = false) const {
-        if (this->is_root()) {
-            return true;
+        if (!include_self && *this == other) {
+            return false;
         }
-        if (include_self && *this == other) {
+        if (this->is_root()) {
             return true;
         }
         if (this->level() >= other.level()) {

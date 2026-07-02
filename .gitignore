@@ -7,3 +7,4 @@ build/
 /unittests/output
 .vs
 /extern/*
+src/scratch

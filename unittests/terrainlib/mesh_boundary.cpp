@@ -350,3 +350,23 @@ TEST_CASE("mesh::find_boundaries_non_manifold") {
         CHECK(actual == expected);
     }
 }
+
+TEST_CASE("mesh::build_boundary_triangle_mask") {
+    SECTION("open box with more triangles than vertices") {
+        // 5 faces of a cube (top removed): 8 vertices, 10 triangles
+        std::vector<glm::uvec3> triangles = {
+            {0, 1, 2}, {0, 2, 3},   // front
+            {1, 5, 6}, {1, 6, 2},   // right
+            {5, 4, 7}, {5, 7, 6},   // back
+            {4, 0, 3}, {4, 3, 7},   // left
+            {4, 5, 1}, {4, 1, 0},   // bottom
+        };
+        REQUIRE(triangles.size() > 8);
+
+        std::vector<uint8_t> mask;
+        mesh::build_boundary_triangle_mask<uint8_t>(triangles, mask, 1, 0);
+
+        const std::vector<uint8_t> expected = {0, 1, 0, 1, 0, 1, 0, 1, 0, 0};
+        CHECK(mask == expected);
+    }
+}

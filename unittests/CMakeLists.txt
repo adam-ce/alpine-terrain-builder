@@ -34,11 +34,16 @@ add_executable(unittests_terrainlib
     opencv_helpers.h
     
     terrainlib/convert.cpp
+    terrainlib/cow.cpp
     terrainlib/dataset.cpp
+    terrainlib/enumerate.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
+    terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
+    terrainlib/offset_table.cpp
+    terrainlib/segmented_buffer.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/mesh_boundary.cpp
@@ -62,8 +67,11 @@ add_executable(unittests_terrainlib
     terrainlib/octree_odd_level_shifted.cpp
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
+    terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp
+    terrainlib/tiny_vector.cpp
+    terrainlib/union_find.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
@@ -95,4 +103,3 @@ add_executable(unittests_sfmerger
     sf_merger/sphere_projector.cpp
 )
 target_link_libraries(unittests_sfmerger PUBLIC sfmergerlib terrainlib Catch2WithMain)
-

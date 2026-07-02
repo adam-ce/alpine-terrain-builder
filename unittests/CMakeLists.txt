@@ -61,6 +61,7 @@ add_executable(unittests_terrainlib
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/spatial_lookup.cpp
+    terrainlib/string_utils.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 

@@ -23,6 +23,9 @@ public:
     SegmentedBuffer() {
         this->reset();
     }
+    SegmentedBuffer(std::vector<value_type> segment) : _data(std::move(segment)) {
+        this->_offsets.append_length(this->_data.size());
+    }
 
     // Resets the buffer to its default state.
     void reset() {
@@ -70,18 +73,16 @@ public:
     }
 
     // Pushes a new segment and copies all elements from a container into it.
-    template <typename TContainer>
-    void push_new_segment(const TContainer &container) {
-        this->start_new_segment();
-
+    template <std::ranges::input_range Range>
+    void push_new_segment(const Range& range) {
         // resize
-        const index_type added_size = container.size();
-        this->resize_last_segment(added_size);
+        const index_type added_size = std::ranges::size(range);
+        this->push_new_segment(added_size);
 
         // copy data
         const segment_index last_segment = this->segment_count() - 1;
         auto destination = this->segment(last_segment);
-        std::copy(container.begin(), container.end(), destination.begin());
+        std::ranges::copy(range, destination.begin());
     }
 
     // Appends an item to the end of the last segment in the data buffer.
@@ -147,12 +148,28 @@ public:
         return this->get_segment_impl(*this, segment_index);
     }
 
+    // Returns a readonly view of the last segment of the buffer.
+    std::span<const value_type> last_segment() const noexcept {
+        return this->segment(this->segment_count() - 1);
+    }
+    // Returns a view of the last segment of the buffer.
+    std::span<value_type> last_segment() noexcept {
+        return this->segment(this->segment_count() - 1);
+    }
+
     // Returns a readonly flat view of the buffer.
     std::span<const value_type> flat() const noexcept {
         return this->_data;
     }
     // Returns a flat view of the buffer.
     std::span<value_type> flat() noexcept {
+        return this->_data;
+    }
+
+    std::vector<value_type>& backing() noexcept {
+        return this->_data;
+    }
+    const std::vector<value_type>& backing() const noexcept {
         return this->_data;
     }
 

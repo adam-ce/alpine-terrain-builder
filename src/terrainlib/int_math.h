@@ -34,10 +34,10 @@ static_assert(ipow2<uint32_t>(10u) == 1024);
 static_assert(ipow(3, 4u) == 81);
 
 template <std::integral T>
-[[nodiscard]] constexpr T is_even(T value) noexcept {
+[[nodiscard]] constexpr bool is_even(T value) noexcept {
     return value % 2 == 0;
 }
 template <std::integral T>
-[[nodiscard]] constexpr T is_odd(T value) noexcept {
+[[nodiscard]] constexpr bool is_odd(T value) noexcept {
     return !is_even(value);
 }

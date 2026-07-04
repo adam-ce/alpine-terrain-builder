@@ -302,7 +302,7 @@ tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::pa
     return RawMesh(data, cgltf_free);
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
+tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
     LOG_TRACE("Loading mesh from gltf data");
 
     const cgltf_data &data = *raw;
@@ -736,7 +736,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::pa
     if (!raw_mesh) {
         return tl::unexpected(map_cgltf_error(raw_mesh.error()));
     }
-    return load_mesh_from_raw(*raw_mesh, options);
+    return load_from_raw(*raw_mesh, options);
 }
 
 } // namespace mesh::io::gltf

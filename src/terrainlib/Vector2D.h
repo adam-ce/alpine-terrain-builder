@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cstdint>
 #include <vector>
 
@@ -25,7 +27,7 @@ public:
     }
     const std::span<const T> get_row(const index_type row) const {
         const index_type start_index = row * this->_cols;
-        return std::span<T>(this->_data.data() + start_index, this->_cols);
+        return std::span<const T>(this->_data.data() + start_index, this->_cols);
     }
 
     index_type rows() const {

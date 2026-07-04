@@ -23,5 +23,5 @@ struct ImageKey {
         this->type = mat.type();
     }
 
-    bool operator<=>(const ImageKey &other) const = default;
+    auto operator<=>(const ImageKey &other) const = default;
 };

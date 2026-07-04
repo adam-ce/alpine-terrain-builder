@@ -55,11 +55,12 @@ public:
 
     void resize(const size_t new_size) {
         this->visit(
-            [&](Inline &) {
+            [&](Inline &option) {
                 if (new_size == 0) {
-                    this->_storage.reset();
-                }
-                if (new_size > 1) {
+                    option.reset();
+                } else if (new_size == 1 && !option.has_value()) {
+                    option.emplace();
+                } else if (new_size > 1) {
                     this->promote_to_vector(new_size).resize(new_size);
                 }
             },

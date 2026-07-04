@@ -124,14 +124,9 @@ std::vector<std::vector<VertexIndex>> find_holes_on_merge_border(
     const mesh::merging::VertexMapping &mapping
 ) {
     std::vector<std::vector<VertexIndex>> holes = find_holes_non_manifold(mesh);
-    for (auto it = holes.rbegin(); it != holes.rend(); it++) {
-        const auto &hole = *it;
-
-        if (!contains_shared_vertex(hole, mapping)) {
-            // Not a hole between meshes
-            holes.erase((it + 1).base());
-        }
-    }
+    std::erase_if(holes, [&](const auto &hole) {
+        return !contains_shared_vertex(hole, mapping);
+    });
     return holes;
 }
 

@@ -46,7 +46,7 @@ BFS run_bfs(const uint32_t source, std::vector<std::vector<uint32_t>> adjacency)
 }
 
 std::vector<uint32_t> reconstruct_path(const uint32_t start, const uint32_t end, const std::vector<uint32_t> &parent) {
-    ASSERT(start < parent.size() || end < parent.size());
+    ASSERT(start < parent.size() && end < parent.size());
     if (parent[end] == BFS::invalid) {
         return {};
     }

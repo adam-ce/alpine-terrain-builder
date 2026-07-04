@@ -284,7 +284,7 @@ public:
         }
 
         const size_t first_index = static_cast<size_t>(first - begin);
-        const size_t last_index = static_cast<size_t>(last - end);
+        const size_t last_index = static_cast<size_t>(last - begin);
 
         const size_t count = last_index - first_index;
         if (count == 0) {

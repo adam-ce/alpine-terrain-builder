@@ -116,17 +116,17 @@ using MeshView__ = mesh::View__<IsConst, n_dims, T>;
 template <glm::length_t n_dims = 3, typename T = double>
 using MeshView_ = mesh::View_<n_dims, T>;
 template <glm::length_t n_dims = 3, typename T = double>
-using MeshMutView_ = mesh::View_<n_dims, T>;
+using MeshMutView_ = mesh::MutView_<n_dims, T>;
 
-using MeshView3d = mesh::View_<3, double>;
-using MeshView2d = mesh::View_<2, double>;
-using MeshView3f = mesh::View_<3, float>;
-using MeshView2f = mesh::View_<2, float>;
+using MeshView3d = mesh::View3d;
+using MeshView2d = mesh::View2d;
+using MeshView3f = mesh::View3f;
+using MeshView2f = mesh::View2f;
 
-using MeshMutView3d = mesh::MutView_<3, double>;
-using MeshMutView2d = mesh::MutView_<2, double>;
-using MeshMutView3f = mesh::MutView_<3, float>;
-using MeshMutView2f = mesh::MutView_<2, float>;
+using MeshMutView3d = mesh::MutView3d;
+using MeshMutView2d = mesh::MutView2d;
+using MeshMutView3f = mesh::MutView3f;
+using MeshMutView2f = mesh::MutView2f;
 
 using MeshView = mesh::View3d;
 using MeshMutView = mesh::MutView3d;

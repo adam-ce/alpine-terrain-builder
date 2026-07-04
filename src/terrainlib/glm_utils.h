@@ -48,6 +48,7 @@ template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>
 inline std::span<T, L> as_span(glm::vec<L, T, Q>& v) {
     static_assert(std::is_standard_layout_v<glm::vec<L, T, Q>>);
     static_assert(sizeof(glm::vec<L, T, Q>) == sizeof(T) * L);
+    
     return std::span<T, L>(value_ptr(v), L);
 }
 template <glm::length_t L, typename T, glm::qualifier Q = glm::defaultp>

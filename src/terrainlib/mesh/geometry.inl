@@ -31,20 +31,21 @@ glm::vec<3, T> compute_normal(const glm::uvec3 &triangle,
     return compute_normal(a, b, c, normalize);
 }
 
-
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2) {
-    if constexpr (n_dims == 3) {
-        const glm::vec<3, T> edge1 = v1 - v0;
-        const glm::vec<3, T> edge2 = v2 - v0;
-        return glm::length2(glm::cross(edge1, edge2)) / 4;
-    } else {
-        const T a = glm::distance(v0, v1);
-        const T b = glm::distance(v1, v2);
-        const T c = glm::distance(v2, v0);
-        const T s = (a + b + c) / 2;
-        return s * (s - a) * (s - b) * (s - c);
-    }
+    const glm::vec<n_dims, T> e1 = v1 - v0;
+    const glm::vec<n_dims, T> e2 = v2 - v0;
+
+    const T e1e1 = glm::dot(e1, e1);
+    const T e2e2 = glm::dot(e2, e2);
+    const T e1e2 = glm::dot(e1, e2);
+
+    // squared parallelogram area = |e1|^2 |e2|^2 - (e1 . e2)^2
+    // squared triangle area = squared parallelogram area / 4
+    const T parallelogram_area2 = std::fma(e1e1, e2e2, -(e1e2 * e1e2));
+
+    // Small negative values can occur from roundoff for nearly degenerate triangles.
+    return std::max(T(0), parallelogram_area2) / T(4);
 }
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const std::array<glm::vec<n_dims, T>, 3> &triangle) {

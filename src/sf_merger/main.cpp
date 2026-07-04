@@ -70,15 +70,15 @@ int main(int argc, char **argv) {
                                                 });
     LOG_DEBUG("Running with: {}", arg_str);
 
-    // TODO: remove
-    std::filesystem::path source = "../../../meshes/out-merge";
-    std::filesystem::path destination = "/mnt/c/Users/Admin/Downloads/out-merge";
-    std::filesystem::remove_all(source);
     run(args);
-    std::filesystem::remove_all(destination);
-    std::filesystem::create_directories(destination);
-    std::filesystem::copy(source, destination,
-                std::filesystem::copy_options::recursive |
-                std::filesystem::copy_options::overwrite_existing);
+    // TODO: remove
+    // std::filesystem::path source = "../../../meshes/out-merge";
+    // std::filesystem::path destination = "/mnt/c/Users/Admin/Downloads/out-merge";
+    // std::filesystem::remove_all(source);
+    // std::filesystem::remove_all(destination);
+    // std::filesystem::create_directories(destination);
+    // std::filesystem::copy(source, destination,
+    //             std::filesystem::copy_options::recursive |
+    //             std::filesystem::copy_options::overwrite_existing);
 }
 

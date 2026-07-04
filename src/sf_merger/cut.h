@@ -81,13 +81,12 @@ inline void cut_node(
     }
 
     /*
-    Uncomment to output masks
-    */
+    Uncomment to output masks:
     const auto path = ctx.output.path_for(id);
     const auto new_path = path.parent_path() /
                           (path.stem().string() + "-mask" + path.extension().string());
     mesh::io::save_to_path(mask.mesh, new_path);
-    
+    */
 
     const auto status_opt = ctx.input.index().get(id);
     if (!status_opt.has_value()) {

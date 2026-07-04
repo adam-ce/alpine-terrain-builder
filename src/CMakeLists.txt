@@ -325,6 +325,12 @@ add_executable(dag-builder
 )
 target_link_libraries(dag-builder PUBLIC dagbuilderlib CLI11::CLI11)
 
+add_executable(dag-convert-debug
+    dag_convert_debug/cli.cpp
+    dag_convert_debug/main.cpp
+)
+target_link_libraries(dag-convert-debug PUBLIC dagbuilderlib CLI11::CLI11)
+
 add_executable(browser
     # browser/main2.cpp
 

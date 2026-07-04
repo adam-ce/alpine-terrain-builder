@@ -471,7 +471,7 @@ Result simplify_mesh(const mesh::Simple&mesh, std::span<const StopCondition> sto
 
     mesh::Simple normalized_mesh = mesh;
     for (size_t i = 0; i < vertex_count; i++) {
-        const glm::vec3 normalized_position = mesh.positions[i] - average_position;
+        const glm::dvec3 normalized_position = mesh.positions[i] - average_position;
         normalized_mesh.positions[i] = normalized_position;
     }
 

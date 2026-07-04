@@ -14,9 +14,35 @@
 
 template <std::ranges::input_range Range, typename T>
 bool contains(Range &&range, const T &value) {
+    return std::ranges::find(range, value) != std::ranges::end(range);
+}
+
+template <std::ranges::input_range Range, typename T>
+std::optional<size_t> index_of(Range &&range, const T &value) {
     const auto begin = std::ranges::begin(range);
     const auto end = std::ranges::end(range);
-    return std::find(begin, end, value) != end;
+    auto it = std::ranges::find(range, value);
+    if (it == end) {
+        return std::nullopt;
+    } else {
+        return std::distance(begin, it);
+    }
+}
+
+template <std::ranges::input_range Range, typename T>
+decltype(auto) find_ptr(Range &&range, const T &value) {
+    auto it = std::ranges::find(range, value);
+    return it == std::ranges::end(range) ? nullptr : std::addressof(*it);
+}
+
+template <std::ranges::input_range Range, typename T>
+std::optional<std::ranges::range_value_t<Range>> find(Range &&range, const T &value) {
+    auto ptr = find_ptr(std::forward<Range>(range), value);
+    if (ptr == nullptr) {
+        return std::nullopt;
+    } else {
+        return *ptr;
+    }
 }
 
 template <typename Iterator, typename T>
@@ -92,6 +118,17 @@ auto transform_vector(Range &&range, Op&& op) {
     return result;
 }
 
+template <std::ranges::input_range Range>
+auto to_vector(Range &&range) {
+    using T = std::ranges::range_value_t<Range>;
+    std::vector<T> result;
+    if constexpr (std::ranges::sized_range<Range>) {
+        result.reserve(std::ranges::size(range));
+    }
+    std::ranges::copy(range, std::back_inserter(result));
+    return result;
+}
+
 template <std::ranges::input_range Range, typename T, typename F>
 constexpr T sum(Range &&range, T init, F &&f) {
     for (auto &&v : range) {
@@ -119,4 +156,14 @@ constexpr auto range(T begin, T end) {
 template <typename T>
 constexpr auto range(T end) {
     return range(T{0}, end);
+}
+
+// Lookup by key in an associative container (map/unordered_map). Returns nullopt if not found.
+template <typename Map, typename Key>
+std::optional<typename Map::mapped_type> find_value(const Map &map, const Key &key) {
+    const auto it = map.find(key);
+    if (it == map.end()) {
+        return std::nullopt;
+    }
+    return it->second;
 }

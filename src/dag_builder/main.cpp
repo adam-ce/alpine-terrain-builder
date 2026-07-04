@@ -24,34 +24,12 @@ int main(int argc, char **argv) {
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
             .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
+            .root_node = args.root_node,
             .write_debug_meshes = args.write_debug_meshes,
         };
 
-        dag::build_leaves(input_storage, output_storage, args.root_node);
-        dag::build_inner_level(output_storage, octree::Id::root(), 15, options);
+        dag::build_levels(input_storage, output_storage, options, args.level_range);
         output_storage.save_index();
-
-        /*
-        if (args.root_node) {
-            const auto level_range = args.level_range.value_or(Range<uint32_t>(0, 30));
-            dag::b(
-                input_storage,
-                output_storage,
-                *args.root_node,
-                level_range,
-                options);
-        } else if (args.level_range) {
-            dag::build_levels(
-                input_storage,
-                output_storage,
-                *args.level_range,
-                options);
-        } else {
-            dag::build_all(
-                input_storage,
-                output_storage,
-                options);
-        }*/
 
         return EXIT_SUCCESS;
     } catch (const std::exception &e) {

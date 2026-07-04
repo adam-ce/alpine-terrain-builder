@@ -169,29 +169,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
     
     DEBUG_ASSERT(mesh::is_manifold(mesh));
 
-    if (!debug_texture) {
-        if (clustering.textures.size() == 1) {
-            // Just copy the single texture
-            mesh.texture = clustering.textures[0];
-        } else if (!clustering.textures.empty()) {
-            // There are multiple textures so we need to create an atlas
-            const std::vector<glm::uvec2> texture_sizes = transform_vector(clustering.textures, [](const auto &texture) {
-                return glm::uvec2(texture.cols, texture.rows);
-            });
-            const atlas::Plan plan = atlas::plan(texture_sizes);
-
-            // remap the uvs to match the atlas
-            uint32_t uv_offset = 0;
-            for (const Cluster &cluster : clustering.clusters) {
-                std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
-                atlas::map_uvs(plan, cluster.texture_id, cluster_uvs);
-                uv_offset += cluster.vertex_count();
-            }
-
-            // Create the atlas texture
-            mesh.texture = atlas::create(plan, clustering.textures);
-        }
-    } else {
+    if (debug_texture) {
         mesh.uvs.clear();
 
         // Prepare texture
@@ -221,6 +199,28 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
         }
 
         mesh.texture = texture;
+    } else {
+        if (clustering.textures.size() == 1) {
+            // Just copy the single texture
+            mesh.texture = clustering.textures[0];
+        } else if (!clustering.textures.empty()) {
+            // There are multiple textures so we need to create an atlas
+            const std::vector<glm::uvec2> texture_sizes = transform_vector(clustering.textures, [](const auto &texture) {
+                return glm::uvec2(texture.cols, texture.rows);
+            });
+            const atlas::Plan plan = atlas::plan(texture_sizes);
+
+            // remap the uvs to match the atlas
+            uint32_t uv_offset = 0;
+            for (const Cluster &cluster : clustering.clusters) {
+                std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
+                atlas::map_uvs(plan, cluster.texture_id, cluster_uvs);
+                uv_offset += cluster.vertex_count();
+            }
+
+            // Create the atlas texture
+            mesh.texture = atlas::create(plan, clustering.textures);
+        }
     }
 
     return mesh;

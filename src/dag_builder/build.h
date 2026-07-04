@@ -3,18 +3,28 @@
 #include <cstdint>
 
 #include "Range.h"
-#include "octree/Id.h"
+#include "build_config.h"
 #include "octree/storage/MeshStorage.h"
 #include "storage.h"
 #include "uv/unwrap.h"
 
 namespace dag {
 
+// When building a DAG level, this determines which input nodes are considered.
+enum class IncludeMode {
+    CurrentOnly,        // when building level L, only include input nodes at exactly level L
+    CurrentAndCoarser,  // when building level L, include input nodes at level L and any coarser level L+X
+};
+
 struct BuildOptions {
     uint32_t clusters_per_partition;
     float target_ratio;
     uv::Algorithm uv_unwrap_algorithm;
-    bool write_debug_meshes;
+    octree::Id root_node = octree::Id::root();
+    IncludeMode include_mode = IncludeMode::CurrentOnly;
+    bool write_debug_meshes = IS_DEBUG_BUILD;
+    bool parallelize = false;
+    bool resume = true;
 };
 
 void build_full(
@@ -22,20 +32,10 @@ void build_full(
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options);
 
-void build_leaves(
+void build_levels(
     const octree::IndexedMeshStorage &input_storage,
-    octree::DagStorage &output_storage,
-    const octree::Id &root_node,
-    const bool resume = true);
-
-void build_full_inner(
-    octree::IndexedDagStorage &storage,
-    const BuildOptions &options);
-
-void build_inner_level(
-    octree::IndexedDagStorage &storage,
-    const octree::Id &root_node,
-    const uint32_t &level,
-    const BuildOptions &options);
+    octree::IndexedDagStorage &output_storage,
+    const BuildOptions &options,
+    const Range<uint32_t> &level_range);
 
 } // namespace dag

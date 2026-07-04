@@ -12,6 +12,7 @@
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
 #include <CGAL/mark_domain_in_triangulation.h>
 
+#include "build_config.h"
 #include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
@@ -137,19 +138,19 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     }
 
     // Check that all input vertices were used
-#ifndef NDEBUG
-    for (const auto& index : indices) {
-        bool found = false;
-        for (const auto& triangle : new_triangles) {
-            if (triangle[0] == index || triangle[1] == index || triangle[2] == index) {
-                found = true;
+    if constexpr (IS_DEBUG_BUILD) {
+        for (const auto& index : indices) {
+            bool found = false;
+            for (const auto& triangle : new_triangles) {
+                if (triangle[0] == index || triangle[1] == index || triangle[2] == index) {
+                    found = true;
+                }
+            }
+            if (!found) {
+                UNREACHABLE("Vertex {} was not used in triangulation", index);
             }
         }
-        if (!found) {
-            UNREACHABLE("Vertex {} was not used in triangulation", index);
-        }
     }
-#endif
 }
 
 SimpleMesh3d triangulate(const Polygon3d &polygon) {

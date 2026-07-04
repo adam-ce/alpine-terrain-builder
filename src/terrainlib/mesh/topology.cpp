@@ -8,6 +8,7 @@
 #include <glm/gtx/hash.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "FixedVector.h"
 #include "HybridVector.h"
 #include "mesh/edges.h"
@@ -28,26 +29,26 @@ create_edge_to_triangle_mapping_impl(const std::span<const glm::uvec3> triangles
         edges_to_triangles[edge].push_back(triangle_index);
     }, true);
 
-#ifndef NDEBUG
-    // Validate the mapping
-    for (const auto &[edge, triangle_indices] : edges_to_triangles) {
-        DEBUG_ASSERT(!triangle_indices.empty(), "Each edge must have at least one triangle");
+    if constexpr (IS_DEBUG_BUILD) {
+        // Validate the mapping
+        for (const auto &[edge, triangle_indices] : edges_to_triangles) {
+            DEBUG_ASSERT(!triangle_indices.empty(), "Each edge must have at least one triangle");
 
-        for (const uint32_t triangle_index : triangle_indices) {
-            DEBUG_ASSERT(triangle_index < triangles.size(), "Triangle index must be valid");
+            for (const uint32_t triangle_index : triangle_indices) {
+                DEBUG_ASSERT(triangle_index < triangles.size(), "Triangle index must be valid");
 
-            const glm::uvec3 &triangle = triangles[triangle_index];
+                const glm::uvec3 &triangle = triangles[triangle_index];
 
-            const bool first_vertex_found_in_triangle =
-                (triangle[0] == edge.x || triangle[1] == edge.x || triangle[2] == edge.x);
+                const bool first_vertex_found_in_triangle =
+                    (triangle[0] == edge.x || triangle[1] == edge.x || triangle[2] == edge.x);
 
-            const bool second_vertex_found_in_triangle =
-                (triangle[0] == edge.y || triangle[1] == edge.y || triangle[2] == edge.y);
+                const bool second_vertex_found_in_triangle =
+                    (triangle[0] == edge.y || triangle[1] == edge.y || triangle[2] == edge.y);
 
-            DEBUG_ASSERT(first_vertex_found_in_triangle && second_vertex_found_in_triangle, "Both vertices of the edge exist in the triangle");
+                DEBUG_ASSERT(first_vertex_found_in_triangle && second_vertex_found_in_triangle, "Both vertices of the edge exist in the triangle");
+            }
         }
     }
-#endif
 
     return edges_to_triangles;
 }

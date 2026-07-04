@@ -4,6 +4,7 @@
 
 #include <glm/common.hpp>
 
+#include "build_config.h"
 #include "mesh/validate.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
@@ -44,12 +45,12 @@ void validate_core(const mesh::View_<n_dims, T> &mesh, const ValidationFlags fla
 
 template <glm::length_t n_dims, typename T>
 void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
-#ifndef NDEBUG
-    detail::validate_core(mesh, flags);
-#else
-    USE(mesh);
-    USE(flags);
-#endif
+    if constexpr (IS_DEBUG_BUILD) {
+        detail::validate_core(mesh, flags);
+    } else {
+        USE(mesh);
+        USE(flags);
+    }
 }
 template <glm::length_t n_dims, typename T>
 void validate(const mesh::Simple_<n_dims, T> &mesh, const ValidationFlags flags) {

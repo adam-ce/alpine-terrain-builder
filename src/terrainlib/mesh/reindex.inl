@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "Range.h"
+#include "build_config.h"
 #include "glm_utils.h"
 #include "OffsetVector.h"
 #include "mesh/SimpleMesh.h"
@@ -133,9 +134,9 @@ void permute_inplace(
 
         const uint32_t prev_at_new = old_to_new[new_index];
         if (prev_at_new == detail::invalid_index) {
-#ifndef NDEBUG
-            new_to_old[new_index] = new_index;
-#endif
+            if constexpr (IS_DEBUG_BUILD) {
+                new_to_old[new_index] = new_index;
+            }
         } else {
             std::swap(new_to_old[new_index], new_to_old[prev_at_new]);
         }

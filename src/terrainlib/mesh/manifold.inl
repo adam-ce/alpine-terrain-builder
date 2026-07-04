@@ -6,6 +6,7 @@
 
 #include <glm/glm.hpp>
 
+#include "build_config.h"
 #include "UnionFind.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
@@ -50,11 +51,11 @@ void duplicate_non_manifold_edges(
     };
     duplicate_non_manifold_edges(triangles, duplicate_vertex);
 
-#ifndef NDEBUG
-    const std::vector<glm::uvec3> triangles_copy(triangles.begin(), triangles.end());
-    const mesh::Simple_<n_dims, Position> mesh(triangles_copy, positions);
-    DEBUG_ASSERT(find_non_manifold_edges(mesh).empty());
-#endif
+    if constexpr (IS_DEBUG_BUILD) {
+        const std::vector<glm::uvec3> triangles_copy(triangles.begin(), triangles.end());
+        const mesh::Simple_<n_dims, Position> mesh(triangles_copy, positions);
+        DEBUG_ASSERT(find_non_manifold_edges(mesh).empty());
+    }
 }
 template <typename Duplicate>
 void duplicate_non_manifold_edges(

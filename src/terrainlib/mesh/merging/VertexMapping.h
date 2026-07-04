@@ -9,6 +9,7 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "SegmentedBuffer.h"
 #include "HybridIndexPairMap.h"
 #include "mesh/merging/VertexId.h"
@@ -161,40 +162,39 @@ public:
 
     // Performs internal consistency checks in debug mode.
     void validate() const {
-#ifndef NDEBUG
-
-        // Check backward(forward(x)) == x
-        for (uint32_t i = 0; i < this->mesh_count(); i++) {
-            const uint32_t vertex_count = this->mesh_vertex_count(i);
-            for (uint32_t j = 0; j < vertex_count; j++) {
-                const uint32_t mapped = this->map_forward(VertexId{.mesh_index = i, .vertex_index = j});
-                const std::optional<uint32_t> inv_mapped = this->map_backward(i, mapped);
-                DEBUG_ASSERT(inv_mapped.has_value());
-                DEBUG_ASSERT(inv_mapped.value() == j);
-            }
-        }
-
-        // Check forward(backward(x)) == x
-        for (const auto &[key, source_vertex_index] : this->_backward) {
-            DEBUG_ASSERT(key.mesh_index < this->mesh_count());
-            DEBUG_ASSERT(source_vertex_index < this->mesh_vertex_count(key.mesh_index));
-            DEBUG_ASSERT(this->map_forward(VertexId{.mesh_index = key.mesh_index, .vertex_index = source_vertex_index}) == key.vertex_index);
-        }
-
-        // Check forward(x) != forward(y)
-        for (uint32_t i = 0; i < this->mesh_count(); i++) {
-            const uint32_t vertex_count = this->mesh_vertex_count(i);
-            for (uint32_t j = 0; j < vertex_count; j++) {
-                const uint32_t mapped_j = this->map_forward(VertexId{.mesh_index = i, .vertex_index = j});
-                for (uint32_t k = j + 1; k < vertex_count; k++) {
-                    const uint32_t mapped_k = this->map_forward(VertexId{.mesh_index = i, .vertex_index = k});
-                    DEBUG_ASSERT(mapped_j != mapped_k);
+        if constexpr (IS_DEBUG_BUILD) {
+            // Check backward(forward(x)) == x
+            for (uint32_t i = 0; i < this->mesh_count(); i++) {
+                const uint32_t vertex_count = this->mesh_vertex_count(i);
+                for (uint32_t j = 0; j < vertex_count; j++) {
+                    const uint32_t mapped = this->map_forward(VertexId{.mesh_index = i, .vertex_index = j});
+                    const std::optional<uint32_t> inv_mapped = this->map_backward(i, mapped);
+                    DEBUG_ASSERT(inv_mapped.has_value());
+                    DEBUG_ASSERT(inv_mapped.value() == j);
                 }
             }
-        }
 
-        DEBUG_ASSERT(this->_backward.size() == this->_forward.total_size());
-#endif
+            // Check forward(backward(x)) == x
+            for (const auto [merged_vertex_index, source_mesh_index, source_vertex_index] : this->_backward.entries()) {
+                DEBUG_ASSERT(source_mesh_index < this->mesh_count());
+                DEBUG_ASSERT(source_vertex_index < this->mesh_vertex_count(source_mesh_index));
+                DEBUG_ASSERT(this->map_forward(VertexId{.mesh_index = source_mesh_index, .vertex_index = source_vertex_index}) == merged_vertex_index);
+            }
+
+            // Check forward(x) != forward(y)
+            for (uint32_t i = 0; i < this->mesh_count(); i++) {
+                const uint32_t vertex_count = this->mesh_vertex_count(i);
+                for (uint32_t j = 0; j < vertex_count; j++) {
+                    const uint32_t mapped_j = this->map_forward(VertexId{.mesh_index = i, .vertex_index = j});
+                    for (uint32_t k = j + 1; k < vertex_count; k++) {
+                        const uint32_t mapped_k = this->map_forward(VertexId{.mesh_index = i, .vertex_index = k});
+                        DEBUG_ASSERT(mapped_j != mapped_k);
+                    }
+                }
+            }
+
+            DEBUG_ASSERT(this->_backward.size() == this->_forward.total_size());
+        }
     }
 
     auto into_parts() && {

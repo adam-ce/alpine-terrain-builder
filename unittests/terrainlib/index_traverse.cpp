@@ -105,7 +105,7 @@ TEST_CASE("octree::traverse with depth") {
             TraversalOrder::DepthFirst
         );
 
-        REQUIRE(visited.size() == 6);
+        CHECK(visited.size() == 6);
 
         // DFS order should be: root, c0, gc0, c1, c2, gc1
         std::vector<Id> expected{root, c0, gc0, c1, c2, gc1};
@@ -123,7 +123,7 @@ TEST_CASE("octree::traverse with depth") {
             root,
             TraversalOrder::BreadthFirst);
 
-        REQUIRE(visited.size() == 6);
+        CHECK(visited.size() == 6);
 
         // BFS order should be: root, c0, c1, c2, gc0, gc1
         std::vector<Id> expected{root, c0, c1, c2, gc0, gc1};

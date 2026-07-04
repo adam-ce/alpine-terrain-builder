@@ -17,21 +17,21 @@ TEST_CASE("contains: found and not found") {
 TEST_CASE("index_of: found returns index") {
     std::vector<int> v = {10, 20, 30, 40};
 
-    REQUIRE(index_of(v, 10) == 0);
-    REQUIRE(index_of(v, 30) == 2);
-    REQUIRE(index_of(v, 40) == 3);
+    CHECK(index_of(v, 10) == 0);
+    CHECK(index_of(v, 30) == 2);
+    CHECK(index_of(v, 40) == 3);
 }
 
 TEST_CASE("index_of: not found returns nullopt") {
     std::vector<int> v = {10, 20, 30};
 
-    REQUIRE(index_of(v, 99) == std::nullopt);
+    CHECK(index_of(v, 99) == std::nullopt);
 }
 
 TEST_CASE("index_of: duplicates returns first occurrence") {
     std::vector<int> v = {5, 3, 7, 3, 9};
 
-    REQUIRE(index_of(v, 3) == 1);
+    CHECK(index_of(v, 3) == 1);
 }
 
 TEST_CASE("find_ptr: found returns non-null pointer to correct value") {
@@ -143,7 +143,7 @@ TEST_CASE("range(end): generates [0, end)") {
     auto r = range(5);
     std::vector<int> result(std::ranges::begin(r), std::ranges::end(r));
 
-    REQUIRE(result.size() == 5);
+    CHECK(result.size() == 5);
     CHECK(result == std::vector<int>{0, 1, 2, 3, 4});
 }
 
@@ -151,7 +151,7 @@ TEST_CASE("range(begin, end): generates [begin, end)") {
     auto r = range(3, 7);
     std::vector<int> result(std::ranges::begin(r), std::ranges::end(r));
 
-    REQUIRE(result.size() == 4);
+    CHECK(result.size() == 4);
     CHECK(result == std::vector<int>{3, 4, 5, 6});
 }
 

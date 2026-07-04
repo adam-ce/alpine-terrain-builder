@@ -62,7 +62,7 @@ void check_no_holes(const SimpleMesh &mesh) {
 }
 
 void check_uvs(const SimpleMesh &mesh) {
-    REQUIRE(mesh.uvs.size() == mesh.positions.size());
+    CHECK(mesh.uvs.size() == mesh.positions.size());
 
     for (const glm::dvec2 uv : mesh.uvs) {
         REQUIRE(glm::all(glm::greaterThanEqual(uv, glm::dvec2(0))));
@@ -71,8 +71,8 @@ void check_uvs(const SimpleMesh &mesh) {
 }
 
 void check_non_empty(const SimpleMesh &mesh) {
-    REQUIRE(mesh.positions.size() > 0);
-    REQUIRE(mesh.triangles.size() > 0);
+    CHECK(mesh.positions.size() > 0);
+    CHECK(mesh.triangles.size() > 0);
 }
 
 struct DVec3Hash {

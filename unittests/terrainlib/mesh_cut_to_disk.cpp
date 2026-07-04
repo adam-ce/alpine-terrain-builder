@@ -21,7 +21,7 @@ TEST_CASE("cut_to_disk works on double-sided triangle") {
 
     const mesh::Topology old_topology = mesh::compute_topology(mesh);
     CHECK(old_topology.is_sphere());
-    REQUIRE(!old_topology.is_disk(false));
+    CHECK(!old_topology.is_disk(false));
 
     mesh::cut_to_disk(mesh);
     mesh::validate(mesh);
@@ -45,7 +45,7 @@ TEST_CASE("cut_to_disk works on tetrahedron") {
 
     const mesh::Topology old_topology = mesh::compute_topology(mesh);
     CHECK(old_topology.is_sphere());
-    REQUIRE(!old_topology.is_disk(false));
+    CHECK(!old_topology.is_disk(false));
 
     mesh::cut_to_disk(mesh);
     mesh::validate(mesh);
@@ -64,7 +64,7 @@ TEST_CASE("cut_to_disk works on tetrahedron triangles only") {
 
     const mesh::Topology old_topology = mesh::compute_topology(triangles);
     CHECK(old_topology.is_sphere());
-    REQUIRE(!old_topology.is_disk(false));
+    CHECK(!old_topology.is_disk(false));
 
     mesh::cut_to_disk(triangles);
     const mesh::Topology new_topology = mesh::compute_topology(triangles);
@@ -99,7 +99,7 @@ TEST_CASE("cut_to_disk works on multiple tetrahedrons") {
     REQUIRE(old_topology.component_count() == 2);
     CHECK(old_topology.component(0).is_sphere());
     CHECK(old_topology.component(1).is_sphere());
-    REQUIRE(!old_topology.is_disks(false));
+    CHECK(!old_topology.is_disks(false));
 
     mesh::cut_to_disk(mesh);
     mesh::validate(mesh);

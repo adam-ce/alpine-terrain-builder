@@ -361,7 +361,7 @@ TEST_CASE("mesh::build_boundary_triangle_mask") {
             {4, 0, 3}, {4, 3, 7},   // left
             {4, 5, 1}, {4, 1, 0},   // bottom
         };
-        REQUIRE(triangles.size() > 8);
+        CHECK(triangles.size() > 8);
 
         std::vector<uint8_t> mask;
         mesh::build_boundary_triangle_mask<uint8_t>(triangles, mask, 1, 0);

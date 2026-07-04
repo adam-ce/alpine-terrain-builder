@@ -18,15 +18,15 @@ TEST_CASE("triangulate handles minimal input") {
     SECTION("Empty indices") {
         std::vector<uint32_t> indices;
         polygon::triangulate(mesh, indices);
-        REQUIRE(mesh.positions.empty());
-        REQUIRE(mesh.triangles.empty());
+        CHECK(mesh.positions.empty());
+        CHECK(mesh.triangles.empty());
     }
 
     SECTION("Single vertex") {
         mesh.positions.push_back({0, 0, 0});
         std::vector<uint32_t> indices = {0};
         polygon::triangulate(mesh, indices);
-        REQUIRE(mesh.triangles.empty());
+        CHECK(mesh.triangles.empty());
     }
 
     SECTION("Two vertices") {
@@ -34,7 +34,7 @@ TEST_CASE("triangulate handles minimal input") {
         mesh.positions.push_back({1, 0, 0});
         std::vector<uint32_t> indices = {0, 1};
         polygon::triangulate(mesh, indices);
-        REQUIRE(mesh.triangles.empty());
+        CHECK(mesh.triangles.empty());
     }
 }
 
@@ -75,7 +75,7 @@ TEST_CASE("triangulate handles a square") {
     std::vector<uint32_t> indices = {0, 1, 2, 3};
     polygon::triangulate(mesh, indices);
 
-    REQUIRE(mesh.triangles.size() == 2); // A square should produce 2 triangles
+    CHECK(mesh.triangles.size() == 2); // A square should produce 2 triangles
     check_every_vertex_used_at_least_once(mesh);
     mesh::validate(mesh);
 }
@@ -91,7 +91,7 @@ TEST_CASE("triangulate works with UVs") {
     std::vector<uint32_t> indices = {0, 1, 2, 3};
     polygon::triangulate(mesh, indices);
 
-    REQUIRE(mesh.uvs.size() == mesh.positions.size());
+    CHECK(mesh.uvs.size() == mesh.positions.size());
 }
 
 std::optional<glm::dvec2> intersection(
@@ -138,7 +138,7 @@ TEST_CASE("triangulate handles U-shaped polygon") {
     std::vector<uint32_t> indices = {0, 1, 2, 3, 4, 5, 6, 7};
 
     polygon::triangulate(mesh, indices);
-    REQUIRE(!mesh.triangles.empty());
+    CHECK(!mesh.triangles.empty());
     check_every_vertex_used_at_least_once(mesh);
     mesh::validate(mesh);
 

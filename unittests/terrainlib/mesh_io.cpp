@@ -88,10 +88,10 @@ TEST_CASE("io roundtrip") {
 
             const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
-            REQUIRE(!std::filesystem::exists(mesh_path));
+            CHECK(!std::filesystem::exists(mesh_path));
 
             mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
-            REQUIRE(std::filesystem::exists(mesh_path));
+            CHECK(std::filesystem::exists(mesh_path));
 
             const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
@@ -114,7 +114,7 @@ TEST_CASE("io roundtrip high precision") {
             SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
-            REQUIRE((double)(float)pi != pi);
+            CHECK((double)(float)pi != pi);
 
             mesh.positions.push_back(glm::dvec3(0, 0, 0));
             mesh.positions.push_back(glm::dvec3(pi, 0, 0));
@@ -131,10 +131,10 @@ TEST_CASE("io roundtrip high precision") {
 
             const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
-            REQUIRE(!std::filesystem::exists(mesh_path));
+            CHECK(!std::filesystem::exists(mesh_path));
 
             mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
-            REQUIRE(std::filesystem::exists(mesh_path));
+            CHECK(std::filesystem::exists(mesh_path));
 
             const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
@@ -157,7 +157,7 @@ TEST_CASE("io roundtrip no texture") {
             SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
-            REQUIRE((double)(float)pi != pi);
+            CHECK((double)(float)pi != pi);
 
             mesh.positions.push_back(glm::dvec3(0, 0, 0));
             mesh.positions.push_back(glm::dvec3(1, 0, 0));
@@ -174,10 +174,10 @@ TEST_CASE("io roundtrip no texture") {
 
             const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
-            REQUIRE(!std::filesystem::exists(mesh_path));
+            CHECK(!std::filesystem::exists(mesh_path));
 
             mesh::io::save_to_path(mesh, mesh_path);
-            REQUIRE(std::filesystem::exists(mesh_path));
+            CHECK(std::filesystem::exists(mesh_path));
 
             const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
@@ -199,7 +199,7 @@ TEST_CASE("io roundtrip no texture and uvs") {
             SimpleMesh mesh;
 
             const double pi = std::numbers::pi_v<double>;
-            REQUIRE((double)(float)pi != pi);
+            CHECK((double)(float)pi != pi);
 
             mesh.positions.push_back(glm::dvec3(0, 0, 0));
             mesh.positions.push_back(glm::dvec3(1, 0, 0));
@@ -211,10 +211,10 @@ TEST_CASE("io roundtrip no texture and uvs") {
 
             const std::filesystem::path mesh_path = fmt::format("./unittests/output/mesh.{}", format);
             std::filesystem::remove(mesh_path);
-            REQUIRE(!std::filesystem::exists(mesh_path));
+            CHECK(!std::filesystem::exists(mesh_path));
 
             mesh::io::save_to_path(mesh, mesh_path);
-            REQUIRE(std::filesystem::exists(mesh_path));
+            CHECK(std::filesystem::exists(mesh_path));
 
             const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {

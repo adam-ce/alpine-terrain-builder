@@ -56,7 +56,7 @@ TEST_CASE("OddLevelShifted::find_node_at_level_containing_point finds the contai
     const auto maybe_id = space.find_node_at_level_containing_point(point, expected_id.level());
 
     REQUIRE(maybe_id.has_value());
-    REQUIRE(maybe_id.value() == expected_id);
+    CHECK(maybe_id.value() == expected_id);
 }
 
 TEST_CASE("OddLevelShifted::find_node_at_level_containing_point roundtrips centers for multiple nodes", "[octree][odd_level_shifted]") {
@@ -95,7 +95,7 @@ TEST_CASE("OddLevelShifted::find_node_at_level_containing_point roundtrips cente
         const auto maybe_id = space.find_node_at_level_containing_point(point, expected_id.level());
 
         REQUIRE(maybe_id.has_value());
-        REQUIRE(maybe_id.value() == expected_id);
+        CHECK(maybe_id.value() == expected_id);
     }
 }
 
@@ -139,7 +139,7 @@ TEST_CASE("OddLevelShifted::find_node_at_level_containing_point handles lower no
     const auto maybe_id = space.find_node_at_level_containing_point(point, expected_id.level());
 
     REQUIRE(maybe_id.has_value());
-    REQUIRE(maybe_id.value() == expected_id);
+    CHECK(maybe_id.value() == expected_id);
 }
 
 TEST_CASE("OddLevelShifted::find_node_at_level_containing_point handles upper node boundaries exclusively", "[octree][odd_level_shifted]") {
@@ -159,7 +159,7 @@ TEST_CASE("OddLevelShifted::find_node_at_level_containing_point handles upper no
     const auto maybe_id = space.find_node_at_level_containing_point(point_on_shared_x_boundary, 4);
 
     REQUIRE(maybe_id.has_value());
-    REQUIRE(maybe_id.value() == right_id);
+    CHECK(maybe_id.value() == right_id);
 }
 
 TEST_CASE("OddLevelShifted::get_intersecting_nodes_on_level returns all intersecting nodes at target level", "[octree::OddLevelShifted]") {

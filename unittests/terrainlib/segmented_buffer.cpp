@@ -6,9 +6,9 @@ using SB = SegmentedBuffer<int>;
 TEST_CASE("SegmentedBuffer default construction") {
     SB buf;
 
-    REQUIRE(buf.segment_count() == 1);
-    REQUIRE(buf.total_size() == 0);
-    REQUIRE(buf.segment_size(0) == 0);
+    CHECK(buf.segment_count() == 1);
+    CHECK(buf.total_size() == 0);
+    CHECK(buf.segment_size(0) == 0);
 }
 
 TEST_CASE("SegmentedBuffer construct from vector") {
@@ -16,7 +16,7 @@ TEST_CASE("SegmentedBuffer construct from vector") {
     SB buf(data);
 
     REQUIRE(buf.segment_count() == 1);
-    REQUIRE(buf.total_size() == 3);
+    CHECK(buf.total_size() == 3);
     REQUIRE(buf.segment_size(0) == 3);
     CHECK(buf(0, 0) == 10);
     CHECK(buf(0, 1) == 20);
@@ -52,7 +52,7 @@ TEST_CASE("SegmentedBuffer start_new_segment then push_to_last_segment") {
     REQUIRE(buf.segment_count() == 2);
     REQUIRE(buf.segment_size(0) == 2);
     REQUIRE(buf.segment_size(1) == 3);
-    REQUIRE(buf.total_size() == 5);
+    CHECK(buf.total_size() == 5);
     CHECK(buf(0, 0) == 10);
     CHECK(buf(0, 1) == 20);
     CHECK(buf(1, 0) == 30);
@@ -67,7 +67,7 @@ TEST_CASE("SegmentedBuffer push_new_segment with size") {
 
     REQUIRE(buf.segment_count() == 1);
     REQUIRE(buf.segment_size(0) == 4);
-    REQUIRE(buf.total_size() == 4);
+    CHECK(buf.total_size() == 4);
     CHECK(buf(0, 0) == 99);
     CHECK(buf(0, 1) == 99);
     CHECK(buf(0, 2) == 99);

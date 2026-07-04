@@ -203,9 +203,9 @@ TEST_CASE("single triangle around bounds") {
         CHECK(c.z == Catch::Approx(0.0));
 
         // Every emitted vertex must lie inside the clipping bounds.
-        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(a)));
-        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(b)));
-        REQUIRE(bounds2d.contains_inclusive(glm::dvec2(c)));
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(a)));
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(b)));
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(c)));
 
         total_area += compute_triangle_area(a, b, c);
     }
@@ -247,7 +247,7 @@ void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const ra
     // Check that no vertices are outside the bounds
     for (const auto &position : clipped_mesh.positions) {
         // INFO(fmt::format("Vertex: {}", position));
-        REQUIRE(bounds.contains_inclusive(position));
+        CHECK(bounds.contains_inclusive(position));
     }
 
     // Check that the source triangles that were fully inside the bounds are still present
@@ -286,7 +286,7 @@ void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const ra
             }
         }
 
-        REQUIRE(should_be_kept == found);
+        CHECK(should_be_kept == found);
     }
 }
 

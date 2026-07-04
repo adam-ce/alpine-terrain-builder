@@ -38,7 +38,7 @@ TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {
     const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
     const radix::tile::SrsBounds shifted_bounds(tile_bounds.min + glm::dvec2(-100, 420), tile_bounds.max + glm::dvec2(-100, 420));
 
-    REQUIRE(terrainbuilder::estimate_zoom_level(tile.zoom_level, tile_bounds, shifted_bounds) == tile.zoom_level);
+    CHECK(terrainbuilder::estimate_zoom_level(tile.zoom_level, tile_bounds, shifted_bounds) == tile.zoom_level);
 }
 
 class AvailabilityListEmptyTileProvider : public TileProvider {

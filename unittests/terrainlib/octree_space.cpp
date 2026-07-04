@@ -71,7 +71,7 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", 
 
     // Check that node bounds fully contain the target
     for (const auto &corner : radix::geometry::corners(target)) {
-        REQUIRE(node_bounds.contains_inclusive(corner));
+        CHECK(node_bounds.contains_inclusive(corner));
     }
 
     // Now check that no child of this node fully contains the target
@@ -102,16 +102,16 @@ TEST_CASE("find_smallest_node_encompassing_bounds roundtrips from Id to bounds a
 
     // Sanity check: bounds should be non-empty
     auto size = node_bounds.size();
-    REQUIRE(size.x > 0);
-    REQUIRE(size.y > 0);
-    REQUIRE(size.z > 0);
+    CHECK(size.x > 0);
+    CHECK(size.y > 0);
+    CHECK(size.z > 0);
 
     // Find the smallest node encompassing the bounds
     auto maybe_id = space.find_smallest_node_encompassing_bounds(node_bounds);
 
     // It should find exactly the same ID
     REQUIRE(maybe_id.has_value());
-    REQUIRE(maybe_id.value() == original_id);
+    CHECK(maybe_id.value() == original_id);
 }
 
 TEST_CASE("find_node_at_level_containing_point: roundtrip from Id to center back to Id", "[octree::Space]") {

@@ -31,16 +31,16 @@ using namespace radix;
 using Catch::Approx;
 
 void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &b) {
-    REQUIRE(a.height() > 0);
-    REQUIRE(a.width() > 0);
-    REQUIRE(b.height() > 0);
-    REQUIRE(b.width() > 0);
+    CHECK(a.height() > 0);
+    CHECK(a.width() > 0);
+    CHECK(b.height() > 0);
+    CHECK(b.width() > 0);
 
     const auto heightErrorIn = std::abs(a.height() - b.height()) / a.height();
     const auto widthErrorIn = std::abs(a.width() - b.width()) / a.width();
     //  fmt::print("height error = {}, width error = {}\n", heightErrorIn, widthErrorIn);
-    REQUIRE(heightErrorIn < 0.001);
-    REQUIRE(widthErrorIn < 0.001);
+    CHECK(heightErrorIn < 0.001);
+    CHECK(widthErrorIn < 0.001);
 }
 
 TEST_CASE("datasets are as expected") {
@@ -114,10 +114,10 @@ TEST_CASE("bbox width pixels") {
     webmercator.importFromEPSG(3857);
     webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-    REQUIRE(d_mgi.widthInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(620.0));
-    REQUIRE(d_mgi.heightInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(350.0));
-    REQUIRE(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(620.0));
-    REQUIRE(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
+    CHECK(d_mgi.widthInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(620.0));
+    CHECK(d_mgi.heightInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(350.0));
+    CHECK(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(620.0));
+    CHECK(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
 
     auto adjust_bounds = [](auto bounds) {
         const auto unadjusted_width = bounds.width();
@@ -127,14 +127,14 @@ TEST_CASE("bbox width pixels") {
         return bounds;
     };
 
-    REQUIRE(d_wgs84.widthInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(620.0 * 0.7));
-    REQUIRE(d_wgs84.heightInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(350.0 * 0.5));
+    CHECK(d_wgs84.widthInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(620.0 * 0.7));
+    CHECK(d_wgs84.heightInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(350.0 * 0.5));
 
     const auto webmercator_bounds = srs::non_exact_bounds_transform(d_wgs84.bounds(), d_wgs84.srs(), webmercator);
-    REQUIRE(d_wgs84.widthInPixels(webmercator_bounds, webmercator) == Approx(620.0));
-    REQUIRE(d_wgs84.heightInPixels(webmercator_bounds, webmercator) == Approx(350.0));
+    CHECK(d_wgs84.widthInPixels(webmercator_bounds, webmercator) == Approx(620.0));
+    CHECK(d_wgs84.heightInPixels(webmercator_bounds, webmercator) == Approx(350.0));
 
     const auto webmercator_adjusted_bounds = adjust_bounds(webmercator_bounds);
-    REQUIRE(d_wgs84.widthInPixels(webmercator_adjusted_bounds, webmercator) == Approx(620.0 * 0.7));
-    REQUIRE(d_wgs84.heightInPixels(webmercator_adjusted_bounds, webmercator) == Approx(350.0 * 0.5));
+    CHECK(d_wgs84.widthInPixels(webmercator_adjusted_bounds, webmercator) == Approx(620.0 * 0.7));
+    CHECK(d_wgs84.heightInPixels(webmercator_adjusted_bounds, webmercator) == Approx(350.0 * 0.5));
 }

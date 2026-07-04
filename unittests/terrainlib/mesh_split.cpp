@@ -89,7 +89,7 @@ TEST_CASE("mesh::split_by_vertex") {
         const SimpleMesh mesh;
         const auto result = mesh::split_by_vertex(mesh, 3, [](uint32_t) { return 0u; });
 
-        REQUIRE(result.groups.size() == 3);
+        CHECK(result.groups.size() == 3);
         CHECK(result.vertex_remap.empty());
 
         for (const auto &group : result.groups) {
@@ -107,7 +107,7 @@ TEST_CASE("mesh::split_by_vertex") {
         });
 
         REQUIRE(result.groups.size() == 2);
-        REQUIRE(result.vertex_remap.size() == mesh.vertex_count());
+        CHECK(result.vertex_remap.size() == mesh.vertex_count());
 
         CHECK(result.groups[0].triangles.size() == 1);
         CHECK(result.groups[1].triangles.empty());
@@ -203,7 +203,7 @@ TEST_CASE("mesh::split_by_triangle") {
         const SimpleMesh mesh;
         const auto result = mesh::split_by_triangle(mesh, 4, [](uint32_t) { return 0u; });
 
-        REQUIRE(result.groups.size() == 4);
+        CHECK(result.groups.size() == 4);
 
         for (const auto &group : result.groups) {
             CHECK(group.positions.empty());
@@ -276,7 +276,7 @@ TEST_CASE("mesh::split_by_triangle") {
             return triangle_index;
         });
 
-        REQUIRE(result.groups.size() == 3);
+        CHECK(result.groups.size() == 3);
 
         for (const auto &group : result.groups) {
             CHECK(group.positions.size() == group.uvs.size());

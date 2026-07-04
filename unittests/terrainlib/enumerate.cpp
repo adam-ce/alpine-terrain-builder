@@ -12,7 +12,7 @@ TEST_CASE("enumerate empty vector") {
         (void)item;
         ++count;
     }
-    REQUIRE(count == 0);
+    CHECK(count == 0);
 }
 
 TEST_CASE("enumerate vector of ints") {
@@ -23,8 +23,8 @@ TEST_CASE("enumerate vector of ints") {
         indices.push_back(item.index);
         values.push_back(item.value);
     }
-    REQUIRE(indices == std::vector<std::size_t>{0, 1, 2});
-    REQUIRE(values == std::vector<int>{10, 20, 30});
+    CHECK(indices == std::vector<std::size_t>{0, 1, 2});
+    CHECK(values == std::vector<int>{10, 20, 30});
 }
 
 TEST_CASE("enumerate with mutation") {
@@ -32,7 +32,7 @@ TEST_CASE("enumerate with mutation") {
     for (auto item : enumerate(vec)) {
         item.value *= 10;
     }
-    REQUIRE(vec == std::vector<int>{10, 20, 30});
+    CHECK(vec == std::vector<int>{10, 20, 30});
 }
 
 TEST_CASE("enumerate const vector") {
@@ -46,7 +46,7 @@ TEST_CASE("enumerate const vector") {
     for (auto item : enumerate(vec)) {
         values.push_back(item.value);
     }
-    REQUIRE(values == std::vector<int>{5, 6, 7});
+    CHECK(values == std::vector<int>{5, 6, 7});
 }
 
 TEST_CASE("enumerate with custom index type") {
@@ -65,8 +65,8 @@ TEST_CASE("enumerate std::array") {
         indices.push_back(item.index);
         values.push_back(item.value);
     }
-    REQUIRE(indices == std::vector<std::size_t>{0, 1, 2});
-    REQUIRE(values == std::vector<int>{4, 5, 6});
+    CHECK(indices == std::vector<std::size_t>{0, 1, 2});
+    CHECK(values == std::vector<int>{4, 5, 6});
 }
 
 TEST_CASE("enumerate with structured bindings") {
@@ -77,7 +77,7 @@ TEST_CASE("enumerate with structured bindings") {
         CHECK(v == vec[expected_index]);
         ++expected_index;
     }
-    REQUIRE(expected_index == 3);
+    CHECK(expected_index == 3);
 }
 
 TEST_CASE("enumerate string vector") {
@@ -88,5 +88,5 @@ TEST_CASE("enumerate string vector") {
         CHECK(item.value == vec[count]);
         ++count;
     }
-    REQUIRE(count == 3);
+    CHECK(count == 3);
 }

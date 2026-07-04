@@ -5,14 +5,14 @@
 #include <string>
 
 TEST_CASE("default_seed returns expected value", "[hash]") {
-    REQUIRE(hash::default_seed() == 0x9e3779b9);
+    CHECK(hash::default_seed() == 0x9e3779b9);
 }
 
 TEST_CASE("combine with single int returns non-zero and is deterministic", "[hash]") {
     size_t result1 = hash::combine(42);
     size_t result2 = hash::combine(42);
     CHECK(result1 != 0);
-    REQUIRE(result1 == result2);
+    CHECK(result1 == result2);
 }
 
 TEST_CASE("combine with two ints is deterministic and differs from single", "[hash]") {
@@ -20,26 +20,26 @@ TEST_CASE("combine with two ints is deterministic and differs from single", "[ha
     size_t dual1 = hash::combine(42, 7);
     size_t dual2 = hash::combine(42, 7);
     CHECK(dual1 == dual2);
-    REQUIRE(dual1 != single);
+    CHECK(dual1 != single);
 }
 
 TEST_CASE("combine is order-dependent", "[hash]") {
     size_t h1 = hash::combine(1, 2);
     size_t h2 = hash::combine(2, 1);
-    REQUIRE(h1 != h2);
+    CHECK(h1 != h2);
 }
 
 TEST_CASE("combine with same values gives same result", "[hash]") {
     size_t a = hash::combine(10, 20, 30);
     size_t b = hash::combine(10, 20, 30);
-    REQUIRE(a == b);
+    CHECK(a == b);
 }
 
 TEST_CASE("append modifies seed", "[hash]") {
     size_t seed = hash::default_seed();
     size_t original = seed;
     hash::append(seed, 42);
-    REQUIRE(seed != original);
+    CHECK(seed != original);
 }
 
 TEST_CASE("append with multiple args equivalent to sequential appends", "[hash]") {
@@ -51,7 +51,7 @@ TEST_CASE("append with multiple args equivalent to sequential appends", "[hash]"
     hash::append(seed_seq, 2);
     hash::append(seed_seq, 3);
 
-    REQUIRE(seed_multi == seed_seq);
+    CHECK(seed_multi == seed_seq);
 }
 
 TEST_CASE("combine with different types", "[hash]") {
@@ -65,7 +65,7 @@ TEST_CASE("combine with different types", "[hash]") {
     CHECK(h_str != 0);
 
     // String hash should differ from integer hashes
-    REQUIRE(h_str != h_int);
+    CHECK(h_str != h_int);
 }
 
 TEST_CASE("combine produces different hashes for different values", "[hash]") {

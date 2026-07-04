@@ -6,10 +6,10 @@
 TEST_CASE("TinyVector default construction is empty") {
     TinyVector<int> vec;
 
-    REQUIRE(vec.empty());
-    REQUIRE(vec.size() == 0);
-    REQUIRE(vec.data() == nullptr);
-    REQUIRE(vec.begin() == vec.end());
+    CHECK(vec.empty());
+    CHECK(vec.size() == 0);
+    CHECK(vec.data() == nullptr);
+    CHECK(vec.begin() == vec.end());
 }
 
 TEST_CASE("TinyVector push one element stays inline") {
@@ -18,8 +18,8 @@ TEST_CASE("TinyVector push one element stays inline") {
 
     REQUIRE(vec.size() == 1);
     REQUIRE_FALSE(vec.empty());
-    REQUIRE(vec[0] == 42);
-    REQUIRE(vec.data() != nullptr);
+    CHECK(vec[0] == 42);
+    CHECK(vec.data() != nullptr);
 }
 
 TEST_CASE("TinyVector push two elements promotes to vector") {
@@ -28,8 +28,8 @@ TEST_CASE("TinyVector push two elements promotes to vector") {
     vec.push_back(20);
 
     REQUIRE(vec.size() == 2);
-    REQUIRE(vec[0] == 10);
-    REQUIRE(vec[1] == 20);
+    CHECK(vec[0] == 10);
+    CHECK(vec[1] == 20);
 }
 
 TEST_CASE("TinyVector push three elements") {
@@ -39,20 +39,20 @@ TEST_CASE("TinyVector push three elements") {
     vec.push_back(3);
 
     REQUIRE(vec.size() == 3);
-    REQUIRE(vec[0] == 1);
-    REQUIRE(vec[1] == 2);
-    REQUIRE(vec[2] == 3);
+    CHECK(vec[0] == 1);
+    CHECK(vec[1] == 2);
+    CHECK(vec[2] == 3);
 }
 
 TEST_CASE("TinyVector pop_back from size 2 to 1") {
     TinyVector<int> vec;
     vec.push_back(5);
     vec.push_back(6);
-    REQUIRE(vec.size() == 2);
+    CHECK(vec.size() == 2);
 
     vec.pop_back();
     REQUIRE(vec.size() == 1);
-    REQUIRE(vec[0] == 5);
+    CHECK(vec[0] == 5);
 }
 
 TEST_CASE("TinyVector pop_back from size 1 to 0") {
@@ -60,8 +60,8 @@ TEST_CASE("TinyVector pop_back from size 1 to 0") {
     vec.push_back(99);
 
     vec.pop_back();
-    REQUIRE(vec.size() == 0);
-    REQUIRE(vec.empty());
+    CHECK(vec.size() == 0);
+    CHECK(vec.empty());
 }
 
 TEST_CASE("TinyVector pop_back on empty throws") {
@@ -74,15 +74,15 @@ TEST_CASE("TinyVector clear from various sizes") {
     SECTION("clear from size 0") {
         TinyVector<int> vec;
         vec.clear();
-        REQUIRE(vec.empty());
+        CHECK(vec.empty());
     }
 
     SECTION("clear from size 1") {
         TinyVector<int> vec;
         vec.push_back(1);
         vec.clear();
-        REQUIRE(vec.empty());
-        REQUIRE(vec.size() == 0);
+        CHECK(vec.empty());
+        CHECK(vec.size() == 0);
     }
 
     SECTION("clear from size 3") {
@@ -91,8 +91,8 @@ TEST_CASE("TinyVector clear from various sizes") {
         vec.push_back(2);
         vec.push_back(3);
         vec.clear();
-        REQUIRE(vec.empty());
-        REQUIRE(vec.size() == 0);
+        CHECK(vec.empty());
+        CHECK(vec.size() == 0);
     }
 }
 
@@ -101,13 +101,13 @@ TEST_CASE("TinyVector resize") {
         TinyVector<int> vec;
         vec.push_back(1);
         vec.resize(0);
-        REQUIRE(vec.empty());
+        CHECK(vec.empty());
     }
 
     SECTION("resize to 1 from empty") {
         TinyVector<int> vec;
         vec.resize(1);
-        REQUIRE(vec.size() == 1);
+        CHECK(vec.size() == 1);
     }
 
     SECTION("resize to 3 promotes to vector") {
@@ -117,9 +117,9 @@ TEST_CASE("TinyVector resize") {
         vec[0] = 10;
         vec[1] = 20;
         vec[2] = 30;
-        REQUIRE(vec[0] == 10);
-        REQUIRE(vec[1] == 20);
-        REQUIRE(vec[2] == 30);
+        CHECK(vec[0] == 10);
+        CHECK(vec[1] == 20);
+        CHECK(vec[2] == 30);
     }
 }
 
@@ -128,8 +128,8 @@ TEST_CASE("TinyVector at with valid and out-of-range index") {
     vec.push_back(7);
     vec.push_back(8);
 
-    REQUIRE(vec.at(0) == 7);
-    REQUIRE(vec.at(1) == 8);
+    CHECK(vec.at(0) == 7);
+    CHECK(vec.at(1) == 8);
     REQUIRE_THROWS_AS(vec.at(2), std::out_of_range);
     REQUIRE_THROWS_AS(vec.at(100), std::out_of_range);
 
@@ -140,7 +140,7 @@ TEST_CASE("TinyVector at with valid and out-of-range index") {
 
     SECTION("const at") {
         const auto &cvec = vec;
-        REQUIRE(cvec.at(0) == 7);
+        CHECK(cvec.at(0) == 7);
         REQUIRE_THROWS_AS(cvec.at(2), std::out_of_range);
     }
 }
@@ -155,7 +155,7 @@ TEST_CASE("TinyVector range-based for loop") {
     for (int val : vec) {
         sum += val;
     }
-    REQUIRE(sum == 6);
+    CHECK(sum == 6);
 }
 
 TEST_CASE("TinyVector reserve then push") {
@@ -167,25 +167,25 @@ TEST_CASE("TinyVector reserve then push") {
     vec.push_back(30);
 
     REQUIRE(vec.size() == 3);
-    REQUIRE(vec[0] == 10);
-    REQUIRE(vec[1] == 20);
-    REQUIRE(vec[2] == 30);
+    CHECK(vec[0] == 10);
+    CHECK(vec[1] == 20);
+    CHECK(vec[2] == 30);
 }
 
 TEST_CASE("TinyVector emplace_back with pair") {
     TinyVector<std::pair<int, int>> vec;
 
     auto &first = vec.emplace_back(1, 2);
-    REQUIRE(first.first == 1);
-    REQUIRE(first.second == 2);
-    REQUIRE(vec.size() == 1);
+    CHECK(first.first == 1);
+    CHECK(first.second == 2);
+    CHECK(vec.size() == 1);
 
     auto &second = vec.emplace_back(3, 4);
-    REQUIRE(second.first == 3);
-    REQUIRE(second.second == 4);
+    CHECK(second.first == 3);
+    CHECK(second.second == 4);
     REQUIRE(vec.size() == 2);
-    REQUIRE(vec[0].first == 1);
-    REQUIRE(vec[1].first == 3);
+    CHECK(vec[0].first == 1);
+    CHECK(vec[1].first == 3);
 }
 
 TEST_CASE("TinyVector span conversion") {
@@ -195,6 +195,6 @@ TEST_CASE("TinyVector span conversion") {
 
     std::span<int> s = vec;
     REQUIRE(s.size() == 2);
-    REQUIRE(s[0] == 1);
-    REQUIRE(s[1] == 2);
+    CHECK(s[0] == 1);
+    CHECK(s[1] == 2);
 }

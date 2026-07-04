@@ -25,3 +25,12 @@ struct ImageKey {
 
     auto operator<=>(const ImageKey &other) const = default;
 };
+
+namespace std {
+template <>
+struct hash<ImageKey> {
+    size_t operator()(const ImageKey &key) const noexcept {
+        return ::hash::combine(key.data, key.rows, key.cols, key.step, key.type);
+    }
+};
+} // namespace std

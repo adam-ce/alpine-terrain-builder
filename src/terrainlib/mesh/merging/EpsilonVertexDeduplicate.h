@@ -6,7 +6,7 @@
 #include "mesh/merging/VertexDeduplicate.h"
 
 namespace mesh::merging {
-    
+
 template <glm::length_t n_dims, typename Component, typename Meta, spatial_lookup::SpatialLookup<n_dims, Component, Meta> Lookup>
 class EpsilonVertexDeduplicate : public VertexDeduplicate<n_dims, Component, Meta> {
 public:
@@ -15,15 +15,16 @@ public:
     EpsilonVertexDeduplicate(Lookup lookup, Component epsilon)
         : _lookup(std::move(lookup)),
           _epsilon(epsilon) {}
-          
+
     Component epsilon() const {
         return this->_epsilon;
     }
-    virtual void insert(const Vec &point, const Meta meta) override {
-        DEBUG_ASSERT_VAL(this->_lookup.insert(point, meta));
+
+    virtual void insert(const Vec &point, Meta meta) override {
+        DEBUG_ASSERT_VAL(this->_lookup.insert(point, std::move(meta)));
     }
-    virtual bool find(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
-        return this->_lookup.find_all_near(point, this->_epsilon, duplicates);
+    virtual bool find(const Vec &point, std::vector<Meta> &matches) const override {
+        return this->_lookup.find_all_near(point, this->_epsilon, matches);
     }
 
 private:
@@ -38,4 +39,4 @@ template <typename L,
 EpsilonVertexDeduplicate(L lookup, C epsilon)
     -> EpsilonVertexDeduplicate<N, C, M, L>;
 
-}
+} // namespace mesh::merging

@@ -1,7 +1,5 @@
 #pragma once
 
-#include <libassert/assert.hpp>
-
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/VertexDeduplicate.h"
 #include "spatial_lookup/SpatialLookup.h"
@@ -27,17 +25,25 @@ public:
     SphereProjectionVertexDeduplicate(Lookup lookup, double epsilon, double radius)
         : _inner(std::move(lookup), epsilon), _radius(radius) {}
 
-    void insert(const Vec &point, const Meta meta) override {
-        const Vec mapped = detail::scale_to_length(point, this->_radius);
-        this->_inner.insert(mapped, meta);
+    double radius() const {
+        return this->_radius;
     }
-    bool find(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
+    double epsilon() const {
+        return this->_inner.epsilon();
+    }
+
+    void insert(const Vec &point, Meta meta) override {
         const Vec mapped = detail::scale_to_length(point, this->_radius);
-        return this->_inner.find(mapped, duplicates);
+        this->_inner.insert(mapped, std::move(meta));
+    }
+    bool find(const Vec &point, std::vector<Meta> &matches) const override {
+        const Vec mapped = detail::scale_to_length(point, this->_radius);
+        return this->_inner.find(mapped, matches);
     }
 
 private:
     EpsilonVertexDeduplicate<3, double, Meta, Lookup> _inner;
     double _radius;
 };
-}
+
+} // namespace mesh::merging

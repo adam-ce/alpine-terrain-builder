@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <type_traits>
 
 #include <glm/glm.hpp>
 
@@ -26,10 +27,21 @@ glm::vec<n_dims, int64_t> quantize_index(const glm::vec<n_dims, T> &v, const T e
 
 template <typename T>
 T quantize_floor(const T x, const T epsilon) {
-    return std::floor(x / epsilon) * epsilon;
+    if constexpr (std::is_integral_v<T>) {
+        if (x < 0) {
+            return ((x - epsilon + 1) / epsilon) * epsilon;
+        }
+        return (x / epsilon) * epsilon;
+    } else {
+        return std::floor(x / epsilon) * epsilon;
+    }
 }
 
 template <glm::length_t n_dims, typename T>
 glm::vec<n_dims, T> quantize_floor(const glm::vec<n_dims, T> &v, const T epsilon) {
-    return glm::floor(v / epsilon) * epsilon;
+    glm::vec<n_dims, T> result;
+    for (glm::length_t i = 0; i < n_dims; i++) {
+        result[i] = quantize_floor(v[i], epsilon);
+    }
+    return result;
 }

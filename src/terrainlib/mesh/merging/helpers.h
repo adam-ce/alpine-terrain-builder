@@ -33,7 +33,9 @@ inline double estimate_merge_epsilon(const std::span<const std::reference_wrappe
 
 namespace {
 radix::geometry::Aabb3d pad_bounds(const radix::geometry::Aabb3d &bounds, const double percentage) {
-    const glm::dvec3 bounds_padding = bounds.size() * percentage;
+    // Percentage-only padding collapses to zero for a zero-size (e.g. single-point) mesh,
+    // which would leave the grid's cell size zero. Enforce a minimum absolute padding too.
+    const glm::dvec3 bounds_padding = glm::max(bounds.size() * percentage, glm::dvec3(radix::geometry::epsilon<double>));
     const radix::geometry::Aabb3d padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
     return padded_bounds;
 }

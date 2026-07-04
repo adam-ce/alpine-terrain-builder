@@ -14,22 +14,23 @@ public:
 
     ExactVertexDeduplicate(Lookup lookup)
         : _lookup(std::move(lookup)) {}
-          
-    virtual void insert(const Vec &point, const Meta meta) override {
-        DEBUG_ASSERT_VAL(this->_lookup.insert(point, meta));
+
+    virtual void insert(const Vec &point, Meta meta) override {
+        DEBUG_ASSERT_VAL(this->_lookup.insert(point, std::move(meta)));
     }
-    virtual bool find(const Vec &point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const override {
-        return this->_lookup.find_all_at(point, duplicates);
+    virtual bool find(const Vec &point, std::vector<Meta> &matches) const override {
+        return this->_lookup.find_all_at(point, matches);
     }
 
 private:
     Lookup _lookup;
-    Component _epsilon;
 };
 
 template <typename L,
+          typename C = typename L::Vec::value_type,
           typename M = typename L::Value,
           glm::length_t N = L::Vec::length()>
 ExactVertexDeduplicate(L lookup)
-    -> ExactVertexDeduplicate<N, M, L>;
-}
+    -> ExactVertexDeduplicate<N, C, M, L>;
+
+} // namespace mesh::merging

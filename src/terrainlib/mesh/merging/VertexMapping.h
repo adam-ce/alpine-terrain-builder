@@ -10,6 +10,7 @@
 #include <libassert/assert.hpp>
 
 #include "SegmentedBuffer.h"
+#include "HybridIndexPairMap.h"
 #include "mesh/merging/VertexId.h"
 #include "log.h"
 
@@ -39,7 +40,7 @@ public:
         this->_forward.init(vertex_counts);
 
         this->_backward.clear();
-        this->_backward.reserve(this->_forward.total_size());
+        this->_backward.reserve_primary(this->_forward.total_size());
     }
 
     // Adds a forward and backward mapping between a source vertex and a merged index.
@@ -59,11 +60,7 @@ public:
 
     // Returns the original vertex index for a given merged index and mesh, if it exists.
     std::optional<uint32_t> map_backward(const uint32_t mesh_index, const uint32_t mapped_index) const {
-        const auto it = this->_backward.find({mesh_index, mapped_index});
-        if (it != this->_backward.end()) {
-            return it->second;
-        }
-        return std::nullopt;
+        return this->_backward.find(mapped_index, mesh_index);
     }
 
     // Returns a list of meshes in which a given merged index exists.
@@ -212,11 +209,11 @@ private:
     }
 
     void add_backward(const VertexId source, const uint32_t mapped_index) {
-        this->_backward[{source.mesh_index, mapped_index}] = source.vertex_index;
+        this->_backward.insert_or_assign(mapped_index, source.mesh_index, source.vertex_index);
     }
 
     SegmentedBuffer<uint32_t, uint32_t> _forward;
-    std::unordered_map<VertexId, uint32_t> _backward;
+    HybridIndexPairMap<uint32_t, uint32_t> _backward;
 };
 
 } // namespace mesh::merging

@@ -15,6 +15,7 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
+#include "build_config.h"
 #include "UnionFind.h"
 #include "log.h"
 #include "mesh/convert.h"
@@ -33,34 +34,33 @@ void validate_epsilon_mapping(
     const VertexMapping &mapping,
     const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
     double epsilon) {
-    USE(mapping, meshes, epsilon);
-#ifndef NDEBUG
-    const double epsilon2 = epsilon * epsilon;
+    if constexpr (IS_DEBUG_BUILD) {
+        const double epsilon2 = epsilon * epsilon;
 
-    const uint32_t max_merged_index = mapping.find_max_merged_index();
+        const uint32_t max_merged_index = mapping.find_max_merged_index();
 
-    std::vector<VertexId> originals;
-    for (uint32_t merged_index = 0; merged_index <= max_merged_index; merged_index++) {
-        // Collect all original vertices mapping to this merged index
-        originals.clear();
-        for (uint32_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
-            const std::optional<uint32_t> vertex_index = mapping.map_backward(mesh_index, merged_index);
-            if (vertex_index.has_value()) {
-                originals.push_back(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index.value()});
+        std::vector<VertexId> originals;
+        for (uint32_t merged_index = 0; merged_index <= max_merged_index; merged_index++) {
+            // Collect all original vertices mapping to this merged index
+            originals.clear();
+            for (uint32_t mesh_index = 0; mesh_index < mapping.mesh_count(); mesh_index++) {
+                const std::optional<uint32_t> vertex_index = mapping.map_backward(mesh_index, merged_index);
+                if (vertex_index.has_value()) {
+                    originals.push_back(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index.value()});
+                }
             }
-        }
 
-        // Check all pairs of original vertices for this merged vertex
-        for (uint32_t i = 0; i < originals.size(); i++) {
-            const glm::dvec3 &pi = meshes[originals[i].mesh_index].get().positions[originals[i].vertex_index];
-            for (uint32_t j = i + 1; j < originals.size(); j++) {
-                const glm::dvec3 &pj = meshes[originals[j].mesh_index].get().positions[originals[j].vertex_index];
-                const double dist2 = glm::distance2(pi, pj);
-                DEBUG_ASSERT(dist2 <= epsilon2);
+            // Check all pairs of original vertices for this merged vertex
+            for (uint32_t i = 0; i < originals.size(); i++) {
+                const glm::dvec3 &pi = meshes[originals[i].mesh_index].get().positions[originals[i].vertex_index];
+                for (uint32_t j = i + 1; j < originals.size(); j++) {
+                    const glm::dvec3 &pj = meshes[originals[j].mesh_index].get().positions[originals[j].vertex_index];
+                    const double dist2 = glm::distance2(pi, pj);
+                    DEBUG_ASSERT(dist2 <= epsilon2);
+                }
             }
         }
     }
-#endif
 }
 
 VertexMapping create_mapping(
@@ -88,20 +88,10 @@ VertexMapping create_mapping(
     std::transform(meshes.begin(), meshes.end(),
                    std::back_inserter(mesh_sizes),
                    [](const auto &mesh) { return mesh.get().vertex_count(); });
-    const uint32_t maximal_merged_mesh_size = std::accumulate(mesh_sizes.begin(), mesh_sizes.end(), 0);
+    const uint32_t maximal_merged_mesh_size = std::accumulate(mesh_sizes.begin(), mesh_sizes.end(), 0u);
     // Handle all meshes being empty
     if (maximal_merged_mesh_size == 0) {
         return {};
-    }
-
-    // Find the largest mesh and put it as the first element
-    const uint32_t index_of_largest_mesh = std::distance(mesh_sizes.begin(), std::max_element(mesh_sizes.begin(), mesh_sizes.end()));
-    std::vector<std::reference_wrapper<const SimpleMesh>> reordered;
-    if (index_of_largest_mesh != 0) {
-        std::copy(meshes.begin(), meshes.end(), std::back_inserter(reordered));
-        std::swap(reordered[0], reordered[index_of_largest_mesh]);
-        // we dont need to swap mesh_sizes here since we use the original mesh indices for the mapping
-        // meshes = std::span(reordered);
     }
 
     VertexMapping mapping;
@@ -118,7 +108,7 @@ VertexMapping create_mapping(
     std::vector<bool> is_boundary_vertex;
 
     // Reusable vector for duplicate vertices
-    std::vector<std::reference_wrapper<const VertexId>> duplicate_vertices;
+    std::vector<VertexId> duplicate_vertices;
 
     bool has_warned = false; // Flag to only print the intra-mesh merge warning once
     for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
@@ -130,8 +120,7 @@ VertexMapping create_mapping(
             find_boundary_edges(mesh.triangles, boundary_edges);
 
             // Classify vertices as on the boundary or on the inside
-            is_boundary_vertex.resize(mesh.vertex_count());
-            std::fill(is_boundary_vertex.begin(), is_boundary_vertex.end(), false);
+            is_boundary_vertex.assign(mesh.vertex_count(), false);
             for (const auto& edge : boundary_edges) {
                 is_boundary_vertex[edge[0]] = true;
                 is_boundary_vertex[edge[1]] = true;
@@ -152,21 +141,21 @@ VertexMapping create_mapping(
             } else if (!deduplicate.find_or_insert(position, current_vertex, duplicate_vertices)) {
                 // Duplicates detected
                 std::optional<std::pair<VertexId, double>> nearest_duplicate;
-                for (const auto &other_vertex : duplicate_vertices) {
+                for (const VertexId &other_vertex : duplicate_vertices) {
                     // Warn if we would perform intra mesh merges (but dont actually do them)
-                    if (other_vertex.get().mesh_index == current_vertex.mesh_index) {
+                    if (other_vertex.mesh_index == current_vertex.mesh_index) {
                         if (!has_warned) {
                             LOG_WARN("Deduplication is too inclusive and would perform intra-mesh merges");
                             has_warned = true;
                         }
                     } else {
                         double distance2 = 0;
-                        // Only caluclate the distance if there is actually more than a single duplicate vertex
+                        // Only calculate the distance if there is actually more than a single duplicate vertex
                         if (duplicate_vertices.size() > 1) {
-                            distance2 = glm::distance2(mesh.positions[other_vertex.get().vertex_index], position);
+                            distance2 = glm::distance2(meshes[other_vertex.mesh_index].get().positions[other_vertex.vertex_index], position);
                         }
                         if (!nearest_duplicate.has_value() || nearest_duplicate.value().second > distance2) {
-                            nearest_duplicate = {other_vertex.get(), distance2};
+                            nearest_duplicate = {other_vertex, distance2};
                         }
                     }
                 }
@@ -189,14 +178,14 @@ VertexMapping create_mapping(
     LOG_DEBUG("Identified {} shared and {} unique vertices", maximal_merged_mesh_size - unique_vertices, unique_vertices);
     mapping.validate();
 
-#ifndef NDEBUG
-    using DefaultEpsilonDeduplicate = EpsilonVertexDeduplicate<3, double, VertexId, spatial_lookup::Grid3d<VertexId>>;
-    const auto *epsilon_deduplicate = dynamic_cast<DefaultEpsilonDeduplicate*>(&deduplicate);
-    if (epsilon_deduplicate != nullptr) {
-        const double epsilon = epsilon_deduplicate->epsilon();
-        validate_epsilon_mapping(mapping, meshes, epsilon);
+    if constexpr (IS_DEBUG_BUILD) {
+        using DefaultEpsilonDeduplicate = EpsilonVertexDeduplicate<3, double, VertexId, spatial_lookup::Grid3d<VertexId>>;
+        const auto *epsilon_deduplicate = dynamic_cast<DefaultEpsilonDeduplicate*>(&deduplicate);
+        if (epsilon_deduplicate != nullptr) {
+            const double epsilon = epsilon_deduplicate->epsilon();
+            validate_epsilon_mapping(mapping, meshes, epsilon);
+        }
     }
-#endif
 
     return mapping;
 }
@@ -232,16 +221,17 @@ SimpleMesh apply_mapping(
         return mesh.has_uvs();
     });
 
-    uint32_t max_vertex_index = 0;
     merged_mesh.positions.resize(max_combined_vertex_count);
     if (has_uvs) {
         merged_mesh.uvs.resize(max_combined_vertex_count);
     }
+
+    uint32_t max_vertex_index = 0;
     for (uint32_t mesh_index = 0; mesh_index < meshes.size(); mesh_index++) {
         const SimpleMesh &mesh = meshes[mesh_index];
         for (uint32_t vertex_index = 0; vertex_index < mesh.vertex_count(); vertex_index++) {
             const uint32_t mapped_index = mapping.map_forward(VertexId{.mesh_index = mesh_index, .vertex_index = vertex_index});
-            merged_mesh.positions[mapped_index] =  mesh.positions[vertex_index];
+            merged_mesh.positions[mapped_index] = mesh.positions[vertex_index];
             if (has_uvs) {
                 merged_mesh.uvs[mapped_index] = mesh.has_uvs() ? mesh.uvs[vertex_index] : glm::dvec2(0);
             }
@@ -251,6 +241,7 @@ SimpleMesh apply_mapping(
     if (max_vertex_index == 0) {
         return {};
     }
+    
     DEBUG_ASSERT(max_vertex_index < max_combined_vertex_count);
     merged_mesh.positions.resize(max_vertex_index + 1);
     if (has_uvs) {
@@ -294,4 +285,4 @@ SimpleMesh apply_mapping(
 
     return merged_mesh;
 }
-} // namespace mesh::merging
+} // namespace mesh::merging::detail

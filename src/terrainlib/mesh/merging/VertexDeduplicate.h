@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -11,26 +10,27 @@ template <glm::length_t n_dims, typename Component, typename Meta>
 class VertexDeduplicate {
 public:
     using Vec = glm::vec<n_dims, Component>;
-    using Duplicate = std::reference_wrapper<const Meta>;
-    using Duplicates = std::vector<Duplicate>;
+    using Matches = std::vector<Meta>;
 
     virtual ~VertexDeduplicate() = default;
 
-    virtual void insert(const Vec& point, const Meta meta) = 0;
-    virtual bool find(const Vec& point, Duplicates &duplicates) const = 0;
-    virtual bool find_or_insert(const Vec &point, const Meta meta, Duplicates &duplicates) {
-        if (this->find(point, duplicates)) {
+    virtual void insert(const Vec& point, Meta meta) = 0;
+    // Appends all matches for point to `matches`. Returns true if any were found.
+    // Values are returned by copy to avoid dangling references into the backing store.
+    virtual bool find(const Vec& point, Matches &matches) const = 0;
+    virtual bool find_or_insert(const Vec &point, Meta meta, Matches &matches) {
+        if (this->find(point, matches)) {
             return false;
         } else {
-            this->insert(point, meta);
+            this->insert(point, std::move(meta));
             return true;
         }
     }
-    Duplicates find(const Vec &point) const {
-        Duplicates duplicates;
-        this->find(point, duplicates);
-        return duplicates;
+    Matches find(const Vec &point) const {
+        Matches matches;
+        this->find(point, matches);
+        return matches;
     }
 };
 
-}
+} // namespace mesh::merging

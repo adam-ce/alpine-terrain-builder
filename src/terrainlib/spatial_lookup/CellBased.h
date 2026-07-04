@@ -2,6 +2,7 @@
 
 #include <glm/common.hpp>
 #include <glm/gtx/component_wise.hpp>
+#include <glm/gtx/norm.hpp>
 #include <libassert/assert.hpp>
 
 #include "MoreExact.h"
@@ -9,7 +10,6 @@
 #include "spatial_lookup/CellBasedStorage.h"
 #include "spatial_lookup/NDLoopHelper.h"
 #include "spatial_lookup/SpatialLookup.h"
-#include <glm/gtx/norm.hpp>
 
 namespace spatial_lookup {
 
@@ -23,7 +23,7 @@ auto distance_sq(const glm::vec<n_dims, T1> &a, const glm::vec<n_dims, T2> &b) {
     if constexpr (std::is_floating_point_v<T>) {
         return glm::distance2(Vec(a), Vec(b));
     } else {
-        const auto diff = a - b;
+        const auto diff = Vec(a) - Vec(b);
         const auto diff_sq = diff * diff;
         return glm::compAdd(diff_sq);
     }
@@ -44,10 +44,11 @@ public:
 
     void clear() {
         this->_storage.clear();
+        this->_bounds = Bounds{};
     }
 
-    bool insert(const Vec& point, const Value value) {
-        const bool inserted = this->_storage.insert(point, value);
+    bool insert(const Vec& point, Value value) {
+        const bool inserted = this->_storage.insert(point, std::move(value));
         if (inserted) {
             this->_bounds.expand_by(point);
         }
@@ -86,16 +87,14 @@ public:
         const Vec &point,
         Distance epsilon,
         Vector &out) const {
-        const auto actual_epsilon = static_cast<MoreExact<Distance, Component>>(epsilon);
-        return find_all_near_impl<const Self>(*this, point, actual_epsilon, out);
+        return find_all_near_impl<const Self>(*this, point, epsilon, out);
     }
     template <typename Distance, typename Vector>
     bool find_all_near(
         const Vec &point,
         Distance epsilon,
         Vector &out) {
-        const auto actual_epsilon = static_cast<MoreExact<Distance, Component>>(epsilon);
-        return find_all_near_impl<Self>(*this, point, actual_epsilon, out);
+        return find_all_near_impl<Self>(*this, point, epsilon, out);
     }
 
     template <typename Func>
@@ -132,23 +131,26 @@ private:
             std::is_const_v<Self>,
             const Value &,
             Value &>;
+        // Promote to the more precise type to avoid e.g. float epsilon against a double grid
+        using E = MoreExact<Distance, Component>;
 
         DEBUG_ASSERT(epsilon > 0);
 
-        const Distance epsilon2 = epsilon * epsilon;
-        if (radix::geometry::distance_sq(self._bounds, point) > epsilon2) {
+        const E eps = static_cast<E>(epsilon);
+        const E eps2 = eps * eps;
+        if (radix::geometry::distance_sq(self._bounds, point) > eps2) {
             return false;
         }
 
         const CellIndex cell_index = self._storage.point_to_cell_index(point);
-        const uint32_t lookup_radius = self.find_lookup_radius(cell_index, point, epsilon);
+        const uint32_t lookup_radius = self.find_lookup_radius(cell_index, point, eps);
 
         bool any_found = false;
         NDLoopHelper<n_dims>::for_each_offset(lookup_radius, [&](const glm::vec<n_dims, int32_t> &offset) {
             const CellIndex neighbor_index = self._storage.offset_cell_index(cell_index, offset);
-            any_found |= self._storage.for_all_in_cell(neighbor_index, [=](const Vec &neighbor_point, ValueRef value) {
-                const Distance distance2 = detail::distance_sq(point, neighbor_point);
-                if (distance2 < epsilon2) {
+            any_found |= self._storage.for_all_in_cell(neighbor_index, [&](const Vec &neighbor_point, ValueRef value) {
+                const E distance2 = detail::distance_sq(point, neighbor_point);
+                if (distance2 <= eps2) {
                     func(point, value, distance2);
                 }
             });
@@ -184,23 +186,23 @@ private:
         return std::nullopt;
     }
 
-    template <typename SpatialLookup, typename Distance, typename Vector>
-    static bool find_all_near_impl(
-        SpatialLookup &lookup,
-        const typename SpatialLookup::Vec &point,
-        const Distance epsilon,
-        Vector &out) {
-        using Vec = SpatialLookup::Vec;
-        using Value = std::conditional_t<
-            std::is_const_v<SpatialLookup>,
-            const typename SpatialLookup::Value,
-            typename SpatialLookup::Value>;
+    // The neighbor scan costs O(radius^n_dims) -> lookup gets too expensive.
+    static constexpr uint32_t max_lookup_radius = 8;
 
-        out.clear();
-        lookup.for_all_near(point, epsilon, [&](const Vec &, Value &value, Distance) {
-            out.emplace_back(value);
-        });
-        return !out.empty();
+    template <typename Distance>
+    static uint32_t compute_lookup_radius(const Distance epsilon, const Component max_cell_size) {
+        const uint32_t radius = static_cast<uint32_t>(
+            std::ceil(static_cast<double>(epsilon) / static_cast<double>(max_cell_size)));
+
+        if (radius > 1) {
+            LOG_WARN_BACKOFF("Lookup epsilon is large relative to the cell size, giving a search radius of {} cells", radius);
+        }
+        if (radius <= max_lookup_radius) {
+            return radius;
+        }
+        LOG_WARN_BACKOFF("Lookup search radius of {} cells is too large; capping to {} cells, so some matches may be missed",
+                          radius, max_lookup_radius);
+        return max_lookup_radius;
     }
 
     template <typename Distance>
@@ -209,17 +211,12 @@ private:
         const Vec cell_size = cell_bounds.size();
         const Vec relative_cell_point = point - cell_bounds.min;
         const Vec distance_from_cell_bounds = glm::min(relative_cell_point, cell_size - relative_cell_point);
-        if (glm::all(glm::greaterThanEqual(distance_from_cell_bounds, Vec(epsilon)))) {
+        if (glm::all(glm::greaterThan(distance_from_cell_bounds, Vec(static_cast<Component>(epsilon))))) {
             return 0;
-        } else {
-            const Component max_cell_size = glm::compMax(cell_size);
-            const uint32_t radius = std::ceil(epsilon / max_cell_size);
-            if (radius > 1) {
-                LOG_WARN("Lookup epsilon ({}) is too large compared to cell size {} resulting in cell radius of {}",
-                         epsilon, cell_size, radius);
-            }
-            return radius;
         }
+
+        const Component max_cell_size = glm::compMax(cell_size);
+        return compute_lookup_radius(epsilon, max_cell_size);
     }
 
     template <typename Self, typename Func>
@@ -241,6 +238,27 @@ private:
                     func(stored_point, value);
                 }
             });
+    }
+
+    template <typename Self, typename Distance, typename Vector>
+    static bool find_all_near_impl(
+        Self &self,
+        const typename Self::Vec &point,
+        Distance epsilon,
+        Vector &out) {
+        using ValueRef = std::conditional_t<
+            std::is_const_v<Self>,
+            const Value &,
+            Value &>;
+        using E = MoreExact<Distance, Component>;
+
+        out.clear();
+
+        self.for_all_near(point, static_cast<E>(epsilon), [&](const Vec &, ValueRef value, E) {
+            out.emplace_back(value);
+        });
+
+        return !out.empty();
     }
 
     template <typename Self, typename Vector>

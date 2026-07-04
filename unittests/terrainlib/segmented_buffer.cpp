@@ -74,6 +74,23 @@ TEST_CASE("SegmentedBuffer push_new_segment with size") {
     CHECK(buf(0, 3) == 99);
 }
 
+TEST_CASE("SegmentedBuffer resize_last_segment after start_new_segment") {
+    SB buf;
+
+    buf.push_new_segment(2, 1);
+    buf.push_new_segment(3, 2);
+
+    REQUIRE(buf.segment_count() == 2);
+    REQUIRE(buf.segment_size(0) == 2);
+    REQUIRE(buf.segment_size(1) == 3);
+    REQUIRE(buf.total_size() == 5);
+    CHECK(buf(0, 0) == 1);
+    CHECK(buf(0, 1) == 1);
+    CHECK(buf(1, 0) == 2);
+    CHECK(buf(1, 1) == 2);
+    CHECK(buf(1, 2) == 2);
+}
+
 TEST_CASE("SegmentedBuffer push_new_segment from range") {
     SB buf;
 

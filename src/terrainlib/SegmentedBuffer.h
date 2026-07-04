@@ -59,7 +59,7 @@ public:
 
         const segment_index last_segment = this->segment_count() - 1;
         const index_type new_end = this->_offsets.range(last_segment).begin + size;
-        this->_offsets.set_end(new_end);
+        this->_offsets.set_end(last_segment, new_end);
         this->_data.resize(new_end, value);
     }
 

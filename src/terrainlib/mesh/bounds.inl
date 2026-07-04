@@ -11,8 +11,8 @@
 #include <radix/geometry.h>
 
 #include "mesh/SimpleMesh.h"
-
-namespace mesh {
+#include "VecRange.h"
+#include "mesh/bounds.h"
 
 namespace detail {
 template <glm::length_t n_dims, typename T>
@@ -23,15 +23,36 @@ radix::geometry::Aabb<n_dims, T> empty_bounds() {
     bounds.max = glm::vec<n_dims, T>(-inf);
     return bounds;
 }
+}
 
-template <typename MeshRange>
+template <glm::length_t n_dims, typename T, VecRange<n_dims, T> Range>
+void extend_bounds(radix::geometry::Aabb<n_dims, T> &bounds, const Range &points) {
+    for (const auto &point : points) {
+        bounds.expand_by(point);
+    }
+}
+
+template <AnyVecRange Range>
+auto calculate_bounds(const Range &points) {
+    using T = range_scalar_t<Range>;
+    constexpr glm::length_t n_dims = range_dims_v<Range>;
+    
+    radix::geometry::Aabb<n_dims, T> bounds = detail::empty_bounds<n_dims, T>();
+    extend_bounds(bounds, points);
+    return bounds;
+}
+
+namespace mesh {
+
+namespace detail {
+template <std::ranges::input_range MeshRange>
 auto calculate_bounds_mesh_range(const MeshRange &meshes) {
     using Mesh = std::unwrap_reference_t<std::ranges::range_value_t<MeshRange>>;
     using Vec = std::remove_cvref_t<decltype(std::declval<Mesh>().positions[0])>;
     using T = typename Vec::value_type;
     constexpr glm::length_t n_dims = Vec::length();
 
-    radix::geometry::Aabb<n_dims, T> bounds = detail::empty_bounds<n_dims, T>();
+    radix::geometry::Aabb<n_dims, T> bounds = ::detail::empty_bounds<n_dims, T>();
 
     for (const auto &mesh_ref : meshes) {
         const Mesh &mesh = mesh_ref;
@@ -44,7 +65,7 @@ auto calculate_bounds_mesh_range(const MeshRange &meshes) {
 
 template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const SimpleMesh_<n_dims, T> &mesh) {
-    return calculate_bounds(mesh.positions);
+    return ::calculate_bounds(mesh.positions);
 }
 template <glm::length_t n_dims, typename T>
 radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const SimpleMesh_<n_dims, T>> meshes) {
@@ -55,28 +76,5 @@ radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const std::ref
     return detail::calculate_bounds_mesh_range(meshes);
 }
 
-template <glm::length_t n_dims, typename T>
-void extend_bounds(radix::geometry::Aabb<n_dims, T> &bounds, const std::span<const glm::vec<n_dims, T>> positions) {
-    for (const auto &position : positions) {
-        bounds.expand_by(position);
-    }
-}
-
-template <glm::length_t n_dims, typename T>
-radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<const glm::vec<n_dims, T>> positions) {
-    radix::geometry::Aabb<n_dims, T> bounds = detail::empty_bounds<n_dims, T>();
-    extend_bounds(bounds, positions);
-    return bounds;
-}
-
-template <glm::length_t n_dims, typename T>
-radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::span<glm::vec<n_dims, T>> positions) {
-    return calculate_bounds(std::span<const glm::vec<n_dims, T>>(positions));
-}
-
-template <glm::length_t n_dims, typename T>
-radix::geometry::Aabb<n_dims, T> calculate_bounds(const std::vector<glm::vec<n_dims, T>>& positions) {
-    return calculate_bounds(std::span<const glm::vec<n_dims, T>>(positions));
-}
 
 }

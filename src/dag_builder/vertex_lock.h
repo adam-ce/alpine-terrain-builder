@@ -15,10 +15,6 @@
 #include "utils.h"
 
 namespace detail {
-inline radix::geometry::Aabb3d calculate_bounds(const Clustering &clustering) {
-    return mesh::calculate_bounds(clustering.positions);
-}
-
 struct VertexInCluster {
     uint32_t cluster_index;
     uint32_t local_vertex_index;
@@ -46,7 +42,7 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering) 
     }
 
     // Calculate safe bounds excluding the outer boundary of the mesh
-    const radix::geometry::Aabb3d bounds = detail::calculate_bounds(clustering);
+    const radix::geometry::Aabb3d bounds = calculate_bounds(clustering.positions);
     const glm::dvec3 center = bounds.centre();
     const glm::dvec3 extents = bounds.size() / 2.0;
     const glm::dvec3 unlocked_extents = extents * 0.99;

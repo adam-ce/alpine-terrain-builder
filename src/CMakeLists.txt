@@ -110,6 +110,10 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
+alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
+add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
+target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+
 set(LIBIGL_COPYLEFT_CORE ON)
 set(LIBIGL_RESTRICTED_TRIANGLE ON)
 alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
@@ -306,14 +310,15 @@ add_executable(index-browser
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
 
 add_library(dagbuilderlib
+    dag_builder/atlas/Packer.cpp
     dag_builder/atlas/rect/atlas.cpp
     dag_builder/atlas/rect/HorizontalStripPlanner.cpp
     dag_builder/atlas/rect/PackingPlanner.cpp
     dag_builder/build.cpp
-    dag_builder/merge.cpp
+    dag_builder/merge/clusterings.cpp
 )
 target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)
-target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis rectpack2D meshoptimizer)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis rectpack2D meshoptimizer xatlas)
 add_executable(dag-builder
     dag_builder/cli.cpp
     dag_builder/main.cpp

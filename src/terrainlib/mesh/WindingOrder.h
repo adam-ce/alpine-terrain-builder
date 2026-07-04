@@ -36,3 +36,14 @@ WindingOrder get_winding_order(const glm::uvec3 &triangle,
     const auto &c = positions[triangle[2]];
     return get_winding_order<T>(a, b, c);
 }
+
+inline glm::uvec3 swap_orientation(glm::uvec3 triangle) {
+    std::swap(triangle[1], triangle[2]);
+    return triangle;
+}
+
+template <typename Vertex>
+std::array<Vertex, 3> swap_orientation(std::array<Vertex, 3> triangle) {
+    std::swap(triangle[1], triangle[2]);
+    return triangle;
+}

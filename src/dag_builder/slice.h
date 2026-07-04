@@ -41,10 +41,11 @@ inline Clustering slice_clusters(const Clustering &clustering, const std::span<c
         }
 
         Cluster new_cluster{
+            .id = cluster.id,
             .vertex_indices = new_vertex_indices,
             .local_triangles = cluster.local_triangles,
             .uvs = cluster.uvs,
-            .texture_id = cluster.texture_id,
+            .texture_id = new_texture_id,
             .absolute_error = cluster.absolute_error};
         new_clustering.clusters.push_back(new_cluster);
     }

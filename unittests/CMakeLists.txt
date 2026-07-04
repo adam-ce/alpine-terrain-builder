@@ -99,6 +99,12 @@ target_link_libraries(unittests_meshbuilder PUBLIC meshbuilderlib terrainlib Cat
 target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
 
 
+add_executable(unittests_dagbuilder
+    catch2_helpers.h
+    dag_builder/slice.cpp
+)
+target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
+
 add_executable(unittests_sfmerger
     catch2_helpers.h
     sf_merger/sphere_projector.cpp

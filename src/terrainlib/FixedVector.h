@@ -134,6 +134,16 @@ public:
         return *this;
     }
 
+    template <size_t M>
+    FixedVector &operator=(std::span<const T, M> values) {
+        static_assert(M <= N, "span too large");
+        this->clear();
+        for (size_t i = 0; i < M; i++) {
+            this->push_back(values[i]);
+        }
+        return *this;
+    }
+
     template <typename... Args>
     void emplace_back(Args &&...args) {
         const bool inserted = this->try_emplace_back(std::forward<Args>(args)...);
@@ -151,6 +161,20 @@ public:
         this->construct_at(this->_size, std::forward<Args>(args)...);
         this->_size++;
         return true;
+    }
+
+    template <std::ranges::input_range Range>
+        requires std::convertible_to<std::ranges::range_reference_t<Range>, T>
+    void append_range(Range &&range) {
+        const size_t old_size = this->_size;
+        try {
+            for (auto &&value : range) {
+                this->push_back(std::forward<decltype(value)>(value));
+            }
+        } catch (...) {
+            this->destroy_from(old_size);
+            throw;
+        }
     }
 
     template <class U>

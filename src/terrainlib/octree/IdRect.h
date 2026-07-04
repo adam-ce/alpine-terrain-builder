@@ -143,6 +143,16 @@ public:
         return this->_end;
     }
 
+    bool contains(const Id &id) const {
+        if (this->_empty || id.level() != this->_begin.level()) {
+            return false;
+        }
+
+        const Id::Coords coords = id.coords();
+        return glm::all(glm::greaterThanEqual(coords, this->_begin.coords())) &&
+               glm::all(glm::lessThanEqual(coords, this->_end.coords()));
+    }
+
 private:
     Id _begin;
     Id _end;

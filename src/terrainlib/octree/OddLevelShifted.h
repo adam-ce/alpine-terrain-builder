@@ -21,6 +21,9 @@ public:
 
     std::optional<Id> find_node_at_level_containing_point(const glm::dvec3 &point, const uint32_t target_level) const;
     IdRect get_intersecting_nodes_on_level(const Id &id, const uint32_t level) const;
+    IdRect get_intersecting_nodes_on_level(const Bounds &source_bounds, const uint32_t level) const;
+    IdRect find_intersecting_nodes_for_standard_id(const Id &id) const;
+    IdRect find_intersecting_standard_nodes(const Id &id) const;
 
     Bounds get_node_bounds_with_children(const Id &id) const;
     Bounds get_node_bounds(const Id &id) const;

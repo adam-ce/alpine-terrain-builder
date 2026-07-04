@@ -66,6 +66,40 @@ IdRect OddLevelShifted::get_intersecting_nodes_on_level(const Id &id, const uint
     return IdRect(min_id, max_id);
 }
 
+IdRect OddLevelShifted::get_intersecting_nodes_on_level(const Bounds &source_bounds, const uint32_t target_level) const {
+    DEBUG_ASSERT(target_level <= Id::max_level());
+
+    const glm::dvec3 node_size = this->_space.get_node_size_at_level(target_level);
+    const glm::dvec3 offset = node_size / 1024.0;
+
+    const auto min_id = this->find_node_at_level_containing_point(source_bounds.min + offset, target_level);
+    const auto max_id = this->find_node_at_level_containing_point(source_bounds.max - offset, target_level);
+    if (!min_id || !max_id) {
+        return {};
+    }
+    return IdRect(*min_id, *max_id);
+}
+
+IdRect OddLevelShifted::find_intersecting_nodes_for_standard_id(const Id &id) const {
+    if (id.level() % 2 == 0) {
+        return IdRect(id, id);
+    }
+    const Bounds standard_bounds = this->_space.get_node_bounds(id);
+    return this->get_intersecting_nodes_on_level(standard_bounds, id.level());
+}
+
+IdRect OddLevelShifted::find_intersecting_standard_nodes(const Id &id) const {
+    if (id.level() % 2 == 0) {
+        return IdRect(id, id);
+    }
+
+    // Odd levels are shifted by half a node size, so a shifted node at coords c
+    // covers the same world space as standard nodes c-1 and c.
+    const Id::Coords coords = id.coords();
+    const Id::Coords min_coords = glm::max(coords, Id::Coords(1)) - Id::Coords(1);
+    return IdRect(Id(id.level(), min_coords), id);
+}
+
 Bounds OddLevelShifted::get_node_bounds_with_children(const Id &id) const {
     if (!id.has_children()) {
         return this->get_node_bounds(id);

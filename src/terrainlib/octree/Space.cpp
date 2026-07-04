@@ -91,6 +91,20 @@ std::optional<Id> Space::find_node_at_level_containing_point(const glm::dvec3& p
     return current;
 }
 
+IdRect Space::get_intersecting_nodes_on_level(const Bounds &source_bounds, const uint32_t target_level) const {
+    DEBUG_ASSERT(target_level <= Id::max_level());
+
+    const glm::dvec3 node_size = this->get_node_size_at_level(target_level);
+    const glm::dvec3 offset = node_size / 1024.0;
+
+    const auto min_id = this->find_node_at_level_containing_point(source_bounds.min + offset, target_level);
+    const auto max_id = this->find_node_at_level_containing_point(source_bounds.max - offset, target_level);
+    if (!min_id || !max_id) {
+        return {};
+    }
+    return IdRect(*min_id, *max_id);
+}
+
 glm::dvec3 Space::get_node_size_at_level(const uint32_t level) const {
     const uint32_t resolution = 1 << level;
     const glm::dvec3 bounds_size = this->_bounds.size();

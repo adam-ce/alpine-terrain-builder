@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 
 #include <tl/expected.hpp>
 
@@ -29,6 +30,21 @@ struct MaybeIndex {
 
     explicit MaybeIndex() : map(std::nullopt) {}
     explicit MaybeIndex(IndexMap map) : map(std::move(map)) {}
+
+    MaybeIndex(const MaybeIndex &) = default;
+    MaybeIndex &operator=(const MaybeIndex &) = default;
+
+    MaybeIndex(MaybeIndex &&other) noexcept
+        : map(std::move(other.map)), dirty(std::exchange(other.dirty, false)) {
+        other.map.reset();
+    }
+
+    MaybeIndex &operator=(MaybeIndex &&other) noexcept {
+        this->map = std::move(other.map);
+        this->dirty = std::exchange(other.dirty, false);
+        other.map.reset();
+        return *this;
+    }
 
     bool add(const Id &id) noexcept {
         if (!map.has_value()) {

@@ -1,0 +1,86 @@
+#include <libassert/assert.hpp>
+
+#include "mesh/convert.h"
+#include "log.h"
+#include "mesh/validate.h"
+
+using namespace cgal;
+
+using UvMap = Mesh::Property_map<cgal::VertexIndex, glm::dvec2>;
+
+Mesh convert::to_cgal_mesh(const SimpleMesh &mesh) {
+    Mesh cgal_mesh;
+    const size_t approx_num_edges = (mesh.face_count() * 3) / 2;
+    cgal_mesh.reserve(mesh.vertex_count(), approx_num_edges, mesh.face_count());
+
+    UvMap uv_map;
+    if (mesh.has_uvs()) {
+        auto [map, inserted] = cgal_mesh.add_property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
+        DEBUG_ASSERT(inserted);
+        uv_map = std::move(map);
+    }
+
+    for (size_t index = 0; index < mesh.positions.size(); ++index) {
+        const glm::dvec3 &position = mesh.positions[index];
+        const cgal::VertexIndex vertex = cgal_mesh.add_vertex(to_cgal_point<Kernel>(position));
+        DEBUG_ASSERT(vertex != Mesh::null_vertex());
+        if (mesh.has_uvs()) {
+            const glm::dvec2 &uv = mesh.uvs[index];
+            uv_map[vertex] = uv;
+        }
+    }
+
+    for (const glm::uvec3 &triangle : mesh.triangles) {
+        const cgal::FaceIndex face = cgal_mesh.add_face(
+            cgal::VertexIndex(triangle.x),
+            cgal::VertexIndex(triangle.y),
+            cgal::VertexIndex(triangle.z));
+        DEBUG_ASSERT(face != Mesh::null_face());
+    }
+
+    return cgal_mesh;
+}
+
+SimpleMesh convert::to_simple_mesh(const Mesh &cgal_mesh) {
+    ASSERT(!cgal_mesh.has_garbage());
+    
+    SimpleMesh mesh;
+
+    auto uv_map_opt = cgal_mesh.property_map<cgal::VertexIndex, glm::dvec2>("v:uv");
+    const bool has_uvs = uv_map_opt.has_value();
+    UvMap uv_map;
+    if (has_uvs) {
+        uv_map = std::move(uv_map_opt.value());
+    }   
+
+    const size_t vertex_count = CGAL::num_vertices(cgal_mesh);
+    const size_t face_count = CGAL::num_faces(cgal_mesh);
+    mesh.positions.resize(vertex_count);
+    if (has_uvs) {
+        mesh.uvs.resize(vertex_count);
+    }
+    mesh.triangles.reserve(face_count);
+
+    for (const cgal::VertexIndex vertex_index : cgal_mesh.vertices()) {
+        const Point3 &position = cgal_mesh.point(vertex_index);
+        mesh.positions[vertex_index] = to_glm_point(position);
+        if (has_uvs) {
+            const glm::dvec2 &uv = uv_map[vertex_index];
+            mesh.uvs[vertex_index] = uv;
+        }
+    }
+
+    for (const cgal::FaceIndex face_index : cgal_mesh.faces()) {
+        glm::uvec3 triangle;
+        unsigned int i = 0;
+        for (const cgal::VertexIndex vertex_index : CGAL::vertices_around_face(cgal_mesh.halfedge(face_index), cgal_mesh)) {
+            triangle[i] = vertex_index;
+            i++;
+        }
+        mesh.triangles.push_back(triangle);
+    }
+
+    mesh::validate(mesh);
+
+    return mesh;
+}

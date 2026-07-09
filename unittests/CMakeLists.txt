@@ -6,83 +6,85 @@ option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF
 option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
 set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
 
-include(FetchContent)
-FetchContent_Declare(catch2
-    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG v3.3.2
-    SOURCE_DIR 		${CMAKE_SOURCE_DIR}/3rdparty/Catch2
+add_compile_definitions(CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
+if (NOT TARGET Catch2)
+    alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.8.1)
+endif()
+
+
+add_compile_definitions(
+    ATB_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+    ATB_UNITTESTS_AUSTRIA_HIGHRES="${ATB_UNITTESTS_AUSTRIA_HIGHRES}"
 )
-FetchContent_MakeAvailable(catch2)
+
+if (ATB_UNITTESTS_EXTENDED)
+    add_compile_definitions(ATB_UNITTESTS_EXTENDED=true)
+else()
+    add_compile_definitions(ATB_UNITTESTS_EXTENDED=false)
+endif()
+
+if (ATB_UNITTESTS_DEBUG_IMAGES)
+    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=true)
+else()
+    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=false)
+endif()
 
 add_executable(unittests_terrainlib
-    alpine_raster_format.cpp
     catch2_helpers.h
-
-    dataset.cpp
-    dataset_reading.cpp
-    depth_first_tile_traverser.cpp
-    grid.cpp
-    image.cpp
-    main.cpp
-    parallel_tile_generator.cpp
-    parallel_tiler.cpp
-    progress_indicator_test.cpp
-    srs_test.cpp
-    tile_heights_generator.cpp
-    top_down_tiler.cpp
-    algorithms/primitives.cpp
-    algorithms/raster_triangle_scanline.cpp
-    tntn/Delaunay_tests.cpp
-    tntn/File_tests.cpp
-    tntn/geometrix_tests.cpp
-    tntn/Mesh_tests.cpp
-    tntn/ObjPool_tests.cpp
-    tntn/OFFReader_tests.cpp
-
-    tntn/RasterIO_tests.cpp
-    tntn/Raster_tests.cpp
-    tntn/raster_tools_tests.cpp
-    tntn/simple_meshing_tests.cpp
-    tntn/SimpleRange_tests.cpp
-    tntn/SuperTriangle_tests.cpp
-    tntn/SurfacePoints_tests.cpp
-    tntn/terra_meshing_tests.cpp
-    tntn/test_common.cpp
-    tntn/test_common.h
-    tntn/triangle_indices.cpp
-    tntn/triangle_indices_data.cpp
-    tntn/triangle_indices.h
-    tntn/util_tests.cpp
-    tntn/vertex_points.cpp
-    tntn/vertex_points.h)
+    opencv_helpers.h
     
-target_compile_definitions(unittests_terrainlib PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
-target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_AUSTRIA_HIGHRES=\"${ATB_UNITTESTS_AUSTRIA_HIGHRES}\"")
-if (ATB_UNITTESTS_EXTENDED)
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_EXTENDED=true")
-else()
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_EXTENDED=false")
-endif()
-if (ATB_UNITTESTS_DEBUG_IMAGES)
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=true")
-else()
-    target_compile_definitions(unittests_terrainlib PUBLIC "ATB_UNITTESTS_DEBUG_IMAGES=false")
-endif()
-target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2)
+    terrainlib/convert.cpp
+    terrainlib/dataset.cpp
+    terrainlib/grid.cpp
+    terrainlib/index_map.cpp
+    terrainlib/index_traverse.cpp
+    terrainlib/mesh_clip.cpp
+    terrainlib/mesh_connected_components.cpp
+    terrainlib/mesh_holes.cpp
+    terrainlib/mesh_io.cpp
+    terrainlib/mesh_merge_mapping.cpp
+    terrainlib/mesh_merge.cpp
+    terrainlib/mesh_utils.cpp
+    terrainlib/octree_id.cpp
+    terrainlib/octree_space.cpp
+    terrainlib/polygon_triangulate.cpp
+    terrainlib/progress_indicator_test.cpp
+    terrainlib/spatial_lookup.cpp
+)
+target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
 
-add_executable(unittests_terrainmerger
+add_executable(unittests_tilebuilder
     catch2_helpers.h
-    terrainmerger/convert.cpp
-    terrainmerger/merge.cpp)
+    tilebuilder/alpine_raster_format.cpp
+    tilebuilder/dataset_reading.cpp
+    tilebuilder/depth_first_tile_traverser.cpp
+    tilebuilder/image.cpp
+    tilebuilder/parallel_tile_generator.cpp
+    tilebuilder/parallel_tiler.cpp
+    tilebuilder/tile_heights_generator.cpp
+    tilebuilder/top_down_tiler.cpp
+)  
+target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib Catch2::Catch2)
+
+add_executable(unittests_terrainsimplify
+    catch2_helpers.h
+)
+target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
 
 
 add_executable(unittests_terrainbuilder
     catch2_helpers.h
-    terrainbuilder/mesh_io.cpp
     terrainbuilder/mesh.cpp
-    terrainbuilder/texture.cpp)
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainmergerlib terrainlib Catch2::Catch2 CGAL::CGAL)
+    terrainbuilder/texture.cpp
+)
+target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
 target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+
+
+add_executable(unittests_terrainmerger
+    catch2_helpers.h
+    terrainmerger/sphere_projector.cpp
+)
+target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)

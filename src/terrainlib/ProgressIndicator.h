@@ -17,15 +17,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef PROGRESSINDICATOR_H
-#define PROGRESSINDICATOR_H
+#pragma once
 
 #include <atomic>
 #include <cassert>
 #include <string>
 #include <thread>
-
-#include "Exception.h"
 
 class ProgressIndicator {
     const size_t m_n_steps;
@@ -34,10 +31,8 @@ class ProgressIndicator {
 public:
     ProgressIndicator(size_t n_steps);
 
-    void taskFinished();
-    [[nodiscard]] std::jthread startMonitoring() const; // join on the returned thread after the work is done!!
-    [[nodiscard]] std::string progressBar() const;
-    [[nodiscard]] std::string xOfYDoneMessagE() const;
+    void task_finished();
+    [[nodiscard]] std::jthread start_monitoring() const; // join on the returned thread after the work is done!!
+    [[nodiscard]] std::string progress_bar(const uint32_t bar_width=50) const;
+    [[nodiscard]] std::string x_of_y_done_message() const;
 };
-
-#endif // PROGRESSINDICATOR_H

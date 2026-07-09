@@ -1,6 +1,5 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
+ * AlpineMaps.org
  * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
  *
  * This program is free software: you can redistribute it and/or modify
@@ -17,181 +16,294 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef SRS_H
-#define SRS_H
+#pragma once
 
 #include <cstddef>
-#include <glm/detail/qualifier.hpp>
 #include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
+#include <array>
+#include <stdexcept>
 
+#include <fmt/format.h>
+#include <glm/detail/qualifier.hpp>
 #include <glm/glm.hpp>
 #include <ogr_spatialref.h>
-#include <vector>
-
-#include "Exception.h"
-#include "tntn/geometrix.h"
+#include <radix/geometry.h>
+#include <tl/expected.hpp>
 #include <radix/tile.h>
 
 namespace srs {
 
-inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source, const OGRSpatialReference& targetSrs)
-{
-    const auto data_srs = source;
-    auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&data_srs, &targetSrs));
-    if (!transformer)
-        throw Exception("Couldn't create SRS transformation");
+inline std::unique_ptr<OGRSpatialReference> clone(const OGRSpatialReference &srs) {
+    auto cloned = srs.Clone();
+    return std::unique_ptr<OGRSpatialReference>(cloned);
+}
+
+inline std::unique_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs) {
+    auto transformer = std::unique_ptr<OGRCoordinateTransformation>(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
+    if (!transformer) {
+        throw std::runtime_error("Couldn't create SRS transformation");
+    }
     return transformer;
 }
 
-// this transform is non exact, because we are only transforming the corner vertices. however, due to projection warping, a rectangle can become an trapezoid with curved edges.
-inline tile::SrsBounds nonExactBoundsTransform(const tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
-{
-    const auto transform = transformation(sourceSrs, targetSrs);
-    std::array xes = { bounds.min.x, bounds.max.x };
-    std::array yes = { bounds.min.y, bounds.max.y };
-    if (!transform->Transform(2, xes.data(), yes.data()))
-        throw Exception("nonExactBoundsTransform failed");
-    return { {xes[0], yes[0]}, {xes[1], yes[1]} };
-}
-
 template <typename T>
-inline glm::tvec3<T> to(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p)
-{
-    const auto transform = transformation(source_srs, target_srs);
-    if (!transform->Transform(1, &p.x, &p.y, &p.z))
-        throw Exception("srs::to(glm::tvec3<T>) failed");
-    return p;
-}
-
-template <typename T>
-inline glm::tvec2<T> to(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, glm::tvec2<T> p) {
-    const auto transform = transformation(source_srs, target_srs);
+inline glm::tvec2<T> transform_point(OGRCoordinateTransformation *transform, glm::tvec2<T> p) {
     if (!transform->Transform(1, &p.x, &p.y))
-        throw Exception("srs::to(glm::tvec2<T>) failed");
+        throw std::runtime_error("srs::transform_point(glm::tvec2<T>) failed");
+    return p;
+}
+template <typename T>
+inline glm::tvec3<T> transform_point(OGRCoordinateTransformation *transform, glm::tvec3<T> p) {
+    if (!transform->Transform(1, &p.x, &p.y, &p.z))
+        throw std::runtime_error("srs::transform_point(glm::tvec3<T>) failed");
     return p;
 }
 
 template <typename T>
-inline glm::tvec3<T> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p)
-{
-    OGRSpatialReference ecef_srs;
-    ecef_srs.importFromEPSG(4978);
-    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    return to(source_srs, ecef_srs, p);
+inline glm::tvec2<T> transform_point(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, glm::tvec2<T> p) {
+    const auto transform = transformation(source_srs, target_srs);
+    return transform_point(transform.get(), p);
+}
+template <typename T>
+inline glm::tvec3<T> transform_point(const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p){
+    const auto transform = transformation(source_srs, target_srs);
+    return transform_point(transform.get(), p);
 }
 
-template <typename T>
-inline std::vector<glm::tvec3<T>> toECEF(const OGRSpatialReference& source_srs, std::vector<glm::tvec3<T>> points)
-{
-    std::vector<T> xes;
-    std::vector<T> ys;
-    std::vector<T> zs;
-    xes.reserve(points.size());
-    ys.reserve(points.size());
-    zs.reserve(points.size());
+template <typename Container>
+inline void transform_points_inplace(OGRCoordinateTransformation *transform, Container &points) {
+    using PointType = typename Container::value_type;
+    using T = typename PointType::value_type;
+    constexpr bool is_3d = (PointType::length() == 3);
+    constexpr bool is_array = std::is_array_v<Container>;
 
-    for (const auto& p : points) {
-        xes.push_back(p.x);
-        ys.push_back(p.y);
-        zs.push_back(p.z);
+    const size_t size = points.size();
+
+    constexpr std::size_t array_size = is_array ? points.size() : 0;
+    using OutputContainer = std::conditional_t<is_array, std::array<T, array_size>, std::vector<T>>;
+
+    OutputContainer xs, ys;
+    std::conditional_t<is_3d, OutputContainer, int> zs;
+    
+    if constexpr (!is_array) {
+        xs.resize(size);
+        ys.resize(size);
+        if constexpr (PointType::length() == 3) {
+            zs.resize(size);
+        }
     }
 
-    OGRSpatialReference ecef_srs;
-    ecef_srs.importFromEPSG(4978);
-    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    const auto transform = transformation(source_srs, ecef_srs);
-    if (!transform->Transform(int(points.size()), xes.data(), ys.data(), zs.data()))
-        throw Exception("toECEF(glm::tvec3<T>) failed");
-
-    for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = { xes[i], ys[i], zs[i] };
+    for (size_t i = 0; i < size; i++) {
+        xs[i] = points[i].x;
+        ys[i] = points[i].y;
+        if constexpr (is_3d) {
+            zs[i] = points[i].z;
+        }
     }
+
+    bool success;
+    if constexpr (is_3d) {
+        success = transform->Transform(size, xs.data(), ys.data(), zs.data());
+    } else {
+        success = transform->Transform(size, xs.data(), ys.data());
+    }
+
+    if (!success) {
+        throw std::runtime_error("srs::transform_points_inplace failed");
+    }
+
+    for (size_t i = 0; i < size; i++) {
+        if constexpr (is_3d) {
+            points[i] = PointType(xs[i], ys[i], zs[i]);
+        } else {
+            points[i] = PointType(xs[i], ys[i]);
+        }
+    }
+}
+
+template <typename Container>
+inline Container transform_points(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, Container points) {
+    const auto transform = transformation(source_srs, target_srs);
+    transform_points_inplace(transform.get(), points);
     return points;
 }
 
-template <typename T, std::size_t n>
-inline std::array<glm::tvec3<T>, n> toECEF(const OGRSpatialReference& source_srs, std::array<glm::tvec3<T>, n> points)
-{
-    std::array<T, n> xes;
-    std::array<T, n> ys;
-    std::array<T, n> zs;
 
-    for (size_t i = 0; i < points.size(); ++i) {
-        xes[i] = points[i].x;
+// TODO: somehow integrate into a single transform_points
+template <typename T>
+inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransformation *transform, const std::vector<glm::tvec3<T>> &points) {
+    std::vector<T> xs;
+    std::vector<T> ys;
+    std::vector<T> zs;
+
+    xs.resize(points.size());
+    ys.resize(points.size());
+    zs.resize(points.size());
+
+    for (size_t i = 0; i < points.size(); i++) {
+        xs[i] = points[i].x;
         ys[i] = points[i].y;
         zs[i] = points[i].z;
     }
 
-    OGRSpatialReference ecef_srs;
-    ecef_srs.importFromEPSG(4978);
-    ecef_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-    const auto transform = transformation(source_srs, ecef_srs);
-    if (!transform->Transform(points.size(), xes.data(), ys.data(), zs.data()))
-        throw Exception("toECEF(glm::tvec3<T>) failed");
+    if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
+        throw std::runtime_error("srs::transform_points_inplace(std::vector<glm::tvec3<T>, n>) failed");
+    }
 
+    std::vector<glm::tvec2<T>> transformed;
+    transformed.resize(points.size());
     for (size_t i = 0; i < points.size(); ++i) {
-        points[i] = { xes[i], ys[i], zs[i] };
+        transformed[i] = {xs[i], ys[i]};
     }
-    return points;
+
+    return transformed;
 }
 
-template <typename T>
-inline std::array<glm::tvec3<T>, 2> toECEF(const OGRSpatialReference& source_srs, const glm::tvec3<T>& p1, const glm::tvec3<T>& p2)
-{
-    return toECEF<T, 2>(source_srs, { p1, p2 });
-}
-inline tntn::BBox3D toECEF(const OGRSpatialReference& source_srs, const tntn::BBox3D& box)
-{
-    constexpr auto n_samples = 100;
-    std::vector<glm::dvec3> points;
-    points.emplace_back(box.min.x, box.min.y, box.min.z);
-    points.emplace_back(box.min.x, box.min.y, box.max.z);
-    points.emplace_back(box.min.x, box.max.y, box.min.z);
-    points.emplace_back(box.min.x, box.max.y, box.max.z);
-    points.emplace_back(box.max.x, box.min.y, box.min.z);
-    points.emplace_back(box.max.x, box.min.y, box.max.z);
-    points.emplace_back(box.max.x, box.max.y, box.min.z);
-    points.emplace_back(box.max.x, box.max.y, box.max.z);
-
-    const auto dx = (box.max.x - box.min.x) / n_samples;
-    const auto dy = (box.max.y - box.min.y) / n_samples;
-    for (auto i = 0; i < n_samples; ++i) {
-        // top and bottom
-        points.emplace_back(box.min.x + i * dx, box.min.y, box.min.z);
-        points.emplace_back(box.min.x + i * dx, box.min.y, box.max.z);
-        points.emplace_back(box.min.x + i * dx, box.max.y, box.min.z);
-        points.emplace_back(box.min.x + i * dx, box.max.y, box.max.z);
-        // left and right
-        points.emplace_back(box.min.x, box.min.y + i * dy, box.min.z);
-        points.emplace_back(box.min.x, box.min.y + i * dy, box.max.z);
-        points.emplace_back(box.max.x, box.min.y + i * dy, box.min.z);
-        points.emplace_back(box.max.x, box.min.y + i * dy, box.max.z);
+inline radix::tile::SrsBounds non_exact_bounds_transform(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
+    const auto transform = transformation(sourceSrs, targetSrs);
+    std::array xs = {bounds.min.x, bounds.max.x};
+    std::array ys = {bounds.min.y, bounds.max.y};
+    if (!transform->Transform(2, xs.data(), ys.data())) {
+        throw std::runtime_error("srs::non_exact_bounds_transform failed");
     }
-    const auto ecef_points = toECEF(source_srs, points);
-    tntn::BBox3D resulting_bbox;
-    resulting_bbox.add(ecef_points.begin(), ecef_points.end());
-    return resulting_bbox;
+    return {{xs[0], ys[0]}, {xs[1], ys[1]}};
+}
+
+inline radix::geometry::Aabb3d non_exact_bounds_transform(const radix::geometry::Aabb3d &bounds, const OGRSpatialReference &sourceSrs, const OGRSpatialReference &targetSrs) {
+    const auto transform = transformation(sourceSrs, targetSrs);
+    std::array xs = {bounds.min.x, bounds.max.x};
+    std::array ys = {bounds.min.y, bounds.max.y};
+    std::array zs = {bounds.min.z, bounds.max.z};
+    if (!transform->Transform(2, xs.data(), ys.data(), zs.data())) {
+        throw std::runtime_error("srs::non_exact_bounds_transform failed");
+    }
+    return {{xs[0], ys[0], zs[0]}, {xs[1], ys[1], zs[1]}};
 }
 
 /// Transforms bounds from one srs to another,
 /// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
 /// But there can be points inside the new bounds that were not present in the original ones.
-inline tile::SrsBounds encompassing_bounding_box_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const tile::SrsBounds &source_bounds) {
+inline radix::tile::SrsBounds encompassing_bounds_transfer(OGRCoordinateTransformation *transform, const radix::tile::SrsBounds &source_bounds) {
+    radix::tile::SrsBounds target_bounds;
+    const int result = transform->TransformBounds(
+        source_bounds.min.x, source_bounds.min.y, source_bounds.max.x, source_bounds.max.y,
+        &target_bounds.min.x, &target_bounds.min.y, &target_bounds.max.x, &target_bounds.max.y,
+        21);
+    if (result != TRUE) {
+        throw std::runtime_error("srs::encompassing_bounding_box_transfer failed");
+    }
+    return target_bounds;
+}
+inline radix::tile::SrsBounds encompassing_bounds_transfer(const OGRSpatialReference &source_srs, const OGRSpatialReference &target_srs, const radix::tile::SrsBounds &source_bounds) {
     if (source_srs.IsSame(&target_srs)) {
         return source_bounds;
     }
 
     const std::unique_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
-    tile::SrsBounds target_bounds;
-    const int result = transformation->TransformBounds(
-        source_bounds.min.x, source_bounds.min.y, source_bounds.max.x, source_bounds.max.y,
-        &target_bounds.min.x, &target_bounds.min.y, &target_bounds.max.x, &target_bounds.max.y,
-        21);
-    if (result != TRUE) {
-        throw std::runtime_error("encompassing_bounding_box_transfer failed");
-    }
-    return target_bounds;
-}
+    return encompassing_bounds_transfer(transformation.get(), source_bounds);
 }
 
-#endif // SRS_H
+inline radix::geometry::Aabb3d encompassing_bounds_transfer(
+    OGRCoordinateTransformation *transform,
+    const radix::geometry::Aabb3d &source_bounds,
+    const uint32_t intermediate_points_edges = 21,
+    const uint32_t intermediate_points_faces = 5) {
+    std::vector<glm::dvec3> points;
+
+    // Add corner points
+    const auto corners = radix::geometry::corners(source_bounds);
+    std::copy(corners.begin(), corners.end(), std::back_inserter(points));
+
+    // Sample points on the edges
+    const auto edges = radix::geometry::edges(source_bounds);
+    for (const auto &edge : edges) {
+        const auto &[p0, p1] = edge;
+
+        for (uint32_t i = 1; i <= intermediate_points_edges; i++) {
+            const double t = static_cast<double>(i) / (intermediate_points_edges + 1);
+            const auto p = glm::mix(p0, p1, t);
+            points.push_back(p);
+        }
+    }
+
+    // TODO: do we need this?
+    // Sample points on the faces
+    const auto quads = radix::geometry::quads(source_bounds);
+    for (const auto &quad : quads) {
+        const auto &[p0, p1, p2, p3] = quad;
+
+        for (uint32_t i = 1; i <= intermediate_points_faces; i++) {
+            const double u = static_cast<double>(i) / (intermediate_points_faces + 1);
+            const auto edge_p0 = glm::mix(p0, p1, u);
+            const auto edge_p1 = glm::mix(p3, p2, u);
+
+            for (uint32_t j = 1; j <= intermediate_points_faces; j++) {
+                const double v = static_cast<double>(j) / (intermediate_points_faces + 1);
+                const auto point = glm::mix(edge_p0, edge_p1, v);
+                points.push_back(point);
+            }
+        }
+    }
+
+    // Transform all collected points
+    transform_points_inplace(transform, points);
+
+    // Compute bounds from transformed points
+    radix::geometry::Aabb3d target_bounds;
+    target_bounds.min = glm::dvec3(std::numeric_limits<double>::max());
+    target_bounds.max = glm::dvec3(std::numeric_limits<double>::min());
+    for (const auto &point : points) {
+        target_bounds.expand_by(point);
+    }
+
+    return target_bounds;
+}
+inline radix::geometry::Aabb3d encompassing_bounds_transfer(
+    const OGRSpatialReference &source_srs,
+    const OGRSpatialReference &target_srs,
+    const radix::geometry::Aabb3d &source_bounds,
+    const uint32_t intermediate_points_edges = 21,
+    const uint32_t intermediate_points_faces = 5) {
+    if (source_srs.IsSame(&target_srs)) {
+        return source_bounds;
+    }
+
+    const auto transform = srs::transformation(source_srs, target_srs);
+    return encompassing_bounds_transfer(transform.get(), source_bounds, intermediate_points_edges, intermediate_points_faces);
+}
+
+inline tl::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg) {
+    OGRSpatialReference srs;
+    if (srs.importFromEPSG(epsg) != OGRERR_NONE) {
+        return tl::unexpected(fmt::format("Failed to import spatial reference from EPSG code: {}", epsg));
+    }
+    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    return srs;
+}
+
+inline tl::expected<OGRSpatialReference, std::string> from_user_input(const std::string &user_input) {
+    OGRSpatialReference srs;
+    if (srs.SetFromUserInput(user_input.c_str()) != OGRERR_NONE) {
+        return tl::unexpected(fmt::format("Failed to set spatial reference from user input: {}", user_input));
+    }
+    srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    return srs;
+}
+
+inline OGRSpatialReference ecef() {
+    return from_epsg(4978).value();
+}
+inline OGRSpatialReference webmercator() {
+    return from_epsg(3857).value();
+}
+inline OGRSpatialReference wgs84() {
+    return from_epsg(4326).value();
+}
+inline OGRSpatialReference mgi() {
+    return from_epsg(4312).value();
+}
+
+}

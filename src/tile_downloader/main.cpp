@@ -14,6 +14,7 @@
 #include "srs.h"
 
 using namespace std::literals;
+using namespace radix;
 
 static unsigned verbosity = 1;
 
@@ -97,7 +98,8 @@ bool create_directories2(const std::filesystem::path& path) {
 
 class TileUrlBuilder {
 public:
-    virtual std::string build_url(const tile::Id &tile_id) const = 0;
+    virtual ~TileUrlBuilder() = default;
+    virtual std::string build_url(const radix::tile::Id &tile_id) const = 0;
 };
 
 // https://mapsneu.wien.gv.at/basemapneu/1.0.0/WMTSCapabilities.xml
@@ -108,8 +110,8 @@ public:
         this->style = map_get_or_default(args, "style"sv, "normal"sv);
     }
 
-    std::string build_url(const tile::Id &tile_id) const {
-        const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
+    std::string build_url(const radix::tile::Id &tile_id) const {
+        const radix::tile::Id google_tile_id = tile_id.to(radix::tile::Scheme::SlippyMap);
         return fmt::format(
             "https://mapsneu.wien.gv.at/basemap/{}/{}/google3857/{}/{}/{}.jpeg",
             layer, style, google_tile_id.zoom_level, google_tile_id.coords.y, google_tile_id.coords.x);
@@ -123,29 +125,27 @@ private:
 // https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/11/710/1098.jpeg
 class GatakiTileUrlBuilder : public TileUrlBuilder {
 public:
-    GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> &args) {}
+    GatakiTileUrlBuilder(const std::map<std::string_view, std::string_view> & /* args */) {}
 
-    std::string build_url(const tile::Id &tile_id) const {
-        const tile::Id google_tile_id = tile_id.to(tile::Scheme::SlippyMap);
+    std::string build_url(const radix::tile::Id &tile_id) const {
+        const radix::tile::Id google_tile_id = tile_id.to(radix::tile::Scheme::SlippyMap);
         return fmt::format(
             "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{}/{}/{}.jpeg",
             google_tile_id.zoom_level, google_tile_id.coords.y, google_tile_id.coords.x);
     }
-
-private:
 };
 
-static std::string format_tile(const tile::Id tile) {
+static std::string format_tile(const radix::tile::Id tile) {
     return fmt::format("Tile[Zoom={}, X={}, Y={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
 }
 
-void print_tile(const tile::Id tile) {
+void print_tile(const radix::tile::Id tile) {
     std::string tile_str = format_tile(tile);
     fmt::print("{}", tile_str);
     std::fflush(nullptr);
 }
 
-void update_tile_status(const tile::Id tile, const std::string_view status, const bool final) {
+void update_tile_status(const radix::tile::Id tile, const std::string_view status, const bool final) {
     std::string tile_str = format_tile(tile);
     fmt::print("\33[2K\r{} ({}){}", tile_str, status, final ? "\n" : "");
     std::fflush(nullptr);
@@ -179,10 +179,10 @@ size_t write_callback(void *ptr, size_t size, size_t nmemb, void *userdata) {
 }
 
 struct ProgressCallbackData {
-    tile::Id tile;
+    radix::tile::Id tile;
 };
 
-int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+int progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t /* ultotal */, curl_off_t /* ulnow */) {
     ProgressCallbackData &data = *static_cast<ProgressCallbackData *>(clientp);
 
     if (dltotal == 0) {
@@ -226,8 +226,7 @@ enum DownloadResult {
     Failed
 };
 
-class TileDownloader
-{
+class TileDownloader {
 public:
     TileDownloader(TileUrlBuilder *url_builder, const std::map<std::string_view, std::string_view> &args) {
         this->url_builder = url_builder;
@@ -252,7 +251,7 @@ public:
         }
     }
 
-    DownloadResult download_tile_by_url(const tile::Id tile, const std::string &url, const std::filesystem::path &path) const {
+    DownloadResult download_tile_by_url(const radix::tile::Id tile, const std::string &url, const std::filesystem::path &path) const {
         if (verbosity > 0)
             print_tile(tile);
 
@@ -347,13 +346,13 @@ public:
         return DownloadResult::Failed;
     }
 
-    DownloadResult download_tile_by_id(const tile::Id tile) const {
+    DownloadResult download_tile_by_id(const radix::tile::Id tile) const {
         const std::string url = this->url_builder->build_url(tile);
         const std::string path = this->get_tile_path(tile);
         return this->download_tile_by_url(tile, url, path);
     }
 
-    DownloadResult download_tile_by_id_recursive(const tile::Id root_id) const {
+    DownloadResult download_tile_by_id_recursive(const radix::tile::Id root_id) const {
         const std::string url = this->url_builder->build_url(root_id);
         const DownloadResult result = this->download_tile_by_id(root_id);
 
@@ -361,13 +360,13 @@ public:
             return result;
         }
 
-        const std::array<tile::Id, 4> subtiles = root_id.children();
+        const std::array<radix::tile::Id, 4> subtiles = root_id.children();
 
         for (size_t i = 0; i < subtiles.size(); i++) {
-            const tile::Id &tile = subtiles[i];
+            const radix::tile::Id &tile = subtiles[i];
 
             if (early_skip && i + 1 < subtiles.size()) {
-                const tile::Id &next_tile = subtiles[i + 1];
+                const radix::tile::Id &next_tile = subtiles[i + 1];
                 const std::string next_tile_path = this->get_tile_path(next_tile);
                 if (std::filesystem::exists(next_tile_path)) {
                     print_tile(tile);
@@ -393,9 +392,9 @@ private:
     std::string_view file_name_template;
     CURL *curl;
     bool early_skip;
-    std::optional<int> max_zoom_level;
+    std::optional<unsigned int> max_zoom_level;
 
-    std::string get_tile_path(const tile::Id tile) const {
+    std::string get_tile_path(const radix::tile::Id tile) const {
         std::string file_path(this->output_path);
         string_replace_all(file_path, "{zoom}"sv, std::to_string(tile.zoom_level));
         string_replace_all(file_path, "{x}"sv, std::to_string(tile.coords.x));
@@ -448,11 +447,11 @@ int main(int argc, char *argv[]) {
     // Parse spatial reference system and scheme
     const unsigned int srs = svtoui(map_get_or_default(arg_map, "srs"sv, "3857"sv));
     const std::string_view scheme_str = map_get_or_default(arg_map, "scheme"sv, "SlippyMap"sv);
-    tile::Scheme scheme;
+    radix::tile::Scheme scheme;
     if (string_equals_ignore_case(scheme_str, "SlippyMap") || string_equals_ignore_case(scheme_str, "Google") || string_equals_ignore_case(scheme_str, "XYZ")) {
-        scheme = tile::Scheme::SlippyMap;
+        scheme = radix::tile::Scheme::SlippyMap;
     } else if (string_equals_ignore_case(scheme_str, "TMS")) {
-        scheme = tile::Scheme::Tms;
+        scheme = radix::tile::Scheme::Tms;
     } else {
         throw std::runtime_error(fmt::format("unsupported srs scheme \"{}\"", scheme_str));
     }
@@ -469,7 +468,7 @@ int main(int argc, char *argv[]) {
     const unsigned int zoom = svtoui(map_get_required(arg_map, "zoom"));
     const unsigned int x = svtoui(map_get_required(arg_map, "x"));
     const unsigned int y = svtoui(map_get_required(arg_map, "y"));
-    const tile::Id root_id = {zoom, {x, y}, scheme};
+    const radix::tile::Id root_id = {zoom, {x, y}, scheme};
 
     // Download tile and subtiles recursively.
     TileDownloader downloader(url_builder.get(), arg_map);

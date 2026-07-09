@@ -38,10 +38,10 @@ class ctb::GlobalMercator : public Grid {
 public:
     GlobalMercator(i_tile tileSize = 256)
         : Grid(tileSize,
-               tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
+               radix::tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
                cSRS,
                3857,
-               std::vector<tile::Id>{tile::Id{0, {0, 0}, tile::Scheme::Tms}},
+               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}, radix::tile::Scheme::Tms}},
                2) {
     }
 

@@ -83,4 +83,5 @@ In order to build, you need to install:
 - FreeImage
 - tbb (intel threading building blocks)
 
-sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
+sudo apt-get install libcgal-dev libopencv-dev libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev libcurl4-openssl-dev 
+(libgmp-dev libmpfr-dev libsqlite3-dev)

@@ -1,262 +1,334 @@
 cmake_minimum_required(VERSION 3.19)
 project(terrain_builder_src LANGUAGES C CXX)
 
-option(ALP_AUTOUPDATE_RADIX "Keeps whack up-to-date with origin/main, but prevents local edits. Change to OFF if you want to edit radix" ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+# TODO: This is needed to avoid NDEBUG being undefined on Release
+if (CMAKE_BUILD_TYPE MATCHES Release)
+    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+endif()
+
 option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-find_package(GDAL REQUIRED)
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
-find_package(OpenCV REQUIRED)
-find_package(CGAL REQUIRED)
-find_package(Eigen3 REQUIRED NO_MODULE)
 find_package(CURL REQUIRED)
 
-if(NOT GDAL_CONFIG)
-    message(FATAL_ERROR "gdal-config command not found (not in PATH?), cannot proceed")
-endif()
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
+alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
 
-execute_process(
-    COMMAND ${GDAL_CONFIG} --version
-    OUTPUT_VARIABLE SYSTEM_GDAL_VERSION
+alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
+add_library(Eigen3 INTERFACE)
+target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
+
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
+find_package(Boost CONFIG REQUIRED)
+
+include(../cmake/SetupGDAL.cmake)
+alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
+
+alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
+find_package(CGAL REQUIRED)
+
+include(../cmake/SetupOpenCV.cmake)
+alp_setup_opencv(4.11.0)
+
+alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
+add_library(cgltf INTERFACE)
+target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+
+set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
+set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
+set(TINYGLTF_BUILD_LOADER_EXAMPLE OFF CACHE INTERNAL "" FORCE)
+alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 4fea26f6c8652f545560807bccc934cf0cdd86dd)
+
+alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
+add_library(stb INTERFACE)
+target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+
+alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
+add_library(tl_expected INTERFACE)
+target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
+
+set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
+alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
+
+alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
+add_library(zpp_bits INTERFACE)
+target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
+
+alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
+
+alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
+
+alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
+
+alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
+# alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
+add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
+target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
+
+# Don't build glfw docs, tests and examples
+set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+if (UNIX)
+	# Enable Wayland and X11 on Unix builds
+	set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
+	set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
+endif (UNIX)
+alp_add_git_repository(glfw URL https://github.com/glfw/glfw.git COMMITISH e7ea71be039836da3a98cea55ae5569cb5eb885c NOT_SYSTEM)
+
+alp_add_git_repository(glad URL https://github.com/Dav1dde/glad.git COMMITISH 431786d8126e4f383a81e36f47b61a5d52a1c20d DO_NOT_ADD_SUBPROJECT)
+add_subdirectory("${glad_SOURCE_DIR}/cmake" glad_cmake)
+glad_add_library(glad_gl_core_46 REPRODUCIBLE API gl:core=4.6)
+
+alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237 NOT_SYSTEM)
+add_subdirectory(browser/res resources-lib)
+
+alp_add_git_repository(imgui URL https://github.com/ocornut/imgui.git COMMITISH 5f0acadf7db1b6d469f0771284e2e3f7818443ce DO_NOT_ADD_SUBPROJECT)
+add_library(imgui STATIC
+   ${imgui_SOURCE_DIR}/imgui.cpp
+   ${imgui_SOURCE_DIR}/imgui_draw.cpp
+   ${imgui_SOURCE_DIR}/imgui_tables.cpp
+   ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+   ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+   ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
 )
-
-if(SYSTEM_GDAL_VERSION VERSION_LESS "3.3")
-    message(FATAL_ERROR "GDAL version \"${SYSTEM_GDAL_VERSION}\" is too old, at least 3.2 is required")
-endif()
-
-include(FetchContent)
-
-if(NOT TARGET fmt::fmt)
-    FetchContent_Declare(fmt
-        GIT_REPOSITORY https://github.com/fmtlib/fmt
-        GIT_TAG 10.2.1
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/fmt
-    )
-    FetchContent_MakeAvailable(fmt)
-endif()
-
-if(ALP_AUTOUPDATE_RADIX)
-    FetchContent_Declare(radix
-        GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-        GIT_TAG origin/main
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        SOURCE_SUBDIR src
-    )
-    FetchContent_MakeAvailable(radix)
-else()
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/radix)
-        FetchContent_Declare(radix
-            GIT_REPOSITORY https://github.com/AlpineMapsOrg/radix.git
-            GIT_TAG 7ace0d0cab1a6166c196bba5d0f11bbf07381abd
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/radix
-        )
-        FetchContent_MakeAvailable(radix)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/radix ${CMAKE_BINARY_DIR}/_deps/radix-build)
-    endif()
-endif()
-
-if(NOT TARGET cgltf)
-    FetchContent_Declare(cgltf
-        GIT_REPOSITORY https://github.com/jkuhlmann/cgltf
-        GIT_TAG 7331a5adf4b0fde15f0e682a5803e4f17137e0ad
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cgltf
-    )
-    FetchContent_MakeAvailable(cgltf)
-    add_library(cgltf INTERFACE)
-    target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
-endif()
-
-if(NOT TARGET tinygltf)
-    set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
-    set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
-    FetchContent_Declare(tinygltf
-        GIT_REPOSITORY https://github.com/syoyo/tinygltf
-        GIT_TAG 4fea26f6c8652f545560807bccc934cf0cdd86dd
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/tinygltf
-    )
-    FetchContent_MakeAvailable(tinygltf)
-endif()
-
-if(NOT TARGET stb)
-    FetchContent_Declare(stb
-        GIT_REPOSITORY https://github.com/nothings/stb
-        GIT_TAG f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/stb
-    )
-    FetchContent_MakeAvailable(stb)
-    add_library(stb INTERFACE)
-    target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
-endif()
-
-if(NOT TARGET cli11)
-    if(NOT EXISTS ${CMAKE_SOURCE_DIR}/3rdparty/cli11)
-        FetchContent_Declare(cli11
-            GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-            GIT_TAG 20de8b73bbbabaf2f94dd07c4ece8ff3590af531
-            SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/cli11
-        )
-        FetchContent_MakeAvailable(cli11)
-    else()
-        add_subdirectory(${CMAKE_SOURCE_DIR}/3rdparty/cli11 ${CMAKE_BINARY_DIR}/_deps/cli11-build)
-    endif()
-endif()
-
-if(NOT TARGET expected)
-    FetchContent_Declare(expected
-        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-        GIT_TAG 3f0ca7b19253129700a073abfa6d8638d9f7c80c
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/expected
-    )
-    FetchContent_MakeAvailable(expected)
-endif()
-
-if(NOT TARGET spdlog)
-    set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
-    FetchContent_Declare(spdlog
-        GIT_REPOSITORY https://github.com/gabime/spdlog.git
-        GIT_TAG v1.13.0
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/spdlog
-    )
-    FetchContent_MakeAvailable(spdlog)
-    add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
-endif()
-
-if(NOT TARGET zpp_bits)
-    FetchContent_Declare(zpp_bits
-        GIT_REPOSITORY https://github.com/eyalz800/zpp_bits.git
-        GIT_TAG v4.4.20
-        SOURCE_DIR ${CMAKE_SOURCE_DIR}/3rdparty/zpp_bits
-    )
-    FetchContent_MakeAvailable(zpp_bits)
-    add_library(zpp_bits INTERFACE)
-    target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
-endif()
+target_include_directories(imgui PUBLIC
+   ${imgui_SOURCE_DIR}
+   ${imgui_SOURCE_DIR}/backends
+)
+target_link_libraries(imgui PUBLIC glfw)
 
 add_library(terrainlib
-    terrainlib/alpine_raster.h terrainlib/alpine_raster.cpp
-
-    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
-    terrainlib/mesh/raw_gltf.h terrainlib/mesh/raw_gltf.cpp
-    terrainlib/mesh/terrain_mesh.h terrainlib/mesh/terrain_mesh.cpp
-    terrainlib/mesh/non_copyable.h
-    terrainlib/log.h
-    terrainlib/log.cpp
-
-    terrainlib/Dataset.h terrainlib/Dataset.cpp
-    terrainlib/DatasetReader.h terrainlib/DatasetReader.cpp
-    terrainlib/depth_first_tile_traverser.h
-    terrainlib/Exception.h
-    terrainlib/Image.h terrainlib/Image.cpp
-    terrainlib/ParallelTileGenerator.h terrainlib/ParallelTileGenerator.cpp
-    terrainlib/ParallelTiler.h terrainlib/ParallelTiler.cpp
-    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
-    terrainlib/srs.h
-    terrainlib/TileHeightsGenerator.h terrainlib/TileHeightsGenerator.cpp
-    terrainlib/Tiler.h terrainlib/Tiler.cpp
-    terrainlib/TopDownTiler.h terrainlib/TopDownTiler.cpp
-    terrainlib/algorithms/primitives.h
-    terrainlib/algorithms/raster_triangle_scanline.h
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
     terrainlib/ctb/GlobalMercator.hpp terrainlib/ctb/GlobalMercator.cpp
     terrainlib/ctb/Grid.hpp
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
-    terrainlib/tntn/BinaryIO.h terrainlib/tntn/BinaryIO.cpp
-    terrainlib/tntn/Delaunator.h terrainlib/tntn/Delaunator.cpp
-    terrainlib/tntn/DelaunayMesh.h terrainlib/tntn/DelaunayMesh.cpp
-    terrainlib/tntn/DelaunayTriangle.h terrainlib/tntn/DelaunayTriangle.cpp
-    terrainlib/tntn/endianness.h
-    terrainlib/tntn/FileFormat.h
-    terrainlib/tntn/File.h terrainlib/tntn/File.cpp
-    terrainlib/tntn/gdal_init.h terrainlib/tntn/gdal_init.cpp
-    terrainlib/tntn/geometrix.h terrainlib/tntn/geometrix.cpp
-    terrainlib/tntn/logging.h terrainlib/tntn/logging.cpp
-    terrainlib/tntn/Mesh2Raster.h terrainlib/tntn/Mesh2Raster.cpp
-    terrainlib/tntn/Mesh.h terrainlib/tntn/Mesh.cpp
-    terrainlib/tntn/MeshIO.h terrainlib/tntn/MeshIO.cpp
-    terrainlib/tntn/MeshMode.h
-    terrainlib/tntn/MeshWriter.h terrainlib/tntn/MeshWriter.cpp
-    terrainlib/tntn/ObjPool.h
-    terrainlib/tntn/OFFReader.h terrainlib/tntn/OFFReader.cpp
-    terrainlib/tntn/Points2Mesh.h terrainlib/tntn/Points2Mesh.cpp
-    terrainlib/tntn/QuadEdge.h terrainlib/tntn/QuadEdge.cpp
-    terrainlib/tntn/QuantizedMeshIO.h terrainlib/tntn/QuantizedMeshIO.cpp
-    terrainlib/tntn/Raster.h
-    terrainlib/tntn/RasterIO.h terrainlib/tntn/RasterIO.cpp
-    terrainlib/tntn/raster_tools.h terrainlib/tntn/raster_tools.cpp
-    terrainlib/tntn/simple_meshing.h terrainlib/tntn/simple_meshing.cpp
-    terrainlib/tntn/SuperTriangle.h terrainlib/tntn/SuperTriangle.cpp
-    terrainlib/tntn/SurfacePoints.h terrainlib/tntn/SurfacePoints.cpp
-    terrainlib/tntn/TerraMesh.h terrainlib/tntn/TerraMesh.cpp
-    terrainlib/tntn/terra_meshing.h terrainlib/tntn/terra_meshing.cpp
-    terrainlib/tntn/TerraUtils.h terrainlib/tntn/TerraUtils.cpp
-    terrainlib/tntn/tntn_assert.h
-    terrainlib/tntn/util.h terrainlib/tntn/util.cpp
-    terrainlib/tntn/ZemlyaMesh.h terrainlib/tntn/ZemlyaMesh.cpp
-    terrainlib/tntn/zemlya_meshing.h terrainlib/tntn/zemlya_meshing.cpp
-    terrainlib/tntn/ZoomRange.h
+
+    terrainlib/io/bytes.h terrainlib/io/bytes.cpp
+    terrainlib/io/Error.h
+    terrainlib/io/serialize.h
+    terrainlib/io/utils.h terrainlib/io/utils.cpp
+
+    terrainlib/mesh/io/error.h
+    terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
+    terrainlib/mesh/io/options.h
+    terrainlib/mesh/io/terrain.h terrainlib/mesh/io/terrain.cpp
+    terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
+    terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
+
+    terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
+    terrainlib/mesh/cgal.h
+    terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
+    terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
+    terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
+    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
+    terrainlib/mesh/merge.h
+    terrainlib/mesh/merging/VertexDeduplicate.h
+    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
+    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
+    terrainlib/mesh/merging/VertexMapping.h
+    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
+    terrainlib/mesh/SimpleMesh.h
+    terrainlib/mesh/TriangleSoup.h
+    terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
+    terrainlib/mesh/uv_map.h terrainlib/mesh/uv_map.cpp
+    terrainlib/mesh/validate.h
+
+    terrainlib/octree/disk/layout/strategy/Default.h
+    terrainlib/octree/disk/layout/strategy/Flat.h
+    terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
+    terrainlib/octree/disk/layout/Strategy.h
+    terrainlib/octree/disk/layout/StrategyRegister.h
+    terrainlib/octree/disk/IndexFile.h
+    terrainlib/octree/disk/Layout.h
+    terrainlib/octree/storage/cache/Dummy.h
+    terrainlib/octree/storage/cache/ICache.h
+    terrainlib/octree/storage/cache/LruCache.h
+    terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
+    terrainlib/octree/storage/IndexedStorage.h
+    terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
+    terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
+    terrainlib/octree/storage/Storage.h
+    terrainlib/octree/Id.h
+    terrainlib/octree/Storage.h
+    terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
+    terrainlib/octree/NodeStatus.h
+    terrainlib/octree/Space.h terrainlib/octree/Space.cpp
+    terrainlib/octree/traverse.h
+    terrainlib/octree/utils.h
+
+    terrainlib/polygon/Polygon.h 
+    terrainlib/polygon/triangulate.h terrainlib/polygon/triangulate.cpp 
+    terrainlib/polygon/utils.h terrainlib/polygon/utils.cpp 
+
+    terrainlib/spatial_lookup/CellBased.h
+    terrainlib/spatial_lookup/CellBasedStorage.h
+    terrainlib/spatial_lookup/Grid.h
+    terrainlib/spatial_lookup/GridStorage.h
+    terrainlib/spatial_lookup/Hashmap.h
+    terrainlib/spatial_lookup/HashmapStorage.h
+    terrainlib/spatial_lookup/NDLoopHelper.h
+    terrainlib/spatial_lookup/SpatialLookup.h
+
+    terrainlib/Dataset.h terrainlib/Dataset.cpp
+    terrainlib/hash_utils.h
+    terrainlib/init.h terrainlib/init.cpp
+    terrainlib/log.h terrainlib/log.cpp
+    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
+    terrainlib/SphereProjector.h
+    terrainlib/srs.h
+    terrainlib/string_utils.h
 )
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB GDAL::GDAL spdlog fmt zpp_bits freeimage cgltf TBB::tbb expected ${OpenCV_LIBS})
-target_include_directories(terrainlib PUBLIC terrainlib ${OpenCV_INCLUDE_DIRS})
+target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
+target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
+
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
 endif()
 
-add_library(terrainbuilderlib
-    terrainbuilder/tile_provider.h
-    terrainbuilder/mesh_builder.h
-    terrainbuilder/mesh_builder.cpp
-    terrainbuilder/raw_dataset_reader.h
-    terrainbuilder/texture_assembler.h
-    terrainbuilder/border.h
-    terrainbuilder/terrainbuilder.h
-    terrainbuilder/terrainbuilder.cpp
-)
-target_include_directories(terrainbuilderlib PUBLIC terrainbuilder terrainlib)
-target_link_libraries(terrainbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 expected)
-add_executable(terrainbuilder
-    terrainbuilder/main.cpp
-)
-target_include_directories(terrainbuilder PUBLIC terrainbuilder)
-target_link_libraries(terrainbuilder PUBLIC terrainbuilderlib)
 
-add_library(terrainmergerlib
-    terrainmerger/cli.h
-    terrainmerger/cli.cpp
-    terrainmerger/merge.h
-    terrainmerger/merge.cpp
-    terrainmerger/simplify.h
-    terrainmerger/simplify.cpp
-    terrainmerger/uv_map.h
-    terrainmerger/uv_map.cpp
-    terrainmerger/cgal.h
-    terrainmerger/convert.h
-    terrainmerger/convert.cpp
-    terrainmerger/validate.h
+add_library(tilebuilderlib
+    tile_builder/alpine_raster.h tile_builder/alpine_raster.cpp
+    tile_builder/DatasetReader.h tile_builder/DatasetReader.cpp
+    tile_builder/depth_first_tile_traverser.h
+    tile_builder/Exception.h
+    tile_builder/Image.h tile_builder/Image.cpp
+    tile_builder/ParallelTileGenerator.h tile_builder/ParallelTileGenerator.cpp
+    tile_builder/ParallelTiler.h tile_builder/ParallelTiler.cpp
+    tile_builder/srs.h
+    tile_builder/TileHeightsGenerator.h tile_builder/TileHeightsGenerator.cpp
+    tile_builder/Tiler.h tile_builder/Tiler.cpp
+    tile_builder/TopDownTiler.h tile_builder/TopDownTiler.cpp
+    tile_builder/algorithms/primitives.h
+    tile_builder/algorithms/raster_triangle_scanline.h
 )
-target_precompile_headers(terrainmergerlib PRIVATE terrainmerger/pch.h)
-target_include_directories(terrainmergerlib PUBLIC terrainmerger terrainlib)
-target_link_libraries(terrainmergerlib PUBLIC terrainlib radix CLI11::CLI11 Eigen3::Eigen CGAL::CGAL)
-add_executable(terrainmerger
-    terrainmerger/main.cpp
+target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tile_builder)
+target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
+add_executable(tile-builder
+    tile_builder/main.cpp
 )
-target_include_directories(terrainmerger PUBLIC terrainmerger)
-target_link_libraries(terrainmerger PUBLIC terrainmergerlib)
+target_link_libraries(tile-builder PUBLIC tilebuilderlib)
+
+
+add_library(sfmergerlib
+    sf_merger/atlas/build.h
+    sf_merger/atlas/HorizontalStripLayoutPlanner.h
+    sf_merger/atlas/Layout.h
+    sf_merger/atlas/LayoutPlanner.h
+    sf_merger/atlas/Sheet.h
+
+    sf_merger/merge/visitor/Masked.h
+    sf_merger/merge/visitor/Simple.h
+    sf_merger/merge/visitor/Visitor.h
+    sf_merger/merge/NodeData.h
+    sf_merger/merge/Result.h
+
+    sf_merger/cut.h
+    sf_merger/earth.h
+    sf_merger/mask.h
+    sf_merger/merge.h
+    sf_merger/NodeLoader.h
+    sf_merger/NodeWriter.h
+    sf_merger/SimpleMutex.h
+    sf_merger/utils.h
+)
+target_include_directories(sfmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sf_merger)
+target_link_libraries(sfmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(sf-merger
+    sf_merger/main.cpp
+    sf_merger/cli.h sf_merger/cli.cpp
+)
+target_link_libraries(sf-merger PUBLIC sfmergerlib)
+
+
+add_library(meshbuilderlib
+    mesh_builder/tile_provider.h
+    mesh_builder/mesh_builder.h
+    mesh_builder/mesh_builder.cpp
+    mesh_builder/raw_dataset_reader.h
+    mesh_builder/texture_assembler.h
+    mesh_builder/border.h
+    mesh_builder/raster.h
+    mesh_builder/mesh_builder.h
+    mesh_builder/mesh_builder.cpp
+)
+target_include_directories(meshbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_builder)
+target_link_libraries(meshbuilderlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
+add_executable(mesh-builder
+    mesh_builder/main.cpp
+)
+target_link_libraries(mesh-builder PUBLIC meshbuilderlib)
+
+
+add_library(meshsimplifylib
+    mesh_simplify/cli.h
+    mesh_simplify/cli.cpp
+    mesh_simplify/simplify.h
+    mesh_simplify/simplify.cpp
+    mesh_simplify/uv_map.h
+    mesh_simplify/uv_map.cpp
+)
+target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
+target_precompile_headers(meshsimplifylib PRIVATE mesh_simplify/pch.h)
+target_link_libraries(meshsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
+add_executable(mesh-simplify
+    mesh_simplify/main.cpp
+)
+target_link_libraries(mesh-simplify PUBLIC meshsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
-target_include_directories(tile-downloader PUBLIC ${CURL_INCLUDE_DIR})
 
-add_executable(terrainconvert
-    terrainconvert/cli.h
-    terrainconvert/cli.cpp
-    terrainconvert/main.cpp
+add_executable(mesh-convert
+    mesh_convert/cli.h mesh_convert/cli.cpp
+    mesh_convert/main.cpp
 )
-target_include_directories(terrainconvert PUBLIC terrainlib)
-target_link_libraries(terrainconvert PUBLIC terrainlib CLI11::CLI11)
+target_link_libraries(mesh-convert PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(index-browser
+    index_browser/cli.h index_browser/cli.cpp
+    index_browser/main.cpp
+)
+add_executable(mesh_merger
+    mesh_merger/cli.h mesh_merger/cli.cpp
+    mesh_merger/main.cpp
+)
+target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
+target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
+
+add_executable(browser
+    # browser/main2.cpp
+
+    browser/main.cpp
+
+    browser/core/Application.cpp
+    browser/core/window/Window.cpp
+    browser/core/shader/Shader.cpp
+    browser/core/shader/ShaderProgram.cpp
+    browser/core/shader/Uniform.h
+    browser/core/shader/GLUniformAbstractions.h
+    browser/core/Buffer.cpp
+    browser/core/Camera.cpp
+
+    browser/core/geometry/UnitCube.h
+
+    browser/core/rendering/OctreeRenderManager.cpp
+)
+
+#target_compile_features(browser PRIVATE cxx_std_20)
+#target_compile_options(browser PRIVATE /utf-8)
+target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
+target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)
+

@@ -22,28 +22,28 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <cmath>
 
 #include <fmt/core.h>
+#include <libassert/assert.hpp>
 
 using namespace std::literals;
 
 ProgressIndicator::ProgressIndicator(size_t n_steps)
-    : m_n_steps(n_steps)
-{
+    : m_n_steps(n_steps) {
 }
 
-void ProgressIndicator::taskFinished()
-{
+void ProgressIndicator::task_finished() {
     ++m_step;
-    if (m_step > m_n_steps)
-        throw Exception("Too many steps reported.");
+    if (m_step > m_n_steps) {
+        throw std::runtime_error("Too many steps reported.");
+    }
 }
 
-std::jthread ProgressIndicator::startMonitoring() const
-{
+std::jthread ProgressIndicator::start_monitoring() const {
     const auto print = [this](size_t delta_v, std::chrono::milliseconds delta_t) {
         const auto delta_t_in_secs = std::chrono::duration_cast<std::chrono::duration<float>>(delta_t).count();
-        const auto print_out = fmt::format("{}  {}, {} tiles per second", this->progressBar(), this->xOfYDoneMessagE(), float(delta_v) / delta_t_in_secs);
+        const auto print_out = fmt::format("{}  {}, {}/s", this->progress_bar(), this->x_of_y_done_message(), float(delta_v) / delta_t_in_secs);
         std::cout << '\r' << print_out;
         std::cout.flush();
     };
@@ -66,16 +66,28 @@ std::jthread ProgressIndicator::startMonitoring() const
     return thread;
 }
 
-std::string ProgressIndicator::progressBar() const
-{
-    const auto progress = unsigned(100.0 * (double(m_step) / double(m_n_steps)) + 0.5);
-    assert(progress >= 0);
-    assert(progress <= 100);
+std::string ProgressIndicator::progress_bar(const uint32_t bar_width) const {
+    DEBUG_ASSERT(bar_width >= 2);
+    const auto inner_bar_width = bar_width - 2;
+    const auto step = m_step.load();
+    const auto progress = step > 0 ? inner_bar_width * step / m_n_steps : 0;
+    DEBUG_ASSERT(progress <= bar_width);
 
-    return std::string(progress, '|') + std::string(100 - progress, '-');
+    std::ostringstream oss;
+    oss << "[";
+    for (uint32_t i = 0; i < inner_bar_width; i++) {
+        if (i < progress || step == m_n_steps) {
+            oss << "=";
+        } else if (i == progress && step != 0) {
+            oss << ">";
+        } else {
+            oss << " ";
+        }
+    }
+    oss << "]";
+    return oss.str();
 }
 
-std::string ProgressIndicator::xOfYDoneMessagE() const
-{
+std::string ProgressIndicator::x_of_y_done_message() const {
     return fmt::format("{}/{}", m_step.load(), m_n_steps);
 }

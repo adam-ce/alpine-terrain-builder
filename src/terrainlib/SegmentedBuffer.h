@@ -146,29 +146,29 @@ public:
     }
 
     // Returns a readonly view of one segment of the buffer.
-    std::span<const value_type> segment(const segment_index segment_index) const noexcept {
+    std::span<const value_type> segment(const segment_index segment_index) const & noexcept {
         return this->get_segment_impl(*this, segment_index);
     }
     // Returns a view of one segment of the buffer.
-    std::span<value_type> segment(const segment_index segment_index) noexcept {
+    std::span<value_type> segment(const segment_index segment_index) & noexcept {
         return this->get_segment_impl(*this, segment_index);
     }
 
     // Returns a readonly view of the last segment of the buffer.
-    std::span<const value_type> last_segment() const noexcept {
+    std::span<const value_type> last_segment() const & noexcept {
         return this->segment(this->segment_count() - 1);
     }
     // Returns a view of the last segment of the buffer.
-    std::span<value_type> last_segment() noexcept {
+    std::span<value_type> last_segment() & noexcept {
         return this->segment(this->segment_count() - 1);
     }
 
     // Returns a readonly flat view of the buffer.
-    std::span<const value_type> flat() const noexcept {
+    std::span<const value_type> flat() const & noexcept {
         return this->_data;
     }
     // Returns a flat view of the buffer.
-    std::span<value_type> flat() noexcept {
+    std::span<value_type> flat() & noexcept {
         return this->_data;
     }
 

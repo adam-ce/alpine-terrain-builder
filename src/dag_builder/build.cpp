@@ -312,7 +312,7 @@ std::vector<octree::Id> find_relevant_input_nodes(
     } else if (include_mode == IncludeMode::CurrentAndCoarser) {
         // Include inputs at same or coarser levels whose bounds intersect target_id in the shifted tree.
         const radix::geometry::Aabb3d target_bounds = shifted_space.get_node_bounds(target_id);
-        for (uint32_t level = target_id.level(); level < input_by_level.size(); level++) {
+        for (uint32_t level = 0; level <= target_id.level(); level++) {
             const std::vector<octree::Id> &input_nodes = input_by_level[level];
             for (const octree::Id& input_id : input_nodes) {
                 const radix::geometry::Aabb3d input_bounds = space.get_node_bounds(input_id);

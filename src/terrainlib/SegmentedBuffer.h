@@ -18,7 +18,7 @@ public:
     using value_type = TValue;
     using index_type = TValueIndex;
     using segment_index = TSegmentIndex;
-    using offset_range = typename OffsetTable<index_type>::range_type;
+    using offset_range = typename OffsetTable_<index_type>::range_type;
 
     SegmentedBuffer() {
         this->reset();
@@ -61,7 +61,7 @@ public:
         }
 
         const segment_index last_segment = this->segment_count() - 1;
-        const index_type new_end = this->_offsets.range(last_segment).begin + size;
+        const index_type new_end = this->_offsets.segment_range(last_segment).begin + size;
         this->_offsets.set_end(last_segment, new_end);
         this->_data.resize(new_end, value);
     }
@@ -88,7 +88,7 @@ public:
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(const value_type &value) {
         const segment_index last_segment = this->segment_count() - 1;
-        const offset_range range = this->_offsets.range(last_segment);
+        const offset_range range = this->_offsets.segment_range(last_segment);
 
         this->_data.push_back(value);
         this->_offsets.set_end(last_segment, range.end + 1);
@@ -97,7 +97,7 @@ public:
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(value_type &&value) {
         const segment_index last_segment = this->segment_count() - 1;
-        const offset_range range = this->_offsets.range(last_segment);
+        const offset_range range = this->_offsets.segment_range(last_segment);
 
         this->_data.push_back(std::forward<value_type>(value));
         this->_offsets.set_end(last_segment, range.end + 1);
@@ -112,6 +112,12 @@ public:
         const segment_index last_segment = this->segment_count() - 1;
         this->_offsets.set_end(last_segment, this->total_size());
         this->_offsets.append_length(0);
+    }
+
+    // Removes all empty segments while preserving the order of non-empty segments.
+    // If all segments are empty, the buffer is reset to one empty segment.
+    void remove_empty_segments() {
+        this->_offsets.remove_empty_segments();
     }
 
     // Accesses an element using segment-relative indexing.
@@ -131,7 +137,7 @@ public:
 
     // Returns the number of elements contained within a specific segment.
     index_type segment_size(const segment_index segment_index) const noexcept {
-        return this->_offsets.element_size(segment_index);
+        return this->_offsets.segment_size(segment_index);
     }
 
     // Returns the total number of elements across all segments.
@@ -166,6 +172,13 @@ public:
         return this->_data;
     }
 
+    auto segments() const & noexcept {
+        return this->segments_impl(*this);
+    }
+    auto segments() & noexcept {
+        return this->segments_impl(*this);
+    }
+
     std::vector<value_type>& backing() noexcept {
         return this->_data;
     }
@@ -178,7 +191,7 @@ private:
     static inline auto &get_impl(Self &self, const segment_index segment_index, const index_type element_index) {
         DEBUG_ASSERT(segment_index < self._offsets.size());
 
-        const offset_range range = self._offsets.range(segment_index);
+        const offset_range range = self._offsets.segment_range(segment_index);
         const index_type flat_index = range.begin + element_index;
 
         DEBUG_ASSERT(flat_index < range.end);
@@ -189,13 +202,21 @@ private:
     static inline auto get_segment_impl(Self &self, const segment_index segment_index) {
         DEBUG_ASSERT(segment_index < self._offsets.size());
 
-        const offset_range range = self._offsets.range(segment_index);
+        const offset_range range = self._offsets.segment_range(segment_index);
         const index_type length = range.end - range.begin;
         return std::span(self._data.data() + range.begin, length);
     }
 
+    template <typename Self>
+    static auto segments_impl(Self &self) noexcept {
+        return std::views::iota(segment_index{0}, self.segment_count()) 
+             | std::views::transform([&self](const segment_index i) noexcept {
+                   return self.segment(i);
+               });
+    }
+
     // Manages the boundaries of each segment.
-    OffsetTable<index_type> _offsets;
+    OffsetTable_<index_type> _offsets;
 
     // The contiguous backing storage for all segments.
     std::vector<value_type> _data;

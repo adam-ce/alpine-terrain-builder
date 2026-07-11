@@ -1,12 +1,14 @@
 #pragma once
 
 #include <numeric>
-#include <type_traits>
 #include <unordered_map>
-#include <variant>
 #include <vector>
+#include <span>
 
 #include <libassert/assert.hpp>
+
+#include "SegmentedBuffer.h"
+
 
 template <bool TrackSizes = false, typename IndexT = size_t, typename SizeT = size_t>
 class UnionFind_ {
@@ -38,12 +40,12 @@ public:
         return this->find_impl(*this, item);
     }
 
-    void make_union(const Index x, const Index y) noexcept {
+    Index make_union(const Index x, const Index y) noexcept {
         const Index x_rep = this->find(x);
         const Index y_rep = this->find(y);
 
         if (x_rep == y_rep) {
-            return;
+            return x_rep;
         }
 
         this->_parents[x_rep] = y_rep;
@@ -51,7 +53,17 @@ public:
 
         if constexpr (TrackSizes) {
             this->_sizes[y_rep] += this->_sizes[x_rep];
+            this->_sizes[x_rep] = Size{0};
         }
+
+        return y_rep;
+    }
+
+    bool is_same_set(const Index x, const Index y) const noexcept {
+        return this->is_same_set_impl(*this, x, y);
+    }
+    bool is_same_set(const Index x, const Index y) noexcept {
+        return this->is_same_set_impl(*this, x, y);
     }
 
     [[nodiscard]] Size size() const noexcept {
@@ -75,12 +87,26 @@ public:
         return !this->is_joint();
     }
 
-    [[nodiscard]] std::unordered_map<Index, std::vector<Index>> get_sets() const {
-        return this->get_sets_impl(*this);
+    [[nodiscard]] std::unordered_map<Index, std::vector<Index>> get_sets_as_map() const {
+        return this->get_sets_as_map_impl(*this);
     }
 
-    [[nodiscard]] std::unordered_map<Index, std::vector<Index>> get_sets() {
-        return this->get_sets_impl(*this);
+    [[nodiscard]] std::unordered_map<Index, std::vector<Index>> get_sets_as_map() {
+        return this->get_sets_as_map_impl(*this);
+    }
+
+    [[nodiscard]] SegmentedBuffer<Index, Size, Index> get_sets_compact() const {
+        return this->get_sets_compact_impl(*this);
+    }
+    [[nodiscard]] SegmentedBuffer<Index, Size, Index> get_sets_compact() {
+        return this->get_sets_compact_impl(*this);
+    }
+
+    [[nodiscard]] SegmentedBuffer<Index, Size, Index> get_sets_sparse() const {
+        return this->get_sets_sparse_impl(*this);
+    }
+    [[nodiscard]] SegmentedBuffer<Index, Size, Index> get_sets_sparse() {
+        return this->get_sets_sparse_impl(*this);
     }
 
 private:
@@ -106,7 +132,14 @@ private:
     }
 
     template <typename Self>
-    static std::unordered_map<Index, std::vector<Index>> get_sets_impl(Self &self) {
+    static bool is_same_set_impl(Self &self, const Index x, const Index y) noexcept {
+        const Index x_rep = self.find(x);
+        const Index y_rep = self.find(y);
+        return x_rep == y_rep;
+    }
+
+    template <typename Self>
+    static std::unordered_map<Index, std::vector<Index>> get_sets_as_map_impl(Self &self) {
         std::unordered_map<Index, std::vector<Index>> sets;
 
         const Size n = self.size();
@@ -114,6 +147,49 @@ private:
 
         for (Index item = 0; item < n; item++) {
             sets[self.find(item)].push_back(item);
+        }
+
+        return sets;
+    }
+
+    template <typename Self>
+    static SegmentedBuffer<Index, Size, Index> get_sets_compact_impl(Self &self) {
+        SegmentedBuffer<Index, Size, Index> sparse = get_sets_sparse_impl(self);
+        sparse.remove_empty_segments();
+        return sparse;
+    }
+
+    template <typename Self>
+    static SegmentedBuffer<Index, Size, Index> get_sets_sparse_impl(Self &self) {
+        const Size n = self.size();
+        SegmentedBuffer<Index, Size, Index> sets;
+
+        if constexpr (TrackSizes) {
+            sets.init(std::span<const Size>(self._sizes));
+
+            std::vector<Size> cursors(n, Size{0});
+            for (Index item = 0; item < n; item++) {
+                const Index rep = self.find(item);
+                std::span<Index> set = sets.segment(rep);
+                Size &cursor = cursors[rep];
+                set[cursor] = item;
+                cursor++;
+            }
+        } else {
+            std::vector<Size> counts(n, Size{0});
+            for (Index item = 0; item < n; item++) {
+                counts[self.find(item)]++;
+            }
+            sets.init(std::span<const Size>(counts));
+
+            for (Index item = 0; item < n; item++) {
+                const Index rep = self.find(item);
+                std::span<Index> set = sets.segment(rep);
+                Size& remaining_count = counts[rep];
+                Size cursor = set.size() - remaining_count;
+                set[cursor] = item;
+                remaining_count--;
+            }
         }
 
         return sets;

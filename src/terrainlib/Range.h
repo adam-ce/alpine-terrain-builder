@@ -1,10 +1,7 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
 #include <algorithm>
 #include <limits>
-#include <type_traits>
 
 #include "number_utils.h"
 
@@ -13,21 +10,30 @@ struct Range {
     T min;
     T max;
 
-    constexpr Range() : Range(std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest()) {}
+    constexpr Range() : Range(T{0}, T{0}) {}
     constexpr Range(T value) : Range(Range::from_single(value)) {}
-    constexpr Range(T min_value, T max_value) : min(min_value), max(max_value) {}
 
-    [[nodiscard]] constexpr bool empty() const noexcept {
-        return min >= max;
+    constexpr Range(T min_value, T max_value)
+        : min(min_value), max(max_value) {
+        this->normalize();
     }
 
-    [[nodiscard]] constexpr T size() const noexcept {
-        static_assert(std::is_arithmetic_v<T>, "Range::size requires arithmetic T");
-        return this->empty() ? T{0} : (max - min);
+    constexpr void normalize() noexcept {
+        if (this->min > this->max) {
+            this->max = this->min;
+        }
+    }
+
+    [[nodiscard]] constexpr bool empty() const noexcept {
+        return this->min == this->max;
     }
 
     [[nodiscard]] constexpr bool valid() const noexcept {
         return this->min <= this->max;
+    }
+
+    [[nodiscard]] constexpr T size() const noexcept {
+        return this->max - this->min;
     }
 
     [[nodiscard]] constexpr bool contains(T value) const noexcept {
@@ -38,35 +44,52 @@ struct Range {
         if (other.empty()) {
             return true;
         }
+
         return other.min >= this->min && other.max <= this->max;
     }
 
     [[nodiscard]] constexpr bool overlaps(const Range &other) const noexcept {
-        if (other.empty()) {
+        if (this->empty() || other.empty()) {
             return false;
         }
+
         return this->min < other.max && other.min < this->max;
     }
 
     constexpr void expand(T value) noexcept {
-        this->min = std::min(min, value);
-        this->max = std::max(max, value + T{1});
+        if (this->empty()) {
+            *this = Range::from_single(value);
+            return;
+        }
+
+        this->min = std::min(this->min, value);
+        this->max = std::max(this->max, next_higher(value));
     }
 
     constexpr void expand(const Range &other) noexcept {
         if (other.empty()) {
             return;
         }
+
+        if (this->empty()) {
+            *this = other;
+            return;
+        }
+
         this->min = std::min(this->min, other.min);
         this->max = std::max(this->max, other.max);
     }
 
     constexpr void clamp(const Range &bounds) noexcept {
+        if (bounds.empty()) {
+            this->min = bounds.min;
+            this->max = bounds.max;
+            return;
+        }
+
         this->min = std::clamp(this->min, bounds.min, bounds.max);
         this->max = std::clamp(this->max, bounds.min, bounds.max);
-        if (this->min > this->max) {
-            this->min = this->max;
-        }
+        this->normalize();
     }
 
     constexpr void translate(T offset) noexcept {
@@ -84,9 +107,11 @@ struct Range {
         if (this->empty()) {
             return other;
         }
+
         if (other.empty()) {
             return *this;
         }
+
         return {
             std::min(this->min, other.min),
             std::max(this->max, other.max)};
@@ -106,5 +131,5 @@ constexpr Range<T> full_range() {
 
 template <typename T>
 constexpr Range<T> empty_range() {
-    return Range<T>(std::numeric_limits<T>::max(), std::numeric_limits<T>::lowest());
+    return Range<T>{};
 }

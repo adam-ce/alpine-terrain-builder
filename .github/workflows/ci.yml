@@ -2,77 +2,110 @@ name: CI
 
 on:
   push:
-    branches: [ "main", "tile-downloader" ]
   pull_request:
     branches: [ "main", "tile-downloader" ]
 
 env:
   BUILD_TYPE: Release
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 1G
 
 jobs:
-  build-terrainbuilder:
+  build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
-       submodules: true
+        submodules: true
 
-    - name: Install dependencies
-      run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
-      
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          ccache \
+          extra-cmake-modules \
+          libcurl4-openssl-dev \
+          libegl1-mesa-dev \
+          libgl1-mesa-dev \
+          libglm-dev \
+          libgmp-dev \
+          libjpeg-dev \
+          libmpfr-dev \
+          libpng-dev \
+          libsqlite3-dev \
+          libtbb-dev \
+          libtiff-dev \
+          libwayland-bin \
+          libwayland-dev \
+          libxkbcommon-dev \
+          ninja-build \
+          pkg-config \
+          sqlite3 \
+          wayland-protocols \
+          xorg-dev \
+          zlib1g-dev
 
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target terrainbuilder
-      
-  build-tile-downloader:
-    if: github.ref == 'refs/heads/tile-downloader'
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
+    - name: Cache installed CMake dependencies
+      uses: actions/cache@v4
       with:
-       submodules: true
+        path: |
+          build/alp_external/boost
+          build/alp_external/proj
+          build/alp_external/gdal
+          build/alp_external/cgal
+          build/alp_external/opencv
+        key: ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-
 
-    - name: Install dependencies
-      run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev libcurl4-openssl-dev
-      
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target tile-downloader
-      
-  test:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
+    - name: Cache ccache
+      uses: actions/cache@v4
       with:
-       submodules: true
+        path: ${{ env.CCACHE_DIR }}
+        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-${{ github.ref_name }}-
+          ${{ runner.os }}-ccache-
 
-    - name: Install dependencies
-      run: sudo apt-get install libfmt-dev libglm-dev libgdal-dev catch2 libfreeimage-dev libtbb-dev
-      
+    - name: Configure ccache
+      run: |
+        ccache --max-size="${CCACHE_MAXSIZE}"
+        ccache --zero-stats
+
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: >
+        cmake
+        -S "${{ github.workspace }}"
+        -B "${{ github.workspace }}/build"
+        -G Ninja
+        -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        -DCMAKE_C_COMPILER_LAUNCHER=ccache
+        -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
-    - name: Build
-      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}} --target unittests_terrainlib
-    
-    - uses: actions/cache@v3
+    - name: Build all targets
+      run: cmake --build "${{ github.workspace }}/build" --config ${{ env.BUILD_TYPE }} --parallel --target all
+
+    - name: ccache stats
+      if: always()
+      run: ccache --show-stats
+
+    - name: Cache unit test data
       id: terrain_builder_unittest_data
+      uses: actions/cache@v4
       with:
-        path: ./unittests/data
-        key: terrain_builder_unittest_data.tar.gz
-  
-    - name: Download data
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: wget -qO- https://gataki.cg.tuwien.ac.at/raw/terrain_builder_unittest_data.tar.gz | tar xvz -C ./unittests/
+        path: unittests/data
+        key: terrain-builder-unittest-data-v1
 
-    - name: Test
-      working-directory: ${{github.workspace}}/build
-      run: ./unittests/unittests_terrainlib
+    - name: Download unit test data
+      if: steps.terrain_builder_unittest_data.outputs.cache-hit != 'true'
+      run: wget -qO- https://gataki.cg.tuwien.ac.at/raw/terrain_builder_unittest_data.tar.gz | tar xz -C unittests
 
+    - name: Run unit tests
+      working-directory: ${{ github.workspace }}/build
+      run: |
+        ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark"
+        ./unittests/unittests_tilebuilder
+        ./unittests/unittests_meshbuilder
+        ./unittests/unittests_dagbuilder
+        ./unittests/unittests_sfmerger

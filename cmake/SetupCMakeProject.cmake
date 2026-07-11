@@ -64,6 +64,15 @@ function(alp_setup_cmake_project arg_NAME)
 
     set(version_var "ALP_INSTALLED_${arg_NAME}_VERSION")
     set(path_var    "ALP_INSTALLED_${arg_NAME}_PATH")
+    set(build_dir   "${CMAKE_BINARY_DIR}/alp_external/${arg_NAME}_build")
+    set(install_dir "${CMAKE_BINARY_DIR}/alp_external/${arg_NAME}")
+    set(stamp_file  "${install_dir}/.alp_install_signature")
+    set(cache_signature "URL=${arg_URL}
+COMMITISH=${arg_COMMITISH}
+BUILD_TYPE=${CMAKE_BUILD_TYPE}
+SYSTEM=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}
+CXX=${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}
+ARGS=${arg_CMAKE_ARGUMENTS}")
 
     if(DEFINED ${version_var} AND "${${version_var}}" STREQUAL "${arg_COMMITISH}${arg_CMAKE_ARGUMENTS}" AND DEFINED ${path_var} AND EXISTS "${${path_var}}")
         list(PREPEND CMAKE_PREFIX_PATH "${${path_var}}")
@@ -71,13 +80,24 @@ function(alp_setup_cmake_project arg_NAME)
         return()
     endif()
 
+    if(EXISTS "${install_dir}" AND EXISTS "${stamp_file}")
+        file(READ "${stamp_file}" installed_signature)
+        if(installed_signature STREQUAL cache_signature)
+            message(STATUS "[alp] Using cached install for ${arg_NAME}: ${install_dir}")
+            list(PREPEND CMAKE_PREFIX_PATH "${install_dir}")
+            set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
+            set(${path_var}    "${install_dir}"   CACHE PATH   "Install path for ${arg_NAME}"            FORCE)
+            set(${version_var} "${arg_COMMITISH}${arg_CMAKE_ARGUMENTS}" CACHE STRING "Installed commit/tag for $ + build flags"    FORCE)
+            return()
+        endif()
+    endif()
+
     alp_add_git_repository(${arg_NAME} URL ${arg_URL} COMMITISH ${arg_COMMITISH} DO_NOT_ADD_SUBPROJECT)
     set(src_dir     "${${arg_NAME}_SOURCE_DIR}")
-    set(build_dir   "${CMAKE_BINARY_DIR}/alp_external/${arg_NAME}_build")
-    set(install_dir "${CMAKE_BINARY_DIR}/alp_external/${arg_NAME}")
 
     file(REMOVE_RECURSE "${install_dir}")
     _alp_build_and_install(${arg_NAME} ${src_dir} ${build_dir} ${install_dir} ${arg_CMAKE_ARGUMENTS})
+    file(WRITE "${stamp_file}" "${cache_signature}")
 
     list(PREPEND CMAKE_PREFIX_PATH "${install_dir}")
     set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
@@ -86,5 +106,4 @@ function(alp_setup_cmake_project arg_NAME)
     set(${path_var}    "${install_dir}"   CACHE PATH   "Install path for ${arg_NAME}"            FORCE)
     set(${version_var} "${arg_COMMITISH}${arg_CMAKE_ARGUMENTS}" CACHE STRING "Installed commit/tag for $ + build flags"    FORCE)
 endfunction()
-
 

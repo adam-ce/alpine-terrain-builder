@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <cstdint>
+#include <limits>
 
 #include <glm/glm.hpp>
 
@@ -25,7 +26,7 @@ inline void compact_cluster_inplace(Cluster &cluster) {
     }
 
     // Build remap
-    constexpr uint32_t invalid_remap = -1;
+    constexpr uint32_t invalid_remap = std::numeric_limits<uint32_t>::max();
     std::vector<uint32_t> remap(vertex_count, invalid_remap);
     std::vector<uint32_t> new_vertex_indices;
     std::vector<glm::dvec2> new_uvs;
@@ -59,7 +60,7 @@ inline void compact_cluster_inplace(Cluster &cluster) {
 
 inline void remove_unused_vertices_inplace(Clustering &clustering) {
     const uint32_t vertex_count = clustering.vertex_count();
-    constexpr uint32_t invalid_vertex = -1;
+    constexpr uint32_t invalid_vertex = std::numeric_limits<uint32_t>::max();
     std::vector<uint32_t> vertex_remap(vertex_count, invalid_vertex);
     uint32_t next_index = 0;
     for (Cluster &cluster : clustering.clusters) {

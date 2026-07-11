@@ -467,8 +467,8 @@ std::unordered_set<octree::Id> build_level(
             return;
         }
 
-        const auto dag_ids = find_value(inner_nodes, target).value_or({});
-        const auto target_input_ids = find_value(input_sources, target).value_or({});
+        const auto dag_ids = find_value(inner_nodes, target).value_or(std::vector<octree::Id>{});
+        const auto target_input_ids = find_value(input_sources, target).value_or(std::vector<octree::Id>{});
 
         auto result = build_node(
             target,
@@ -478,7 +478,7 @@ std::unordered_set<octree::Id> build_level(
 
         if (result) {
             const auto save_result = ctx.output_storage.save(target, *result);
-            DEBUG_ASSERT_VAL(save_result);
+            DEBUG_ASSERT(save_result.has_value());
             if (debug_storage) {
                 debug_storage->save(target, clustering_to_mesh(result->clustering));
             }

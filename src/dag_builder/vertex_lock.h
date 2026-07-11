@@ -4,19 +4,29 @@
 #include <unordered_set>
 #include <vector>
 
-#include <glm/vec3.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <libassert/assert.hpp>
+#include <radix/geometry.h>
 
 #include "TinyVector.h"
 #include "cluster.h"
-#include "mesh/bounds.h"
 #include "mesh/triangle_compare.h"
 #include "simplify.h"
 #include "utils.h"
 #include "VertexInCluster.h"
 
 
-inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering) {
+// Signed distance from a point to an axis-aligned box: negative inside (distance to the
+// nearest face), positive outside (euclidean distance to the surface), zero on a face.
+inline double signed_distance_to_bounds(const radix::geometry::Aabb3d &bounds, const glm::dvec3 &point) {
+    const glm::dvec3 gaps = glm::max(bounds.min - point, point - bounds.max);
+    const double outside = glm::length(glm::max(gaps, glm::dvec3(0.0)));
+    const double inside = glm::min(glm::compMax(gaps), 0.0);
+    return outside + inside;
+}
+
+inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, const radix::geometry::Aabb3d &node_bounds) {
     // Lock every triangle where any vertex is either on the border and near the bounds or shared between clusters.
     const uint32_t cluster_count = clustering.cluster_count();
     const uint32_t vertex_count = clustering.vertex_count();
@@ -36,18 +46,12 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering) 
         }
     }
 
-    // Calculate safe bounds excluding the outer boundary of the mesh
-    const radix::geometry::Aabb3d bounds = calculate_bounds(clustering.positions);
-    const glm::dvec3 center = bounds.centre();
-    const glm::dvec3 extents = bounds.size() / 2.0;
-    const glm::dvec3 unlocked_extents = extents * 0.99;
-    const radix::geometry::Aabb3d unlocked_bounds(center - unlocked_extents, center + unlocked_extents);
-
-    // Lock vertices outside safe bounds that are on the boundary
+    // Lock boundary vertices on or beyond a node face, as these are shared with
+    // neighbouring nodes.
+    const double lock_margin = glm::compMax(node_bounds.size()) * 1e-3;
     for (const uint32_t vertex_index : boundary_vertices) {
-        // Lock only vertices outside the unlocked bounds
         const glm::dvec3 &position = clustering.positions[vertex_index];
-        if (!unlocked_bounds.contains(position)) {
+        if (signed_distance_to_bounds(node_bounds, position) >= -lock_margin) {
             vertices_to_lock.insert(vertex_index);
         }
     }

@@ -72,7 +72,7 @@ struct LodResult {
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build child map.
-LodResult build_lod(const Clustering &input, const BuildOptions &options) {
+LodResult build_lod(const Clustering &input, const BuildOptions &options, const radix::geometry::Aabb3d &node_bounds) {
     const Partitioning partitioning = create_partitioning(input, PartitionOptions{
                                                                      .clusters_per_partition = options.clusters_per_partition});
     // Construct new clusters and generate new textures.
@@ -87,9 +87,7 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options) {
     trim_textures_inplace(clustering);
 
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering);
-
-    // Simplify each cluster
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, node_bounds);
     clustering = simplify(clustering, SimplifyOptions{
                                           .target_ratio = options.target_ratio,
                                           .vertex_lock = VertexLock::mask(vertex_lock)});
@@ -155,6 +153,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     const std::vector<octree::Id> &dag_ids,
     const RegionFilter &filter,
     const double epsilon,
+    const radix::geometry::Aabb3d &node_bounds,
     const BuildContext &ctx) {
     std::vector<dag::Id> cluster_sources;
     std::vector<Clustering> filtered;
@@ -186,7 +185,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
 
     const Clustering merged = merge_clusterings(filtered, epsilon);
 
-    const auto [simplified, child_map] = build_lod(merged, ctx.options);
+    const auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
 
     auto child_id_map = transform_vector(child_map, [&](const auto &children) {
         return transform_vector(children, [&](const uint32_t merged_index) {
@@ -266,7 +265,7 @@ std::optional<dag::ClusterBatch> build_node(
 
     RegionFilter dag_filter;
     dag_filter.include = {node_bounds};
-    dag::ClusterBatch inner = load_and_simplify_dag_nodes(dag_ids, dag_filter, epsilon, ctx);
+    dag::ClusterBatch inner = load_and_simplify_dag_nodes(dag_ids, dag_filter, epsilon, node_bounds, ctx);
 
     if (input_clusters.empty() && inner.clustering.is_empty()) {
         LOG_WARN("No valid clusters for node {}, skipping", target_id);

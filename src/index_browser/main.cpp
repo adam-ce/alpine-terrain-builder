@@ -1,4 +1,5 @@
-#include <queue>
+#include <numeric>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -9,6 +10,7 @@
 #include <fmt/core.h>
 #include <fmt/format.h>
 
+#include "log.h"
 #include "octree/Id.h"
 #include "octree/NodeStatus.h"
 #include "octree/NodeStatusOrMissing.h"
@@ -77,7 +79,7 @@ public:
         parent.expanded = true;
 
         if (parent.status == octree::NodeStatusOrMissing::Leaf) {
-            auto result = this->_storage.read_node(parent.id);
+            auto result = this->_storage.load(parent.id);
             DisplayEntry entry;
             if (result.has_value()) {
                 const auto &mesh = result.value();

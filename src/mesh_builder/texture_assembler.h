@@ -10,6 +10,7 @@
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <glm/vector_relational.hpp>
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
@@ -221,7 +222,8 @@ void copy_paste_image(
     const radix::geometry::Aabb2d src_padding(
         src_exact.min - glm::dvec2(src_padded.min),
         glm::dvec2(src_padded.max) - src_exact.max);
-    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding, glm::dvec2(0))));
+    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding.min, glm::dvec2(0))));
+    DEBUG_ASSERT(glm::all(glm::greaterThanEqual(src_padding.max, glm::dvec2(0))));
 
     // Safe integer crop of source
     const cv::Rect src_padded_cv = to_cv_rect(src_padded);
@@ -305,11 +307,15 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     const glm::uvec2 image_size = target_image_region.size();
 
     // Allocate the image to write all the individual tiles into.
-    LOG_DEBUG("Allocating image {}x{} type={} (≈{:.2f} MB)",
-                image_size.x,
-                image_size.y,
-                cv::typeToString(any_tile_image.type()),
-                (image_size.x * image_size.y * any_tile_image.elemSize()) / (1024.0 * 1024.0));
+    const float expected_memory_mb = (image_size.x * image_size.y * any_tile_image.elemSize()) / (1024.0 * 1024.0);
+    if (expected_memory_mb > 1000.0f) {
+        const float expected_memory_gb = expected_memory_mb / 1024.0f;
+        LOG_WARN("Allocating very large texture of size {}x{} (≈{:.2f} GB)", image_size.x, image_size.y, expected_memory_gb);
+    } else if (expected_memory_mb > 100.0f) {
+        LOG_INFO("Allocating large texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
+    } else {
+        LOG_DEBUG("Allocating texture of size {}x{} (≈{:.2f} MB)", image_size.x, image_size.y, expected_memory_mb);
+    }
     cv::Mat image = cv::Mat::zeros(image_size.y, image_size.x, any_tile_image.type());
 
     for (const radix::tile::Id &tile : tiles_to_splatter) {

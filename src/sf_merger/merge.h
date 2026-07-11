@@ -162,9 +162,9 @@ inline void merge_datasets(
         get_dataset_name(output_dataset));
 
     octree::Space space = octree::Space::earth();
-    octree::cache::Dummy left_cache;
+    octree::cache::Dummy<mesh::Simple> left_cache;
     NodeLoader left(left_dataset, left_cache, space);
-    octree::cache::Dummy right_cache;
+    octree::cache::Dummy<mesh::Simple> right_cache;
     NodeLoader right(right_dataset, right_cache, space);
     NodeWriter output(output_dataset);
     if (mask.has_value()) {

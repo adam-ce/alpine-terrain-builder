@@ -7,7 +7,6 @@
 
 #include "mesh/merging/VertexMapping.h"
 #include "mesh/merging/mapping.h"
-#include "pch.h"
 
 namespace mesh {
 

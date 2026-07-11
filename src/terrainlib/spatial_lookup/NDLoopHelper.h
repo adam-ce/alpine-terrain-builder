@@ -9,6 +9,10 @@ public:
 
     template <typename Func>
     static void for_each_offset(const uint32_t radius, Func &&func) {
+        if (radius == 0) {
+            func(Offset(0));
+            return;
+        }
         Offset offset;
         _for_each_offset(static_cast<int32_t>(radius), offset, std::forward<Func>(func));
     }
@@ -25,6 +29,6 @@ private:
             }
         }
     }
-    
+
     friend class NDLoopHelper<n_dims, current_dim - 1>;
 };

@@ -73,6 +73,7 @@ void combine_inplace(
     const SimpleMesh_<n_dims, T> &other_mesh) {
     bool has_uvs = acc_mesh.has_uvs() || other_mesh.has_uvs();
 
+    const auto vertex_offset = acc_mesh.vertex_count();
     acc_mesh.positions.insert(acc_mesh.positions.end(), other_mesh.positions.begin(), other_mesh.positions.end());
 
     if (has_uvs) {
@@ -85,7 +86,7 @@ void combine_inplace(
 
     acc_mesh.triangles.reserve(acc_mesh.face_count() + other_mesh.face_count());
     for (const auto &triangle : other_mesh.triangles) {
-        acc_mesh.triangles.push_back(triangle + static_cast<uint32_t>(acc_mesh.vertex_count()));
+        acc_mesh.triangles.push_back(triangle + static_cast<uint32_t>(vertex_offset));
     }
 }
 }

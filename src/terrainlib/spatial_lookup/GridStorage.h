@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <vector>
 #include <optional>
 
 #include <glm/common.hpp>
 #include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 
 #include "spatial_lookup/CellBasedStorage.h"
 
@@ -22,12 +24,11 @@ public:
     using GridOffset = glm::vec<n_dims, int32_t>;
 
     GridStorage(const Vec origin, const Vec size, const GridIndex divisions)
-        : _origin(origin), _size(size), _divisions(divisions) {
-        this->_point_count = 0;
+        : _point_count(0), _origin(origin), _size(size), _divisions(divisions) {
         this->_data.resize(glm::compMul(divisions));
     }
 
-    struct Item {                           
+    struct Item {
         Vec point;
         Value value;
     };
@@ -37,22 +38,38 @@ public:
     };
 
     void clear() {
-        for (auto &cell : this->_data) {
+        for (Cell &cell : this->_data) {
             cell.items.clear();
         }
         this->_point_count = 0;
     }
 
     [[nodiscard]] bool empty() const {
-        return this->_data.empty();
+        return this->_point_count == 0;
     }
 
-    [[nodiscard]] size_t size() const {
+    [[nodiscard]] size_t point_count() const {
+        return this->_point_count;
+    }
+
+    [[nodiscard]] size_t cell_count() const {
         return this->_data.size();
     }
 
+    [[nodiscard]] Bounds bounds() const {
+        return Bounds{this->_origin, this->_origin + this->_size};
+    }
+
     [[nodiscard]] GridIndex point_to_grid_index(const Vec &point) const {
-        return GridIndex((point - this->_origin) / this->cell_size());
+        DEBUG_ASSERT(this->bounds().contains_inclusive(point));
+
+        const Vec relative = (point - this->_origin) / this->cell_size();
+        GridIndex index;
+        for (glm::length_t i = 0; i < n_dims; i++) {
+            const uint32_t division = this->_divisions[i];
+            index[i] = std::min(static_cast<uint32_t>(relative[i]), division - 1);
+        }
+        return index;
     }
     [[nodiscard]] CellIndex point_to_cell_index(const Vec &point) const {
         return this->grid_to_cell_index(this->point_to_grid_index(point));
@@ -86,7 +103,7 @@ public:
     [[nodiscard]] GridIndex cell_to_grid_index(const CellIndex index) const {
         GridIndex grid_index;
         CellIndex current_index = index;
-        for (CellIndex i = 0; i < n_dims; i++) {
+        for (glm::length_t i = 0; i < n_dims; i++) {
             grid_index[i] = current_index % this->_divisions[i];
             current_index /= this->_divisions[i];
         }
@@ -96,25 +113,21 @@ public:
         const GridIndex grid_index = this->cell_to_grid_index(index);
         const Vec cell_size = this->cell_size();
         const Vec cell_min = this->_origin + Vec(grid_index) * cell_size;
-        const Vec cell_max = cell_min + cell_size;
         return Bounds{
             .min = cell_min,
-            .max = cell_max
+            .max = cell_min + cell_size
         };
     }
 
-    bool insert(const Vec &point, const Value value) {
+    bool insert(const Vec &point, Value value) {
         const CellIndex index = this->point_to_cell_index(point);
 
         if (!this->is_valid_cell_index(index)) {
             return false;
         }
 
-        const Item item{
-            .point = point,
-            .value = value};
         Cell &cell = this->_data[index];
-        cell.items.push_back(std::move(item));
+        cell.items.push_back(Item{.point = point, .value = std::move(value)});
         this->_point_count += 1;
 
         return true;
@@ -144,7 +157,7 @@ public:
         return this->_size / Vec(this->_divisions);
     }
 
-    bool is_valid_cell_index(const CellIndex &index) const {
+    [[nodiscard]] bool is_valid_cell_index(const CellIndex index) const {
         return index < this->_data.size();
     }
 
@@ -158,4 +171,4 @@ private:
     // static_assert(CellBasedStorage<Self, n_dims, Component, Value>);
 };
 
-}
+} // namespace spatial_lookup

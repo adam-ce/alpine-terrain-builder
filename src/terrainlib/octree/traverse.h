@@ -40,9 +40,9 @@ void traverse(
             }
             const auto current_status = current_status_opt.value();
 
-            std::forward<VisitFn>(visit_fn)(current, current_status);
+            visit_fn(current, current_status);
 
-            if (current.has_children() && std::forward<RefineFn>(refine_fn)(current)) {
+            if (current.has_children() && refine_fn(current)) {
                 const auto children = current.children().value();
                 for (const auto& child : children) {
                     dfs(child);
@@ -64,9 +64,9 @@ void traverse(
             }
             const auto current_status = current_status_opt.value();
 
-            std::forward<VisitFn>(visit_fn)(current, current_status);
+            visit_fn(current, current_status);
 
-            if (current.has_children() && std::forward<RefineFn>(refine_fn)(current)) {
+            if (current.has_children() && refine_fn(current)) {
                 const auto children = current.children().value();
                 for (const auto& child : children) {
                     queue.push(child);

@@ -11,6 +11,9 @@ namespace octree::disk::v1 {
 inline constexpr std::string_view index_file_name() {
     return "terrain.index";
 }
+inline constexpr std::string_view index_extension() {
+    return ".index";
+}
 
 struct IndexFile {
     using serialize = zpp::bits::members<3>;

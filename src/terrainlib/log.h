@@ -5,6 +5,7 @@
 #define FMT_HEADER_ONLY
 #endif
 #include "log_impls.h"
+#include "number_utils.h"
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
@@ -32,20 +33,41 @@ public:
         exit(1);                \
     } while (false)
 
-/*
-#if __cplusplus >= 202302L
-#define _UNREACHABLE() std::unreachable()
-#elif defined(__GNUC__) || defined(__clang__)
-#define _UNREACHABLE() __builtin_unreachable()
-#elif defined(_MSC_VER)
-#define _UNREACHABLE() __assume(false)
-#else
-#define _UNREACHABLE() std::abort()
-#endif
+// Logs at most once per call site for the lifetime of the process.
+#define LOG_WARN_ONCE(...)                  \
+    do {                                     \
+        static bool _log_warn_once_fired = false; \
+        if (!_log_warn_once_fired) {         \
+            LOG_WARN(__VA_ARGS__);           \
+            _log_warn_once_fired = true;     \
+        }                                    \
+    } while (false)
 
-#define UNREACHABLE()                                                       \
-    do {                                                                    \
-        LOG_ERROR("Reached unreachable code at %s:%d", __FILE__, __LINE__); \
-        _UNREACHABLE();                                                     \
-    } while (0)
-*/
+// Tracks call count per call site and reports whether the current call falls
+// on a power-of-two occurrence (1, 2, 4, 8, 16, ...).
+class LogBackoff {
+public:
+    bool should_log() {
+        this->_count++;
+        return is_power_of_two(this->_count);
+    }
+
+    uint64_t count() const {
+        return this->_count;
+    }
+
+private:
+    uint64_t _count = 0;
+};
+
+// Logs on occurrence 1, 2, 4, 8, 16, ... per call site, with the occurrence count appended.
+#define LOG_WARN_BACKOFF(fmt_str, ...)                                  \
+    do {                                                                \
+        static LogBackoff _log_warn_backoff;                            \
+        if (_log_warn_backoff.should_log()) {                           \
+            LOG_WARN(fmt_str " (occurrence {})", ##__VA_ARGS__, _log_warn_backoff.count()); \
+        }                                                                \
+    } while (false)
+
+template <typename... Ts>
+constexpr void USE(Ts &&...) noexcept {}

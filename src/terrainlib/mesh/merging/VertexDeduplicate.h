@@ -1,6 +1,5 @@
 #pragma once
 
-#include <functional>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -11,24 +10,27 @@ template <glm::length_t n_dims, typename Component, typename Meta>
 class VertexDeduplicate {
 public:
     using Vec = glm::vec<n_dims, Component>;
+    using Matches = std::vector<Meta>;
 
     virtual ~VertexDeduplicate() = default;
 
-    virtual void add(const Vec& point, const Meta meta) = 0;
-    virtual bool get(const Vec& point, std::vector<std::reference_wrapper<const Meta>> &duplicates) const = 0;
-    virtual bool get_or_add(const Vec &point, const Meta meta, std::vector<std::reference_wrapper<const Meta>> &duplicates) {
-        if (this->get(point, duplicates)) {
+    virtual void insert(const Vec& point, Meta meta) = 0;
+    // Appends all matches for point to `matches`. Returns true if any were found.
+    // Values are returned by copy to avoid dangling references into the backing store.
+    virtual bool find(const Vec& point, Matches &matches) const = 0;
+    virtual bool find_or_insert(const Vec &point, Meta meta, Matches &matches) {
+        if (this->find(point, matches)) {
             return false;
         } else {
-            this->add(point, meta);
+            this->insert(point, std::move(meta));
             return true;
         }
     }
-    std::vector<std::reference_wrapper<const Meta>> get(const Vec &point) const {
-        std::vector<std::reference_wrapper<const Meta>> duplicates;
-        this->get(point, duplicates);
-        return duplicates;
+    Matches find(const Vec &point) const {
+        Matches matches;
+        this->find(point, matches);
+        return matches;
     }
 };
 
-}
+} // namespace mesh::merging

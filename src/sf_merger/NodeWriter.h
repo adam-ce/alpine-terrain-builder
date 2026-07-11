@@ -15,17 +15,13 @@ public:
     NodeWriter(octree::Storage &storage) : _storage(storage) {}
 
     bool has_node(const octree::Id &id) {
-        if (this->_overwrite) {
-            return false;
-        } else {
-            return this->_storage.has_node(id);
-        }
+        return this->_storage.has(id);
     }
 
     void write_node(const octree::Id &id, const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        DEBUG_ASSERT_VAL(this->_storage.write_node(id, mesh, this->_overwrite));
-        auto p = this->_storage.get_node_path(id);
+        DEBUG_ASSERT_VAL(this->_storage.save(id, mesh));
+        auto p = this->_storage.path_for(id);
         // change extension to .png
         p.replace_extension(".png");
         cv::imwrite(p, mesh.texture.value_or(cv::Mat()));
@@ -42,7 +38,7 @@ public:
                 }
                 DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
 
-                DEBUG_ASSERT_VAL(this->_storage.copy_node_from(child_id, loader.storage()));
+                DEBUG_ASSERT_VAL(this->_storage.copy_from(child_id, loader.storage()));
             },
             octree::always_refine,
             id);
@@ -50,5 +46,4 @@ public:
 
 private:
     octree::Storage &_storage;
-    bool _overwrite = false;
 };

@@ -7,6 +7,7 @@
 #include <CLI/CLI.hpp>
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 #include <tbb/global_control.h>
 
@@ -15,6 +16,7 @@
 #include "srs.h"
 #include "terrainbuilder.h"
 #include "octree/Space.h"
+#include "tile_provider.h"
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -133,6 +135,44 @@ radix::geometry::Aabb3d parse_target_bounds(
     UNREACHABLE();
 }
 
+void log_dataset_overview(const Dataset &dataset) {
+    const std::string name = dataset.name();
+
+    const unsigned int widthPx = dataset.widthInPixels();
+    const unsigned int heightPx = dataset.heightInPixels();
+    const unsigned int bands = dataset.n_bands();
+
+    const auto datasetSrs = dataset.srs();
+    const auto bounds = dataset.bounds3d(true);
+
+    const auto boundsEcef =
+        srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+
+    const octree::Space earth = octree::Space::earth();
+    const auto enclosingNode =
+        earth.find_smallest_node_encompassing_bounds(boundsEcef).value();
+
+    const int scaleLevel = static_cast<int>(std::floor(std::log2(
+        earth.bounds().size().x / glm::compMax(boundsEcef.size()))));
+
+    LOG_INFO("Dataset");
+    LOG_INFO("  name        : {}", name);
+    LOG_INFO("  size        : {} x {} px | bands={}", widthPx, heightPx, bands);
+    LOG_INFO("  srs         : {}", srs::friendly_name(datasetSrs));
+    LOG_INFO("  bounds      : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
+             bounds.min.x, bounds.min.y, bounds.min.z,
+             bounds.max.x, bounds.max.y, bounds.max.z);
+    LOG_INFO("  bounds ecef : [{:.3f}, {:.3f}, {:.3f}] - [{:.3f}, {:.3f}, {:.3f}]",
+             boundsEcef.min.x, boundsEcef.min.y, boundsEcef.min.z,
+             boundsEcef.max.x, boundsEcef.max.y, boundsEcef.max.z);
+    LOG_INFO("  octree      : enclosing node level={} coords=({}, {}, {})",
+             enclosingNode.level(),
+             enclosingNode.coords().x,
+             enclosingNode.coords().y,
+             enclosingNode.coords().z);
+    LOG_INFO("  octree      : scale level={}", scaleLevel);
+}
+
 int run(std::span<char *> args) {
     int argc = args.size();
     char **argv = args.data();
@@ -145,6 +185,8 @@ int run(std::span<char *> args) {
     std::filesystem::path dataset_path;
     std::optional<std::filesystem::path> texture_base_path;
     std::string mesh_srs_input = "EPSG:4978";
+    std::optional<uint32_t> min_texture_level;
+    std::optional<uint32_t> max_texture_level;
     std::filesystem::path output_path;
     spdlog::level::level_enum log_level = spdlog::level::level_enum::trace;
 
@@ -164,6 +206,10 @@ int run(std::span<char *> args) {
         ->check(CLI::ExistingDirectory);
     app.add_option("--mesh-srs", mesh_srs_input, "EPSG code of the target srs of the mesh positions")
         ->default_val("EPSG:4978");
+    app.add_option("--min-texture-level", min_texture_level, "Minimum texture zoom level to use for assembling textures.")
+        ->needs("--textures");
+    app.add_option("--max-texture-level", max_texture_level, "Maximum texture zoom level to use for assembling textures.")
+        ->needs("--textures");
     app.add_option("--verbosity", log_level, "Verbosity level of logging")
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case));
 
@@ -228,14 +274,30 @@ int run(std::span<char *> args) {
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);
+    bool overwrite_existing = false;
+    batch->add_flag("--overwrite", overwrite_existing, "Overwrite existing mesh files");
 
     CLI11_PARSE(app, argc, argv);
 
     Log::init(log_level);
 
     Dataset dataset(dataset_path.string());
+    log_dataset_overview(dataset);
     OGRSpatialReference mesh_srs = parse_srs(mesh_srs_input);
     OGRSpatialReference texture_srs = srs::webmercator();
+
+    std::unique_ptr<TileProvider> tile_provider;
+    if (texture_base_path.has_value()) {
+        BasemapSchemeTilePathProvider basemap_provider(texture_base_path.value());
+        if (min_texture_level.has_value() || max_texture_level.has_value()) {
+            tile_provider = std::make_unique<ZoomRangeTileProvider<BasemapSchemeTilePathProvider>>(
+                std::move(basemap_provider),
+                min_texture_level,
+                max_texture_level);
+        } else {
+            tile_provider = std::make_unique<BasemapSchemeTilePathProvider>(std::move(basemap_provider));
+        }
+    }
 
     if (*single) {
         OGRSpatialReference target_srs = parse_srs(target_srs_input);
@@ -251,7 +313,7 @@ int run(std::span<char *> args) {
             target_srs,
             target_bounds,
             texture_srs,
-            texture_base_path,
+            tile_provider.get(),
             mesh_srs,
             output_path);
     }
@@ -259,18 +321,22 @@ int run(std::span<char *> args) {
     if (*batch) {
         std::optional<tbb::global_control> tbb_control;
         if (num_threads > 0) {
-            LOG_INFO("Using {} threads for batch processing.", num_threads);
-            tbb_control.emplace(tbb::global_control(tbb::global_control::max_allowed_parallelism, num_threads));
+            LOG_DEBUG("Requesting max parallelism of {}", num_threads);
+            tbb_control.emplace(tbb::global_control::max_allowed_parallelism, num_threads);
         }
+        const auto actual_num_threads = tbb::global_control::active_value(tbb::global_control::max_allowed_parallelism);
+        const auto maybe_s = actual_num_threads == 1 ? "" : "s";
+        LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
         terrainbuilder::build_all_patches(
             dataset,
             target_level,
             texture_srs,
-            texture_base_path,
+            tile_provider.get(),
             mesh_srs,
             output_base_path,
-            output_format);
+            output_format,
+            overwrite_existing);
     }
 
     return 0;

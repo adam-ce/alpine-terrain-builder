@@ -12,6 +12,7 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "mesh/bounds.h"
 #include "srs.h"
 #include "SphereProjector.h"
 
@@ -241,7 +242,7 @@ glm::dvec2 calculate_radius_squared_range(const std::span<const SimpleMesh3d> me
     for (const SimpleMesh3d &mesh : meshes) {
         const auto radius_sq_range = calculate_radius_squared_range(mesh);
         min_radius_sq = std::min(min_radius_sq, radius_sq_range.x);
-        max_radius_sq = std::min(max_radius_sq, radius_sq_range.y);
+        max_radius_sq = std::max(max_radius_sq, radius_sq_range.y);
     }
 
     return glm::dvec2(min_radius_sq, max_radius_sq);
@@ -390,7 +391,7 @@ inline glm::dvec2 calculate_radius_range(const radix::geometry::Aabb3d& bounds) 
 }
 
 inline glm::dvec2 pad_radius_range(const glm::dvec2& radius_range, double padding_fraction) {
-    DEBUG_ASSERT(radius_range.x >= 0 || radius_range.y >= 0);
+    DEBUG_ASSERT(radius_range.x >= 0 && radius_range.y >= 0);
     DEBUG_ASSERT(radius_range.y > radius_range.x);
 
     if (padding_fraction == 0.0) {
@@ -520,7 +521,7 @@ inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const glm
 }
 
 inline SpherePolygonMask compute_mesh_shadow(const SimpleMesh3d &mesh, const double radius) {
-    const radix::geometry::Aabb3d bounds = calculate_bounds(mesh);
+    const radix::geometry::Aabb3d bounds = mesh::calculate_bounds(mesh);
     return compute_mesh_shadow(mesh, bounds.centre(), radius);
 }
 

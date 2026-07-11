@@ -1,18 +1,25 @@
-#ifndef SIMPLIFY_H
-#define SIMPLIFY_H
+#pragma once
 
-#include "pch.h"
+#include "mesh/SimpleMesh.h" 
+#include "mesh/cgal.h"
 
-using namespace kernel::epick;
+#include <span>
+#include <string_view>
+#include <variant>
+
+#include <fmt/format.h>
+#include <glm/glm.hpp>
+#include <opencv2/opencv.hpp>
+
 namespace simplify {
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
 // We could use the same type as in uv_map but this would require a custom visitor or similar.
-typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMap;
+using AttachedUvPropertyMap = cgal::Mesh::Property_map<cgal::VertexDescriptor, cgal::Point2>;
 
 cv::Mat simplify_texture(const cv::Mat& texture, glm::uvec2 target_resolution);
 
-void simplify_mesh_texture(SimpleMesh& mesh, glm::uvec2 target_resolution);
+void simplify_mesh_texture(mesh::Simple& mesh, glm::uvec2 target_resolution);
 
 enum class Algorithm {
     GarlandHeckbert,
@@ -43,12 +50,12 @@ struct Options {
 };
 
 struct Result {
-    SimpleMesh mesh;
+    mesh::Simple mesh;
     double max_absolute_error;
 };
 
-Result simplify_mesh(const SimpleMesh &mesh, std::span<const StopCondition> stop_conditions, Options options = Options());
-inline Result simplify_mesh(const SimpleMesh &mesh, const StopCondition& stop_condition, Options options = Options()) {
+Result simplify_mesh(const mesh::Simple &mesh, std::span<const StopCondition> stop_conditions, Options options = Options());
+inline Result simplify_mesh(const mesh::Simple &mesh, const StopCondition& stop_condition, Options options = Options()) {
     return simplify_mesh(mesh, std::span<const StopCondition>{&stop_condition, 1}, options);
 }
 }
@@ -57,5 +64,3 @@ inline Result simplify_mesh(const SimpleMesh &mesh, const StopCondition& stop_co
 template <> struct fmt::formatter<simplify::Algorithm>: formatter<string_view> {
     auto format(const simplify::Algorithm& algorithm, format_context& ctx) const;
 };
-
-#endif

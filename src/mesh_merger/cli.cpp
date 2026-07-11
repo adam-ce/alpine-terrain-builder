@@ -38,8 +38,7 @@ Args cli::parse(int argc, const char * const * argv) {
         ->default_val(spdlog::level::level_enum::info);
 
     try {
-        // app.parse(argc, argv);
-        app.parse("--input /home/user/master/meshes/out-cut/13/6481/4795/6854.glb /home/user/master/meshes/out-cut/13/6481/4794/6854.glb --output /home/user/master/meshes/test_merge.glb --epsilon 0.00001");
+        app.parse(argc, argv);
     } catch (const CLI::ParseError &e) {
         exit(app.exit(e));
     }

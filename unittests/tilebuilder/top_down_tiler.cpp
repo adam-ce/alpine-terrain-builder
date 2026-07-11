@@ -67,7 +67,7 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
     SECTION("mercator / level 0 austria")
     {
         const auto grid = ctb::GlobalMercator();
-        auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+        auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_mgi.tif").value();
         const auto bounds = dataset->bounds(grid.getSRS());
         const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, scheme);
 
@@ -91,7 +91,7 @@ TEMPLATE_TEST_CASE("BottomUpTiler, using tms scheme", "", std::true_type, std::f
     SECTION("geodetic / level 0 austria")
     {
         const auto grid = ctb::GlobalGeodetic();
-        auto dataset = Dataset::make_shared(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+        auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_mgi.tif").value();
         const auto bounds = dataset->bounds(grid.getSRS());
         const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, scheme);
 

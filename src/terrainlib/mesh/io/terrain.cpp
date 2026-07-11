@@ -2,77 +2,56 @@
 
 #include <libassert/assert.hpp>
 
+#include "io/bytes.h"
 #include "log.h"
 #include "mesh/io/terrain.h"
-#include "mesh/io/utils.h"
-
-using namespace mesh::io::utils;
+#include "mesh/EncodedMesh.h"
+#include "mesh/encode.h"
 
 namespace mesh::io::terrain {
 
 namespace {
+LoadMeshError load_error_from_io_error(::io::Error error) {
+    switch (error) {
+    case ::io::Error::Value::OpenFile:
+        return LoadMeshErrorKind::FileNotFound;
+    case ::io::Error::Value::DetermineSize:
+    case ::io::Error::Value::ReadBytes:
+        return LoadMeshErrorKind::InvalidFormat;
+    default:
+        return LoadMeshErrorKind::InvalidFormat;
+    }
+}
+
+SaveMeshError save_error_from_io_error(::io::Error error) {
+    switch (error) {
+    case ::io::Error::Value::OpenFile:
+        return SaveMeshErrorKind::OpenFile;
+    case ::io::Error::Value::WriteBytes:
+        return SaveMeshErrorKind::WriteFile;
+    default:
+        return SaveMeshErrorKind::WriteFile;
+    }
+}
+
 tl::expected<void, SaveMeshError> write_bytes_to_path(
     const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
-    LOG_TRACE("Writing bytes to path {}", path);
-
-    std::ofstream ofs(path, std::ios::out | std::ios::binary);
-    if (!ofs.is_open()) {
-        LOG_ERROR("Failed to open file {}", path);
-        return tl::unexpected(SaveMeshErrorKind::OpenFile);
+    const auto result = ::io::write_bytes_to_path(bytes, path);
+    if (!result.has_value()) {
+        return tl::unexpected(save_error_from_io_error(result.error()));
     }
-
-    const unsigned long data_size = bytes.size();
-    // ofs.write(reinterpret_cast<const char *>(&data_size), sizeof(unsigned long));
-    ofs.write(reinterpret_cast<const char *>(bytes.data()), data_size);
-
-    if (!ofs.good()) {
-        LOG_ERROR("Failed to write to file {}", path);
-        ofs.close();
-        return tl::unexpected(SaveMeshErrorKind::WriteFile);
-    }
-
-    ofs.close();
-
     return {};
 }
 
 tl::expected<std::vector<uint8_t>, LoadMeshError> read_bytes_from_path(const std::filesystem::path &path) {
-    LOG_TRACE("Reading bytes from path {}", path);
-
-    std::ifstream ifs(path, std::ios::in | std::ios::binary);
-    if (!ifs.is_open()) {
-        LOG_ERROR("Failed to open file {}", path);
-        return tl::unexpected(LoadMeshErrorKind::FileNotFound);
-    }
-
-    std::vector<uint8_t> data;
-
-    // get length of file
-    ifs.seekg(0, ifs.end);
-    const size_t length = ifs.tellg();
-    ifs.seekg(0, ifs.beg);
-
-    // read file
-    if (length > 0) {
-        data.resize(length);
-        ifs.read(reinterpret_cast<char *>(data.data()), length);
-    }
-    ifs.close();
-
-    return data;
-}
-}
-
-tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions& options) {
-    const auto result = read_bytes_from_path(path);
+    const auto result = ::io::read_bytes_from_path(path);
     if (!result.has_value()) {
-        return tl::unexpected(result.error());
+        return tl::unexpected(load_error_from_io_error(result.error()));
     }
-    const std::vector<uint8_t> bytes = result.value();
-    return load_from_buffer(bytes, options);
+    return result.value();
 }
 
-tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& /* options */) {
+tl::expected<std::vector<uint8_t>, SaveMeshError> save_encoded_to_buffer(const mesh::Encoded &mesh) {
     LOG_TRACE("Serializing mesh to buffer");
 
     // TODO: this ignores the texture format in SaveOptions
@@ -98,11 +77,11 @@ tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMes
     return data;
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions & /* options */) {
+tl::expected<mesh::Encoded, LoadMeshError> load_encoded_from_buffer(const std::span<const uint8_t> bytes) {
     LOG_TRACE("Deserializing mesh from buffer");
 
     zpp::bits::in in(bytes);
-    SimpleMesh mesh;
+    mesh::Encoded mesh;
     auto result = in(mesh);
     if (zpp::bits::failure(result)) {
         std::error_code error_code = std::make_error_code(result);
@@ -128,6 +107,50 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const u
 
     return mesh;
 }
+}
+
+tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& options) {
+    const auto encode_result = mesh::encode(mesh, mesh::EncodeOptions{
+                                                      .texture_format = options.texture_format});
+    if (!encode_result.has_value()) {
+        return tl::unexpected(SaveMeshErrorKind::UnsupportedFormat);
+    }
+    const mesh::Encoded encoded = encode_result.value();
+
+    const auto deser_result = save_encoded_to_buffer(encoded);
+    if (!deser_result.has_value()) {
+        return tl::unexpected(deser_result.error());
+    }
+    const std::vector<uint8_t> buffer = deser_result.value();
+
+    return buffer;
+}
+
+tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions & /* options */) {
+    const auto deser_result = load_encoded_from_buffer(bytes);
+    if (!deser_result.has_value()) {
+        return tl::unexpected(deser_result.error());
+    }
+    const mesh::Encoded encoded = deser_result.value();
+
+    const auto decode_result = mesh::decode(encoded);
+    if (!decode_result.has_value()) {
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
+    const mesh::Simple mesh = decode_result.value();
+
+    return mesh;
+}
+
+tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions & /* options */) {
+    const auto bytes_result = read_bytes_from_path(path);
+    if (!bytes_result.has_value()) {
+        return tl::unexpected(bytes_result.error());
+    }
+    const std::vector<uint8_t> bytes = bytes_result.value();
+
+    return load_from_buffer(bytes);
+}
 
 tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std::filesystem::path &path, const SaveOptions& options) {
     LOG_TRACE("Saving mesh as high precision terrain");
@@ -138,9 +161,12 @@ tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std
     }
     const std::vector<uint8_t> bytes = result.value();
 
-    create_parent_directories(path);
+    const auto write_result = write_bytes_to_path(bytes, path);
+    if (!write_result.has_value()) {
+        return tl::unexpected(write_result.error());
+    }
 
-    return write_bytes_to_path(bytes, path);
+    return {};
 }
 
 } // namespace mesh::io::terrain

@@ -22,7 +22,6 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
-#include <regex>
 #include <stdexcept>
 
 #include <gdal_priv.h>
@@ -111,8 +110,9 @@ Dataset::~Dataset() = default;
 
 radix::tile::SrsBounds Dataset::bounds() const {
     std::array<double, 6> adfGeoTransform = {};
-    if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None)
+    if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None) {
         throw std::runtime_error("Could not get transformation information from source dataset");
+    }
 
     // https://gdal.org/user/raster_data_model.html
     // gdal has a row/column raster format, where row 0 is the top most row.
@@ -120,8 +120,9 @@ radix::tile::SrsBounds Dataset::bounds() const {
     // computing bounds is going first from row/column to dataset SRS and then to target SRS
 
     // we don't support sheering or rotation for now
-    if (adfGeoTransform[2] != 0.0 || adfGeoTransform[4] != 0.0)
+    if (adfGeoTransform[2] != 0.0 || adfGeoTransform[4] != 0.0) {
         throw std::runtime_error("Dataset geo transform contains sheering or rotation. This is not supported!");
+    }
 
     const double westX = adfGeoTransform[0];
     const double southY = adfGeoTransform[3] + (heightInPixels() * adfGeoTransform[5]);
@@ -135,10 +136,11 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
     glm::dvec2 height_range;
-    if (!band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr)) {
+    const auto result = band->GetStatistics(approx_ok, false, &height_range.x, &height_range.y, nullptr, nullptr);
+    if (result != CE_None) {
         const char *unit = band->GetUnitType();
-        DEBUG_ASSERT(unit != nullptr);
-        DEBUG_ASSERT(strcmp(unit, "m") || strcmp(unit, "meters"));
+        ASSERT(unit != nullptr);
+        ASSERT(strcmp(unit, "m") == 0 || strcmp(unit, "meters") == 0);
         height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
     }
 
@@ -189,7 +191,7 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 
     const auto transformer = srs::transformation(srs(), targetSrs);
     if (!transformer->Transform(int(x.size()), x.data(), y.data())) {
-        throw std::string("Could not transform dataset bounds to target SRS");
+        throw std::runtime_error("Could not transform dataset bounds to target SRS");
     }
 
     DEBUG_ASSERT(!x.empty());
@@ -234,6 +236,9 @@ unsigned Dataset::n_bands() const {
 }
 
 GDALDataset *Dataset::gdalDataset() {
+    return m_gdal_dataset.get();
+}
+const GDALDataset *Dataset::gdalDataset() const {
     return m_gdal_dataset.get();
 }
 

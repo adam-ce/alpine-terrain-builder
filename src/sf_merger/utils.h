@@ -14,7 +14,7 @@ inline Cow<const SimpleMesh> clip_on_mask(const SimpleMesh &mesh, const MeshMask
     if (clipped.is_ref()) {
         return clipped;
     }
-    SimpleMesh result = std::move(clipped.get());
+    SimpleMesh result = clipped.get();
     trim_texture_inplace(result);
     return Cow<const SimpleMesh>::from_owned(std::move(result));
 }

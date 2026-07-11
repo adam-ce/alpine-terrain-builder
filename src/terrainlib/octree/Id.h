@@ -11,6 +11,7 @@
 #include <libassert/assert.hpp>
 
 #include "hash_utils.h"
+#include "int_math.h"
 
 namespace octree {
 
@@ -24,21 +25,22 @@ public:
     [[nodiscard]] static constexpr Level max_level() {
         return (sizeof(Index) * 8) / 3;
     }
-    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
-        return (1ull << level) - 1;
-    }
     [[nodiscard]] static constexpr Index max_index_on_level(const Level level) {
         return (1ull << (3 * level)) - 1;
     }
+    [[nodiscard]] static constexpr Coord max_coord_on_level(const Level level) {
+        return (1ull << level) - 1;
+    }
+    [[nodiscard]] static constexpr Coords max_coords_on_level(const Level level) {
+        return Coords(max_coord_on_level(level));
+    }
 
     constexpr Id() = default; // zpp::bits requires a default constructor
-    constexpr Id(const Level level, const Coords coords)
-        : Id(level, interleave3(coords)) {
-    }
-    constexpr Id(const Level level, const Index index)
-        : _level(level), _index(index) {
+    constexpr Id(const Level level, const Coord x, const Coord y, const Coord z) : Id(level, Coords(x, y, z)) {}
+    constexpr Id(const Level level, const Coords coords) : Id(level, interleave3(coords)) {}
+    constexpr Id(const Level level, const Index index) : _level(level), _index(index) {
         DEBUG_ASSERT(level <= Id::max_level());
-        DEBUG_ASSERT(index <= Id::max_index_on_level(this->_level));
+        DEBUG_ASSERT(index <= Id::max_index_on_level(level));
     }
 
     [[nodiscard]] static std::optional<Id> try_make(const Level level, const Coords coords) {
@@ -86,6 +88,24 @@ public:
             return std::nullopt;
         }
         return Id(this->level(), Coords(new_coords));
+    }
+    [[nodiscard]] constexpr std::optional<Id> prev() const {
+        const Level level = this->level();
+        const Index index = this->index_on_level();
+        const Index min_index = 0;
+        if (index == min_index) {
+            return std::nullopt;
+        }
+        return Id(level, index-1);
+    }
+    [[nodiscard]] constexpr std::optional<Id> next() const {
+        const Level level = this->level();
+        const Index index = this->index_on_level();
+        const Index max_index = Id::max_index_on_level(level);
+        if (index == max_index) {
+            return std::nullopt;
+        }
+        return Id(level, index+1);
     }
 
     [[nodiscard]] std::vector<Id> neighbours() const {
@@ -148,6 +168,50 @@ public:
 
     [[nodiscard]] static constexpr Id root() {
         return Id(0, 0);
+    }
+
+    [[nodiscard]] constexpr std::optional<Id> ancestor_on_level(const Level target_level) const {
+        if (target_level > this->level()) {
+            return std::nullopt;
+        }
+        const Level level_diff = this->level() - target_level;
+        const auto ancestor_coords = this->coords() / ipow2<Coord>(level_diff);
+        return Id(target_level, ancestor_coords);
+    }
+    [[nodiscard]] std::vector<Id> descendants_on_level(const Level target_level) const {
+        if (target_level < this->level()) {
+            return {};
+        }
+
+        const Level level_diff = target_level - this->level();
+
+        const Index count = ipow2<Index>(level_diff * 3u);
+        const Index first_index = this->index_on_level() * count;
+
+        std::vector<Id> descendants;
+        descendants.reserve(count);
+
+        for (Index offset = 0; offset < count; offset++) {
+            descendants.emplace_back(target_level, first_index | offset);
+        }
+
+        return descendants;
+    }
+    [[nodiscard]] constexpr bool is_descendant_of(const Id &other, const bool include_self = false) const {
+        return other.is_ancestor_of(*this, include_self);
+    }
+
+    [[nodiscard]] constexpr bool is_ancestor_of(const Id &other, const bool include_self = false) const {
+        if (!include_self && *this == other) {
+            return false;
+        }
+        if (this->is_root()) {
+            return true;
+        }
+        if (this->level() >= other.level()) {
+            return false;
+        }
+        return other.ancestor_on_level(this->level()) == *this;
     }
 
     constexpr bool operator==(const Id &other) const {

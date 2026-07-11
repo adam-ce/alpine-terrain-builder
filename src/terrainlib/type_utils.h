@@ -1,12 +1,20 @@
+#pragma once
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cxxabi.h>
 #include <string_view>
 #include <typeinfo>
+#include <memory>
+#include <cstdlib>
+#include <type_traits>
+
+#ifndef _MSC_VER
+    #include <cxxabi.h>
+#endif
 
 // modified from https://stackoverflow.com/questions/1055452/c-get-name-of-type-in-template/59522794#59522794
-namespace {
+namespace detail {
 template <typename T>
 [[nodiscard]] constexpr std::string_view function_signature() {
 #ifndef _MSC_VER
@@ -21,7 +29,7 @@ struct TypeNameFormat {
     std::size_t junk_total = 0;
 };
 
-constexpr TypeNameFormat type_name_format = [] {
+inline constexpr TypeNameFormat type_name_format = [] {
     TypeNameFormat ret;
     std::string_view sample = function_signature<int>();
     ret.junk_leading = sample.find("int");
@@ -31,28 +39,46 @@ constexpr TypeNameFormat type_name_format = [] {
 static_assert(type_name_format.junk_leading != std::size_t(-1), "Unable to determine the type name format on this compiler.");
 
 template <typename T>
-static constexpr auto type_name_storage = [] {
+inline constexpr auto type_name_storage = [] {
     std::array<char, function_signature<T>().size() - type_name_format.junk_total + 1> ret{};
     std::copy_n(function_signature<T>().data() + type_name_format.junk_leading, ret.size() - 1, ret.data());
+    ret.back() = '\0';
     return ret;
 }();
 }
 
 template <typename T>
-[[nodiscard]] constexpr std::string_view type_name() {
-    return {type_name_storage<T>.data(), type_name_storage<T>.size() - 1};
+[[nodiscard]] inline constexpr std::string_view type_name() {
+    return {detail::type_name_storage<T>.data(), detail::type_name_storage<T>.size() - 1};
 }
 
 template <typename T>
-[[nodiscard]] constexpr const char *type_name_c() {
-    return type_name_storage<T>.data();
+[[nodiscard]] inline constexpr const char *type_name_c() {
+    return detail::type_name_storage<T>.data();
 }
 
 template <class T>
-std::string type_name(const T &obj) {
-    int status;
+inline std::string type_name(const T &obj) {
+#ifndef _MSC_VER
+    int status = 0;
     std::unique_ptr<char, void (*)(void *)> res{
         abi::__cxa_demangle(typeid(obj).name(), nullptr, nullptr, &status),
         std::free};
-    return (status == 0) ? res.get() : typeid(obj).name();
+    if (status == 0 && res)
+        return res.get();
+#endif
+    return typeid(obj).name(); // fallback (may be mangled)
 }
+
+template <class>
+inline constexpr bool always_false_v = false;
+
+
+template <typename T, template <typename...> class Tmpl>
+struct is_specialization_of : std::false_type {};
+
+template <template <typename...> class Tmpl, typename... Args>
+struct is_specialization_of<Tmpl<Args...>, Tmpl> : std::true_type {};
+
+template <typename T, template <typename...> class Tmpl>
+inline constexpr bool is_specialization_of_v = is_specialization_of<T, Tmpl>::value;

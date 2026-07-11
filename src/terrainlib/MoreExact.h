@@ -1,6 +1,6 @@
 #pragma once
 
-#include <typeinfo>
+#include <type_traits>
 
 // Generic helper to determine the "more exact" type, preferring floating point types
 template <typename T1, typename T2>

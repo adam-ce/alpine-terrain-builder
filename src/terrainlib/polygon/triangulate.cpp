@@ -1,24 +1,26 @@
-#include "polygon/triangulate.h"
+#include <span>
+#include <vector>
 
+#include <glm/glm.hpp>
+#include <boost/property_map/property_map.hpp>
 #include <libassert/assert.hpp>
 
 #include <CGAL/Constrained_Delaunay_triangulation_2.h>
-#include <CGAL/mark_domain_in_triangulation.h>
+#include <CGAL/Constrained_triangulation_face_base_2.h>
 #include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
-#include <CGAL/Polygon_2.h>
-#include <CGAL/Triangulation_face_base_with_info_2.h>
+#include <CGAL/Triangulation_data_structure_2.h>
 #include <CGAL/Triangulation_vertex_base_with_info_2.h>
+#include <CGAL/mark_domain_in_triangulation.h>
 
+#include "build_config.h"
+#include "log.h"
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
-#include "mesh/validate.h"
-#include "mesh/utils.h"
+#include "polygon/triangulate.h"
 #include "polygon/utils.h"
-#include "log.h"
 
 using Kernel = cgal::kernel::epeck::Kernel;
 using Point2 = Kernel::Point_2;
-using Polygon2 = CGAL::Polygon_2<Kernel>;
 
 using VertexBase = CGAL::Triangulation_vertex_base_with_info_2<std::optional<uint32_t>, Kernel>;
 using FaceBase = CGAL::Constrained_triangulation_face_base_2<Kernel>;
@@ -74,7 +76,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         polygon.points.push_back(mesh.positions[vertex_index]);
     }
     polygon.points.push_back(polygon.points[0]); // close the polygon
-    DEBUG_ASSERT(cgal_polygon.is_simple());
 
     DEBUG_ASSERT(polygon::is_planar(polygon));
     const PlaneBasis basis = make_basis(polygon);
@@ -88,7 +89,6 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
         const glm::dvec3 &point = polygon.points[i];
         const glm::dvec2 projected = project(point, basis);
         VertexHandle vh = cdt.insert(convert::to_cgal_point<Kernel>(projected));
-        DEBUG_ASSERT(vh.is_valid());
         vh->info() = indices[i];
         handles.push_back(vh);
     }
@@ -138,19 +138,19 @@ void triangulate(SimpleMesh3d &mesh, const std::span<const uint32_t> indices) {
     }
 
     // Check that all input vertices were used
-#ifndef NDEBUG
-    for (const auto& index : indices) {
-        bool found = false;
-        for (const auto& triangle : new_triangles) {
-            if (triangle[0] == index || triangle[1] == index || triangle[2] == index) {
-                found = true;
+    if constexpr (IS_DEBUG_BUILD) {
+        for (const auto& index : indices) {
+            bool found = false;
+            for (const auto& triangle : new_triangles) {
+                if (triangle[0] == index || triangle[1] == index || triangle[2] == index) {
+                    found = true;
+                }
+            }
+            if (!found) {
+                UNREACHABLE("Vertex {} was not used in triangulation", index);
             }
         }
-        if (!found) {
-            UNREACHABLE("Vertex {} was not used in triangulation", index);
-        }
     }
-#endif
 }
 
 SimpleMesh3d triangulate(const Polygon3d &polygon) {

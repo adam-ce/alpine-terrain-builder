@@ -15,15 +15,42 @@
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
 #include <CGAL/tags.h>
 
-#include "convert.h"
+#include <fmt/core.h>
+
+#include "mesh/convert.h"
+#include "mesh/bounds.h"
+#include "opencv_utils.h"
 #include "log.h"
 #include "simplify.h"
 #include "uv_map.h"
+#include "mesh/cleanup.h"
 #include "mesh/validate.h"
-#include "mesh/utils.h"
+#include "mesh/cgal.h"
 
-using namespace simplify;
 
+auto fmt::formatter<simplify::Algorithm>::format(const simplify::Algorithm &algorithm, format_context &ctx) const {
+    string_view name = "unknown";
+
+    switch (algorithm) {
+    case simplify::Algorithm::GarlandHeckbert:
+        name = "GarlandHeckbert";
+        break;
+    case simplify::Algorithm::LindstromTurk:
+        name = "LindstromTurk";
+        break;
+    }
+
+    return formatter<string_view>::format(name, ctx);
+}
+
+std::ostream &operator<<(std::ostream &os, const simplify::Algorithm &algorithm) {
+    os << fmt::format("{}", algorithm);
+    return os;
+}
+
+namespace simplify {
+
+namespace {
 template <class... Ts>
 struct overloaded : Ts... {
     using Ts::operator()...;
@@ -32,14 +59,14 @@ struct overloaded : Ts... {
 // We use a different uv map type here, because we need this one to be attached to the mesh
 // as otherwise the entries for removed vertices are not removed during garbage collection.
 // We could use the same type as in uv_map but this would require a custom visitor or similar.
-typedef SurfaceMesh::Property_map<VertexDescriptor, Point2> AttachedUvPropertyMap;
+using AttachedUvPropertyMap = cgal::Mesh::Property_map<cgal::VertexDescriptor, cgal::Point2>;
 
-static std::vector<glm::dvec2> decode_uv_map(const AttachedUvPropertyMap &uv_map, size_t number_of_vertices) {
+inline std::vector<glm::dvec2> decode_uv_map(const AttachedUvPropertyMap &uv_map, size_t number_of_vertices) {
     std::vector<glm::dvec2> uvs;
     uvs.reserve(number_of_vertices);
     for (size_t i = 0; i < number_of_vertices; i++) {
-        const Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
-        uvs.push_back(convert::cgal2glm(uv));
+        const cgal::Point2 &uv = uv_map[CGAL::SM_Vertex_index(i)];
+        uvs.push_back(convert::to_glm_point(uv));
     }
     return uvs;
 }
@@ -51,7 +78,7 @@ T clone(const T &orig) {
 
 class ExpensiveStopPredicate {
 public:
-    ExpensiveStopPredicate(SurfaceMesh& mesh) : mesh(mesh), original_mesh(clone(mesh)) {
+    ExpensiveStopPredicate(cgal::Mesh& mesh) : mesh(mesh), original_mesh(clone(mesh)) {
         if (this->has_expensive_checks()) {
             this->make_snapshot(std::move(clone(mesh)), mesh);
         }
@@ -69,7 +96,7 @@ public:
         if (this->has_expensive_checks() && this->should_check_expensive(this->original_mesh, this->mesh)) {
             // At this point we know that we will perform expensive checks
             // and thus want to clean up the removed geometry.
-            SurfaceMesh mesh_clone = clone(this->mesh);
+            cgal::Mesh mesh_clone = clone(this->mesh);
             mesh_clone.collect_garbage();
 
             if (this->should_stop(this->original_mesh, mesh_clone, true)) {
@@ -95,42 +122,42 @@ protected:
         return true;
     };
 
-    virtual bool should_check_expensive(const SurfaceMesh &original, const SurfaceMesh &simplified) const = 0;
-    virtual bool should_stop(const SurfaceMesh &original, const SurfaceMesh &simplified, const bool check_expensive) const = 0;
+    virtual bool should_check_expensive(const cgal::Mesh &original, const cgal::Mesh &simplified) const = 0;
+    virtual bool should_stop(const cgal::Mesh &original, const cgal::Mesh &simplified, const bool check_expensive) const = 0;
 
-    virtual void make_snapshot(SurfaceMesh &&/*mesh_copy*/, SurfaceMesh& mesh) const {
+    virtual void make_snapshot(cgal::Mesh &&/*mesh_copy*/, cgal::Mesh& mesh) const {
         this->mesh_snapshot = mesh;
     }
-    virtual void restore_snapshot(SurfaceMesh& mesh) const {
+    virtual void restore_snapshot(cgal::Mesh& mesh) const {
         mesh = this->mesh_snapshot;
     }
 
 private:
     mutable bool has_stopped = false;
-    SurfaceMesh &mesh;
-    mutable SurfaceMesh mesh_snapshot;
-    mutable SurfaceMesh original_mesh;
+    cgal::Mesh &mesh;
+    mutable cgal::Mesh mesh_snapshot;
+    mutable cgal::Mesh original_mesh;
 };
 
-static double measure_max_absolute_error(const SurfaceMesh &original, const SurfaceMesh &simplified, const double bound_on_error = 0.0001) {
-    const double error = CGAL::Polygon_mesh_processing::bounded_error_Hausdorff_distance<CGAL::Parallel_if_available_tag, SurfaceMesh, SurfaceMesh>(
+inline double measure_max_absolute_error(const cgal::Mesh &original, const cgal::Mesh &simplified, const double bound_on_error = 0.0001) {
+    const double error = CGAL::Polygon_mesh_processing::bounded_error_Hausdorff_distance<CGAL::Parallel_if_available_tag, cgal::Mesh, cgal::Mesh>(
         original, simplified, bound_on_error);
     return error + bound_on_error;
 }
 
-static radix::geometry::Aabb3d calculate_bounds(const SurfaceMesh &mesh) {
+inline radix::geometry::Aabb3d calculate_bounds(const cgal::Mesh &mesh) {
     radix::geometry::Aabb3d bounds;
     bounds.min = glm::dvec3(std::numeric_limits<double>::infinity());
     bounds.max = glm::dvec3(-std::numeric_limits<double>::infinity());
 
     for (const CGAL::SM_Vertex_index vertex_index : mesh.vertices()) {
-        const Point3 &position = mesh.point(vertex_index);
-        bounds.expand_by(convert::cgal2glm(position));
+        const cgal::Point3 &position = mesh.point(vertex_index);
+        bounds.expand_by(convert::to_glm_point(position));
     }
     return bounds;
 }
 
-static std::pair<bool, double> check_condition(const VertexRatio &vertex_ratio, const SurfaceMesh &modified, const SurfaceMesh &original) {
+inline std::pair<bool, double> check_condition(const VertexRatio &vertex_ratio, const cgal::Mesh &modified, const cgal::Mesh &original) {
     const double modified_vertex_count = modified.number_of_vertices();
     const double current_ratio = static_cast<double>(modified_vertex_count) / original.num_vertices();
     // LOG_TRACE("Current vertex ratio is {:g}% with target {:g}%", current_ratio * 100, vertex_ratio.ratio * 100);
@@ -138,7 +165,7 @@ static std::pair<bool, double> check_condition(const VertexRatio &vertex_ratio, 
     const bool fulfilled = current_ratio <= vertex_ratio.ratio;
     return {fulfilled, current_ratio};
 }
-static std::pair<bool, double> check_condition(const EdgeRatio &edge_ratio, const SurfaceMesh &modified, const SurfaceMesh &original) {
+inline std::pair<bool, double> check_condition(const EdgeRatio &edge_ratio, const cgal::Mesh &modified, const cgal::Mesh &original) {
     const double modified_edge_count = modified.number_of_edges();
     const double current_ratio = static_cast<double>(modified_edge_count) / original.num_edges();
     // LOG_TRACE("Current edge ratio is {:g}% with target {:g}%", current_ratio * 100, edge_ratio.ratio * 100);
@@ -146,7 +173,7 @@ static std::pair<bool, double> check_condition(const EdgeRatio &edge_ratio, cons
     const bool fulfilled = current_ratio <= edge_ratio.ratio;
     return {fulfilled, current_ratio};
 }
-static std::pair<bool, double> check_condition(const FaceRatio &face_ratio, const SurfaceMesh &modified, const SurfaceMesh &original) {
+inline std::pair<bool, double> check_condition(const FaceRatio &face_ratio, const cgal::Mesh &modified, const cgal::Mesh &original) {
     const double modified_face_count = modified.number_of_faces();
     const double current_ratio = static_cast<double>(modified_face_count) / original.num_faces();
     // LOG_TRACE("Current face ratio is {:g}% with target {:g}%", current_ratio * 100, face_ratio.ratio * 100);
@@ -154,7 +181,7 @@ static std::pair<bool, double> check_condition(const FaceRatio &face_ratio, cons
     const bool fulfilled = current_ratio <= face_ratio.ratio;
     return {fulfilled, current_ratio};
 }
-static std::pair<bool, double> check_condition(const RelativeError &relative_error, const SurfaceMesh &modified, const SurfaceMesh &original) {
+inline std::pair<bool, double> check_condition(const RelativeError &relative_error, const cgal::Mesh &modified, const cgal::Mesh &original) {
     // TODO: use CGAL::Polygon_mesh_processing::is_Hausdorff_distance_larger() instead
     const glm::dvec3 original_mesh_size = calculate_bounds(original).size();
     const double original_mesh_max_size = std::max({original_mesh_size[0], original_mesh_size[1], original_mesh_size[2]});
@@ -165,13 +192,13 @@ static std::pair<bool, double> check_condition(const RelativeError &relative_err
     const bool fulfilled = current_relative_error >= relative_error.error_bound;
     return {fulfilled, current_relative_error};
 }
-static std::pair<bool, double> check_condition(const AbsoluteError absolute_error, const SurfaceMesh &modified, const SurfaceMesh &original) {
-    const double current_absolute_error = measure_max_absolute_error(convert::mesh2cgal(convert::cgal2mesh(original)), convert::mesh2cgal(convert::cgal2mesh(modified)), absolute_error.error_bound * 0.1 /* TODO: */);
+inline std::pair<bool, double> check_condition(const AbsoluteError absolute_error, const cgal::Mesh &modified, const cgal::Mesh &original) {
+    const double current_absolute_error = measure_max_absolute_error(convert::to_cgal_mesh(convert::to_simple_mesh(original)), convert::to_cgal_mesh(convert::to_simple_mesh(modified)), absolute_error.error_bound * 0.1 /* TODO: */);
     LOG_TRACE("Current absolute error is {:g} with target {:g}", current_absolute_error, absolute_error.error_bound);
     const bool fulfilled = current_absolute_error >= absolute_error.error_bound;
     return {fulfilled, current_absolute_error};
 }
-static std::pair<bool, double> check_condition(const StopCondition &stop_condition, const SurfaceMesh &modified, const SurfaceMesh &original) {
+inline std::pair<bool, double> check_condition(const StopCondition &stop_condition, const cgal::Mesh &modified, const cgal::Mesh &original) {
     return std::visit(overloaded{
                           [&](const VertexRatio &vertex_ratio) {
                               return check_condition(vertex_ratio, modified, original);
@@ -191,7 +218,7 @@ static std::pair<bool, double> check_condition(const StopCondition &stop_conditi
                       stop_condition);
 }
 
-static bool is_evaluation_expensive(const StopCondition &stop_condition) {
+inline bool is_evaluation_expensive(const StopCondition &stop_condition) {
     return std::visit(overloaded{
                           [&](const VertexRatio &) {
                               return false;
@@ -211,14 +238,14 @@ static bool is_evaluation_expensive(const StopCondition &stop_condition) {
                       stop_condition);
 }
 
-struct SurfaceMeshSnapshot {
+struct MeshSnapshot {
     // mesh is already saved by ExpensiveStopPredicate
     std::vector<glm::dvec2> uv_map;
 };
 
 class StopConditionStopPredicate : public ExpensiveStopPredicate {
 public:
-    StopConditionStopPredicate(SurfaceMesh &mesh, AttachedUvPropertyMap &uv_map, const std::span<const StopCondition> stop_conditions)
+    StopConditionStopPredicate(cgal::Mesh &mesh, AttachedUvPropertyMap &uv_map, const std::span<const StopCondition> stop_conditions)
         : ExpensiveStopPredicate(mesh), stop_conditions(stop_conditions), uv_map_ref(uv_map) {
         this->has_expensive_condition = std::any_of(this->stop_conditions.begin(), this->stop_conditions.end(), is_evaluation_expensive);
         this->next_check_edge_count = CGAL::num_edges(mesh) * 0.9;
@@ -229,7 +256,7 @@ protected:
     bool has_expensive_checks() const override {
         return this->has_expensive_condition;
     }
-    bool should_check_expensive(const SurfaceMesh &, const SurfaceMesh &simplified) const override {
+    bool should_check_expensive(const cgal::Mesh &, const cgal::Mesh &simplified) const override {
         if (!this->has_expensive_condition) {
             return false;
         }
@@ -244,7 +271,7 @@ protected:
         return false;
     }
 
-    bool should_stop(const SurfaceMesh &original, const SurfaceMesh &simplified, const bool check_expensive) const override {
+    bool should_stop(const cgal::Mesh &original, const cgal::Mesh &simplified, const bool check_expensive) const override {
         return std::any_of(this->stop_conditions.begin(), this->stop_conditions.end(), [&](const StopCondition &stop_condition) {
             if (is_evaluation_expensive(stop_condition) && !check_expensive) {
                 return false;
@@ -253,27 +280,27 @@ protected:
         });
     }
 
-    void make_snapshot(SurfaceMesh &&mesh, SurfaceMesh& mesh2) const override {
+    void make_snapshot(cgal::Mesh &&mesh, cgal::Mesh& mesh2) const override {
         LOG_TRACE("Making new snapshot of current geometry");
         this->last_snapshot.uv_map.clear();
         this->last_snapshot.uv_map.resize(mesh2.num_vertices());
 
         for (const CGAL::SM_Vertex_index vertex_index : mesh2.vertices()) {
-            const Point2 &uv = uv_map_ref[vertex_index];
-            this->last_snapshot.uv_map[vertex_index] = convert::cgal2glm(uv);
+            const cgal::Point2 &uv = uv_map_ref[vertex_index];
+            this->last_snapshot.uv_map[vertex_index] = convert::to_glm_point(uv);
         }
         
         ExpensiveStopPredicate::make_snapshot(std::move(mesh), mesh2);
     }
 
-    void restore_snapshot(SurfaceMesh& mesh) const override {
+    void restore_snapshot(cgal::Mesh& mesh) const override {
         LOG_TRACE("Restoring last valid snapshot");
         ExpensiveStopPredicate::restore_snapshot(mesh);
 
         mesh.remove_property_map(this->uv_map_ref);
-        this->uv_map_ref = mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
+        this->uv_map_ref = mesh.add_property_map<cgal::VertexDescriptor, cgal::Point2>("h:uv").first;
         for (size_t i = 0; i < this->last_snapshot.uv_map.size(); i++) {
-            this->uv_map_ref[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(this->last_snapshot.uv_map[i]);
+            this->uv_map_ref[CGAL::SM_Vertex_index(i)] = convert::to_cgal_point(this->last_snapshot.uv_map[i]);
         }
     }
 
@@ -282,10 +309,10 @@ private:
     AttachedUvPropertyMap &uv_map_ref;
     mutable size_t next_check_edge_count;
     bool has_expensive_condition;
-    mutable SurfaceMeshSnapshot last_snapshot;
+    mutable MeshSnapshot last_snapshot;
 };
 
-struct UvMapUpdateEdgeCollapseVisitor : CGAL::Surface_mesh_simplification::Edge_collapse_visitor_base<SurfaceMesh> {
+struct UvMapUpdateEdgeCollapseVisitor : CGAL::Surface_mesh_simplification::Edge_collapse_visitor_base<cgal::Mesh> {
     UvMapUpdateEdgeCollapseVisitor(AttachedUvPropertyMap &uv_map)
         : uv_map(uv_map) {}
 
@@ -296,62 +323,42 @@ struct UvMapUpdateEdgeCollapseVisitor : CGAL::Surface_mesh_simplification::Edge_
             return;
         }
 
-        const VertexDescriptor v0 = profile.v0();
-        const VertexDescriptor v1 = profile.v1();
+        const cgal::VertexDescriptor v0 = profile.v0();
+        const cgal::VertexDescriptor v1 = profile.v1();
 
-        const glm::dvec3 pt = convert::cgal2glm(*placement);
-        const glm::dvec3 p0 = convert::cgal2glm(profile.p0());
-        const glm::dvec3 p1 = convert::cgal2glm(profile.p1());
+        const glm::dvec3 pt = convert::to_glm_point(*placement);
+        const glm::dvec3 p0 = convert::to_glm_point(profile.p0());
+        const glm::dvec3 p1 = convert::to_glm_point(profile.p1());
 
         const auto w1 = std::clamp(glm::length(pt - p0) / glm::length(p1 - p0), 0.0, 1.0);
         const auto w0 = 1 - w1;
 
-        const glm::dvec2 uv0 = convert::cgal2glm(get(uv_map, v0));
-        const glm::dvec2 uv1 = convert::cgal2glm(get(uv_map, v1));
-        this->new_uv = convert::glm2cgal(uv0 * w0 + uv1 * w1);
+        const glm::dvec2 uv0 = convert::to_glm_point(get(uv_map, v0));
+        const glm::dvec2 uv1 = convert::to_glm_point(get(uv_map, v1));
+        this->new_uv = convert::to_cgal_point(uv0 * w0 + uv1 * w1);
     }
 
     // Called after each edge has been collapsed
-    void OnCollapsed(const Profile &, VertexDescriptor vd) {
+    void OnCollapsed(const Profile &, cgal::VertexDescriptor vd) {
         uv_map[vd] = new_uv;
     }
 
     AttachedUvPropertyMap &uv_map;
-    Point2 new_uv;
+    cgal::Point2 new_uv;
 };
-
-auto fmt::formatter<Algorithm>::format(const Algorithm &algorithm, format_context &ctx) const {
-    string_view name = "unknown";
-
-    switch (algorithm) {
-    case Algorithm::GarlandHeckbert:
-        name = "GarlandHeckbert";
-        break;
-    case Algorithm::LindstromTurk:
-        name = "LindstromTurk";
-        break;
-    }
-
-    return formatter<string_view>::format(name, ctx);
-}
-
-std::ostream &operator<<(std::ostream &os, const Algorithm &algorithm) {
-    os << fmt::format("{}", algorithm);
-    return os;
-}
 
 // Property map that indicates whether an edge is marked as non-removable.
 struct BorderIsConstrainedEdgeMap {
-    typedef EdgeDescriptor key_type;
+    typedef cgal::EdgeDescriptor key_type;
     typedef bool value_type;
     typedef value_type reference;
     typedef boost::readable_property_map_tag category;
 
-    const SurfaceMesh *mesh;
+    const cgal::Mesh *mesh;
     const bool active = true;
     const bool restrict_border_triangles = true;
 
-    BorderIsConstrainedEdgeMap(const SurfaceMesh &mesh, const bool active = true)
+    BorderIsConstrainedEdgeMap(const cgal::Mesh &mesh, const bool active = true)
         : mesh(&mesh), active(active) {}
 
     friend value_type get(const BorderIsConstrainedEdgeMap &map, const key_type &edge) {
@@ -359,7 +366,7 @@ struct BorderIsConstrainedEdgeMap {
             return false;
         }
 
-        const SurfaceMesh &mesh = *map.mesh;
+        const cgal::Mesh &mesh = *map.mesh;
 
         // return CGAL::is_border(edge, mesh); // old version
         if (CGAL::is_border(edge, mesh)) {
@@ -370,8 +377,8 @@ struct BorderIsConstrainedEdgeMap {
             return false;
         }
 
-        const VertexDescriptor v0 = mesh.vertex(edge, 0);
-        const VertexDescriptor v1 = mesh.vertex(edge, 1);
+        const cgal::VertexDescriptor v0 = mesh.vertex(edge, 0);
+        const cgal::VertexDescriptor v1 = mesh.vertex(edge, 1);
         if (CGAL::is_border(v0, mesh).has_value() || CGAL::is_border(v1, mesh).has_value()) {
             return true;
         }
@@ -386,8 +393,8 @@ struct SimplificationArgs {
 };
 
 template <class Cost, class Placement>
-static size_t _simplify_mesh_with_cost_and_placement(
-    SurfaceMesh &mesh,
+inline size_t _simplify_mesh_with_cost_and_placement(
+    cgal::Mesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Cost &cost,
     const Placement &placement,
@@ -396,7 +403,7 @@ static size_t _simplify_mesh_with_cost_and_placement(
     BorderIsConstrainedEdgeMap bem(mesh, args.lock_borders);
     const ConstrainedPlacement constrained_placement(bem, placement);
 
-    // const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<SurfaceMesh> stop_predicate(args.stop_edge_ratio);
+    // const CGAL::Surface_mesh_simplification::Count_ratio_stop_predicate<cgal::Mesh> stop_predicate(args.stop_edge_ratio);
     const StopConditionStopPredicate stop_predicate(mesh, uv_map, args.stop_conditions);
     UvMapUpdateEdgeCollapseVisitor visitor(uv_map);
     const CGAL::Surface_mesh_simplification::Bounded_normal_change_filter<> filter;
@@ -417,8 +424,8 @@ static size_t _simplify_mesh_with_cost_and_placement(
 }
 
 template <class Policies>
-static size_t _simplify_mesh_with_policies(
-    SurfaceMesh &mesh,
+inline size_t _simplify_mesh_with_policies(
+    cgal::Mesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Policies &policies,
     const SimplificationArgs args) {
@@ -431,26 +438,29 @@ static size_t _simplify_mesh_with_policies(
     return _simplify_mesh_with_cost_and_placement(mesh, uv_map, cost, placement, args);
 }
 
-static size_t _simplify_mesh(
-    SurfaceMesh &mesh,
+inline size_t _simplify_mesh(
+    cgal::Mesh &mesh,
     AttachedUvPropertyMap &uv_map,
     const Algorithm algorithm,
     const SimplificationArgs args) {
     // LOG_TRACE("Simplifying mesh (stop ratio={:g}, borders={}, algorithm={})", args.stop_edge_ratio, args.lock_borders ? "Locked" : "Unlocked", algorithm);
 
     switch (algorithm) {
-    case Algorithm::GarlandHeckbert:
-        typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<SurfaceMesh, Kernel> GH_policies;
-        return _simplify_mesh_with_policies<GH_policies>(mesh, uv_map, GH_policies(mesh), args);
-    case Algorithm::LindstromTurk:
-        typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<SurfaceMesh> LT_cost;
-        typedef CGAL::Surface_mesh_simplification::LindstromTurk_placement<SurfaceMesh> LT_placement;
-        return _simplify_mesh_with_cost_and_placement<LT_cost, LT_placement>(mesh, uv_map, LT_cost(), LT_placement(), args);
-    }
+        case Algorithm::GarlandHeckbert:
+            typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<cgal::Mesh, cgal::Kernel> GH_policies;
+            return _simplify_mesh_with_policies<GH_policies>(mesh, uv_map, GH_policies(mesh), args);
+        case Algorithm::LindstromTurk:
+            typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<cgal::Mesh> LT_cost;
+            typedef CGAL::Surface_mesh_simplification::LindstromTurk_placement<cgal::Mesh> LT_placement;
+            return _simplify_mesh_with_cost_and_placement<LT_cost, LT_placement>(mesh, uv_map, LT_cost(), LT_placement(), args);
+        }
 
-    throw std::invalid_argument("invalid algorithm specified");
+        throw std::invalid_argument("invalid algorithm specified");
+    }
 }
-Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondition> stop_conditions, Options options) {
+
+
+Result simplify_mesh(const mesh::Simple&mesh, std::span<const StopCondition> stop_conditions, Options options) {
     // simplification fails with large numerical values so we normalize the values here.
     // EPECK is way too slow
     const size_t vertex_count = mesh.positions.size();
@@ -459,18 +469,18 @@ Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondit
         average_position += mesh.positions[i] / static_cast<double>(vertex_count);
     }
 
-    SimpleMesh normalized_mesh = mesh;
+    mesh::Simple normalized_mesh = mesh;
     for (size_t i = 0; i < vertex_count; i++) {
-        const glm::vec3 normalized_position = mesh.positions[i] - average_position;
+        const glm::dvec3 normalized_position = mesh.positions[i] - average_position;
         normalized_mesh.positions[i] = normalized_position;
     }
 
-    SurfaceMesh cgal_mesh = convert::mesh2cgal(normalized_mesh);
-    const SurfaceMesh original_mesh(cgal_mesh);
+    cgal::Mesh cgal_mesh = convert::to_cgal_mesh(normalized_mesh);
+    const cgal::Mesh original_mesh(cgal_mesh);
 
-    AttachedUvPropertyMap uv_map = cgal_mesh.add_property_map<VertexDescriptor, Point2>("h:uv").first;
+    AttachedUvPropertyMap uv_map = cgal_mesh.add_property_map<cgal::VertexDescriptor, cgal::Point2>("h:uv").first;
     for (size_t i = 0; i < mesh.uvs.size(); i++) {
-        uv_map[CGAL::SM_Vertex_index(i)] = convert::glm2cgal(mesh.uvs[i]);
+        uv_map[CGAL::SM_Vertex_index(i)] = convert::to_cgal_point(mesh.uvs[i]);
     }
 
     const SimplificationArgs args{
@@ -484,33 +494,28 @@ Result simplify::simplify_mesh(const SimpleMesh&mesh, std::span<const StopCondit
         LOG_WARN("Failed to remove self intersections after simplification");
     }
 
-    SimpleMesh simplified_mesh = convert::cgal2mesh(cgal_mesh);
-    simplified_mesh.uvs.resize(simplified_mesh.vertex_count());
-    for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
-        simplified_mesh.uvs[i] = convert::cgal2glm(uv_map[CGAL::SM_Vertex_index(i)]);
-    }
+    mesh::Simple simplified_mesh = convert::to_simple_mesh(cgal_mesh);
     for (size_t i = 0; i < CGAL::num_vertices(cgal_mesh); i++) {
         simplified_mesh.positions[i] += average_position;
     }
 
-    remove_isolated_vertices(simplified_mesh);
+    mesh::remove_isolated_vertices(simplified_mesh);
 
     mesh::validate(simplified_mesh);
-    mesh::validate(convert::mesh2cgal(simplified_mesh));
 
     return Result{
         .mesh = simplified_mesh,
         .max_absolute_error = simplification_error};
 }
 
-cv::Mat simplify::simplify_texture(const cv::Mat &texture, glm::uvec2 target_resolution) {
-    cv::Mat simplified_texture;
-    cv::resize(texture, simplified_texture, cv::Size(target_resolution.x, target_resolution.y), cv::INTER_LINEAR);
-    return simplified_texture;
+cv::Mat simplify_texture(const cv::Mat &texture, glm::uvec2 target_resolution) {
+    return rescale_texture(texture, target_resolution);
 }
 
-void simplify::simplify_mesh_texture(SimpleMesh &mesh, glm::uvec2 target_resolution) {
+void simplify_mesh_texture(mesh::Simple &mesh, glm::uvec2 target_resolution) {
     if (mesh.texture.has_value()) {
         mesh.texture = simplify_texture(mesh.texture.value(), target_resolution);
     }
+}
+
 }

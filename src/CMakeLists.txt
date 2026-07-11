@@ -6,22 +6,64 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
 # TODO: This is needed to avoid NDEBUG being undefined on Release
 if (CMAKE_BUILD_TYPE MATCHES Release)
-    set(ALP_ENABLE_ASSERTS OFF CACHE BOOL "" FORCE)
+    set(ALP_ENABLE_ASSERTS ON CACHE BOOL "" FORCE)
 endif()
 
-option(ALP_ENABLE_THREAD_SANITIZER "compiles atb with thread sanitizer enabled (only debug, works only on g++ and clang)" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
+
+# ASAN & TSAN
+option(ALP_ENABLE_THREAD_SANITIZER "compiles with thread sanitizer enabled" OFF)
+option(ALP_ENABLE_ADDRESS_SANITIZER "compiles with address sanitizer enabled" OFF)
+
+if(ALP_ENABLE_ADDRESS_SANITIZER)
+    if(ALP_ENABLE_THREAD_SANITIZER)
+        message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")
+    endif()
+endif()
+
+if(ALP_ENABLE_ADDRESS_SANITIZER)
+    message(STATUS "AddressSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(ASAN_FLAGS -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -g)
+        add_compile_options(${ASAN_FLAGS})
+        add_link_options(${ASAN_FLAGS})
+    else()
+        message(WARNING "ALP_ENABLE_ADDRESS_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
+if(ALP_ENABLE_THREAD_SANITIZER)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(WARNING "ThreadSanitizer is not recommended with Release builds. "
+                        "Use Debug or RelWithDebInfo for accurate race detection.")
+    endif()
+    message(STATUS "ThreadSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(TSAN_FLAGS -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g)
+        add_compile_options(${TSAN_FLAGS})
+        add_link_options(${TSAN_FLAGS})
+    else()
+        message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
+set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O${ALP_RELEASE_OPT_LEVEL}")
+endif()
 
 find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
 alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
-alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH 20de8b73bbbabaf2f94dd07c4ece8ff3590af531)
+alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH v2.6.1)
 
 alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
 add_library(Eigen3 INTERFACE)
-target_include_directories(Eigen3 INTERFACE ${eigen_SOURCE_DIR})
+target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
 
 alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
 find_package(Boost CONFIG REQUIRED)
@@ -37,7 +79,7 @@ alp_setup_opencv(4.11.0)
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
-target_include_directories(cgltf INTERFACE ${cgltf_SOURCE_DIR})
+target_include_directories(cgltf INTERFACE SYSTEM ${cgltf_SOURCE_DIR})
 
 set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
@@ -46,11 +88,11 @@ alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 
 
 alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
 add_library(stb INTERFACE)
-target_include_directories(stb INTERFACE ${stb_SOURCE_DIR})
+target_include_directories(stb INTERFACE SYSTEM ${stb_SOURCE_DIR})
 
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 add_library(tl_expected INTERFACE)
-target_include_directories(tl_expected INTERFACE ${tl_expected_SOURCE_DIR}/include)
+target_include_directories(tl_expected INTERFACE SYSTEM ${tl_expected_SOURCE_DIR}/include)
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
@@ -58,7 +100,7 @@ add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
-target_include_directories(zpp_bits INTERFACE ${zpp_bits_SOURCE_DIR})
+target_include_directories(zpp_bits INTERFACE SYSTEM ${zpp_bits_SOURCE_DIR})
 
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 
@@ -66,10 +108,22 @@ alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git 
 
 alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 
-alp_add_git_repository(xatlas URL https://github.com/Korinin38/xatlas_hi-res_optimised COMMITISH 67f364cbcec67b586130c61c90f64192fad44fd2 DO_NOT_ADD_SUBPROJECT)
-# alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
+
+alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
 add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
 target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+
+set(LIBIGL_COPYLEFT_CORE ON)
+set(LIBIGL_RESTRICTED_TRIANGLE ON)
+alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
+
+alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
+
+set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(METIS_INSTALL OFF CACHE BOOL "" FORCE)
+alp_add_git_repository(metis URL https://github.com/scivision/metis COMMITISH v5.2.1.2)
+target_compile_definitions(metis INTERFACE IDXTYPEWIDTH=32 REALTYPEWIDTH=32)
 
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
 
@@ -106,6 +160,18 @@ target_include_directories(imgui PUBLIC
 )
 target_link_libraries(imgui PUBLIC glfw)
 
+
+# Unity Builds
+option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
+set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity translation unit")
+if(ALP_ENABLE_UNITY_BUILD)
+    message(STATUS "ALP_ENABLE_UNITY_BUILD: enabling CMake unity builds (CMAKE_UNITY_BUILD=ON)")
+    set(CMAKE_UNITY_BUILD ON)
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE ${ALP_UNITY_BUILD_BATCH_SIZE})
+endif()
+
+
+# Own targets
 add_library(terrainlib
     terrainlib/ctb/CTBException.hpp
     terrainlib/ctb/GlobalGeodetic.hpp terrainlib/ctb/GlobalGeodetic.cpp
@@ -114,83 +180,53 @@ add_library(terrainlib
     terrainlib/ctb/TileCoordinate.hpp
     terrainlib/ctb/types.hpp
 
-    terrainlib/io/bytes.h terrainlib/io/bytes.cpp
-    terrainlib/io/Error.h
-    terrainlib/io/serialize.h
-    terrainlib/io/utils.h terrainlib/io/utils.cpp
+    terrainlib/io/bytes.cpp
+    terrainlib/io/utils.cpp
 
-    terrainlib/mesh/io/error.h
-    terrainlib/mesh/io/gltf.h terrainlib/mesh/io/gltf.cpp
-    terrainlib/mesh/io/options.h
-    terrainlib/mesh/io/terrain.h terrainlib/mesh/io/terrain.cpp
-    terrainlib/mesh/io/texture.h terrainlib/mesh/io/texture.cpp
-    terrainlib/mesh/io/utils.h terrainlib/mesh/io/utils.cpp
+    terrainlib/mesh/igl/igl.cpp
 
-    terrainlib/mesh/boolean.h terrainlib/mesh/boolean.cpp
-    terrainlib/mesh/cgal.h
-    terrainlib/mesh/clip.h terrainlib/mesh/clip.cpp
-    terrainlib/mesh/convert.h terrainlib/mesh/convert.cpp
-    terrainlib/mesh/holes.h terrainlib/mesh/holes.cpp
-    terrainlib/mesh/io.h terrainlib/mesh/io.cpp
-    terrainlib/mesh/merge.h
-    terrainlib/mesh/merging/VertexDeduplicate.h
-    terrainlib/mesh/merging/EpsilonVertexDeduplicate.h
-    terrainlib/mesh/merging/SphereProjectionVertexDeduplicate.h
-    terrainlib/mesh/merging/VertexMapping.h
-    terrainlib/mesh/merging/mapping.h terrainlib/mesh/merging/mapping.cpp
-    terrainlib/mesh/SimpleMesh.h
-    terrainlib/mesh/TriangleSoup.h
-    terrainlib/mesh/utils.h terrainlib/mesh/utils.cpp
-    terrainlib/mesh/uv_map.h terrainlib/mesh/uv_map.cpp
-    terrainlib/mesh/validate.h
+    terrainlib/mesh/io/gltf.cpp
+    terrainlib/mesh/io/terrain.cpp
+    terrainlib/mesh/io/texture.cpp
+    terrainlib/mesh/io/utils.cpp
+    
+    terrainlib/mesh/merging/mapping.cpp
 
-    terrainlib/octree/disk/layout/strategy/Default.h
-    terrainlib/octree/disk/layout/strategy/Flat.h
-    terrainlib/octree/disk/layout/strategy/LevelAndCoordinateDirectories.h
-    terrainlib/octree/disk/layout/Strategy.h
-    terrainlib/octree/disk/layout/StrategyRegister.h
-    terrainlib/octree/disk/IndexFile.h
-    terrainlib/octree/disk/Layout.h
-    terrainlib/octree/storage/cache/Dummy.h
-    terrainlib/octree/storage/cache/ICache.h
-    terrainlib/octree/storage/cache/LruCache.h
-    terrainlib/octree/storage/helpers.h terrainlib/octree/storage/helpers.cpp
-    terrainlib/octree/storage/IndexedStorage.h
-    terrainlib/octree/storage/open.h terrainlib/octree/storage/open.cpp
-    terrainlib/octree/storage/RawStorage.h terrainlib/octree/storage/RawStorage.cpp
-    terrainlib/octree/storage/Storage.h
-    terrainlib/octree/Id.h
-    terrainlib/octree/Storage.h
-    terrainlib/octree/IndexMap.h terrainlib/octree/IndexMap.cpp
-    terrainlib/octree/NodeStatus.h
-    terrainlib/octree/Space.h terrainlib/octree/Space.cpp
-    terrainlib/octree/traverse.h
-    terrainlib/octree/utils.h
+    terrainlib/mesh/bfs.cpp
+    terrainlib/mesh/boolean.cpp
+    terrainlib/mesh/boundary.cpp
+    terrainlib/mesh/cleanup.cpp
+    terrainlib/mesh/clip.cpp
+    terrainlib/mesh/compute_topology.cpp
+    terrainlib/mesh/convert.cpp
+    terrainlib/mesh/geometry.cpp
+    terrainlib/mesh/holes.cpp
+    terrainlib/mesh/io.cpp
+    terrainlib/mesh/manifold.cpp
+    terrainlib/mesh/texture_trim.cpp
+    terrainlib/mesh/topology.cpp
+    terrainlib/mesh/validate.cpp
+    terrainlib/mesh/vertex_index_range.cpp
 
-    terrainlib/polygon/Polygon.h 
-    terrainlib/polygon/triangulate.h terrainlib/polygon/triangulate.cpp 
-    terrainlib/polygon/utils.h terrainlib/polygon/utils.cpp 
+    terrainlib/octree/storage/helpers.cpp
+    terrainlib/octree/IndexMap.cpp
+    terrainlib/octree/Space.cpp
+    terrainlib/octree/OddLevelShifted.cpp
 
-    terrainlib/spatial_lookup/CellBased.h
-    terrainlib/spatial_lookup/CellBasedStorage.h
-    terrainlib/spatial_lookup/Grid.h
-    terrainlib/spatial_lookup/GridStorage.h
-    terrainlib/spatial_lookup/Hashmap.h
-    terrainlib/spatial_lookup/HashmapStorage.h
-    terrainlib/spatial_lookup/NDLoopHelper.h
-    terrainlib/spatial_lookup/SpatialLookup.h
+    terrainlib/polygon/triangulate.cpp 
+    terrainlib/polygon/utils.cpp 
 
-    terrainlib/Dataset.h terrainlib/Dataset.cpp
-    terrainlib/hash_utils.h
-    terrainlib/init.h terrainlib/init.cpp
-    terrainlib/log.h terrainlib/log.cpp
-    terrainlib/ProgressIndicator.h terrainlib/ProgressIndicator.cpp
-    terrainlib/SphereProjector.h
-    terrainlib/srs.h
-    terrainlib/string_utils.h
+    terrainlib/uv/unwrap.cpp
+
+    terrainlib/Dataset.cpp
+    terrainlib/init.cpp
+    terrainlib/log.cpp
+    terrainlib/ProgressIndicator.cpp
 )
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
-target_link_libraries(terrainlib PUBLIC radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum)
+target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
+target_link_libraries(terrainlib PUBLIC 
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
@@ -198,19 +234,14 @@ endif()
 
 
 add_library(tilebuilderlib
-    tile_builder/alpine_raster.h tile_builder/alpine_raster.cpp
-    tile_builder/DatasetReader.h tile_builder/DatasetReader.cpp
-    tile_builder/depth_first_tile_traverser.h
-    tile_builder/Exception.h
-    tile_builder/Image.h tile_builder/Image.cpp
-    tile_builder/ParallelTileGenerator.h tile_builder/ParallelTileGenerator.cpp
-    tile_builder/ParallelTiler.h tile_builder/ParallelTiler.cpp
-    tile_builder/srs.h
-    tile_builder/TileHeightsGenerator.h tile_builder/TileHeightsGenerator.cpp
-    tile_builder/Tiler.h tile_builder/Tiler.cpp
-    tile_builder/TopDownTiler.h tile_builder/TopDownTiler.cpp
-    tile_builder/algorithms/primitives.h
-    tile_builder/algorithms/raster_triangle_scanline.h
+    tile_builder/alpine_raster.cpp
+    tile_builder/DatasetReader.cpp
+    tile_builder/Image.cpp
+    tile_builder/ParallelTileGenerator.cpp
+    tile_builder/ParallelTiler.cpp
+    tile_builder/TileHeightsGenerator.cpp
+    tile_builder/Tiler.cpp
+    tile_builder/TopDownTiler.cpp
 )
 target_include_directories(tilebuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/tile_builder)
 target_link_libraries(tilebuilderlib PUBLIC terrainlib radix ZLIB::ZLIB GDAL::GDAL fmt)
@@ -220,46 +251,18 @@ add_executable(tile-builder
 target_link_libraries(tile-builder PUBLIC tilebuilderlib)
 
 
-add_library(sfmergerlib
-    sf_merger/atlas/build.h
-    sf_merger/atlas/HorizontalStripLayoutPlanner.h
-    sf_merger/atlas/Layout.h
-    sf_merger/atlas/LayoutPlanner.h
-    sf_merger/atlas/Sheet.h
-
-    sf_merger/merge/visitor/Masked.h
-    sf_merger/merge/visitor/Simple.h
-    sf_merger/merge/visitor/Visitor.h
-    sf_merger/merge/NodeData.h
-    sf_merger/merge/Result.h
-
-    sf_merger/cut.h
-    sf_merger/earth.h
-    sf_merger/mask.h
-    sf_merger/merge.h
-    sf_merger/NodeLoader.h
-    sf_merger/NodeWriter.h
-    sf_merger/SimpleMutex.h
-    sf_merger/utils.h
-)
+add_library(sfmergerlib sf_merger/merge.h)
 target_include_directories(sfmergerlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/sf_merger)
 target_link_libraries(sfmergerlib PUBLIC terrainlib spdlog CLI11::CLI11 tl_expected)
 add_executable(sf-merger
     sf_merger/main.cpp
-    sf_merger/cli.h sf_merger/cli.cpp
+    sf_merger/cli.cpp
 )
 target_link_libraries(sf-merger PUBLIC sfmergerlib)
 
 
 add_library(meshbuilderlib
-    mesh_builder/tile_provider.h
-    mesh_builder/mesh_builder.h
-    mesh_builder/mesh_builder.cpp
-    mesh_builder/raw_dataset_reader.h
-    mesh_builder/texture_assembler.h
-    mesh_builder/border.h
-    mesh_builder/raster.h
-    mesh_builder/mesh_builder.h
+    mesh_builder/terrainbuilder.cpp
     mesh_builder/mesh_builder.cpp
 )
 target_include_directories(meshbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_builder)
@@ -271,15 +274,11 @@ target_link_libraries(mesh-builder PUBLIC meshbuilderlib)
 
 
 add_library(meshsimplifylib
-    mesh_simplify/cli.h
     mesh_simplify/cli.cpp
-    mesh_simplify/simplify.h
     mesh_simplify/simplify.cpp
-    mesh_simplify/uv_map.h
     mesh_simplify/uv_map.cpp
 )
 target_include_directories(meshsimplifylib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/mesh_simplify)
-target_precompile_headers(meshsimplifylib PRIVATE mesh_simplify/pch.h)
 target_link_libraries(meshsimplifylib PUBLIC terrainlib radix CLI11::CLI11 Eigen3 CGAL::CGAL)
 add_executable(mesh-simplify
     mesh_simplify/main.cpp
@@ -288,25 +287,49 @@ target_link_libraries(mesh-simplify PUBLIC meshsimplifylib)
 
 add_executable(tile-downloader
     tile_downloader/main.cpp
+    tile_downloader/cli.cpp
 )
 target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
 
 add_executable(mesh-convert
-    mesh_convert/cli.h mesh_convert/cli.cpp
+    mesh_convert/cli.cpp
     mesh_convert/main.cpp
 )
 target_link_libraries(mesh-convert PUBLIC terrainlib CLI11::CLI11)
 
-add_executable(index-browser
-    index_browser/cli.h index_browser/cli.cpp
-    index_browser/main.cpp
-)
 add_executable(mesh_merger
-    mesh_merger/cli.h mesh_merger/cli.cpp
+    mesh_merger/cli.cpp
     mesh_merger/main.cpp
 )
 target_link_libraries(mesh_merger PUBLIC terrainlib CLI11::CLI11)
+
+add_executable(index-browser
+    index_browser/cli.cpp
+    index_browser/main.cpp
+)
 target_link_libraries(index-browser PUBLIC terrainlib CLI11::CLI11 ftxui::dom ftxui::component ftxui::screen)
+
+add_library(dagbuilderlib
+    dag_builder/atlas/Packer.cpp
+    dag_builder/atlas/rect/atlas.cpp
+    dag_builder/atlas/rect/HorizontalStripPlanner.cpp
+    dag_builder/atlas/rect/PackingPlanner.cpp
+    dag_builder/build.cpp
+    dag_builder/merge/clusterings.cpp
+)
+target_include_directories(dagbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/dag_builder)
+target_link_libraries(dagbuilderlib PUBLIC terrainlib libassert::assert metis rectpack2D meshoptimizer xatlas)
+add_executable(dag-builder
+    dag_builder/cli.cpp
+    dag_builder/main.cpp
+)
+target_link_libraries(dag-builder PUBLIC dagbuilderlib CLI11::CLI11)
+
+add_executable(dag-convert-debug
+    dag_convert_debug/cli.cpp
+    dag_convert_debug/main.cpp
+)
+target_link_libraries(dag-convert-debug PUBLIC dagbuilderlib CLI11::CLI11)
 
 add_executable(browser
     # browser/main2.cpp
@@ -332,3 +355,15 @@ add_executable(browser
 target_include_directories(browser PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/browser)
 target_link_libraries(browser PUBLIC terrainlib glfw glad_gl_core_46 resources-lib imgui)
 
+# Setup compiler caching with sccache or ccache if available
+find_program(SCCACHE_PROGRAM sccache)
+find_program(CCACHE_PROGRAM ccache)
+if (SCCACHE_PROGRAM)
+    message(STATUS "Using sccache as compiler launcher: ${SCCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${SCCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+elseif (CCACHE_PROGRAM)
+    message(STATUS "Using ccache as compiler launcher: ${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER   "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()

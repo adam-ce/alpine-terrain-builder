@@ -1,6 +1,5 @@
 #pragma once
 
-#include <span>
 #include <functional>
 
 #include "mesh/SimpleMesh.h"
@@ -8,12 +7,32 @@
 #include "mesh/merging/VertexId.h"
 #include "mesh/merging/VertexMapping.h"
 #include "mesh/merging/helpers.h"
+#include "type_utils.h"
 
 namespace mesh::merging {
 
-// VertexMapping create_connecting_mapping(std::span<const SimpleMesh> meshes);
-
 namespace detail {
+template<typename T, std::size_t N, std::size_t... I> constexpr auto span_to_refs_array_impl(std::span<T, N> s, std::index_sequence<I...>) {
+    return std::array<std::reference_wrapper<T>, N>{std::ref(s[I])...};
+}
+
+template <typename T, std::size_t Extent>
+constexpr auto span_to_refs(std::span<T, Extent> s) {
+    using U = std::remove_cv_t<T>;
+    if constexpr (is_specialization_of_v<U, std::reference_wrapper>) {
+        return s;
+    } else if constexpr (Extent == std::dynamic_extent) {
+        std::vector<std::reference_wrapper<T>> out;
+        out.reserve(s.size());
+        for (T &x : s) {
+            out.emplace_back(x);
+        }
+        return out;
+    } else {
+        return span_to_refs_array_impl<T, Extent>(s, std::make_index_sequence<Extent>{});
+    }
+}
+
 struct ResolvedCreateOptions {
     bool only_consider_boundary;
     VertexDeduplicate<3, double, VertexId>& deduplicate;
@@ -87,27 +106,28 @@ inline CreateOptions<EstimateEpsilon> create_options() {
     return CreateOptions<EstimateEpsilon>::defaults();
 }
 
-template <typename Mode = EstimateEpsilon>
+template <typename Meshes, typename Mode = EstimateEpsilon>
 VertexMapping create_mapping(
-    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
+    const Meshes meshes,
     const CreateOptions<Mode> options = create_options()) {
+    const auto mesh_span = detail::span_to_refs(std::span(meshes));
     switch (meshes.size()) {
         case 0: 
             return {};
         case 1:
-            return VertexMapping::identity(meshes[0].get().vertex_count());
+            return VertexMapping::identity(mesh_span[0].get().vertex_count());
         default:
             if constexpr (std::is_same_v<Mode, EstimateEpsilon>) {
-                auto deduplicate = make_default_deduplicate(meshes);
+                auto deduplicate = make_default_deduplicate(mesh_span);
                 LOG_TRACE("Creating merge mapping with default epsilon = {}", deduplicate.epsilon());
-                return detail::create_mapping(meshes, {options.get_only_consider_boundary(), deduplicate});
+                return detail::create_mapping(mesh_span, {options.get_only_consider_boundary(), deduplicate});
             } else if constexpr (std::is_same_v<Mode, ProvidedEpsilon>) {
                 const double epsilon = options.get_mode().value;
                 LOG_TRACE("Creating merge mapping with epsilon = {}", epsilon);
-                auto deduplicate = make_epsilon_deduplicate(meshes, epsilon);
-                return detail::create_mapping(meshes, {options.get_only_consider_boundary(), deduplicate});
+                auto deduplicate = make_epsilon_deduplicate(mesh_span, epsilon);
+                return detail::create_mapping(mesh_span, {options.get_only_consider_boundary(), deduplicate});
             } else if constexpr (std::is_same_v<Mode, ProvidedDeduplicate>) {
-                return detail::create_mapping(meshes, {options.get_only_consider_boundary(), options.get_mode().deduplicate});
+                return detail::create_mapping(mesh_span, {options.get_only_consider_boundary(), options.get_mode().deduplicate});
             } else {
                 UNREACHABLE();
             }
@@ -145,11 +165,13 @@ inline ApplyOptions apply_options() {
     return ApplyOptions::defaults();
 }
 
+template <typename Meshes>
 inline SimpleMesh apply_mapping(
-    const std::span<const std::reference_wrapper<const SimpleMesh>> meshes,
+    const Meshes meshes,
     const VertexMapping &mapping,
     const ApplyOptions options = apply_options()) {
-    return detail::apply_mapping(meshes, mapping, detail::ResolvedApplyOptions {
+    const auto mesh_span = detail::span_to_refs(std::span(meshes));
+    return detail::apply_mapping(mesh_span, mapping, detail::ResolvedApplyOptions {
         .deduplicate_triangles = options.get_deduplicate_triangles(),
         .merge_uvs = options.get_merge_uvs()
     });

@@ -71,7 +71,7 @@ TEST_CASE("find_smallest_node_encompassing_bounds returns smallest valid node", 
 
     // Check that node bounds fully contain the target
     for (const auto &corner : radix::geometry::corners(target)) {
-        REQUIRE(node_bounds.contains_inclusive(corner));
+        CHECK(node_bounds.contains_inclusive(corner));
     }
 
     // Now check that no child of this node fully contains the target
@@ -102,14 +102,151 @@ TEST_CASE("find_smallest_node_encompassing_bounds roundtrips from Id to bounds a
 
     // Sanity check: bounds should be non-empty
     auto size = node_bounds.size();
-    REQUIRE(size.x > 0);
-    REQUIRE(size.y > 0);
-    REQUIRE(size.z > 0);
+    CHECK(size.x > 0);
+    CHECK(size.y > 0);
+    CHECK(size.z > 0);
 
     // Find the smallest node encompassing the bounds
     auto maybe_id = space.find_smallest_node_encompassing_bounds(node_bounds);
 
     // It should find exactly the same ID
     REQUIRE(maybe_id.has_value());
-    REQUIRE(maybe_id.value() == original_id);
+    CHECK(maybe_id.value() == original_id);
+}
+
+TEST_CASE("find_node_at_level_containing_point: roundtrip from Id to center back to Id", "[octree::Space]") {
+    Space space = Space::earth();
+
+    Id id{4, glm::uvec3(3, 1, 2)};
+    glm::dvec3 centre = space.get_node_bounds(id).centre();
+
+    auto result = space.find_node_at_level_containing_point(centre, 4);
+    REQUIRE(result.has_value());
+    CHECK(result.value() == id);
+}
+
+TEST_CASE("find_node_at_level_containing_point: nullopt outside space", "[octree::Space]") {
+    Space space = Space::earth();
+
+    glm::dvec3 outside = space.bounds().max + glm::dvec3(1.0);
+
+    auto result = space.find_node_at_level_containing_point(outside, 3);
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("find_node_at_level_containing_point: level 0 returns root", "[octree::Space]") {
+    Space space = Space::earth();
+
+    glm::dvec3 interior = space.bounds().centre();
+
+    auto result = space.find_node_at_level_containing_point(interior, 0);
+    REQUIRE(result.has_value());
+    CHECK(result.value() == Id::root());
+}
+
+TEST_CASE("find_node_at_level_containing_point: ancestors are consistent across levels", "[octree::Space]") {
+    Space space = Space::earth();
+
+    glm::dvec3 point = space.bounds().centre();
+
+    auto id1 = space.find_node_at_level_containing_point(point, 1);
+    auto id2 = space.find_node_at_level_containing_point(point, 2);
+    auto id3 = space.find_node_at_level_containing_point(point, 3);
+
+    REQUIRE(id1.has_value());
+    REQUIRE(id2.has_value());
+    REQUIRE(id3.has_value());
+
+    CAPTURE(id1.value());
+    CAPTURE(id2.value());
+    CAPTURE(id3.value());
+
+    CHECK(id2->ancestor_on_level(1) == id1);
+    CHECK(id3->ancestor_on_level(2) == id2);
+}
+
+TEST_CASE("get_node_bounds: root equals space bounds", "[octree::Space]") {
+    Space space = Space::earth();
+
+    Bounds root_bounds = space.get_node_bounds(Id::root());
+
+    CHECK(root_bounds.min.x == space.bounds().min.x);
+    CHECK(root_bounds.min.y == space.bounds().min.y);
+    CHECK(root_bounds.min.z == space.bounds().min.z);
+    CHECK(root_bounds.max.x == space.bounds().max.x);
+    CHECK(root_bounds.max.y == space.bounds().max.y);
+    CHECK(root_bounds.max.z == space.bounds().max.z);
+}
+
+TEST_CASE("get_node_bounds: children tile parent", "[octree::Space]") {
+    Space space = Space::earth();
+
+    Id parent{2, glm::uvec3(1, 2, 0)};
+    Bounds parent_bounds = space.get_node_bounds(parent);
+
+    REQUIRE(parent.has_children());
+    auto children = parent.children().value();
+
+    Bounds union_bounds = space.get_node_bounds(children[0]);
+    for (const Id &child : children) {
+        CAPTURE(child);
+        union_bounds.expand_by(space.get_node_bounds(child));
+    }
+
+    CHECK(union_bounds.min.x == Catch::Approx(parent_bounds.min.x).epsilon(1e-9));
+    CHECK(union_bounds.min.y == Catch::Approx(parent_bounds.min.y).epsilon(1e-9));
+    CHECK(union_bounds.min.z == Catch::Approx(parent_bounds.min.z).epsilon(1e-9));
+    CHECK(union_bounds.max.x == Catch::Approx(parent_bounds.max.x).epsilon(1e-9));
+    CHECK(union_bounds.max.y == Catch::Approx(parent_bounds.max.y).epsilon(1e-9));
+    CHECK(union_bounds.max.z == Catch::Approx(parent_bounds.max.z).epsilon(1e-9));
+
+    Bounds child0_bounds = space.get_node_bounds(children[0]);
+    Bounds child7_bounds = space.get_node_bounds(children[7]);
+
+    CHECK(child0_bounds.min.x == Catch::Approx(parent_bounds.min.x).epsilon(1e-9));
+    CHECK(child0_bounds.min.y == Catch::Approx(parent_bounds.min.y).epsilon(1e-9));
+    CHECK(child0_bounds.min.z == Catch::Approx(parent_bounds.min.z).epsilon(1e-9));
+    CHECK(child7_bounds.max.x == Catch::Approx(parent_bounds.max.x).epsilon(1e-9));
+    CHECK(child7_bounds.max.y == Catch::Approx(parent_bounds.max.y).epsilon(1e-9));
+    CHECK(child7_bounds.max.z == Catch::Approx(parent_bounds.max.z).epsilon(1e-9));
+}
+
+TEST_CASE("get_node_size_at_level: halves at each level", "[octree::Space]") {
+    Space space = Space::earth();
+
+    glm::dvec3 full_size = space.bounds().size();
+
+    glm::dvec3 size0 = space.get_node_size_at_level(0);
+    glm::dvec3 size1 = space.get_node_size_at_level(1);
+    glm::dvec3 size2 = space.get_node_size_at_level(2);
+
+    CHECK(size0.x == Catch::Approx(full_size.x).epsilon(1e-9));
+    CHECK(size0.y == Catch::Approx(full_size.y).epsilon(1e-9));
+    CHECK(size0.z == Catch::Approx(full_size.z).epsilon(1e-9));
+
+    CHECK(size1.x == Catch::Approx(full_size.x / 2.0).epsilon(1e-9));
+    CHECK(size1.y == Catch::Approx(full_size.y / 2.0).epsilon(1e-9));
+    CHECK(size1.z == Catch::Approx(full_size.z / 2.0).epsilon(1e-9));
+
+    CHECK(size2.x == Catch::Approx(full_size.x / 4.0).epsilon(1e-9));
+    CHECK(size2.y == Catch::Approx(full_size.y / 4.0).epsilon(1e-9));
+    CHECK(size2.z == Catch::Approx(full_size.z / 4.0).epsilon(1e-9));
+}
+
+TEST_CASE("contains: interior point is true", "[octree::Space]") {
+    Space space = Space::earth();
+
+    CHECK(space.contains(space.bounds().centre()));
+}
+
+TEST_CASE("contains: min corner is true (inclusive)", "[octree::Space]") {
+    Space space = Space::earth();
+
+    CHECK(space.contains(space.bounds().min));
+}
+
+TEST_CASE("contains: max corner is false (exclusive)", "[octree::Space]") {
+    Space space = Space::earth();
+
+    CHECK_FALSE(space.contains(space.bounds().max));
 }

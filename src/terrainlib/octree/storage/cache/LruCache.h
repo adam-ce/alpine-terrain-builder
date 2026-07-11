@@ -12,9 +12,9 @@ namespace octree::cache {
 
 // TODO: UNTESTED
 template <typename Key, typename Value>
-class Lru : public ICache {
+class Lru_ : public ICache {
 public:
-    explicit Lru(const size_t capacity) : _capacity(capacity) {}
+    explicit Lru_(const size_t capacity) : _capacity(capacity) {}
 
     std::optional<Value> get(const Key& key) {
         auto it = this->_map.find(key);
@@ -62,5 +62,7 @@ private:
     std::list<Key> _usage;
     std::unordered_map<Key, std::pair<Value, typename std::list<Key>::iterator>> _map;
 };
+
+using Lru<T> = Lru<octree::Id, T>;
 
 }

@@ -43,25 +43,12 @@ std::string format_secs_since(const std::chrono::high_resolution_clock::time_poi
 }
 }
 
-class BasemapSchemeTilePathProvider : public TilePathProvider {
-public:
-    BasemapSchemeTilePathProvider(std::filesystem::path base_path)
-        : base_path(base_path) {}
-
-    std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile_id) const override {
-        return fmt::format("{}/{}/{}/{}.jpeg", this->base_path.string(), tile_id.zoom_level, tile_id.coords.y, tile_id.coords.x);
-    }
-
-private:
-    std::filesystem::path base_path;
-};
-
 std::optional<SimpleMesh> build_patch(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> texture_base_path,
+    const TileProvider* tile_provider,
     const OGRSpatialReference &mesh_srs) {
     const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
@@ -97,11 +84,10 @@ std::optional<SimpleMesh> build_patch(
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
     LOG_INFO("Finished building mesh geometry");
 
-    if (texture_base_path.has_value()) {
+    if (tile_provider != nullptr) {
         start = std::chrono::high_resolution_clock::now();
         LOG_INFO("Assembling mesh texture");
-        BasemapSchemeTilePathProvider tile_provider(texture_base_path.value());
-        std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, tile_provider);
+        std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
         if (!texture.has_value()) {
             LOG_ERROR("Failed to assemble texture");
             // TODO: should we return nullopt here?
@@ -121,7 +107,7 @@ void build_and_save_patch(
     const OGRSpatialReference &target_bounds_srs,
     const radix::geometry::Aabb3d &target_bounds,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> texture_base_path,
+    const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_path) {
     auto mesh_result = build_patch(
@@ -129,7 +115,7 @@ void build_and_save_patch(
         target_bounds_srs,
         target_bounds,
         texture_srs,
-        texture_base_path,
+        tile_provider,
         mesh_srs);
     if (!mesh_result.has_value()) {
         return;
@@ -156,7 +142,7 @@ void build_and_save_patch(
         exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
-    LOG_INFO("Done", output_path);
+    LOG_INFO("Done writing mesh to {}", output_path);
 }
 
 namespace {
@@ -173,10 +159,12 @@ void build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
-    const std::optional<std::filesystem::path> &texture_base_path,
+    const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs,
     const std::filesystem::path &output_base_path,
-    const std::string &output_format) {
+    const std::string &output_format,
+    const bool overwrite_existing
+) {
     if (!std::filesystem::exists(output_base_path)) {
         LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
         std::filesystem::create_directories(output_base_path);
@@ -208,7 +196,7 @@ void build_all_patches(
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
-    tbb::enumerable_thread_specific<std::unique_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
+    tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
         auto local_ecef_srs = ecef_srs;
         auto local_dataset_srs = dataset_srs;
         auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
@@ -216,10 +204,15 @@ void build_all_patches(
     });
 
     process_node = [&](octree::Id node) {
+        // Check if node intersects with ecef bounds of dataset
         const auto node_bounds = space.get_node_bounds(node);
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds);
+        if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
+            return;
+        }
 
+        // Check if node bounds in dataset srs intersect with dataset
+        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
+            &*transform_ecef_dataset.local(), node_bounds, 7, 3);
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
             return;
         }
@@ -244,6 +237,7 @@ void build_all_patches(
     ProgressIndicator progress(target_nodes.size());
     std::jthread progress_thread = progress.start_monitoring();
 
+    // Clone dataset and SRSs for each thread
     tbb::enumerable_thread_specific<Dataset> local_dataset([&]() {
         return dataset.clone();
     });
@@ -268,7 +262,7 @@ void build_all_patches(
 
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (storage.has_node(node)) {
+        if (!overwrite_existing && storage.has(node)) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
             return;
         }
@@ -284,13 +278,13 @@ void build_all_patches(
             ecef_srs,
             node_bounds,
             texture_srs,
-            texture_base_path,
+            tile_provider,
             mesh_srs);
 
         if (mesh_result.has_value()) {
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
-            storage.write_node(node, mesh);
+            storage.save(node, mesh);
         }
 
         progress.task_finished();

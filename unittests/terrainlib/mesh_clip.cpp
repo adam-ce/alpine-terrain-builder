@@ -13,8 +13,10 @@
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/io.h"
-#include "mesh/utils.h"
+#include "mesh/bounds.h"
 #include "mesh/validate.h"
+#include "mesh/manifold.h"
+#include "mesh/geometry.h"
 #include "octree/Space.h"
 #include "octree/Id.h"
 
@@ -103,22 +105,17 @@ TEST_CASE("single triangle touching bounds") {
     const radix::geometry::Aabb3d bounds(glm::dvec3(-1, -1, -1), glm::dvec3(0.5, 0.5, 0));
     const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
     const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
-    if (clipped_soup.size() == 1) {
-        CHECK(clipped_soup == TriangleSoup{{glm::dvec3(0, 0, 0),
-                                            glm::dvec3(0.5, 0, 0),
-                                            glm::dvec3(0, 0.5, 0)}});
-    } else {
-        CHECK(clipped_soup == TriangleSoup{{
-                                               glm::dvec3(0, 0, 0),
-                                               glm::dvec3(0.5, 0, 0),
-                                               glm::dvec3(0.5, 0.5, 0),
-                                           },
-                                           {
-                                               glm::dvec3(0, 0, 0),
-                                               glm::dvec3(0.5, 0.5, 0),
-                                               glm::dvec3(0, 0.5, 0),
-                                           }});
-    }
+    CHECK(clipped_soup.size() == 2);
+    CHECK(clipped_soup == TriangleSoup{{
+                                        glm::dvec3(0, 0, 0),
+                                        glm::dvec3(0.5, 0, 0),
+                                        glm::dvec3(0.5, 0.5, 0),
+                                    },
+                                    {
+                                        glm::dvec3(0, 0, 0),
+                                        glm::dvec3(0.5, 0.5, 0),
+                                        glm::dvec3(0, 0.5, 0),
+                                    }});
 }
 
 TEST_CASE("single triangle with single vertex in bounds") {
@@ -149,6 +146,72 @@ TEST_CASE("single triangle with single vertex in bounds") {
                                                glm::dvec3(0, 0.5, 0),
                                            }});
     }
+}
+
+TEST_CASE("clip returns empty mesh if triangle with vertices on bounds and outside") {
+    SimpleMesh mesh;
+    mesh.positions = {
+        glm::dvec3(0.0, 0.0, 0.0),  // on plane y = 0
+        glm::dvec3(1.0, 0.0, 0.0),  // on plane y = 0
+        glm::dvec3(0.5, -1.0, 0.0), // outside (below plane)
+    };
+    mesh.triangles = {
+        glm::uvec3(0, 1, 2)};
+
+    // Clip with bottom plane y >= 0
+    const radix::geometry::Aabb3d bounds(
+        glm::dvec3(-1.0, 0.0, -1.0),
+        glm::dvec3(2.0, 1.0, 1.0));
+
+    const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
+    const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
+
+    CAPTURE(clipped_soup);
+    CHECK(clipped_soup == TriangleSoup{});
+}
+
+TEST_CASE("single triangle around bounds") {
+    SimpleMesh mesh;
+    mesh.positions = {
+        glm::dvec3(0.0, 3.0, 0.0),
+        glm::dvec3(3.0, -2.0, 0.0),
+        glm::dvec3(-3.0, -2.0, 0.0),
+    };
+    mesh.triangles = {glm::uvec3(0, 1, 2)};
+
+    const radix::geometry::Aabb3d bounds(
+        glm::dvec3(-1.0),
+        glm::dvec3(1.0));
+    const radix::geometry::Aabb2d bounds2d(
+        glm::dvec2(bounds.min),
+        glm::dvec2(bounds.max));
+
+    const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
+    const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
+
+    double total_area = 0.0;
+    for (const auto &triangle : clipped_soup) {
+        const auto &a = triangle[0];
+        const auto &b = triangle[1];
+        const auto &c = triangle[2];
+
+        CAPTURE(a, b, c);
+
+        // Still on the source plane.
+        CHECK(a.z == Catch::Approx(0.0));
+        CHECK(b.z == Catch::Approx(0.0));
+        CHECK(c.z == Catch::Approx(0.0));
+
+        // Every emitted vertex must lie inside the clipping bounds.
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(a)));
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(b)));
+        CHECK(bounds2d.contains_inclusive(glm::dvec2(c)));
+
+        total_area += compute_triangle_area(a, b, c);
+    }
+
+    // The clipped region is exactly a 2x2 square.
+    CHECK(total_area == Catch::Approx(4.0));
 }
 
 TEST_CASE("single triangle with two vertices in bounds") {
@@ -184,7 +247,7 @@ void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const ra
     // Check that no vertices are outside the bounds
     for (const auto &position : clipped_mesh.positions) {
         // INFO(fmt::format("Vertex: {}", position));
-        REQUIRE(bounds.contains_inclusive(position));
+        CHECK(bounds.contains_inclusive(position));
     }
 
     // Check that the source triangles that were fully inside the bounds are still present
@@ -223,79 +286,38 @@ void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const ra
             }
         }
 
-        REQUIRE(should_be_kept == found);
+        CHECK(should_be_kept == found);
     }
 }
 
-TEST_CASE("mesh::clip_on_bounds") {
-    const std::filesystem::path mesh_path = ATB_TEST_DATA_DIR "/meshes/6857.terrain";
-    auto mesh_result = mesh::io::load_from_path(mesh_path);
-    REQUIRE(mesh_result.has_value());
-    SimpleMesh &mesh = mesh_result.value();
-    mesh.uvs.clear(); // Ensure no UVs are present, as clipping with UVs is not supported yet.
-    mesh.texture = std::nullopt;
-
-    // Create cube mesh
+TEST_CASE("clip_on_bounds produces manifold mesh") {
+    SimpleMesh mesh;
     mesh.positions = {
-        glm::dvec3(-1.0, -1.0, -1.0), // 0
-        glm::dvec3(1.0, -1.0, -1.0),  // 1
-        glm::dvec3(1.0, 1.0, -1.0),   // 2
-        glm::dvec3(-1.0, 1.0, -1.0),  // 3
-        glm::dvec3(-1.0, -1.0, 1.0),  // 4
-        glm::dvec3(1.0, -1.0, 1.0),   // 5
-        glm::dvec3(1.0, 1.0, 1.0),    // 6
-        glm::dvec3(-1.0, 1.0, 1.0)    // 7
+        // Triangle A
+        glm::dvec3(1.0, 0.0, 0.0),
+        glm::dvec3(-1.0, 0.0, 0.0),
+        glm::dvec3(-1.0, 1.0, 0.0),
+
+        // Triangle B (disconnected, but will intersect at same point)
+        glm::dvec3(1.0, 0.0, 0.2),
+        glm::dvec3(-1.0, 0.0, -0.2),
+        glm::dvec3(-1.0, -1.0, -0.2),
     };
 
     mesh.triangles = {
-        // Bottom face
         glm::uvec3(0, 1, 2),
-        glm::uvec3(0, 2, 3),
-        // Top face
-        glm::uvec3(4, 5, 6),
-        glm::uvec3(4, 6, 7),
-        // Front face
-        glm::uvec3(0, 1, 5),
-        glm::uvec3(0, 5, 4),
-        // Back face
-        glm::uvec3(3, 2, 6),
-        glm::uvec3(3, 6, 7),
-        // Left face
-        glm::uvec3(0, 3, 7),
-        glm::uvec3(0, 7, 4),
-        // Right face
-        glm::uvec3(1, 2, 6),
-        glm::uvec3(1, 6, 5)};
-
-    mesh::validate(mesh);
-
-    const std::array<radix::geometry::Aabb3d, 11> bounds_array = {
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, -2.0), glm::dvec3(2.0, 2.0, 2.0)),
-        radix::geometry::Aabb3d(glm::dvec3(2.0, 2.0, 2.0), glm::dvec3(3.0, 3.0, 3.0)),
-        radix::geometry::Aabb3d(glm::dvec3(-1.0, -1.0, -1.0), glm::dvec3(1.0, 1.0, 1.0)),
-        radix::geometry::Aabb3d(glm::dvec3(0.5, 0.5, 0.5), glm::dvec3(2.0, 2.0, 2.0)),
-        radix::geometry::Aabb3d(glm::dvec3(-0.5, -0.5, -0.5), glm::dvec3(0.5, 0.5, 0.5)),
-        // tiny slice of one side:
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, -2.0), glm::dvec3(-0.99, 2.0, 2.0)), // -x
-        radix::geometry::Aabb3d(glm::dvec3(0.99, -2.0, -2.0), glm::dvec3(2.0, 2.0, 2.0)),   // +x
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, -2.0), glm::dvec3(2.0, -0.99, 2.0)), // -y
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, 0.99, -2.0), glm::dvec3(2.0, 2.0, 2.0)),   // +y
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, -2.0), glm::dvec3(2.0, 2.0, -0.99)), // -z
-        radix::geometry::Aabb3d(glm::dvec3(-2.0, -2.0, 0.99), glm::dvec3(2.0, 2.0, 2.0))    // +z
+        glm::uvec3(3, 4, 5),
     };
 
-    const radix::geometry::Aabb3d mesh_bounds = calculate_bounds(mesh);
-    const glm::dvec3 mesh_centre = (mesh_bounds.max + mesh_bounds.min) / glm::dvec3(2);
-    const glm::dvec3 mesh_extends = mesh_bounds.size() / glm::dvec3(2);
-    for (const auto &relative_bounds : bounds_array) {
-        CAPTURE(relative_bounds);
-        const radix::geometry::Aabb3d bounds{
-            mesh_centre + relative_bounds.min * mesh_extends,
-            mesh_centre + relative_bounds.max * mesh_extends};
-        CAPTURE(bounds);
-        SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
-        run_checks(mesh, clipped_mesh, bounds);
-    }
+    const radix::geometry::Aabb3d bounds(
+        glm::dvec3(0.0, -10.0, -10.0),
+        glm::dvec3(10.0, 10.0, 10.0));
+
+    const SimpleMesh clipped = mesh::clip_on_bounds(mesh, bounds);
+
+    CHECK(clipped.triangles.size() == 2);
+    CHECK(mesh::is_manifold(clipped));
+    CHECK(clipped.positions.size() == 6);
 }
 
 #ifdef NDEBUG

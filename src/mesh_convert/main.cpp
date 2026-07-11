@@ -1,11 +1,11 @@
 #include <filesystem>
 
 #include <glm/glm.hpp>
-#include <opencv2/opencv.hpp>
 #include <tl/expected.hpp>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/io.h"
+#include "opencv_utils.h"
 #include "log.h"
 #include "cli.h"
 
@@ -23,7 +23,7 @@ void run(const cli::Args& args) {
             cv::Mat& texture = mesh.texture.value();
             glm::uvec2 target_resolution = args.texture_resolution.value();
             LOG_INFO("Resizing mesh texture to {}x{}", target_resolution.x, target_resolution.y);
-            cv::resize(texture, texture, cv::Size(target_resolution.x, target_resolution.y), cv::INTER_LINEAR);
+            rescale_texture_inplace(texture, target_resolution);
         } else {
             LOG_WARN("--texture-resolution specified but no texture present");
         }

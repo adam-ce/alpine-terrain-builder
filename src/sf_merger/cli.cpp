@@ -51,7 +51,7 @@ Args cli::parse(int argc, const char *const *argv) {
 
     cut.add_option("--output", cut_args.output_path, "Path to output the cut dataset to");
 
-    app.add_flag("--keep-inside,!--keep-outside", cut_args.keep_inside, "Keep the part of the dataset thats inside/outside the mask.");
+    cut.add_flag("--keep-inside,!--keep-outside", cut_args.keep_inside, "Keep the part of the dataset thats inside/outside the mask.");
 
     cut.fallthrough();
 

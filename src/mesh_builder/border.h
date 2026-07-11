@@ -1,6 +1,8 @@
 #pragma once
 
+#include <limits>
 #include <ostream>
+#include <type_traits>
 
 #include <radix/geometry.h>
 

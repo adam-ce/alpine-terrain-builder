@@ -1,13 +1,16 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
 #include "hash_utils.h"
 
 namespace mesh::merging {
 
 // Identifies a specific vertex within a particular mesh.
 struct VertexId {
-    size_t mesh_index;
-    size_t vertex_index;
+    uint32_t mesh_index;
+    uint32_t vertex_index;
 
     auto operator<=>(const VertexId &) const = default;
 };

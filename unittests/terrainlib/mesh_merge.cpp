@@ -22,7 +22,7 @@
 #include "../catch2_helpers.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/merge.h"
-#include "mesh/utils.h"
+#include "mesh/normalize.h"
 
 TEST_CASE("mesh::merge") {
     SECTION("two tris with shared edge") {
@@ -51,8 +51,8 @@ TEST_CASE("mesh::merge") {
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
 
-        sort_and_normalize_triangles(actual.triangles);
-        sort_and_normalize_triangles(expected.triangles);
+        mesh::sort_and_normalize_triangles(actual.triangles);
+        mesh::sort_and_normalize_triangles(expected.triangles);
 
         CHECK(expected.positions == actual.positions);
         CHECK(expected.uvs == actual.uvs);
@@ -95,8 +95,8 @@ TEST_CASE("mesh::merge") {
         expected.triangles.push_back(glm::uvec3(0, 1, 2));
         expected.triangles.push_back(glm::uvec3(2, 1, 3));
 
-        sort_and_normalize_triangles(actual.triangles);
-        sort_and_normalize_triangles(expected.triangles);
+        mesh::sort_and_normalize_triangles(actual.triangles);
+        mesh::sort_and_normalize_triangles(expected.triangles);
 
         CHECK(expected.positions == actual.positions);
         CHECK(expected.uvs == actual.uvs);
@@ -140,8 +140,8 @@ TEST_CASE("mesh::merge") {
         expected.triangles.push_back(glm::uvec3(1, 5, 4));
         expected.triangles.push_back(glm::uvec3(4, 5, 6));
 
-        sort_and_normalize_triangles(actual.triangles);
-        sort_and_normalize_triangles(expected.triangles);
+        mesh::sort_and_normalize_triangles(actual.triangles);
+        mesh::sort_and_normalize_triangles(expected.triangles);
 
         CHECK(expected.positions == actual.positions);
         CHECK(expected.uvs == actual.uvs);

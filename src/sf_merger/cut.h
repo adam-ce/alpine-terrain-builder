@@ -33,19 +33,19 @@ inline void cut_leaf_node(
 ) {
     DEBUG_ASSERT(ctx.input.index().is(octree::NodeStatus::Leaf, id));
 
-    const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.read_node(id)).value();
+    const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.load(id)).value();
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles", 
         id, mask.mesh.vertex_count(), mask.mesh.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        DEBUG_ASSERT_VAL(ctx.output.copy_node_from(id, ctx.input));
+        DEBUG_ASSERT_VAL(ctx.output.copy_from(id, ctx.input));
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles", 
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
-            DEBUG_ASSERT_VAL(ctx.output.write_node(id, clipped_mesh));
+            DEBUG_ASSERT_VAL(ctx.output.save(id, clipped_mesh));
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
         }
@@ -81,13 +81,12 @@ inline void cut_node(
     }
 
     /*
-    Uncomment to output masks
-    */
-    const auto path = ctx.output.get_node_path(id);
+    Uncomment to output masks:
+    const auto path = ctx.output.path_for(id);
     const auto new_path = path.parent_path() /
                           (path.stem().string() + "-mask" + path.extension().string());
     mesh::io::save_to_path(mask.mesh, new_path);
-    
+    */
 
     const auto status_opt = ctx.input.index().get(id);
     if (!status_opt.has_value()) {

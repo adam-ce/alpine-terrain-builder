@@ -74,7 +74,7 @@ glm::dmat4 get_node_transform_world(const cgltf_node &node) {
     const cgltf_node *parent = node.parent;
     while (parent != nullptr) {
         const glm::dmat4 parent_transform = get_node_transform_local(*parent);
-        transform *= parent_transform;
+        transform = parent_transform * transform;
         parent = parent->parent;
     }
 
@@ -199,8 +199,13 @@ std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material
     cgltf_texture &albedo_texture = *material.pbr_metallic_roughness.base_color_texture.texture;
     cgltf_image &albedo_image = *albedo_texture.image;
 
+    if (albedo_image.buffer_view == nullptr) {
+        LOG_WARN("mesh material texture image is not embedded in a buffer view");
+        return std::nullopt;
+    }
+
     const std::span<const uint8_t> raw_texture{cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
-    cv::Mat texture = mesh::io::texture::read_texture_from_encoded_bytes(raw_texture);
+    cv::Mat texture = mesh::io::read_texture_from_encoded_bytes(raw_texture);
     return texture;
 }
 
@@ -264,6 +269,10 @@ static std::string image_ext_to_mime(std::string_view extension) {
         extension = extension.substr(1);
     }
 
+    if (extension == "jpg") {
+        extension = "jpeg";
+    }
+
     return fmt::format("image/{}", extension);
 }
 }
@@ -277,14 +286,23 @@ tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::pa
     if (result != cgltf_result::cgltf_result_success) {
         return tl::unexpected(result);
     }
+
     result = cgltf_load_buffers(&options, data, path_ptr);
     if (result != cgltf_result::cgltf_result_success) {
+        cgltf_free(data);
         return tl::unexpected(result);
     }
+
+    result = cgltf_validate(data);
+    if (result != cgltf_result_success) {
+        cgltf_free(data);
+        return tl::unexpected(result);
+    }
+
     return RawMesh(data, cgltf_free);
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
+tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
     LOG_TRACE("Loading mesh from gltf data");
 
     const cgltf_data &data = *raw;
@@ -306,10 +324,19 @@ tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, c
     }
 
     // indices
+    if (mesh_primitive.indices == nullptr) {
+        LOG_ERROR("mesh primitive has no indices");
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
     cgltf_accessor &index_accessor = *mesh_primitive.indices;
     std::vector<glm::uvec3> indices;
+    DEBUG_ASSERT(index_accessor.count % 3 == 0);
     indices.resize(index_accessor.count / 3);
-    cgltf_accessor_unpack_indices(&index_accessor, reinterpret_cast<unsigned int *>(indices.data()), cgltf_component_size(index_accessor.component_type), indices.size() * 3);
+    cgltf_accessor_unpack_indices(
+        &index_accessor,
+        reinterpret_cast<unsigned int *>(indices.data()),
+        sizeof(uint32_t),
+        indices.size() * 3);
 
     // positions
     cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
@@ -319,6 +346,10 @@ tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, c
     }
 
     cgltf_accessor &position_accessor = *position_attr->data;
+    if (position_accessor.type != cgltf_type_vec3) {
+        LOG_WARN("mesh positions are not vec3");
+        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+    }
     std::vector<glm::vec3> positions;
     positions.resize(position_accessor.count);
     cgltf_accessor_unpack_floats(&position_accessor, reinterpret_cast<float *>(positions.data()), positions.size() * 3);
@@ -330,6 +361,10 @@ tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, c
         LOG_WARN("mesh has no uv attribute");
     } else {
         cgltf_accessor &uv_accessor = *uv_attr->data;
+        if (uv_accessor.type != cgltf_type_vec2) {
+            LOG_WARN("mesh uvss are not vec2");
+            return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        }
         uvs.resize(uv_accessor.count);
         cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
     }
@@ -349,7 +384,10 @@ tl::expected<SimpleMesh, LoadMeshError> load_mesh_from_raw(const RawMesh &raw, c
         uvsd[i] = glm::dvec2(uvs[i]);
     }
 
-    std::optional<cv::Mat> texture = load_texture_from_material(*mesh_primitive.material);
+    std::optional<cv::Mat> texture;
+    if (mesh_primitive.material != nullptr) {
+        texture = load_texture_from_material(*mesh_primitive.material);
+    }
 
     return SimpleMesh(indices, positionsd, uvsd, texture);
 }
@@ -397,7 +435,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     const bool has_texture = terrain_mesh.has_texture();
     std::vector<uint8_t> texture_bytes;
     if (has_texture) {
-        texture_bytes = mesh::io::texture::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
+        texture_bytes = mesh::io::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
     }
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)
@@ -416,7 +454,9 @@ tl::expected<void, SaveMeshError> save_to_path(
     buffer_data.resize(texture_data_end);
     std::memcpy(buffer_data.data() + index_data_offset, terrain_mesh.triangles.data(), index_data_byte_count);
     std::memcpy(buffer_data.data() + vertex_data_offset, vertices.data(), vertex_data_byte_count);
-    std::memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+    if (has_texture) {
+        std::memcpy(buffer_data.data() + texture_data_offset, texture_bytes.data(), texture_data_byte_count);
+    }
 
     const bool binary_output = path.extension() == ".glb";
 
@@ -594,6 +634,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     parent_node.children_count = parent_node_children.size();
     parent_node.children = parent_node_children.data();
     parent_node.has_translation = true;
+    mesh_node.parent = &parent_node;
 
     cgltf_node &parent_parent_node = nodes[0] = {};
     parent_parent_node.name = node_name;
@@ -601,6 +642,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     parent_parent_node.children_count = parent_parent_node_children.size();
     parent_parent_node.children = parent_parent_node_children.data();
     parent_parent_node.has_translation = true;
+    parent_node.parent = &parent_parent_node;
 
     const glm::vec3 parent_parent_offset(average_position);
     const glm::dvec3 parent_parent_offset_error = glm::dvec3(parent_parent_offset) - average_position;
@@ -678,7 +720,7 @@ tl::expected<void, SaveMeshError> save_to_path(
 
     // ********************* Save the GLTF data to a file ********************* //
     create_parent_directories(path);
-    cgltf_options gltf_options;
+    cgltf_options gltf_options = {};
     if (binary_output) {
         gltf_options.type = cgltf_file_type_glb;
     }
@@ -694,7 +736,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::pa
     if (!raw_mesh) {
         return tl::unexpected(map_cgltf_error(raw_mesh.error()));
     }
-    return load_mesh_from_raw(*raw_mesh, options);
+    return load_from_raw(*raw_mesh, options);
 }
 
 } // namespace mesh::io::gltf

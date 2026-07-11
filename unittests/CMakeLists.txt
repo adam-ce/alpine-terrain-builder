@@ -34,22 +34,45 @@ add_executable(unittests_terrainlib
     opencv_helpers.h
     
     terrainlib/convert.cpp
+    terrainlib/cow.cpp
     terrainlib/dataset.cpp
+    terrainlib/enumerate.cpp
+    terrainlib/fixed_vector.cpp
     terrainlib/grid.cpp
+    terrainlib/hash_utils.cpp
+    terrainlib/hybrid_index_pair_map.cpp
+    terrainlib/hybrid_vector.cpp
+    terrainlib/offset_table.cpp
+    terrainlib/segmented_buffer.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
+    terrainlib/mesh_boundary.cpp
+    terrainlib/mesh_bounds.cpp
+    terrainlib/mesh_cleanup.cpp
     terrainlib/mesh_clip.cpp
+    terrainlib/mesh_combine.cpp
     terrainlib/mesh_connected_components.cpp
+    terrainlib/mesh_cut.cpp
+    terrainlib/mesh_cut_to_disk.cpp
     terrainlib/mesh_holes.cpp
     terrainlib/mesh_io.cpp
+    terrainlib/mesh_manifold.cpp
     terrainlib/mesh_merge_mapping.cpp
     terrainlib/mesh_merge.cpp
-    terrainlib/mesh_utils.cpp
+    terrainlib/mesh_reindex.cpp
+    terrainlib/mesh_split.cpp
+    terrainlib/mesh_topology.cpp
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
+    terrainlib/octree_odd_level_shifted.cpp
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
+    terrainlib/quantize.cpp
+    terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
+    terrainlib/string_utils.cpp
+    terrainlib/tiny_vector.cpp
+    terrainlib/union_find.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 
@@ -67,24 +90,23 @@ add_executable(unittests_tilebuilder
 )  
 target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
 
-
-add_executable(unittests_terrainsimplify
+add_executable(unittests_meshbuilder
     catch2_helpers.h
+    mesh_builder/mesh.cpp
+    mesh_builder/texture.cpp
 )
-target_link_libraries(unittests_terrainsimplify PUBLIC terrainsimplifylib Catch2::Catch2WithMain)
+target_link_libraries(unittests_meshbuilder PUBLIC meshbuilderlib terrainlib Catch2WithMain)
+target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
 
 
-add_executable(unittests_terrainbuilder
+add_executable(unittests_dagbuilder
     catch2_helpers.h
-    terrainbuilder/mesh.cpp
-    terrainbuilder/texture.cpp
+    dag_builder/slice.cpp
 )
-target_link_libraries(unittests_terrainbuilder PUBLIC terrainbuilderlib terrainsimplifylib terrainlib Catch2WithMain)
-target_compile_definitions(unittests_terrainbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
 
-
-add_executable(unittests_terrainmerger
+add_executable(unittests_sfmerger
     catch2_helpers.h
-    terrainmerger/sphere_projector.cpp
+    sf_merger/sphere_projector.cpp
 )
-target_link_libraries(unittests_terrainmerger PUBLIC terrainmergerlib terrainlib Catch2WithMain)
+target_link_libraries(unittests_sfmerger PUBLIC sfmergerlib terrainlib Catch2WithMain)

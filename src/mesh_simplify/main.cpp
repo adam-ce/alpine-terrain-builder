@@ -1,12 +1,14 @@
+#include <numeric>
+#include <string>
+
 #include "cli.h"
-#include "convert.h"
+#include "mesh/convert.h"
 #include "log.h"
-#include "merge.h"
+#include "mesh/merge.h"
 #include "mesh/io.h"
-#include "mesh/utils.h"
 #include "simplify.h"
 #include "uv_map.h"
-#include "validate.h"
+#include "mesh/validate.h"
 
 std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::path> paths, const bool print_errors = true) {
     std::vector<SimpleMesh> meshes;
@@ -22,8 +24,7 @@ std::vector<SimpleMesh> load_meshes_from_path(std::span<const std::filesystem::p
         }
 
         const SimpleMesh mesh = std::move(result.value());
-        validate_mesh(mesh);
-        validate_mesh(convert::mesh2cgal(mesh));
+        mesh::validate(mesh);
         meshes.push_back(mesh);
     }
 
@@ -58,6 +59,10 @@ SimpleMesh simplify_mesh(const SimpleMesh &mesh, const cli::SimplificationArgs &
     return result.mesh;
 }
 
+glm::uvec2 cv2glm(cv::Point2i point) {
+    return glm::uvec2(point.x, point.y);
+}
+
 void run(const cli::Args &args) {
     LOG_INFO("Loading meshes...");
     std::vector<SimpleMesh> meshes = load_meshes_from_path(args.input_paths);
@@ -66,14 +71,14 @@ void run(const cli::Args &args) {
     const bool meshes_have_textures = std::all_of(meshes.begin(), meshes.end(), [](const SimpleMesh &mesh) { return mesh.has_texture(); });
     
     const std::optional<glm::uvec2> texture_size = (!meshes.empty() && meshes[0].texture.has_value())
-                                                       ? std::optional<glm::uvec2>{convert::cv2glm(meshes[0].texture.value().size())}
+                                                       ? std::optional<glm::uvec2>{cv2glm(meshes[0].texture.value().size())}
                                                        : std::nullopt;
     const glm::uvec2 target_texture_size = args.target_texture_resolution.has_value() ?
         args.target_texture_resolution.value() : (texture_size.has_value() ? texture_size.value() : glm::uvec2(256));
 
     LOG_INFO("Merging meshes...");
-    merge::VertexMapping vertex_mapping;
-    SimpleMesh merged_mesh = merge::merge_meshes(meshes, vertex_mapping);
+    const mesh::merging::VertexMapping vertex_mapping = mesh::merging::create_mapping(meshes);
+    SimpleMesh merged_mesh = mesh::merging::apply_mapping(meshes, vertex_mapping);
     if (args.save_intermediate_meshes) {
         const std::filesystem::path merged_mesh_path = std::filesystem::path(args.output_path).replace_extension(".merged.glb");
         LOG_DEBUG("Saving merged mesh to {}", merged_mesh_path);

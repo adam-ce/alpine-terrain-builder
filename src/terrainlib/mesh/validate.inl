@@ -1,107 +1,97 @@
 #pragma once
 
-#include "pch.h"
-#include "mesh/utils.h"
+#include <type_traits>
 
-#include <CGAL/Polygon_mesh_processing/self_intersections.h>
-#include <libassert/assert.hpp>
+#include <glm/common.hpp>
+
+#include "build_config.h"
+#include "mesh/validate.h"
+#include "mesh/SimpleMesh.h"
+#include "mesh/View.h"
 
 namespace mesh {
 
-namespace {
-template <glm::length_t n_dims, typename T>
-void validate_sorted_normalized_mesh(const SimpleMesh_<n_dims, T> &mesh) {
-    using Mesh = SimpleMesh_<n_dims, T>;
-    using Triangle = typename Mesh::Triangle;
-    using Position = typename Mesh::Position;
-    using Uv = typename Mesh::Uv;
-    static_assert(n_dims == 2 || n_dims == 3, "Mesh must be 2D or 3D");
-
-    // Check correct count of uvs
-    DEBUG_ASSERT(!mesh.has_uvs() || mesh.positions.size() == mesh.uvs.size());
-
-    // Check uvs between 0 and 1
-    for (const Uv &uv : mesh.uvs) {
-        for (size_t k = 0; k < static_cast<size_t>(uv.length()); k++) {
-            DEBUG_ASSERT(uv[k] >= 0);
-            DEBUG_ASSERT(uv[k] <= 1);
-        }
-    }
-
-    // Check for vertex indices in triangles outside valid range
-    for (const Triangle &triangle : mesh.triangles) {
-        for (size_t k = 0; k < static_cast<size_t>(triangle.length()); k++) {
-            const size_t vertex_index = triangle[k];
-            DEBUG_ASSERT(vertex_index < mesh.vertex_count());
-        }
-    }
-
-    // Check for degenerate triangles
-    for (const Triangle &triangle : mesh.triangles) {
-        DEBUG_ASSERT(triangle.x != triangle.y);
-        DEBUG_ASSERT(triangle.y != triangle.z);
-        DEBUG_ASSERT(triangle.x != triangle.z);
-    }
-
-    // Check for duplicated triangles
-    DEBUG_ASSERT(mesh.triangles.end() == std::adjacent_find(mesh.triangles.begin(), mesh.triangles.end()));
-
-    // Check for duplicated triangles with different orientations
-    std::vector<Triangle> triangles_ignore_orientation(mesh.triangles);
-    // Sort vertices in triangles
-    for (Triangle &triangle : triangles_ignore_orientation) {
-        std::sort(&triangle.x, &triangle.z + 1);
-    }
-    std::vector<Triangle> triangles_ignore_orientation_normalized(triangles_ignore_orientation);
-    sort_and_normalize_triangles(triangles_ignore_orientation_normalized);
-    DEBUG_ASSERT(triangles_ignore_orientation_normalized.end() == std::adjacent_find(triangles_ignore_orientation_normalized.begin(), triangles_ignore_orientation_normalized.end()));
-
-    // Check for isolated vertices
-    DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
-
-    // Check for duplicate vertices
-    const double epsilon = 1e-9;
-    auto almost_equal = [epsilon](const Position &a, const Position &b) {
-        return glm::all(glm::lessThan(glm::abs(a - b), Position(epsilon)));
-    };
-
-    std::vector<Position> sorted_positions = mesh.positions;
-    std::sort(sorted_positions.begin(), sorted_positions.end(), [&](const Position &a, const Position &b) {
-        if (a.x != b.x) {
-            return a.x < b.x;
-        }
-        if constexpr (n_dims == 2) {
-            return a.y < b.y;
-        } else if constexpr (n_dims == 3) {
-            if (a.y != b.y) {
-                return a.y < b.y;
-            }
-            return a.z < b.z;
-        }
-    });
-
-    for (size_t i = 1; i < sorted_positions.size(); i++) {
-        DEBUG_ASSERT(!almost_equal(sorted_positions[i - 1], sorted_positions[i]));
-    }
-}
-} // namespace
+namespace detail {
 
 template <glm::length_t n_dims, typename T>
-void validate(const SimpleMesh_<n_dims, T> &mesh) {
-#ifndef NDEBUG
-    SimpleMesh_<n_dims, T> sorted(mesh);
-    sort_and_normalize_triangles(sorted);
-    validate_sorted_normalized_mesh(sorted);
-#endif
+inline constexpr bool validate_supported_v = false;
+
+template <>
+inline constexpr bool validate_supported_v<2, float> = true;
+template <>
+inline constexpr bool validate_supported_v<2, double> = true;
+template <>
+inline constexpr bool validate_supported_v<3, float> = true;
+template <>
+inline constexpr bool validate_supported_v<3, double> = true;
+
+template <glm::length_t n_dims, typename T>
+void validate_impl(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags);
+
+// These impls have been moved to the cpp file, since we want to keep this file cheap since it is
+// included in lots of other files, and the validation code is unused in release anyways.
+extern template void validate_impl<2, float>(const mesh::View_<2, float> &, ValidationFlags);
+extern template void validate_impl<2, double>(const mesh::View_<2, double> &, ValidationFlags);
+extern template void validate_impl<3, float>(const mesh::View_<3, float> &, ValidationFlags);
+extern template void validate_impl<3, double>(const mesh::View_<3, double> &, ValidationFlags);
+
+template <glm::length_t n_dims, typename T>
+void validate_core(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
+    static_assert(validate_supported_v<n_dims, T>, "mesh::validate is only supported for (2,float), (2,double), (3,float), (3,double)");
+    validate_impl<n_dims, T>(mesh, flags);
 }
 
-template <typename Point>
-inline void validate(const CGAL::Surface_mesh<Point> &mesh) {
-#ifndef NDEBUG
-    DEBUG_ASSERT(mesh.is_valid()); 
-    DEBUG_ASSERT(CGAL::is_triangle_mesh(mesh));
-    DEBUG_ASSERT(CGAL::is_valid_polygon_mesh(mesh));
-    DEBUG_ASSERT(!CGAL::Polygon_mesh_processing::does_self_intersect(mesh));
-#endif
+} // namespace detail
+
+template <glm::length_t n_dims, typename T>
+void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
+    if constexpr (IS_DEBUG_BUILD) {
+        detail::validate_core(mesh, flags);
+    } else {
+        USE(mesh);
+        USE(flags);
+    }
 }
+template <glm::length_t n_dims, typename T>
+void validate(const mesh::Simple_<n_dims, T> &mesh, const ValidationFlags flags) {
+    validate(mesh::View_<n_dims, T>(mesh), flags);
 }
+
+template <glm::length_t n_dims, typename T>
+void validate_basic(const mesh::View_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic);
+}
+template <glm::length_t n_dims, typename T>
+void validate_basic(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_basic(mesh::View_<n_dims, T>(mesh));
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_unconnected(const mesh::View_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry);
+}
+template <glm::length_t n_dims, typename T>
+void validate_unconnected(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_unconnected(mesh::View_<n_dims, T>(mesh));
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_connected(const mesh::View_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent);
+}
+template <glm::length_t n_dims, typename T>
+void validate_connected(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_connected(mesh::View_<n_dims, T>(mesh));
+}
+
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const mesh::View_<n_dims, T> &mesh) {
+    validate(mesh, ValidationFlags::Basic | ValidationFlags::Geometry | ValidationFlags::SingleComponent | ValidationFlags::Manifold);
+}
+template <glm::length_t n_dims, typename T>
+void validate_manifold(const mesh::Simple_<n_dims, T> &mesh) {
+    validate_manifold(mesh::View_<n_dims, T>(mesh));
+}
+
+} // namespace mesh
+

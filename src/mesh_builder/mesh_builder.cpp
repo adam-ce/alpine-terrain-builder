@@ -13,13 +13,14 @@
 #include "Dataset.h"
 #include "log.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/utils.h"
+#include "mesh/cleanup.h"
 #include "mesh_builder.h"
 #include "raster.h"
 #include "raw_dataset_reader.h"
 #include "srs.h"
 #include "mesh/clip.h"
 #include "mesh/validate.h"
+#include "mesh/bounds.h"
 
 // TODO: fix namespace
 namespace terrainbuilder {
@@ -48,9 +49,6 @@ glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> 
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);
     return result;
 }
-
-// TODO:: write documentation
-// TODO: use referencedBounds
 
 glm::dvec3 convert_pixel_to_vertex(const float height, const raster::Coords pixel_coords, const RawDatasetReader& reader, const PixelBounds& pixel_bounds) {
     const glm::dvec2 point_offset_in_raster(0.5); // Convert pixel coordinates into a point in the dataset's srs.
@@ -114,6 +112,7 @@ SimpleMesh transform_mesh(SimpleMesh&& source_mesh, const OGRSpatialReference &s
     srs::transform_points_inplace(transform.get(), source_mesh.positions);
     return source_mesh;
 }
+/*
 SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReference &source_srs, const OGRSpatialReference& target_srs) {
     SimpleMesh target_mesh;
     target_mesh.positions = srs::transform_points(source_srs, target_srs, source_mesh.positions);
@@ -122,6 +121,7 @@ SimpleMesh transform_mesh(const SimpleMesh &source_mesh, const OGRSpatialReferen
     target_mesh.texture = source_mesh.texture;
     return target_mesh;
 }
+*/
 
 std::vector<glm::dvec2> generate_uv_space(const std::vector<glm::dvec3>& positions, const OGRSpatialReference &mesh_srs, const OGRSpatialReference &texture_srs, radix::tile::SrsBounds& texture_bounds) {
     std::vector<glm::dvec2> uvs = srs::transform_points_to_2d(srs::transformation(mesh_srs, texture_srs).get(), positions);
@@ -195,6 +195,13 @@ tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
         return tl::unexpected(BuildMeshError::EmptyRegion);
     }
 
+    // Fast check if all vertices will be clipped
+    const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
+    const radix::geometry::Aabb3d approx_clip_bounds = srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds);
+    if (!radix::geometry::intersect(approx_clip_bounds, clip_bounds)) {
+        return tl::unexpected(BuildMeshError::EmptyRegion);
+    }
+
     LOG_TRACE("Clipping mesh based on target bounds");
     const SimpleMesh mesh_in_clip_srs = transform_mesh(std::move(mesh_in_source_srs), source_srs, clip_srs);
     SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh_in_clip_srs, clip_bounds);
@@ -210,7 +217,7 @@ tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     LOG_TRACE("Transforming mesh into output srs");
     SimpleMesh target_mesh = transform_mesh(std::move(clipped_mesh), clip_srs, mesh_srs);
     
-    remove_isolated_vertices(target_mesh); // TODO: is this still required?
+    mesh::remove_isolated_vertices(target_mesh); // TODO: is this still required?
     mesh::validate(target_mesh);
     return target_mesh;
 }

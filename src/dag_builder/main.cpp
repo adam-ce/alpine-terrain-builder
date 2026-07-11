@@ -26,6 +26,7 @@ int main(int argc, char **argv) {
             .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
             .root_node = args.root_node,
             .write_debug_meshes = args.write_debug_meshes,
+            .resume = !args.overwrite,
         };
 
         dag::build_levels(input_storage, output_storage, options, args.level_range);

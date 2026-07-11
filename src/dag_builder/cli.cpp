@@ -138,6 +138,8 @@ Args cli::parse(int argc, const char *const *argv) {
 
     app.add_flag("--overwrite", args.overwrite, "Overwrite data already present in output");
 
+    app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
+
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
         ->default_val(args.log_level);

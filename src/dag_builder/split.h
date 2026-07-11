@@ -66,10 +66,10 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
         const bool has_uvs = !cluster.uvs.empty();
 
         // Ensure we can meaningfully split triangles and vertices
-        ASSERT(triangle_count >= num_parts && "Cluster has fewer triangles than requested parts");
-        ASSERT(vertex_count >= num_parts && "Cluster has fewer vertices than requested parts");
+        ASSERT(triangle_count >= num_parts, "Cluster has fewer triangles than requested parts");
+        ASSERT(vertex_count >= num_parts, "Cluster has fewer vertices than requested parts");
 
-        // Initialize eptr and eind based on the triangle data<
+        // Initialize eptr and eind based on the triangle data
         std::vector<idx_t> eptr(triangle_count + 1); // Offsets in eind where faces start/end
         std::vector<idx_t> eind(triangle_count * 3); // Indices into vertex array
 
@@ -137,7 +137,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
             const uint32_t partition_index = epart[i];
             Cluster &partition = partitions[partition_index];
             glm::uvec3 triangle = cluster.local_triangles[i];
-            for (uint8_t k=0; k<3; k++) {
+            for (uint8_t k = 0; k < 3; k++) {
                 const uint32_t original_index = triangle[k];
                 uint32_t &new_index = remap[partition_index][original_index];
                 if (new_index == invalid_remap) {

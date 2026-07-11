@@ -161,7 +161,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     std::vector<Clustering> filtered;
 
     for (const octree::Id &id : dag_ids) {
-        const auto dag_node = ctx.output_storage.load(id);
+        auto dag_node = ctx.output_storage.load(id);
         if (!dag_node) {
             LOG_WARN("Failed to load DAG node {}, skipping", id);
             continue;
@@ -180,6 +180,9 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
             continue;
         }
         filtered.push_back(slice_clusters(clustering, indices));
+    }
+    if (filtered.empty()) {
+        return {};
     }
 
     const Clustering merged = merge_clusterings(filtered, epsilon);
@@ -264,8 +267,7 @@ std::optional<dag::ClusterBatch> build_node(
 
     RegionFilter dag_filter;
     dag_filter.include = {node_bounds};
-    dag::ClusterBatch inner = load_and_simplify_dag_nodes(
-        dag_ids, dag_filter, epsilon, ctx);
+    dag::ClusterBatch inner = load_and_simplify_dag_nodes(dag_ids, dag_filter, epsilon, ctx);
 
     if (input_clusters.empty() && inner.clustering.is_empty()) {
         LOG_WARN("No valid clusters for node {}, skipping", target_id);
@@ -331,9 +333,9 @@ std::vector<octree::Id> find_relevant_dag_nodes(
     const std::unordered_set<octree::Id> &prev_level_built,
     const octree::OddLevelShifted &shifted_space) {
     std::vector<octree::Id> result;
-    for (const octree::Id &parent : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
-        if (prev_level_built.contains(parent)) {
-            result.push_back(parent);
+    for (const octree::Id &child : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
+        if (prev_level_built.contains(child)) {
+            result.push_back(child);
         }
     }
     return result;
@@ -350,7 +352,10 @@ std::unordered_set<octree::Id> find_nodes_to_build_on_level(
     // Consider input nodes at this level
     const std::span<const octree::Id> level_input_ids = input_by_level[level];
     for (const octree::Id &input_id : level_input_ids) {
-        target_set.insert(input_id);
+        const octree::IdRect shifted_nodes = ctx.shifted_space.find_intersecting_nodes_for_standard_id(input_id);
+        for (const octree::Id &shifted_id : shifted_nodes) {
+            target_set.insert(shifted_id);
+        }
     }
 
     // Consider parents of previously built nodes
@@ -457,25 +462,18 @@ std::unordered_set<octree::Id> build_level(
     tbb::concurrent_vector<octree::Id> saved_ids;
 
     ProgressIndicator progress(targets.size());
-    for (size_t i = 0; i < already_built.size(); i++) {
-        progress.task_finished();
-    }
     auto progress_thread = progress.start_monitoring();
 
     parallel_foreach(targets, [&](const octree::Id &target) {
         if (already_built.contains(target)) {
+            progress.task_finished();
             return;
         }
 
         const auto dag_ids = find_value(inner_nodes, target).value_or({});
         const auto target_input_ids = find_value(input_sources, target).value_or({});
 
-        auto result = build_node(
-            target,
-            target_input_ids,
-            dag_ids,
-            ctx);
-
+        auto result = build_node(target, target_input_ids, dag_ids, ctx);
         if (result) {
             const auto save_result = ctx.output_storage.save(target, *result);
             DEBUG_ASSERT_VAL(save_result);

@@ -125,6 +125,7 @@ jobs:
     - name: Run unit tests
       working-directory: ${{ github.workspace }}/build
       run: |
+        export LD_LIBRARY_PATH="${{ github.workspace }}/build/alp_external/proj/lib:${{ github.workspace }}/build/alp_external/proj/lib64:${{ github.workspace }}/build/alp_external/gdal/lib:${{ github.workspace }}/build/alp_external/gdal/lib64:${{ github.workspace }}/build/alp_external/opencv/lib:${{ github.workspace }}/build/alp_external/opencv/lib64:${{ github.workspace }}/build/alp_external/boost/lib:${{ github.workspace }}/build/alp_external/boost/lib64:${LD_LIBRARY_PATH:-}"
         ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark"
         ./unittests/unittests_tilebuilder
         ./unittests/unittests_meshbuilder

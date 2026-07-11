@@ -5,7 +5,6 @@
 #include <glm/gtx/norm.hpp>
 #include <libassert/assert.hpp>
 
-#include "MoreExact.h"
 #include "log.h"
 #include "spatial_lookup/CellBasedStorage.h"
 #include "spatial_lookup/NDLoopHelper.h"
@@ -17,7 +16,7 @@ namespace detail {
 // Calculate distance^2, works with all types
 template <glm::length_t n_dims, typename T1, typename T2>
 auto distance_sq(const glm::vec<n_dims, T1> &a, const glm::vec<n_dims, T2> &b) {
-    using T = MoreExact<T1, T2>;
+    using T = std::common_type_t<int, unsigned int>;
     using Vec = glm::vec<n_dims, T>;
 
     if constexpr (std::is_floating_point_v<T>) {
@@ -141,8 +140,8 @@ private:
             std::is_const_v<Self>,
             const Value &,
             Value &>;
-        // Promote to the more precise type to avoid e.g. float epsilon against a double grid
-        using E = MoreExact<Distance, Component>;
+        // Promote to the more precise type
+        using E = std::common_type_t<Distance, Component>;
 
         DEBUG_ASSERT(epsilon > 0);
 
@@ -260,7 +259,8 @@ private:
             std::is_const_v<Self>,
             const Value &,
             Value &>;
-        using E = MoreExact<Distance, Component>;
+        // Promote to the more precise type
+        using E = std::common_type_t<Distance, Component>;
 
         out.clear();
 

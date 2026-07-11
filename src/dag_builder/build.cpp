@@ -14,7 +14,6 @@
 #include "clusterize.h"
 #include "compact.h"
 #include "encoded.h"
-#include "error_bounds.h"
 #include "int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"

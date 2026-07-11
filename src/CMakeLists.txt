@@ -289,7 +289,7 @@ add_executable(tile-downloader
     tile_downloader/main.cpp
     tile_downloader/cli.cpp
 )
-target_link_libraries(tile-downloader PUBLIC terrainlib ${CURL_LIBRARIES})
+target_link_libraries(tile-downloader PUBLIC terrainlib CLI11::CLI11 ${CURL_LIBRARIES})
 
 add_executable(mesh-convert
     mesh_convert/cli.cpp

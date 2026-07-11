@@ -13,13 +13,8 @@
 #include "mesh/triangle_compare.h"
 #include "simplify.h"
 #include "utils.h"
+#include "VertexInCluster.h"
 
-namespace detail {
-struct VertexInCluster {
-    uint32_t cluster_index;
-    uint32_t local_vertex_index;
-};
-}
 
 inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering) {
     // Lock every triangle where any vertex is either on the border and near the bounds or shared between clusters.
@@ -58,11 +53,11 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering) 
     }
 
     // Find all vertices shared between at least 2 clusters
-    std::vector<TinyVector<detail::VertexInCluster>> cluster_membership(vertex_count);
+    std::vector<TinyVector<VertexInCluster>> cluster_membership(vertex_count);
     for (uint32_t cluster_index = 0; cluster_index < cluster_count; cluster_index++) {
         const Cluster &cluster = clustering.clusters[cluster_index];
         for (const auto [local_vertex_index, vertex_index] : enumerate(cluster.vertex_indices)) {
-            TinyVector<detail::VertexInCluster> &membership = cluster_membership[vertex_index];
+            TinyVector<VertexInCluster> &membership = cluster_membership[vertex_index];
             membership.emplace_back(cluster_index, local_vertex_index);
         }
     }

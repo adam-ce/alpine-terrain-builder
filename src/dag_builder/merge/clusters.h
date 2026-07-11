@@ -499,6 +499,10 @@ inline UvMap unwrap_merged_cluster(
     // Prepare atlas for new texture
     TextureBaker baker;
 
+    // Texture map id each component is baked into, used to gather the packed
+    // UVs back into merged-vertex order.
+    std::vector<TextureMapId> component_map_ids(components.size());
+
     // Preallocate
     std::vector<uint32_t> source_clusters;
     source_clusters.reserve(cluster_indices.size());
@@ -535,7 +539,7 @@ inline UvMap unwrap_merged_cluster(
             });
             const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
             const cv::Mat texture = clustering.textures[texture_id];
-            baker.add_mesh(TexturedMesh{component.triangles, TextureMap{uvs, texture}});
+            component_map_ids[component_index] = baker.add_mesh(TexturedMesh{component.triangles, TextureMap{uvs, texture}});
         } else {
             // If multiple clusters are relevant, we have to perform an unwrap.
             /*auto result = uv::unwrap(component, uv::Algorithm::AsRigidAsPossible);
@@ -593,15 +597,29 @@ inline UvMap unwrap_merged_cluster(
                     .target = target_triangle,
                 });
             }
-            baker.add_composition(comp);
+            component_map_ids[component_index] = baker.add_composition(comp);
         }
     }
 
     // Combine all textures together
     const auto baked = baker.bake(glm::uvec2(2048));
+
+    // Gather the per-component packed UVs into merged-vertex order. Each
+    // component is baked using component-local vertex indices, so the flat
+    // buffer cannot be assigned to the merged cluster directly.
+    std::vector<glm::dvec2> merged_uvs(merged_cluster.vertex_count());
+    for (const auto &[component_index, component] : enumerate(components)) {
+        const std::span<const glm::dvec2> component_uvs = baked.uvs_for(component_map_ids[component_index]);
+        const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
+        DEBUG_ASSERT(component_uvs.size() == local_to_merged.size());
+        for (const auto [local_index, merged_index] : enumerate(local_to_merged)) {
+            merged_uvs[merged_index] = component_uvs[local_index];
+        }
+    }
+
     return UvMap{
         baked.texture(),
-        baked.uvs()
+        std::move(merged_uvs)
     };
 }
 
@@ -662,9 +680,8 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
                 cluster_indices.push_back(i);
             }
         }
-        if (cluster_indices.empty()) {
-            continue;
-        }
+        // Empty partitions would break the cluster index == partition index mapping relied on by build_lod.
+        ASSERT(!cluster_indices.empty());
 
         // Check if we need to perform a fresh uv unwrap due to different textures or inconsistent uvs
         const bool needs_unwrap = detail::check_merge_needs_unwrap(clustering, cluster_indices);

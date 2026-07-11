@@ -149,6 +149,26 @@ constexpr T sum(Range &&range, T init = T{}) {
     return sum(std::forward<Range>(range), init, std::identity{});
 }
 
+// Minimum element of a range, or the given default value if the range is empty.
+template <std::ranges::forward_range Range, typename T = std::ranges::range_value_t<Range>>
+    requires std::convertible_to<std::ranges::range_value_t<Range>, T>
+constexpr T min(Range &&range, T default_value = T{}) {
+    if (std::ranges::empty(range)) {
+        return default_value;
+    }
+    return std::ranges::min(std::forward<Range>(range));
+}
+
+// Maximum element of a range, or the given default value if the range is empty.
+template <std::ranges::forward_range Range, typename T = std::ranges::range_value_t<Range>>
+    requires std::convertible_to<std::ranges::range_value_t<Range>, T>
+constexpr T max(Range &&range, T default_value = T{}) {
+    if (std::ranges::empty(range)) {
+        return default_value;
+    }
+    return std::ranges::max(std::forward<Range>(range));
+}
+
 template <typename T>
 constexpr auto range(T begin, T end) {
     return std::views::iota(begin, end);

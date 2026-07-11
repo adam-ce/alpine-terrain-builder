@@ -116,6 +116,16 @@ public:
     bool find_all_at(const Vec &point, Vector &out) {
         return find_all_at_impl<Self>(*this, point, out);
     }
+    
+    template <typename Func>
+    bool for_all_points(Func &&func) const {
+        return this->_storage.for_all_points(std::forward<Func>(func));
+    }
+
+    template <typename Func>
+    bool for_all_points(Func &&func) {
+        return this->_storage.for_all_points(std::forward<Func>(func));
+    }
 
 private:
     Storage _storage;

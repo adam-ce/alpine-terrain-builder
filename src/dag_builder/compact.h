@@ -6,7 +6,9 @@
 #include <glm/glm.hpp>
 
 #include "cluster.h"
+#include "enumerate.h"
 #include "slice.h"
+#include "validate.h"
 
 inline void compact_cluster_inplace(Cluster &cluster) {
     const size_t vertex_count = cluster.vertex_count();

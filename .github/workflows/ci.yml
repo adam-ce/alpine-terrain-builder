@@ -46,8 +46,9 @@ jobs:
           xorg-dev \
           zlib1g-dev
 
-    - name: Cache installed CMake dependencies
-      uses: actions/cache@v4
+    - name: Restore installed CMake dependencies
+      id: cmake_dependency_cache
+      uses: actions/cache/restore@v4
       with:
         path: |
           build/alp_external/boost
@@ -59,11 +60,12 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-
 
-    - name: Cache ccache
-      uses: actions/cache@v4
+    - name: Restore ccache
+      id: ccache_cache
+      uses: actions/cache/restore@v4
       with:
         path: ${{ env.CCACHE_DIR }}
-        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.sha }}
+        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
           ${{ runner.os }}-ccache-${{ github.ref_name }}-
           ${{ runner.os }}-ccache-
@@ -83,12 +85,31 @@ jobs:
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
+    - name: Save installed CMake dependencies
+      if: steps.cmake_dependency_cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          build/alp_external/boost
+          build/alp_external/proj
+          build/alp_external/gdal
+          build/alp_external/cgal
+          build/alp_external/opencv
+        key: ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
+
     - name: Build all targets
       run: cmake --build "${{ github.workspace }}/build" --config ${{ env.BUILD_TYPE }} --parallel --target all
 
     - name: ccache stats
       if: always()
       run: ccache --show-stats
+
+    - name: Save ccache
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ env.CCACHE_DIR }}
+        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Cache unit test data
       id: terrain_builder_unittest_data

@@ -65,7 +65,7 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)

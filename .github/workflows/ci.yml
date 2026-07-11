@@ -126,8 +126,13 @@ jobs:
       working-directory: ${{ github.workspace }}/build
       run: |
         export LD_LIBRARY_PATH="${{ github.workspace }}/build/alp_external/proj/lib:${{ github.workspace }}/build/alp_external/proj/lib64:${{ github.workspace }}/build/alp_external/gdal/lib:${{ github.workspace }}/build/alp_external/gdal/lib64:${{ github.workspace }}/build/alp_external/opencv/lib:${{ github.workspace }}/build/alp_external/opencv/lib64:${{ github.workspace }}/build/alp_external/boost/lib:${{ github.workspace }}/build/alp_external/boost/lib64:${LD_LIBRARY_PATH:-}"
-        ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark"
-        ./unittests/unittests_tilebuilder
-        ./unittests/unittests_meshbuilder
-        ./unittests/unittests_dagbuilder
-        ./unittests/unittests_sfmerger
+        export PROJ_DATA="${{ github.workspace }}/build/alp_external/proj/share/proj"
+        export PROJ_LIB="${PROJ_DATA}"
+        export GDAL_DATA="${{ github.workspace }}/build/alp_external/gdal/share/gdal"
+        status=0
+        ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark" || status=$?
+        ./unittests/unittests_tilebuilder || status=$?
+        ./unittests/unittests_meshbuilder || status=$?
+        ./unittests/unittests_dagbuilder || status=$?
+        ./unittests/unittests_sfmerger || status=$?
+        exit $status

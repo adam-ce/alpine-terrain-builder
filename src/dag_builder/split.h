@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cmath>
-#include <type_traits>
 #include <vector>
 
 #include <libassert/assert.hpp>
@@ -17,33 +16,6 @@
 #include "utils.h"
 #include "validate.h"
 
-namespace {
-template <typename A, typename B>
-inline constexpr auto int_div_ceil(A a, B b) {
-    static_assert(std::is_integral_v<A>);
-    static_assert(std::is_integral_v<B>);
-    using T = std::conditional_t<(sizeof(A) >= sizeof(B)), A, B>;
-    ASSERT(b != 0);
-
-    const T a_t = static_cast<T>(a);
-    const T b_t = static_cast<T>(b);
-    const T q = a_t / b_t;
-    const T r = a_t % b_t;
-
-    // Exact division -> already the ceiling
-    if (r == 0) {
-        return q;
-    }
-
-    // Same sign
-    if ((a > 0 && b > 0) || (a < 0 && b < 0)) {
-        return q + 1;
-    }
-
-    // Opposite signs -> truncation toward zero already gave the ceiling
-    return q;
-}
-}
 
 template <Size S>
 inline Clustering split_each_into_equal_parts(const Clustering &input, const S num_parts) {

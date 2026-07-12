@@ -601,8 +601,13 @@ inline UvMap unwrap_merged_cluster(
         }
     }
 
-    // Combine all textures together
-    const auto baked = baker.bake(glm::uvec2(2048));
+    // Combine all textures together, compressing resolution in proportion to
+    // how many clusters are being merged so the DAG's texture budget shrinks
+    // going up the LOD hierarchy.
+    const atlas::Packing packing = baker.pack();
+    const double compression_ratio = 1.0 / double(cluster_indices.size());
+    const glm::uvec2 texture_size = compute_bake_texture_size(packing, compression_ratio, 4096);
+    const auto baked = baker.bake(packing, texture_size);
 
     // Gather the per-component packed UVs into merged-vertex order. Each
     // component is baked using component-local vertex indices, so the flat

@@ -108,17 +108,15 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options, const 
 
     // Split each cluster into roughly 4 parts
     auto result = clusterize(clustering);
-    clustering = result.clustering;
 
-    // Build child map
-    std::vector<std::vector<uint32_t>> child_map(clustering.cluster_count());
+    // Build child map. Simplification preserves the cluster count, so each final
+    // cluster's backward mapping index is its partition index.
+    std::vector<std::vector<uint32_t>> child_map(result.clustering.cluster_count());
     for (const auto [final_index, partition_index] : enumerate(result.backward_mapping)) {
-        auto &children = child_map[final_index];
-        const auto &original_clusters = partition_to_clusters[partition_index];
-        for (const uint32_t original_index : original_clusters) {
-            children.push_back(original_index);
-        }
+        child_map[final_index] = partition_to_clusters[partition_index];
     }
+
+    clustering = result.clustering;
 
     return {clustering, child_map};
 }

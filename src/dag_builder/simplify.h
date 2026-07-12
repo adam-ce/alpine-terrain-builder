@@ -71,7 +71,9 @@ struct SimplifyOptions {
     VertexLock vertex_lock = VertexLock::none();
     float uv_weight = 0.5;
     ErrorMode error_mode = ErrorMode::Overwrite;
-    
+    // Emit exactly one output cluster per input cluster
+    bool preserve_cluster_count = false;
+
     // Default options apply a target ratio when no stop condition is specified.
     static SimplifyOptions defaults() {
         SimplifyOptions options;
@@ -185,7 +187,11 @@ inline Clustering simplify(
 
         // Perform simplification
         const size_t original_triangle_count = original_cluster.local_triangles.size();
-        const size_t target_triangle_count = static_cast<size_t>(options.target_ratio * original_triangle_count);
+        size_t target_triangle_count = static_cast<size_t>(target_ratio * original_triangle_count);
+        if (options.preserve_cluster_count) {
+            // Keep at least one triangle so the cluster cannot disappear
+            target_triangle_count = std::max(target_triangle_count, size_t{1});
+        }
         meshopt::SimplifyResult result = meshopt::simplify_with_attributes(
             original_cluster.local_triangles,
             cluster_positions_f,
@@ -197,7 +203,10 @@ inline Clustering simplify(
             relative_target_error,
             meshopt_SimplifyErrorAbsolute);
         if (result.triangles.empty()) {
-            // Simplification removed all triangles, go to next cluster
+            // Simplification removed all triangles
+            if (options.preserve_cluster_count) {
+                simplified_clustering.clusters.push_back(original_cluster);
+            }
             continue;
         }
 
@@ -262,6 +271,7 @@ inline Clustering simplify(
 
         // Create new cluster
         Cluster simplified_cluster{
+            .id = original_cluster.id,
             .vertex_indices = std::move(vertex_indices),
             .local_triangles = std::move(local_triangles),
             .uvs = std::move(uvs),
@@ -272,6 +282,9 @@ inline Clustering simplify(
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
+    if (options.preserve_cluster_count) {
+        DEBUG_ASSERT(original_clustering.cluster_count() == simplified_clustering.cluster_count());
+    }
     validate(simplified_clustering);
     return simplified_clustering;
 }

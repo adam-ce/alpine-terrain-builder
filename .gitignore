@@ -8,3 +8,4 @@ build/
 .vs
 /extern/*
 src/scratch
+build-release

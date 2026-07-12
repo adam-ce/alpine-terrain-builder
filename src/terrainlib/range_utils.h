@@ -138,6 +138,7 @@ constexpr T sum(Range &&range, T init, F &&f) {
 }
 
 template <std::ranges::input_range Range, typename F>
+    requires std::invocable<F &, std::ranges::range_reference_t<Range>>
 constexpr auto sum(Range &&range, F &&f) {
     using T = std::decay_t<std::invoke_result_t<F &, std::ranges::range_reference_t<Range>>>;
     return sum(std::forward<Range>(range), T{}, std::forward<F>(f));

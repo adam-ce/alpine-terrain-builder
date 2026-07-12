@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
 #include "Range.h"
 #include "build_config.h"
@@ -18,7 +19,8 @@ enum class IncludeMode {
 
 struct BuildOptions {
     uint32_t clusters_per_partition;
-    float target_ratio;
+    std::optional<float> target_ratio;
+    std::optional<float> relative_target_error;
     uv::Algorithm uv_unwrap_algorithm;
     octree::Id root_node = octree::Id::root();
     IncludeMode include_mode = IncludeMode::CurrentOnly;

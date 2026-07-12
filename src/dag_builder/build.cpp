@@ -88,9 +88,22 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options, const 
 
     // Find vertices to lock
     const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, node_bounds);
-    clustering = simplify(clustering, SimplifyOptions{
-                                          .target_ratio = options.target_ratio,
-                                          .vertex_lock = VertexLock::mask(vertex_lock)});
+
+    // Convert relative_target_error (a fraction of the node bounds) to an absolute
+    // error; both targets stay optional so simplify() can apply its own default.
+    std::optional<float> absolute_target_error;
+    if (options.relative_target_error) {
+        const double node_extent = glm::compMax(node_bounds.size());
+        absolute_target_error = static_cast<float>(options.relative_target_error.value() * node_extent);
+    }
+    const SimplifyOptions simplify_options{
+        .target_ratio = options.target_ratio,
+        .absolute_target_error = absolute_target_error,
+        .vertex_lock = VertexLock::mask(vertex_lock),
+        .error_mode = ErrorMode::Add,
+        .preserve_cluster_count = true
+    };
+    clustering = simplify(clustering, simplify_options);
     remove_unused_vertices_inplace(clustering);
 
     // Split each cluster into roughly 4 parts

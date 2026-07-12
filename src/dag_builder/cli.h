@@ -23,7 +23,8 @@ struct Args {
 
     uv::Algorithm uv_unwrap_algorithm;
     uint32_t clusters_per_partition;
-    float target_ratio;
+    std::optional<float> target_ratio;
+    std::optional<float> target_error;
 
     bool write_debug_meshes;
     bool overwrite;

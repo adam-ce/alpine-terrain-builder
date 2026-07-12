@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <variant>
 #include <unordered_set>
 #include <type_traits>
 #include <vector>
 #include <span>
+#include <optional>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
@@ -52,11 +54,20 @@ private:
     explicit VertexLock(T t) : v(std::move(t)) {}
 };
 
+// Target ratio used when neither a ratio nor an error target is specified
+inline constexpr float DEFAULT_TARGET_RATIO = 0.5f;
 struct SimplifyOptions {
-    float target_ratio = 0.5;
-    float absolute_target_error = meshopt::NO_TARGET_ERROR;
+    std::optional<float> target_ratio;
+    std::optional<float> absolute_target_error;
     VertexLock vertex_lock = VertexLock::none();
     float uv_weight = 0.5;
+
+    // Default options apply a target ratio when no stop condition is specified.
+    static SimplifyOptions defaults() {
+        SimplifyOptions options;
+        options.target_ratio = DEFAULT_TARGET_RATIO;
+        return options;
+    }
 };
 
 namespace detail {
@@ -99,7 +110,7 @@ namespace detail {
 [[nodiscard]]
 inline Clustering simplify(
     const Clustering& original_clustering,
-    const SimplifyOptions options = {}
+    const SimplifyOptions options = SimplifyOptions::defaults()
 ) {
     Clustering simplified_clustering;
     simplified_clustering.textures = original_clustering.textures;
@@ -109,6 +120,10 @@ inline Clustering simplify(
     std::vector<glm::vec3> cluster_positions_f;
     std::vector<glm::vec2> cluster_uvs_f;
     std::vector<uint32_t> vertex_remap;
+
+    const float target_ratio = options.target_ratio.value_or(0.0f);
+    const float absolute_target_error = options.absolute_target_error.value_or(meshopt::NO_TARGET_ERROR);
+
     for (const Cluster &original_cluster : original_clustering.clusters) {
         const size_t original_vertex_count = original_cluster.vertex_indices.size();
 
@@ -121,8 +136,15 @@ inline Clustering simplify(
         cluster_positions_f.reserve(original_vertex_count);
         to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
         const float max_extents = glm::compMax(bounds.size());
-        const float relative_target_error = options.absolute_target_error == meshopt::NO_TARGET_ERROR ?
-            meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
+        if (max_extents == 0.0f) {
+            // Empty or degenerate cluster
+            if (options.preserve_cluster_count) {
+                simplified_clustering.clusters.push_back(original_cluster);
+            }
+            continue;
+        }
+        const float relative_target_error = absolute_target_error == meshopt::NO_TARGET_ERROR ?
+            meshopt::NO_TARGET_ERROR : absolute_target_error / (max_extents * 2);
 
         // Prepare vertex attributes (uv)
         cluster_uvs_f.clear();

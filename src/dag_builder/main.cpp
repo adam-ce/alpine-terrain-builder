@@ -20,14 +20,19 @@ int main(int argc, char **argv) {
         octree::IndexedDagStorage output_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.output_path);
         output_storage.settings().allow_overwrite = args.overwrite;
 
-        const dag::BuildOptions options{
+        dag::BuildOptions options{
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
+            .relative_target_error = args.target_error,
             .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
             .root_node = args.root_node,
             .write_debug_meshes = args.write_debug_meshes,
             .resume = !args.overwrite,
         };
+        // If the user specified neither target, fall back to a default error.
+        if (!args.target_ratio && !args.target_error) {
+            options.relative_target_error = 0.01f;
+        }
 
         dag::build_levels(input_storage, output_storage, options, args.level_range);
         output_storage.save_index();

@@ -100,7 +100,8 @@ Args cli::parse(int argc, const char *const *argv) {
         .level_range = full_range<uint32_t>(),
         .uv_unwrap_algorithm = {},
         .clusters_per_partition = 8,
-        .target_ratio = 0.25,
+        .target_ratio = std::nullopt,
+        .target_error = std::nullopt,
         .write_debug_meshes = false,
         .overwrite = false,
     };
@@ -133,8 +134,10 @@ Args cli::parse(int argc, const char *const *argv) {
         ->check(CLI::PositiveNumber);
 
     app.add_option("--target-ratio", args.target_ratio, "Simplification target ratio")
-        ->default_val(args.target_ratio)
         ->check(CLI::Range(0.0, 1.0));
+
+    app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
+        ->check(CLI::NonNegativeNumber);
 
     app.add_flag("--overwrite", args.overwrite, "Overwrite data already present in output");
 

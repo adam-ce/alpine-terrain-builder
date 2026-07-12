@@ -18,6 +18,7 @@
  *****************************************************************************/
 
 #include <array>
+#include <memory>
 #include <numeric>
 #include <string>
 #include <tuple>
@@ -29,6 +30,22 @@
 #include "srs.h"
 
 using namespace radix;
+
+namespace {
+void require_projection_available(const Dataset& dataset, const OGRSpatialReference& target_srs)
+{
+    const auto dataset_srs = dataset.srs();
+    const auto source_bounds = dataset.bounds();
+
+    std::shared_ptr<OGRCoordinateTransformation> transform;
+    REQUIRE_NOTHROW(transform = srs::transformation(dataset_srs, target_srs));
+    REQUIRE(transform != nullptr);
+
+    std::array xs = { (source_bounds.min.x + source_bounds.max.x) / 2.0 };
+    std::array ys = { (source_bounds.min.y + source_bounds.max.y) / 2.0 };
+    REQUIRE(transform->Transform(static_cast<int>(xs.size()), xs.data(), ys.data()));
+}
+}
 
 TEST_CASE("reading")
 {
@@ -97,6 +114,7 @@ TEST_CASE("reading")
 
                     const auto srs_bounds = srs::nonExactBoundsTransform(geodetic_bounds, geodetic_srs, srs);
 
+                    require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, srs, 1);
                     if (ATB_UNITTESTS_DEBUG_IMAGES) {
                         const auto heights = reader.read(srs_bounds, 1000, 1000);
@@ -148,6 +166,7 @@ TEST_CASE("reading")
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
             const auto ref_dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR + std::string(datasets.front())).value();
+            require_projection_available(*ref_dataset, geodetic_srs);
             const auto ref_reader = DatasetReader(ref_dataset, geodetic_srs, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
             if (ATB_UNITTESTS_DEBUG_IMAGES)
@@ -155,6 +174,7 @@ TEST_CASE("reading")
 
             for (std::string dataset_name : datasets) {
                 const auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR + std::string(dataset_name)).value();
+                require_projection_available(*dataset, geodetic_srs);
                 const auto reader = DatasetReader(dataset, geodetic_srs, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
 

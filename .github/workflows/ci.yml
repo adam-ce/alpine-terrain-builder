@@ -23,9 +23,9 @@ jobs:
             build_type: Release
             sanitizer: normal
             cmake_flags: ""
-          - name: clang-18-asan
-            cc: clang-18
-            cxx: clang++-18
+          - name: clang-23-asan
+            cc: clang-23
+            cxx: clang++-23
             build_type: RelWithDebInfo
             sanitizer: asan
             cmake_flags: -DALP_ENABLE_ADDRESS_SANITIZER=ON
@@ -69,7 +69,7 @@ jobs:
           zlib1g-dev
 
     - name: Install LLVM 23
-      if: matrix.sanitizer == 'tsan'
+      if: matrix.cxx == 'clang++-23'
       run: |
         wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
         chmod +x /tmp/llvm.sh

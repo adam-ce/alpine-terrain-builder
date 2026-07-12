@@ -16,18 +16,33 @@
 class TileDownloader {
 public:
     TileDownloader(const TileUrlBuilder &url_builder, std::string output_pattern,
-                   bool early_skip, std::optional<unsigned int> max_zoom_level)
+                   bool early_skip, std::optional<unsigned int> max_zoom_level, unsigned root_zoom_level)
         : _url_builder(url_builder),
           _output_pattern(std::move(output_pattern)),
+          _logger(root_zoom_level),
           _early_skip(early_skip),
           _max_zoom_level(max_zoom_level) {}
 
     void download_recursive(const radix::tile::Id &root_id) {
-        this->_logger.progress(root_id, "Connecting...");
+        this->_logger.start();
+        this->download_recursive_core(root_id);
+        this->_logger.finish();
+    }
+
+private:
+    const TileUrlBuilder &_url_builder;
+    std::string _output_pattern;
+    HttpClient _http;
+    TileLogger _logger;
+    bool _early_skip;
+    std::optional<unsigned int> _max_zoom_level;
+
+    void download_recursive_core(const radix::tile::Id &root_id) {
         auto result = this->download_tile(root_id);
-        this->_logger.result(root_id, result);
+        this->_logger.report_error(root_id, result);
 
         if (is_failure(result)) {
+            this->_logger.missing(root_id);
             return;
         }
 
@@ -45,17 +60,9 @@ public:
                 continue;
             }
 
-            this->download_recursive(children[i]);
+            this->download_recursive_core(children[i]);
         }
     }
-
-private:
-    const TileUrlBuilder &_url_builder;
-    std::string _output_pattern;
-    HttpClient _http;
-    TileLogger _logger;
-    bool _early_skip;
-    std::optional<unsigned int> _max_zoom_level;
 
     static bool is_failure(const TileResult::Status &result) {
         return std::holds_alternative<TileResult::Absent>(result)
@@ -112,12 +119,9 @@ private:
         ensure_parent_dirs(path);
 
         const std::string url = this->_url_builder.build_url(tile);
-        auto progress_fn = [&](double fraction) {
-            this->_logger.progress(tile, fraction);
-        };
 
         for (int attempt = 0; attempt < 100; attempt++) {
-            HttpResponse response = this->_http.get(url, progress_fn);
+            HttpResponse response = this->_http.get(url);
 
             if (response.curl_code == CURLE_OK && this->_http.is_image(response)) {
                 write_file(path, response.body);

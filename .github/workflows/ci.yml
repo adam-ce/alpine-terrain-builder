@@ -6,13 +6,35 @@ on:
     branches: [ "main", "tile-downloader" ]
 
 env:
-  BUILD_TYPE: Release
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 1G
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc-14-normal
+            cc: gcc-14
+            cxx: g++-14
+            build_type: Release
+            sanitizer: normal
+            cmake_flags: ""
+          - name: clang-18-asan
+            cc: clang-18
+            cxx: clang++-18
+            build_type: RelWithDebInfo
+            sanitizer: asan
+            cmake_flags: -DALP_ENABLE_ADDRESS_SANITIZER=ON
+          - name: clang-23-tsan
+            cc: clang-23
+            cxx: clang++-23
+            build_type: RelWithDebInfo
+            sanitizer: tsan
+            cmake_flags: -DALP_ENABLE_THREAD_SANITIZER=ON
 
     steps:
     - uses: actions/checkout@v4
@@ -46,6 +68,14 @@ jobs:
           xorg-dev \
           zlib1g-dev
 
+    - name: Install LLVM 23
+      if: matrix.sanitizer == 'tsan'
+      run: |
+        wget -qO /tmp/llvm.sh https://apt.llvm.org/llvm.sh
+        chmod +x /tmp/llvm.sh
+        sudo /tmp/llvm.sh 23
+        sudo apt-get install -y --no-install-recommends libclang-rt-23-dev
+
     - name: Restore installed CMake dependencies
       id: cmake_dependency_cache
       uses: actions/cache/restore@v4
@@ -56,19 +86,19 @@ jobs:
           build/alp_external/gdal
           build/alp_external/cgal
           build/alp_external/opencv
-        key: ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
+        key: ${{ runner.os }}-alp-installs-${{ matrix.name }}-${{ matrix.build_type }}-${{ matrix.sanitizer }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
         restore-keys: |
-          ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-
+          ${{ runner.os }}-alp-installs-${{ matrix.name }}-${{ matrix.build_type }}-${{ matrix.sanitizer }}-
 
     - name: Restore ccache
       id: ccache_cache
       uses: actions/cache/restore@v4
       with:
         path: ${{ env.CCACHE_DIR }}
-        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
-          ${{ runner.os }}-ccache-${{ github.ref_name }}-
-          ${{ runner.os }}-ccache-
+          ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-${{ github.ref_name }}-
+          ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-
 
     - name: Configure ccache
       run: |
@@ -81,9 +111,12 @@ jobs:
         -S "${{ github.workspace }}"
         -B "${{ github.workspace }}/build"
         -G Ninja
-        -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+        -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DCMAKE_C_COMPILER=${{ matrix.cc }}
+        -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        ${{ matrix.cmake_flags }}
 
     - name: Save installed CMake dependencies
       if: steps.cmake_dependency_cache.outputs.cache-hit != 'true'
@@ -95,10 +128,10 @@ jobs:
           build/alp_external/gdal
           build/alp_external/cgal
           build/alp_external/opencv
-        key: ${{ runner.os }}-alp-installs-${{ env.BUILD_TYPE }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
+        key: ${{ runner.os }}-alp-installs-${{ matrix.name }}-${{ matrix.build_type }}-${{ matrix.sanitizer }}-${{ hashFiles('CMakeLists.txt', 'src/CMakeLists.txt', 'cmake/*.cmake') }}
 
     - name: Build all targets
-      run: cmake --build "${{ github.workspace }}/build" --config ${{ env.BUILD_TYPE }} --parallel --target all
+      run: cmake --build "${{ github.workspace }}/build" --config ${{ matrix.build_type }} --parallel --target all
 
     - name: ccache stats
       if: always()
@@ -109,7 +142,7 @@ jobs:
       uses: actions/cache/save@v4
       with:
         path: ${{ env.CCACHE_DIR }}
-        key: ${{ runner.os }}-ccache-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Cache unit test data
       id: terrain_builder_unittest_data

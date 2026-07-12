@@ -283,7 +283,7 @@ struct fmt::formatter<octree::Id> {
 
     // Format the Id object.
     template <typename FormatContext>
-    auto format(const octree::Id &id, FormatContext &ctx) {
+    auto format(const octree::Id &id, FormatContext &ctx) const {
         return fmt::format_to(
             ctx.out(),
             "Id(level={}, coords=({}, {}, {}), index={})",

@@ -708,6 +708,14 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
             reuse_count++;
         }
         merged_cluster.texture_id = textures.add(texture);
+
+        // Carry the largest child error into the merged cluster.
+        double max_child_error = 0.0;
+        for (const uint32_t cluster_index : cluster_indices) {
+            max_child_error = std::max(max_child_error, clustering.clusters[cluster_index].absolute_error);
+        }
+        merged_cluster.absolute_error = max_child_error;
+
         partitioned_clusters.push_back(std::move(merged_cluster));
     }
 

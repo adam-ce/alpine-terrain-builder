@@ -249,6 +249,7 @@ Clustering rebuild_clustering(
             new_cluster.uvs = cluster.uvs;
             new_cluster.id = cluster.id;
             new_cluster.texture_id = texture_id_map[cluster.texture_id];
+            new_cluster.absolute_error = cluster.absolute_error;
 
             new_cluster.vertex_indices.reserve(cluster.vertex_count());
             for (const uint32_t vertex_index : cluster.vertex_indices) {

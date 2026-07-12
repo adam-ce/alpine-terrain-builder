@@ -56,12 +56,22 @@ private:
 
 // Target ratio used when neither a ratio nor an error target is specified
 inline constexpr float DEFAULT_TARGET_RATIO = 0.5f;
+
+// Controls how the input cluster's error is combined with the error introduced by this
+// simplification when setting the simplified cluster's error.
+enum class ErrorMode {
+    Overwrite, // keep only this simplification's error, discarding the input error
+    Add,       // add this simplification's error to the input error
+    Max,       // keep the larger of the input error and this simplification's error
+};
+
 struct SimplifyOptions {
     std::optional<float> target_ratio;
     std::optional<float> absolute_target_error;
     VertexLock vertex_lock = VertexLock::none();
     float uv_weight = 0.5;
-
+    ErrorMode error_mode = ErrorMode::Overwrite;
+    
     // Default options apply a target ratio when no stop condition is specified.
     static SimplifyOptions defaults() {
         SimplifyOptions options;
@@ -71,6 +81,18 @@ struct SimplifyOptions {
 };
 
 namespace detail {
+    inline double combine_error(const ErrorMode mode, const double input_error, const double current_error) {
+        switch (mode) {
+        case ErrorMode::Overwrite:
+            return current_error;
+        case ErrorMode::Add:
+            return input_error + current_error;
+        case ErrorMode::Max:
+            return std::max(input_error, current_error);
+        }
+        return current_error;
+    }
+
     inline std::vector<uint8_t> resolve_vertex_lock(const VertexLock& v, const Clustering& clustering, const Cluster& cluster) {
         constexpr const uint8_t UNLOCKED = VertexLock::UNLOCKED;
         constexpr const uint8_t LOCKED = VertexLock::LOCKED;
@@ -234,8 +256,9 @@ inline Clustering simplify(
             }
         }
         
-        // Make error absolute
-        const float absolute_error = result.relative_error * (max_extents * 2);
+        // Make error absolute and combine with the input cluster's error
+        const double absolute_error = result.relative_error * (max_extents * 2);
+        const double combined_error = detail::combine_error(options.error_mode, original_cluster.absolute_error, absolute_error);
 
         // Create new cluster
         Cluster simplified_cluster{
@@ -243,7 +266,7 @@ inline Clustering simplify(
             .local_triangles = std::move(local_triangles),
             .uvs = std::move(uvs),
             .texture_id = original_cluster.texture_id,
-            .absolute_error = absolute_error
+            .absolute_error = combined_error
         };
         validate(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));

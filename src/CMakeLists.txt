@@ -58,7 +58,7 @@ find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
-alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 12.2.0)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH v2.6.1)
 
 alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)

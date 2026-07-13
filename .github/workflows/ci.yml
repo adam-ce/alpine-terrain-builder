@@ -3,7 +3,7 @@ name: CI
 on:
   push:
   pull_request:
-    branches: [ "main", "tile-downloader" ]
+    branches: [ "main" ]
 
 env:
   CCACHE_DIR: ${{ github.workspace }}/.ccache

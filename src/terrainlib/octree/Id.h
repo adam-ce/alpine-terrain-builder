@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <functional>
+#include <type_traits>
 
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
@@ -323,17 +324,22 @@ constexpr auto serialize(auto &archive, octree::Id &id) {
     octree::Id::Level level;
     octree::Id::Index index;
     auto result = archive(level, index);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
-    }
+    } else {
+        if (failure(result)) {
+            return result;
+        }
 
-    auto maybe_id = octree::Id::try_make(level, index);
-    if (!maybe_id) {
-        return zpp::bits::errc(std::errc::bad_message);
-    }
+        auto maybe_id = octree::Id::try_make(level, index);
+        if (!maybe_id) {
+            return zpp::bits::errc(std::errc::bad_message);
+        }
 
-    id = *maybe_id;
-    return success();
+        id = *maybe_id;
+        return success();
+    }
 }
 constexpr auto serialize(auto &archive, const octree::Id &id) {
     return archive(id.level(), id.index_on_level());

@@ -14,6 +14,10 @@
 #include "hash_utils.h"
 #include "int_math.h"
 
+namespace zpp::bits {
+struct access;
+}
+
 namespace octree {
 
 class Id {
@@ -236,6 +240,8 @@ public:
 private:
     Level _level;
     Index _index;
+
+    friend zpp::bits::access;
 
     [[nodiscard]] constexpr Id _child(const uint32_t child_index) const {
         DEBUG_ASSERT(child_index <= 7);

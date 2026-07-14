@@ -1,7 +1,7 @@
 #include "Buffer.h"
 #include <log.h>
 
-Buffer::Buffer(GLenum target = GL_ARRAY_BUFFER, GLenum usage = GL_STATIC_DRAW) : m_target(target), m_usage(usage) {
+Buffer::Buffer(GLenum target, GLenum usage) : m_target(target), m_usage(usage) {
 	glCreateBuffers(1, &m_handle);
 }
 

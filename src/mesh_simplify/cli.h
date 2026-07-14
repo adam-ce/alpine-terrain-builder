@@ -42,11 +42,11 @@ namespace cli {
     }
 
     template <std::size_t Extent>
-    Args cli::parse(const std::span<const std::string, Extent> args) {
+    Args parse(const std::span<const std::string, Extent> args) {
         return _parse(args);
     }
     template <std::size_t Extent>
-    Args cli::parse(const std::span<const std::string_view, Extent> args) {
+    Args parse(const std::span<const std::string_view, Extent> args) {
         return _parse(args);
     }
 }

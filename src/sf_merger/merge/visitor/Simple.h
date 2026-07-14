@@ -26,15 +26,15 @@ public:
         const NodeData<RightStatus> &right,
         const Context& ctx) {
 
-        if constexpr (right.status() == Status::Missing) {
+        if constexpr (RightStatus == Status::Missing) {
             return Unchanged{Source::Left};
         }
 
-        if constexpr (left.status() == Status::Missing) {
+        if constexpr (LeftStatus == Status::Missing) {
             return Unchanged{Source::Right};
         }
 
-        if constexpr (left.status() == Status::Leaf && right.status() == Status::Leaf) {
+        if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
             return merge_meshes(right.mesh(), left.mesh());
         }
 

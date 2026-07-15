@@ -2,7 +2,6 @@
 
 #include <optional>
 
-#include <zpp_bits.h>
 #include <magic_enum/magic_enum.hpp>
 
 #include "octree/NodeStatus.h"
@@ -67,10 +66,6 @@ private:
 
 public:
     Value _value;
-
-public:
-    using serialize = zpp::bits::members<1>;
-    friend zpp::bits::access;
 };
 
 }

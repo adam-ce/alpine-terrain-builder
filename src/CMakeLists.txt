@@ -18,7 +18,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_CXX_FLAGS_RELEASE "-O${ALP_RELEASE_OPT_LEVEL}")
 endif()
 
-find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
@@ -31,6 +30,13 @@ target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
 
 alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
+
+set(_alp_tbb_cmake_arguments -DTBB_TEST=OFF)
+if(ALP_ENABLE_THREAD_SANITIZER)
+    list(APPEND _alp_tbb_cmake_arguments -DTBB_SANITIZE=thread)
+endif()
+alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS ${_alp_tbb_cmake_arguments})
+find_package(TBB REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
 alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)

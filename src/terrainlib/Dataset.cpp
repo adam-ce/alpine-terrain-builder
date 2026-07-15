@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <cassert>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 
 #include <gdal_priv.h>
@@ -35,6 +36,8 @@
 static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigned int flags) {
     initialize_gdal_once();
     const std::string path_str = path.string();
+    static std::mutex gdal_open_mutex;
+    const std::lock_guard lock(gdal_open_mutex);
     return static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags, nullptr, nullptr, nullptr));
 }
 
@@ -59,7 +62,7 @@ std::optional<Dataset> Dataset::open_vector(std::filesystem::path path) {
     return std::nullopt;
 }
 std::optional<std::shared_ptr<Dataset>> Dataset::open_shared_raster(std::filesystem::path path) {
-    if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER | GDAL_OF_SHARED | GDAL_OF_THREAD_SAFE)) {
+    if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
         return std::make_shared<Dataset>(std::move(Dataset(path, dataset)));
     }
     LOG_ERROR("Couldn't open shared raster dataset {}.\n", path);

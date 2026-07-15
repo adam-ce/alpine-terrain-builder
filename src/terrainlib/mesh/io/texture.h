@@ -24,7 +24,7 @@ std::vector<uint8_t> write_texture_to_encoded_buffer(const ImageAndExt &item);
 
 #include <zpp_bits.h>
 
-namespace zpp::bits {
+namespace mesh::io {
 
 template <typename Archive>
 auto serialize(Archive &archive, const mesh::io::ImageAndExt &item) {
@@ -41,7 +41,7 @@ auto serialize(Archive &archive, mesh::io::ImageAndExt &item) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
@@ -50,4 +50,4 @@ auto serialize(Archive &archive, mesh::io::ImageAndExt &item) {
     }
 }
 
-} // namespace zpp::bits
+} // namespace mesh::io

@@ -18,8 +18,6 @@
 #include "mesh/io/texture.h"
 #include "meshopt.h"
 
-namespace zpp::bits {
-
 template <typename Archive>
 auto serialize(Archive &archive, const TextureSet &textures) {
     size_t size = textures.size();
@@ -28,14 +26,14 @@ auto serialize(Archive &archive, const TextureSet &textures) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
         for (const auto &texture : textures) {
             const mesh::io::ImageAndExt item{texture, ".jpeg"};
             result = archive(item);
-            if (failure(result)) {
+            if (zpp::bits::failure(result)) {
                 return result;
             }
         }
@@ -51,7 +49,7 @@ auto serialize(Archive &archive, TextureSet &textures) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
@@ -60,7 +58,7 @@ auto serialize(Archive &archive, TextureSet &textures) {
         for (size_t i = 0; i < size; i++) {
             mesh::io::ImageAndExt item;
             result = archive(item);
-            if (failure(result)) {
+            if (zpp::bits::failure(result)) {
                 return result;
             }
 
@@ -118,7 +116,7 @@ auto serialize(Archive &archive, Cluster &cluster) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
@@ -157,7 +155,7 @@ auto serialize(Archive &archive, Clustering &clustering) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
@@ -166,8 +164,6 @@ auto serialize(Archive &archive, Clustering &clustering) {
         return result;
     }
 }
-
-} // namespace zpp::bits
 
 inline tl::expected<void, ::io::Error>
 save_clustering(const Clustering &clustering,

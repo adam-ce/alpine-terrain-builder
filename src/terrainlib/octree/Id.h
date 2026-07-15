@@ -314,7 +314,7 @@ struct hash<octree::Id> {
 } // namespace std
 
 #include <zpp_bits.h>
-namespace zpp::bits {
+namespace octree {
 namespace {
 constexpr zpp::bits::errc success() {
     return zpp::bits::errc(std::errc());
@@ -328,7 +328,7 @@ constexpr auto serialize(auto &archive, octree::Id &id) {
     if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
     } else {
-        if (failure(result)) {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
@@ -344,4 +344,4 @@ constexpr auto serialize(auto &archive, octree::Id &id) {
 constexpr auto serialize(auto &archive, const octree::Id &id) {
     return archive(id.level(), id.index_on_level());
 }
-}
+} // namespace octree

@@ -37,7 +37,7 @@ std::vector<std::vector<uint32_t>> build_parent_map(const std::vector<std::vecto
 
 }
 
-namespace zpp::bits {
+namespace dag {
 
 template <typename Archive>
 auto serialize(Archive &archive, const dag::Id &id) {
@@ -58,4 +58,4 @@ template <typename Archive>
 auto serialize(Archive &archive, dag::ClusterBatch &node) {
     return archive(node.clustering, node.child_map);
 }
-}
+} // namespace dag

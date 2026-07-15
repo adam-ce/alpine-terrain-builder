@@ -161,6 +161,9 @@ jobs:
         export PROJ_DATA="${{ github.workspace }}/build/alp_external/proj/share/proj"
         export PROJ_LIB="${PROJ_DATA}"
         export GDAL_DATA="${{ github.workspace }}/build/alp_external/gdal/share/gdal"
+        if [[ "${{ matrix.sanitizer }}" == "tsan" ]]; then
+          export TSAN_OPTIONS="suppressions=${{ github.workspace }}/extern/tbb/cmake/suppressions/tsan.suppressions"
+        fi
         status=0
         ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark" || status=$?
         ./unittests/unittests_tilebuilder || status=$?

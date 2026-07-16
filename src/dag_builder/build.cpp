@@ -541,6 +541,15 @@ void build_levels(
         return;
     }
 
+    // Seed prev_level_built with any already-built nodes one level finer than the first level.
+    // TODO: use hierachical lookup here based on root_bounds and IdRect
+    std::unordered_set<octree::Id> prev_level_built;
+    for (const auto &[id, status] : output_storage.index()) {
+        if (id.level() == range.end && status != octree::NodeStatus::Virtual) {
+            prev_level_built.insert(id);
+        }
+    }
+
     BuildContext ctx{input_storage, ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
 
     for (uint32_t level = range.end; level-- > range.start;) {

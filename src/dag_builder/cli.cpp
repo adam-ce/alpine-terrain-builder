@@ -159,8 +159,7 @@ Args cli::parse(int argc, const char *const *argv) {
 
     bool resume = false;
     bool overwrite = false;
-    app.add_flag("--resume", resume, "Resume building the dag from then data in output")
-        ->excludes("--overwrite");
+    app.add_flag("--resume", resume, "Resume building the dag from then data in output");
     app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
         ->excludes("--resume");
 

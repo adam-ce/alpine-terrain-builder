@@ -21,6 +21,13 @@ option(ALP_ENABLE_THREAD_SANITIZER "Compile with ThreadSanitizer enabled" OFF)
 option(ALP_ENABLE_ADDRESS_SANITIZER "Compile with AddressSanitizer enabled" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "Enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
+
+set(ALP_ENABLE_ASSERTS_DEFAULT OFF)
+if(CMAKE_BUILD_TYPE MATCHES "^(Debug|RelWithDebInfo)$")
+    set(ALP_ENABLE_ASSERTS_DEFAULT ON)
+endif()
+option(ALP_ENABLE_ASSERTS "Do not define NDEBUG, i.e., enable asserts" ${ALP_ENABLE_ASSERTS_DEFAULT})
+
 set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity translation unit")
 set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
 
@@ -57,10 +64,6 @@ if(ALP_ENABLE_THREAD_SANITIZER)
     else()
         message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
     endif()
-endif()
-
-if(CMAKE_BUILD_TYPE MATCHES Release)
-    set(ALP_ENABLE_ASSERTS ON CACHE BOOL "Do not define NDEBUG even in Release mode, i.e., enable asserts" FORCE)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

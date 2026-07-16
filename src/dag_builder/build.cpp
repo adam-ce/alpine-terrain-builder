@@ -490,11 +490,14 @@ std::unordered_set<octree::Id> build_level(
         auto result = build_node(target, target_input_ids, dag_ids, ctx);
         if (result) {
             const auto save_result = ctx.output_storage.save(target, *result);
-            DEBUG_ASSERT_VAL(save_result);
-            if (debug_storage) {
-                debug_storage->save(target, clustering_to_mesh(result->clustering));
+            if (save_result) {
+                if (debug_storage) {
+                    debug_storage->save(target, clustering_to_mesh(result->clustering));
+                }
+                saved_ids.push_back(target);
+            } else {
+                LOG_ERROR("Failed to save node {}: {}", target, save_result.error());
             }
-            saved_ids.push_back(target);
         }
         progress.task_finished();
     }, ctx.options.parallelize);

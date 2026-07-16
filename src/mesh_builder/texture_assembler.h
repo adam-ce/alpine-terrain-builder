@@ -24,7 +24,7 @@
 namespace terrainbuilder {
 
 /// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
-[[nodiscard]] unsigned int estimate_zoom_level(
+[[nodiscard]] inline unsigned int estimate_zoom_level(
     const unsigned int reference_zoom_level,
     const radix::tile::SrsBounds reference_tile_bounds,
     const radix::tile::SrsBounds target_bounds) {
@@ -38,7 +38,7 @@ namespace terrainbuilder {
 /// Find all the tiles needed to construct the texture for the given target bounds under the root tile.
 /// The result tiles are ordered in such a way that they can be sequentially written to a texture.
 /// Larger tiles are only included if they are not covered by smaller tiles.
-[[nodiscard]] std::vector<radix::tile::Id> find_relevant_tiles_to_splatter_in_bounds(
+[[nodiscard]] inline std::vector<radix::tile::Id> find_relevant_tiles_to_splatter_in_bounds(
     /// The root tile specifying the tiles to consider.
     const radix::tile::Id root_tile,
     /// Specifes the grid used to organize the image tiles.
@@ -119,7 +119,7 @@ namespace terrainbuilder {
 }
 
 /// Calculate the offset and size of the target bounds inside the root tile.
-[[nodiscard]] radix::geometry::Aabb2ui calculate_target_image_region(
+[[nodiscard]] inline radix::geometry::Aabb2ui calculate_target_image_region(
     /// The bounds for which texture data should be created.
     const radix::tile::SrsBounds target_bounds,
     /// The bounds of the root tile.
@@ -143,7 +143,7 @@ namespace terrainbuilder {
     return target_image_region;
 }
 
-[[nodiscard]] radix::geometry::Aabb2ui calculate_pixel_tile_bounds(
+[[nodiscard]] inline radix::geometry::Aabb2ui calculate_pixel_tile_bounds(
     radix::tile::Id tile,
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
@@ -157,7 +157,7 @@ namespace terrainbuilder {
     return radix::geometry::Aabb2ui(tile_position, tile_position + tile_size);
 }
 
-[[nodiscard]] cv::Rect to_cv_rect(radix::geometry::Aabb2ui aabb) {
+[[nodiscard]] inline cv::Rect to_cv_rect(radix::geometry::Aabb2ui aabb) {
     const glm::uvec2 size = aabb.size();
     return cv::Rect{
         static_cast<int>(aabb.min.x),
@@ -166,14 +166,14 @@ namespace terrainbuilder {
         static_cast<int>(size.y)
     };
 }
-[[nodiscard]] cv::Size to_cv_size(glm::uvec2 vec) {
+[[nodiscard]] inline cv::Size to_cv_size(glm::uvec2 vec) {
     return cv::Size{
         static_cast<int>(vec.x),
         static_cast<int>(vec.y)
     };
 }
 
-void copy_paste_image(
+inline void copy_paste_image(
     cv::Mat &target,
     const cv::Mat &source,
     const radix::geometry::Aabb2i target_bounds,
@@ -254,7 +254,7 @@ void copy_paste_image(
     final_source.copyTo(target(target_rect));
 }
 
-void copy_paste_image(
+inline void copy_paste_image(
     cv::Mat &target,
     const cv::Mat &source,
     const glm::ivec2 target_position,
@@ -264,7 +264,7 @@ void copy_paste_image(
 }
 
 namespace {
-std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id tile, const TileProvider &tile_provider) {
+inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id tile, const TileProvider &tile_provider) {
     const TilePathProvider *tile_path_provider = dynamic_cast<const TilePathProvider *>(&tile_provider);
     if (tile_path_provider != nullptr) {
         return tile_path_provider->get_tile_path(tile).value();
@@ -273,7 +273,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
 }
 }
 
-[[nodiscard]] cv::Mat splatter_tiles_to_texture(
+[[nodiscard]] inline cv::Mat splatter_tiles_to_texture(
     const radix::tile::Id root_tile,
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
@@ -358,7 +358,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
 }
 
 /// Creates a texture for the given region.
-[[nodiscard]] std::optional<cv::Mat> assemble_texture_from_tiles(
+[[nodiscard]] inline std::optional<cv::Mat> assemble_texture_from_tiles(
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.

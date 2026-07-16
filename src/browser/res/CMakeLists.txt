@@ -16,3 +16,6 @@ cmrc_add_resource_library(
     shaders/octree_lines.frag
     # shaders/select.csh
 )
+
+# Generated CMRC sources reuse internal symbol names and cannot share a unity translation unit.
+set_target_properties(resources-lib PROPERTIES UNITY_BUILD OFF)

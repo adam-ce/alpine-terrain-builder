@@ -14,7 +14,7 @@ public:
   Application(std::string title, int width, int height);
 
   void run();
-  void update_camera(float frame_delta_time, Uniform<glm::mat4> U_view);
+  void update_camera(float frame_delta_time);
 
   ~Application();
 

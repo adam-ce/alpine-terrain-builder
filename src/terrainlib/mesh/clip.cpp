@@ -16,6 +16,7 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
+#include "build_config.h"
 #include "hash_utils.h"
 #include "log.h"
 #include "mesh/cgal.h"
@@ -738,6 +739,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
         HalfedgeDescriptor h_e, HalfedgeDescriptor h_f, 
         const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         DEBUG_ASSERT(i_id == intersections.size());
+        ALP_UNUSED(i_id);
         if (&mesh == &tm_e) {
             // The edge belongs to the mesh being clipped
             const auto source_vertex = mesh.source(h_e);

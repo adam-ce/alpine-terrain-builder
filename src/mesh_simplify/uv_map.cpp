@@ -165,9 +165,11 @@ Texture uv_map::merge_textures(
     const mesh::merging::VertexMapping &mapping,
     const UvMap &uv_map,
     const glm::uvec2 merged_texture_size) {
+#ifndef NDEBUG
     for (const SimpleMesh& mesh : original_meshes) {
         DEBUG_ASSERT(mesh.has_texture());
     }
+#endif
 
     cv::Mat merged_atlas = cv::Mat::zeros(merged_texture_size.y, merged_texture_size.x, CV_32FC3);
 

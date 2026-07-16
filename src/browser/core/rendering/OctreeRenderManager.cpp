@@ -49,7 +49,6 @@ namespace octree
             {
                 // Don't split. Check whether to render this node
                 bool is_current_closest = false;
-                bool is_current_farthest = false;
 
                 if (current_distance < closest_distance)
                 {
@@ -60,7 +59,6 @@ namespace octree
                 if (current_distance > farthest_distance)
                 {
                     farthest_distance = current_distance;
-                    is_current_farthest = true;
                     farthest = current;
                 }
 

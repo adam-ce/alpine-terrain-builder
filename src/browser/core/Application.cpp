@@ -221,7 +221,7 @@ void Application::run() {
 
         draw_settings_window();
 
-        update_camera(frame_delta_time, U_view);
+        update_camera(frame_delta_time);
 
         octree::OctreeRenderIntent rendering_intent = octree_render_manager.generate_octree_render_intent(octree::Id::root(), m_camera->get_position(), false, m_refining_factor);
 
@@ -256,7 +256,7 @@ void Application::run() {
     }
 }
 
-void Application::update_camera(float frame_delta_time, Uniform<glm::mat4> U_view) {
+void Application::update_camera(float frame_delta_time) {
     if (!m_camera) {
         LOG_WARN("Trying to update non-initialized camera!");
         return;
@@ -580,9 +580,9 @@ void Application::draw_octree_settings_section() {
 
 void Application::gl_debug_callback(GLenum source, GLenum type,
                                               GLuint id, GLenum severity,
-                                              GLsizei length,
+                                              GLsizei,
                                               const GLchar *message,
-                                              const GLvoid *userParam) {
+                                              const GLvoid *) {
   std::stringstream stringStream;
   std::string sourceString;
   std::string typeString;

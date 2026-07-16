@@ -170,7 +170,7 @@ void Window::glfw_error_callback(int error, const char* description) {
     LOG_ERROR("[{}] {}", error, description);
 }
 
-void Window::key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
+void Window::key_callback(GLFWwindow* window, int key, int /*scancode*/, int action, int /*mode*/) {
     Window* w = (Window*)glfwGetWindowUserPointer(window);
 
     if (!w->m_key_states.contains(key)) {
@@ -194,7 +194,7 @@ void Window::key_callback(GLFWwindow* window, int key, int scancode, int action,
     }
 }
 
-void Window::mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+void Window::mouse_button_callback(GLFWwindow* window, int button, int action, int /*mods*/) {
     Window* w = (Window*)glfwGetWindowUserPointer(window);
     
     if (!w->m_mouse_button_states.contains(button)) {

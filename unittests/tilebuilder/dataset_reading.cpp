@@ -83,7 +83,7 @@ TEST_CASE("reading")
         const std::array test_srses = { 4326, 3857 };
         const std::array test_locations = {
         // CRS bounds, [lower limit, at least one value smaller, at least one value larger, upper limit]
-#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
+#if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
             std::make_tuple(
                 "at100m",
                 at100m,
@@ -106,7 +106,7 @@ TEST_CASE("reading")
             const auto [test_name, test_datasets, geodetic_bounds, limits] = test;
 
             for (std::string dataset_name : test_datasets) {
-                const auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR + std::string(dataset_name)).value();
+                const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
                 for (const auto& test_srs : test_srses) {
                     OGRSpatialReference srs;
                     srs.importFromEPSG(test_srs);
@@ -116,7 +116,7 @@ TEST_CASE("reading")
 
                     require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, srs, 1);
-                    if (ATB_UNITTESTS_DEBUG_IMAGES) {
+                    if (ALP_UNITTESTS_DEBUG_IMAGES) {
                         const auto heights = reader.read(srs_bounds, 1000, 1000);
                         const auto s = std::string("/austria/").length();
                         const auto l = dataset_name.length() - std::string(".tif").length() - s;
@@ -141,7 +141,7 @@ TEST_CASE("reading")
     SECTION("compare with ref render")
     {
         const std::array test_data = {
-#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
+#if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
             std::make_tuple(
                 "at100m",
                 at100m,
@@ -153,7 +153,7 @@ TEST_CASE("reading")
                 pizbuin1m,
                 radix::tile::SrsBounds{{10.105646780, 46.839864531}, {10.129815588, 46.847626067}},
                 740U, 315U, 3.01, 0.006),
-#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
+#if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
             std::make_tuple(
                 "pizbuin1m_highres",
                 pizbuin1m,
@@ -165,15 +165,15 @@ TEST_CASE("reading")
         for (const auto& test : test_data) {
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
-            const auto ref_dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR + std::string(datasets.front())).value();
+            const auto ref_dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())).value();
             require_projection_available(*ref_dataset, geodetic_srs);
             const auto ref_reader = DatasetReader(ref_dataset, geodetic_srs, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
-            if (ATB_UNITTESTS_DEBUG_IMAGES)
+            if (ALP_UNITTESTS_DEBUG_IMAGES)
                 image::debugOut(ref_heights, fmt::format("./heights_ref.png"));
 
             for (std::string dataset_name : datasets) {
-                const auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR + std::string(dataset_name)).value();
+                const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
                 require_projection_available(*dataset, geodetic_srs);
                 const auto reader = DatasetReader(dataset, geodetic_srs, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
@@ -181,7 +181,7 @@ TEST_CASE("reading")
                 const auto s = std::string("/austria/").length();
                 const auto l = dataset_name.length() - std::string(".tif").length() - s;
 
-                if (ATB_UNITTESTS_DEBUG_IMAGES) {
+                if (ALP_UNITTESTS_DEBUG_IMAGES) {
                     image::debugOut(ref_heights, fmt::format("./heights_{}_{}.png", test_name, dataset_name.substr(s, l)));
 
                     auto height_diffs = HeightData(render_width, render_height);
@@ -202,13 +202,13 @@ TEST_CASE("reading")
         }
     }
 
-#if defined(ATB_UNITTESTS_EXTENDED) && ATB_UNITTESTS_EXTENDED
+#if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
     SECTION("overview without warping")
     {
-        REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
+        REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
         const auto border = 5;
-        const auto low_res_ds = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_100m_mgi.tif").value();
-        const auto high_res_ds = Dataset::open_shared_raster(ATB_UNITTESTS_AUSTRIA_HIGHRES).value();
+        const auto low_res_ds = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif").value();
+        const auto high_res_ds = Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES).value();
         const auto srs = low_res_ds->srs();
 
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
@@ -244,7 +244,7 @@ TEST_CASE("reading")
         const auto high_res_time = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
         fmt::print("low res time: {}; high res time: {}\n", double(low_res_time) / 1000.0, double(high_res_time) / 1000.0);
 
-        if (ATB_UNITTESTS_DEBUG_IMAGES) {
+        if (ALP_UNITTESTS_DEBUG_IMAGES) {
             image::debugOut(low_res_heights, fmt::format("./low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./high_res_heights.png"));
 
@@ -265,9 +265,9 @@ TEST_CASE("reading")
 
     SECTION("overview with warping")
     {
-        REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
-        const auto low_res_ds = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif").value();
-        const auto high_res_ds = Dataset::open_shared_raster(ATB_UNITTESTS_AUSTRIA_HIGHRES).value();
+        REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
+        const auto low_res_ds = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif").value();
+        const auto high_res_ds = Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES).value();
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
@@ -286,7 +286,7 @@ TEST_CASE("reading")
         REQUIRE(high_res_heights.width() == render_width);
         REQUIRE(high_res_heights.height() == render_height);
 
-        if (ATB_UNITTESTS_DEBUG_IMAGES) {
+        if (ALP_UNITTESTS_DEBUG_IMAGES) {
             image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
 
@@ -307,9 +307,9 @@ TEST_CASE("reading")
 
     SECTION("lowres overview with warping")
     {
-        REQUIRE(std::string(ATB_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
-        const auto low_res_ds = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif").value();
-        const auto high_res_ds = Dataset::open_shared_raster(ATB_UNITTESTS_AUSTRIA_HIGHRES).value();
+        REQUIRE(std::string(ALP_UNITTESTS_AUSTRIA_HIGHRES).length() > 5);
+        const auto low_res_ds = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_epsg4326.tif").value();
+        const auto high_res_ds = Dataset::open_shared_raster(ALP_UNITTESTS_AUSTRIA_HIGHRES).value();
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
@@ -328,7 +328,7 @@ TEST_CASE("reading")
         REQUIRE(high_res_heights.width() == render_width);
         REQUIRE(high_res_heights.height() == render_height);
 
-        if (ATB_UNITTESTS_DEBUG_IMAGES) {
+        if (ALP_UNITTESTS_DEBUG_IMAGES) {
             image::debugOut(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
 

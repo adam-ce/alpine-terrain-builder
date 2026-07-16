@@ -77,5 +77,5 @@ target_link_libraries(terrainlib PUBLIC
 )
 
 if(ALP_ENABLE_OVERVIEW_READING)
-    target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)
+    target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)
 endif()

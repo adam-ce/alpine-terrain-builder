@@ -55,7 +55,7 @@ TEST_CASE("parallel tile generator")
     };
 
     std::filesystem::path base_path = "./unittest_tiles/";
-    auto generator = ParallelTileGenerator::make(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter, &validation_error_counter), base_path);
+    auto generator = ParallelTileGenerator::make(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter, &validation_error_counter), base_path);
     generator.setWarnOnMissingOverviews(false);
     SECTION("dataset tiles only")
     {

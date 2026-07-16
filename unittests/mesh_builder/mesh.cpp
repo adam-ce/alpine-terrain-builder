@@ -157,7 +157,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
 
     for (const auto &data : test_data) {
         DYNAMIC_SECTION(data.path_suffix) {
-            Dataset dataset(std::filesystem::path(ATB_TEST_DATA_DIR).concat(data.path_suffix));
+            Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix));
             const auto source_srs = dataset.srs();
             const auto &mesh_srs = data.mesh_srs;
             const auto &target_srs = data.target_srs;
@@ -253,7 +253,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     nodes.push_back(summit_node);
 
     const std::string dataset_suffix = "/austria/pizbuin_1m_mgi.tif";
-    const std::filesystem::path dataset_path = std::filesystem::path(ATB_TEST_DATA_DIR).concat(dataset_suffix);
+    const std::filesystem::path dataset_path = std::filesystem::path(ALP_TEST_DATA_DIR).concat(dataset_suffix);
     Dataset dataset(dataset_path);
 
     std::vector<SimpleMesh> node_meshes;

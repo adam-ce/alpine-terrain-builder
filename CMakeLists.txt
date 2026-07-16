@@ -32,9 +32,9 @@ set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity 
 set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
 
 # Unit-test configuration
-option(ATB_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)
-option(ATB_UNITTESTS_DEBUG_IMAGES "Output debug height images for visual comparison" OFF)
-set(ATB_UNITTESTS_AUSTRIA_HIGHRES "" CACHE FILEPATH "Path to the high resolution Austrian terrain dataset")
+option(ALP_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)
+option(ALP_UNITTESTS_DEBUG_IMAGES "Output debug height images for visual comparison" OFF)
+set(ALP_UNITTESTS_AUSTRIA_HIGHRES "" CACHE FILEPATH "Path to the high resolution Austrian terrain dataset")
 
 if(ALP_ENABLE_ADDRESS_SANITIZER AND ALP_ENABLE_THREAD_SANITIZER)
     message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")

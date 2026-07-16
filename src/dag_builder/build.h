@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 
+#include "ContinuationMode.h"
 #include "Range.h"
 #include "build_config.h"
 #include "octree/storage/MeshStorage.h"
@@ -26,7 +27,7 @@ struct BuildOptions {
     IncludeMode include_mode = IncludeMode::CurrentOnly;
     bool write_debug_meshes = IS_DEBUG_BUILD;
     bool parallelize = false;
-    bool resume = true;
+    ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
 void build_full(

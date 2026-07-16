@@ -36,6 +36,7 @@
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
+#include "ContinuationMode.h"
 
 namespace dag {
 
@@ -451,12 +452,16 @@ std::unordered_set<octree::Id> build_level(
     LOG_INFO("Building level {} ({} targets)", level, targets.size());
 
     std::unordered_set<octree::Id> already_built;
-    if (ctx.options.resume) {
+    if (ctx.options.continuation_mode != ContinuationMode::Overwrite) {
         for (const octree::Id &target : targets) {
             if (ctx.output_storage.has(target)) {
                 already_built.insert(target);
             }
         }
+    }
+
+    if (ctx.options.continuation_mode == ContinuationMode::Error && already_built.empty()) {
+        LOG_ERROR_AND_EXIT("Found some of target nodes already in built in the output directory, use --resume or --overwrite");
     }
 
     // Initialize debug storage if requested (contains .glb meshes)

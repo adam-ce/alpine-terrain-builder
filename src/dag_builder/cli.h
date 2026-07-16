@@ -28,6 +28,7 @@ struct Args {
 
     bool write_debug_meshes;
     bool overwrite;
+    ContinuationMode continuation_mode;
 };
 
 Args parse(int argc, const char *const *argv);

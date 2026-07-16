@@ -84,6 +84,17 @@ octree::Id make_octree_id(const std::vector<uint64_t> &values) {
     throw CLI::ValidationError("--root-node expects either: <level> <index> or <level> <x> <y> <z>");
 }
 
+ContinuationMode make_continuation_mode(const bool resume, const bool overwrite) {
+    if (resume && overwrite) {
+        UNREACHABLE();
+    }
+    if (resume) {
+        return ContinuationMode::Resume;
+    } else if (overwrite) {
+        return ContinuationMode::Overwrite;
+    }
+}
+
 } // namespace
 
 Args cli::parse(int argc, const char *const *argv) {
@@ -103,7 +114,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
         .write_debug_meshes = false,
-        .overwrite = false,
+        .continuation_mode = ContinuationMode::Error
     };
 
     app.add_option("--input", args.input_path, "Path to input mesh dataset")
@@ -139,7 +150,12 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
         ->check(CLI::NonNegativeNumber);
 
-    app.add_flag("--overwrite", args.overwrite, "Overwrite data already present in output");
+    bool resume = false;
+    bool overwrite = false;
+    app.add_flag("--resume", resume, "Resume building the dag from then data in output")
+        ->excludes("--overwrite");
+    app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
+        ->excludes("--resume");
 
     app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
 
@@ -154,6 +170,7 @@ Args cli::parse(int argc, const char *const *argv) {
         if (!root_node_values.empty()) {
             args.root_node = make_octree_id(root_node_values);
         }
+        args.continuation_mode = make_continuation_mode(resume, overwrite);
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));
     }

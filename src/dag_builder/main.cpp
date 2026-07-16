@@ -9,6 +9,7 @@
 #include "octree/storage/MeshStorage.h"
 #include "octree/storage/open.h"
 #include "storage.h"
+#include "ContinuationMode.h"
 
 int main(int argc, char **argv) {
     const cli::Args args = cli::parse(argc, argv);
@@ -18,7 +19,7 @@ int main(int argc, char **argv) {
     try {
         const octree::IndexedMeshStorage input_storage = octree::open_folder_indexed(args.input_path);
         octree::IndexedDagStorage output_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.output_path);
-        output_storage.settings().allow_overwrite = args.overwrite;
+        output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
         dag::BuildOptions options{
             .clusters_per_partition = args.clusters_per_partition,
@@ -27,7 +28,7 @@ int main(int argc, char **argv) {
             .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
             .root_node = args.root_node,
             .write_debug_meshes = args.write_debug_meshes,
-            .resume = !args.overwrite,
+            .continuation_mode = args.continuation_mode
         };
         // If the user specified neither target, fall back to a default error.
         if (!args.target_ratio && !args.target_error) {

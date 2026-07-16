@@ -50,11 +50,11 @@ public:
         const NodeData<LeftStatus> &left,
         const NodeData<RightStatus> &right,
         const Context &ctx) {
-        if constexpr (left.status() == Status::Inner || right.status() == Status::Inner) {
+        if constexpr (LeftStatus == Status::Inner || RightStatus == Status::Inner) {
             UNREACHABLE();
         }
 
-        if constexpr (left.status() == Status::Missing && right.status() == Status::Missing) {
+        if constexpr (LeftStatus == Status::Missing && RightStatus == Status::Missing) {
             DEBUG_ASSERT(!(ctx.has_left_parent && ctx.has_right_parent));
             if (!ctx.has_left_parent && !ctx.has_right_parent) {
                 return Ignore{};
@@ -62,7 +62,7 @@ public:
         }
 
         // If the parent mask is empty, we can just return whatevers on the left
-        if constexpr (left.status() != Status::Missing) {
+        if constexpr (LeftStatus != Status::Missing) {
             if (ctx.mask.mesh.is_empty()) {
                 return Unchanged{Source::Left};
             }
@@ -73,20 +73,20 @@ public:
         MeshMask mask(mesh::clip_on_bounds_and_cap(ctx.mask.mesh, bounds));
 
         // Same when the current mask is empty
-        if constexpr (left.status() != Status::Missing) {
+        if constexpr (LeftStatus != Status::Missing) {
             if (mask.mesh.is_empty()) {
                 return Unchanged{Source::Left};
             }
         }
 
         // If we have two leaf nodes we can directly merge them.
-        if constexpr (left.status() == Status::Leaf && right.status() == Status::Leaf) {
+        if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Leaf) {
             return this->merge_meshes(left.mesh(), right.mesh(), true, true, mask);
         }
 
         // If we have a left leaf we either directly return it (after clipping)
         // or merge if right has a non-missing parent
-        if constexpr (left.status() == Status::Leaf && right.status() == Status::Missing) {
+        if constexpr (LeftStatus == Status::Leaf && RightStatus == Status::Missing) {
             if (ctx.has_right_parent) {
                 return this->merge_meshes(left.mesh(), right.mesh().value(), true, false, mask);
             }
@@ -104,7 +104,7 @@ public:
 
         // If we have a right leaf we either directly return it (after clipping)
         // or merge if left has a non-missing parent
-        if constexpr (left.status() == Status::Missing && right.status() == Status::Leaf) {
+        if constexpr (LeftStatus == Status::Missing && RightStatus == Status::Leaf) {
             if (ctx.has_left_parent) {
                 return this->merge_meshes(left.mesh().value(), right.mesh(), false, true, mask);
             }
@@ -120,7 +120,7 @@ public:
             }
         }
 
-        if constexpr (left.status() == Status::Missing && right.status() == Status::Missing) {
+        if constexpr (LeftStatus == Status::Missing && RightStatus == Status::Missing) {
             DEBUG_ASSERT(ctx.has_left_parent || ctx.has_right_parent);
             if (ctx.has_left_parent) {
                 auto result = clip_on_mask(left.mesh().value(), mask, false);
@@ -140,12 +140,12 @@ public:
             }
         }
 
-        if constexpr (left.status() == Status::Virtual || right.status() == Status::Virtual) {
+        if constexpr (LeftStatus == Status::Virtual || RightStatus == Status::Virtual) {
             return Recurse{
                 Context{
                     .mask = mask,
-                    .has_left_parent = ctx.has_left_parent || left.status() == Status::Leaf,
-                    .has_right_parent = ctx.has_right_parent || right.status() == Status::Leaf}};
+                    .has_left_parent = ctx.has_left_parent || LeftStatus == Status::Leaf,
+                    .has_right_parent = ctx.has_right_parent || RightStatus == Status::Leaf}};
         }
 
         UNREACHABLE();

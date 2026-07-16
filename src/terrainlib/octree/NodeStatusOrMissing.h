@@ -2,7 +2,6 @@
 
 #include <optional>
 
-#include <zpp_bits.h>
 #include <magic_enum/magic_enum.hpp>
 
 #include "octree/NodeStatus.h"
@@ -67,10 +66,6 @@ private:
 
 public:
     Value _value;
-
-public:
-    using serialize = zpp::bits::members<1>;
-    friend zpp::bits::access;
 };
 
 }
@@ -84,7 +79,7 @@ struct fmt::formatter<octree::NodeStatusOrMissing> {
     }
 
     template <typename FormatContext>
-    auto format(const octree::NodeStatusOrMissing &status, FormatContext &ctx) {
+    auto format(const octree::NodeStatusOrMissing &status, FormatContext &ctx) const {
         switch (status) {
         case octree::NodeStatusOrMissing::Leaf:
             return fmt::format_to(ctx.out(), "Leaf");

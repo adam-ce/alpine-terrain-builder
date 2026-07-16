@@ -3,6 +3,7 @@
 #include <string_view>
 #include <vector>
 #include <span>
+#include <type_traits>
 
 #include <opencv2/opencv.hpp>
 
@@ -23,7 +24,7 @@ std::vector<uint8_t> write_texture_to_encoded_buffer(const ImageAndExt &item);
 
 #include <zpp_bits.h>
 
-namespace zpp::bits {
+namespace mesh::io {
 
 template <typename Archive>
 auto serialize(Archive &archive, const mesh::io::ImageAndExt &item) {
@@ -36,12 +37,17 @@ auto serialize(Archive &archive, mesh::io::ImageAndExt &item) {
     std::vector<uint8_t> encoded;
 
     auto result = archive(item.ext, encoded);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
+        return result;
+    } else {
+        if (zpp::bits::failure(result)) {
+            return result;
+        }
+
+        item.image = mesh::io::read_texture_from_encoded_bytes(encoded);
         return result;
     }
-
-    item.image = mesh::io::read_texture_from_encoded_bytes(encoded);
-    return result;
 }
 
-} // namespace zpp::bits
+} // namespace mesh::io

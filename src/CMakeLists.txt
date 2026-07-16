@@ -11,42 +11,6 @@ endif()
 
 option(ALP_ENABLE_OVERVIEW_READING "enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 
-# ASAN & TSAN
-option(ALP_ENABLE_THREAD_SANITIZER "compiles with thread sanitizer enabled" OFF)
-option(ALP_ENABLE_ADDRESS_SANITIZER "compiles with address sanitizer enabled" OFF)
-
-if(ALP_ENABLE_ADDRESS_SANITIZER)
-    if(ALP_ENABLE_THREAD_SANITIZER)
-        message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")
-    endif()
-endif()
-
-if(ALP_ENABLE_ADDRESS_SANITIZER)
-    message(STATUS "AddressSanitizer enabled")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        set(ASAN_FLAGS -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -g)
-        add_compile_options(${ASAN_FLAGS})
-        add_link_options(${ASAN_FLAGS})
-    else()
-        message(WARNING "ALP_ENABLE_ADDRESS_SANITIZER set but compiler is not GCC/Clang; ignoring")
-    endif()
-endif()
-
-if(ALP_ENABLE_THREAD_SANITIZER)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        message(WARNING "ThreadSanitizer is not recommended with Release builds. "
-                        "Use Debug or RelWithDebInfo for accurate race detection.")
-    endif()
-    message(STATUS "ThreadSanitizer enabled")
-    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-        set(TSAN_FLAGS -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g)
-        add_compile_options(${TSAN_FLAGS})
-        add_link_options(${TSAN_FLAGS})
-    else()
-        message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
-    endif()
-endif()
-
 set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -54,19 +18,21 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(CMAKE_CXX_FLAGS_RELEASE "-O${ALP_RELEASE_OPT_LEVEL}")
 endif()
 
-find_package(TBB REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(CURL REQUIRED)
 
-alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 10.2.1)
+alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 12.2.0)
 alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH v2.6.1)
 
 alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format'")
+alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
+
+alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS -DTBB_TEST=OFF)
+find_package(TBB REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
 alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
@@ -95,10 +61,10 @@ add_library(tl_expected INTERFACE)
 target_include_directories(tl_expected INTERFACE SYSTEM ${tl_expected_SOURCE_DIR}/include)
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
-alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.13.0)
+alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
 add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
-alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.5 DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.2 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits INTERFACE SYSTEM ${zpp_bits_SOURCE_DIR})
 

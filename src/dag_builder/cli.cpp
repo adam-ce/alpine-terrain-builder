@@ -26,6 +26,11 @@ const std::unordered_map<std::string, spdlog::level::level_enum> log_level_names
     {"trace", spdlog::level::level_enum::trace},
 };
 
+const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
+    {"current", dag::IncludeMode::CurrentOnly},
+    {"current-and-coarser", dag::IncludeMode::CurrentAndCoarser},
+};
+
 const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
     {"AsRigidAsPossible", uv::Algorithm::AsRigidAsPossible},
     {"arap", uv::Algorithm::AsRigidAsPossible},
@@ -114,6 +119,8 @@ Args cli::parse(int argc, const char *const *argv) {
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
         .write_debug_meshes = false,
+        .parallelize = false,
+        .include_mode = dag::IncludeMode::CurrentOnly,
         .continuation_mode = ContinuationMode::Error
     };
 
@@ -158,6 +165,12 @@ Args cli::parse(int argc, const char *const *argv) {
         ->excludes("--resume");
 
     app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
+
+    app.add_flag("--parallelize", args.parallelize, "Build nodes within a level in parallel");
+
+    app.add_option("--include-mode", args.include_mode, "Which input nodes to include when building a level")
+        ->transform(CLI::CheckedTransformer(include_mode_names, CLI::ignore_case))
+        ->default_val(args.include_mode);
 
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))

@@ -27,7 +27,9 @@ int main(int argc, char **argv) {
             .relative_target_error = args.target_error,
             .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
             .root_node = args.root_node,
+            .include_mode = args.include_mode,
             .write_debug_meshes = args.write_debug_meshes,
+            .parallelize = args.parallelize,
             .continuation_mode = args.continuation_mode
         };
         // If the user specified neither target, fall back to a default error.

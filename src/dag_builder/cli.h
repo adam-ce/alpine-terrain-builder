@@ -7,6 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "build.h"
 #include "octree/Id.h"
 #include "Range.h"
 #include "uv/unwrap.h"
@@ -27,7 +28,8 @@ struct Args {
     std::optional<float> target_error;
 
     bool write_debug_meshes;
-    bool overwrite;
+    bool parallelize;
+    dag::IncludeMode include_mode;
     ContinuationMode continuation_mode;
 };
 

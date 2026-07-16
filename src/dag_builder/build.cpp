@@ -171,12 +171,15 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     std::vector<Clustering> filtered;
 
     for (const octree::Id &id : dag_ids) {
+        // Load dag node clusters
         auto dag_node = ctx.output_storage.load(id);
         if (!dag_node) {
             LOG_WARN("Failed to load DAG node {}, skipping", id);
             continue;
         }
         Clustering clustering = std::move(dag_node.value().clustering);
+
+        // Assign canonical cluster ids
         for (auto &[cluster_index, cluster] : enumerate(clustering.clusters)) {
             cluster.id = cluster_sources.size();
             cluster_sources.emplace_back(id, cluster_index);
@@ -186,6 +189,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         }
 
         auto indices = find_clusters_matching(clustering, filter);
+        // Find relevant clusters from this node.
         if (indices.empty()) {
             continue;
         }
@@ -195,10 +199,13 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         return {};
     }
 
+    // Merge remaining clusterings
     const Clustering merged = merge_clusterings(filtered, epsilon);
 
     const auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
+    // Run nanite-style grouping, simplification, splitting.
 
+    // Create map from cluster index to child cluster id.
     auto child_id_map = transform_vector(child_map, [&](const auto &children) {
         return transform_vector(children, [&](const uint32_t merged_index) {
             const uint32_t source_index = merged.clusters[merged_index].id;
@@ -266,6 +273,8 @@ std::optional<dag::ClusterBatch> build_node(
     const auto node_bounds = ctx.shifted_space.get_node_bounds(target_id);
     const double epsilon = compute_epsilon(node_bounds);
 
+    // Prepare filter to only include clusters inside the target_id bounds. 
+    // In CurrentAndCoarser mode, input regions represented by the relvant DAG nodes are excluded as well.
     RegionFilter input_filter;
     input_filter.include = {node_bounds};
     if (ctx.options.include_mode == IncludeMode::CurrentAndCoarser) {

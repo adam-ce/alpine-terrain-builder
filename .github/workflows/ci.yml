@@ -35,6 +35,12 @@ jobs:
             build_type: RelWithDebInfo
             sanitizer: tsan
             cmake_flags: -DALP_ENABLE_THREAD_SANITIZER=ON
+          - name: clang-23-unity
+            cc: clang-23
+            cxx: clang++-23
+            build_type: Release
+            sanitizer: normal
+            cmake_flags: -DALP_ENABLE_UNITY_BUILD=ON
 
     steps:
     - uses: actions/checkout@v4

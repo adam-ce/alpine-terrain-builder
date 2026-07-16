@@ -73,11 +73,11 @@ struct LodResult {
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build child map.
-LodResult build_lod(const Clustering &input, const BuildOptions &options, const radix::geometry::Aabb3d &node_bounds) {
-    const Partitioning partitioning = create_partitioning(input, PartitionOptions{
-                                                                     .clusters_per_partition = options.clusters_per_partition});
+LodResult build_lod(const Clustering &clusters, const BuildOptions &options, const radix::geometry::Aabb3d &node_bounds) {
+    const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
+                                                                        .clusters_per_partition = options.clusters_per_partition});
     // Construct new clusters and generate new textures.
-    Clustering clustering = apply_partitioning(input, partitioning, options.uv_unwrap_algorithm);
+    Clustering clustering = apply_partitioning(clusters, partitioning, options.uv_unwrap_algorithm);
     // Create partition to cluster map
     std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
     for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {

@@ -25,12 +25,13 @@
 #include "mesh/split.h"
 #include "mesh/topology.h"
 #include "opencv_utils.h"
-#include "partition.h"
 #include "range_utils.h"
 #include "uv/unwrap.h"
 #include "vector_utils.h"
 #include "atlas/TextureBaker.h"
 #include "TinyVector.h"
+#include "Partitioning.h"
+
 
 namespace detail {
 inline bool check_all_same_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {

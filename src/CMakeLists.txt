@@ -5,7 +5,7 @@ alp_add_git_repository(fmt URL https://github.com/fmtlib/fmt COMMITISH 12.2.0)
 
 alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH 3.4.0 DO_NOT_ADD_SUBPROJECT)
 add_library(Eigen3 INTERFACE)
-target_include_directories(Eigen3 INTERFACE SYSTEM ${eigen_SOURCE_DIR})
+target_include_directories(Eigen3 SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 
 alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
@@ -24,7 +24,7 @@ alp_setup_opencv(4.11.0)
 
 alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
-target_include_directories(cgltf INTERFACE SYSTEM ${cgltf_SOURCE_DIR})
+target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 
 set(TINYGLTF_HEADER_ONLY ON CACHE INTERNAL "" FORCE)
 set(TINYGLTF_INSTALL OFF CACHE INTERNAL "" FORCE)
@@ -33,18 +33,18 @@ alp_add_git_repository(tinygltf URL https://github.com/syoyo/tinygltf COMMITISH 
 
 alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b13373436a2866c5d68f8f80ac6f0bc1ffe DO_NOT_ADD_SUBPROJECT)
 add_library(stb INTERFACE)
-target_include_directories(stb INTERFACE SYSTEM ${stb_SOURCE_DIR})
+target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 
 alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
 add_library(tl_expected INTERFACE)
-target_include_directories(tl_expected INTERFACE SYSTEM ${tl_expected_SOURCE_DIR}/include)
+target_include_directories(tl_expected SYSTEM INTERFACE ${tl_expected_SOURCE_DIR}/include)
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.2 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
-target_include_directories(zpp_bits INTERFACE SYSTEM ${zpp_bits_SOURCE_DIR})
+target_include_directories(zpp_bits SYSTEM INTERFACE ${zpp_bits_SOURCE_DIR})
 
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
@@ -88,7 +88,7 @@ endif()
 if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
     alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
     add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
-    target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
+    target_include_directories(xatlas SYSTEM PUBLIC ${xatlas_SOURCE_DIR}/source)
 
     alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
 
@@ -106,13 +106,14 @@ if(ALP_BUILD_BROWSER)
         set(GLFW_BUILD_WAYLAND ON CACHE BOOL "" FORCE)
         set(GLFW_BUILD_X11 ON CACHE BOOL "" FORCE)
     endif()
-    alp_add_git_repository(glfw URL https://github.com/glfw/glfw.git COMMITISH e7ea71be039836da3a98cea55ae5569cb5eb885c NOT_SYSTEM)
+    alp_add_git_repository(glfw URL https://github.com/glfw/glfw.git COMMITISH e7ea71be039836da3a98cea55ae5569cb5eb885c)
 
     alp_add_git_repository(glad URL https://github.com/Dav1dde/glad.git COMMITISH 431786d8126e4f383a81e36f47b61a5d52a1c20d DO_NOT_ADD_SUBPROJECT)
     add_subdirectory("${glad_SOURCE_DIR}/cmake" glad_cmake)
     glad_add_library(glad_gl_core_46 REPRODUCIBLE API gl:core=4.6)
+    set_property(TARGET glad_gl_core_46 PROPERTY SYSTEM TRUE)
 
-    alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237 NOT_SYSTEM)
+    alp_add_git_repository(resources-lib URL https://github.com/vector-of-bool/cmrc.git COMMITISH 952ffddba731fc110bd50409e8d2b8a06abbd237)
 
     alp_add_git_repository(imgui URL https://github.com/ocornut/imgui.git COMMITISH 5f0acadf7db1b6d469f0771284e2e3f7818443ce DO_NOT_ADD_SUBPROJECT)
     add_library(imgui STATIC
@@ -123,7 +124,7 @@ if(ALP_BUILD_BROWSER)
         ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
     )
-    target_include_directories(imgui PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
+    target_include_directories(imgui SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends)
     target_link_libraries(imgui PUBLIC glfw)
 endif()
 

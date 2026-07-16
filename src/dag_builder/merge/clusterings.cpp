@@ -265,6 +265,7 @@ Clustering rebuild_clustering(
         filter_degenerate_triangle(merged);
     }
 
+    DEBUG_ASSERT(merged.cluster_count() == sum(clusterings, [](const Clustering &clustering) { return clustering.cluster_count(); }));
     validate(merged);
     return merged;
 }

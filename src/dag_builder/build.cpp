@@ -117,9 +117,7 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options, const 
         child_map[final_index] = partition_to_clusters[partition_index];
     }
 
-    clustering = result.clustering;
-
-    return {clustering, child_map};
+    return {std::move(result.clustering), std::move(child_map)};
 }
 
 // Load input meshes, clusterize, and filter them to the target region.

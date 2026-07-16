@@ -48,7 +48,7 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, 
 
     // Lock boundary vertices on or beyond a node face, as these are shared with
     // neighbouring nodes.
-    const double lock_margin = glm::compMax(node_bounds.size()) * 1e-3;
+    const double lock_margin = glm::compMax(node_bounds.size()) * 0.05;
     for (const uint32_t vertex_index : boundary_vertices) {
         const glm::dvec3 &position = clustering.positions[vertex_index];
         if (signed_distance_to_bounds(node_bounds, position) >= -lock_margin) {

@@ -76,7 +76,7 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options, const 
     const Partitioning partitioning = create_partitioning(input, PartitionOptions{
                                                                      .clusters_per_partition = options.clusters_per_partition});
     // Construct new clusters and generate new textures.
-    Clustering clustering = apply_partitioning(input, partitioning);
+    Clustering clustering = apply_partitioning(input, partitioning, options.uv_unwrap_algorithm);
     // Create partition to cluster map
     std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
     for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {

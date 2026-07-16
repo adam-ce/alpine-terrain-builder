@@ -83,13 +83,13 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
 }
 
 Clustering merge_clusters(const Clustering &clustering, const Partitioning &partitioning);
-inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning) {
-    return merge_clusters(clustering, partitioning);
+inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
+    return merge_clusters(clustering, partitioning, algorithm);
 }
 #include "merge/clusters.h"
 
-inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}) {
+inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
     const Partitioning partitioning = create_partitioning(clustering, options);
-    return apply_partitioning(clustering, partitioning);
+    return apply_partitioning(clustering, partitioning, algorithm);
 }
 

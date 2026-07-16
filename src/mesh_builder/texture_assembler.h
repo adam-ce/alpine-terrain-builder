@@ -379,16 +379,26 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     // Start by transforming the input bounds into the srs the tiles are in.
     const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
-    const radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(radix::tile::Scheme::SlippyMap);
+    radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(radix::tile::Scheme::SlippyMap);
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
         return std::nullopt;
     }
 
+    // The smallest encompassing tile can be deeper than what is actually available, in which case walk up to the nearest available ancestor tile.
+    while (smallest_encompassing_tile.zoom_level > 0 && !tile_provider.has_tile(smallest_encompassing_tile)) {
+        smallest_encompassing_tile = smallest_encompassing_tile.parent();
+    }
+
+    // Tile pixel coordinates are stored as 32-bit unsigned ints (see PixelPoint/i_pixel), so
+    // coords.x * grid.tileSize() overflows past this zoom level; never recurse deeper than that.
+    const uint32_t max_safe_zoom_level = static_cast<uint32_t>(std::log2(std::numeric_limits<uint32_t>::max() / grid.tileSize()));
+    const uint32_t clamped_max_zoom = std::min(max_zoom.value_or(max_safe_zoom_level), max_safe_zoom_level);
+
     // Find relevant tiles in bounds
     const std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
-        smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, max_zoom);
+        smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, clamped_max_zoom);
     LOG_TRACE("Found {} relevant texture tiles", tiles_to_splatter.size());
 
     // If we found to relevant tiles, we are done.

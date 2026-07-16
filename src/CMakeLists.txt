@@ -59,10 +59,8 @@ alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMM
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER
     ALP_BUILD_MESH_BUILDER
-    ALP_BUILD_MESH_SIMPLIFY
     ALP_BUILD_TILE_DOWNLOADER
     ALP_BUILD_MESH_CONVERT
-    ALP_BUILD_MESH_MERGER
     ALP_BUILD_INDEX_BROWSER
     ALP_BUILD_DAG_BUILDER
     ALP_BUILD_DAG_CONVERT_DEBUG
@@ -146,17 +144,11 @@ endif()
 if(ALP_BUILD_MESH_BUILDER)
     add_subdirectory(mesh_builder)
 endif()
-if(ALP_BUILD_MESH_SIMPLIFY)
-    add_subdirectory(mesh_simplify)
-endif()
 if(ALP_BUILD_TILE_DOWNLOADER)
     add_subdirectory(tile_downloader)
 endif()
 if(ALP_BUILD_MESH_CONVERT)
     add_subdirectory(mesh_convert)
-endif()
-if(ALP_BUILD_MESH_MERGER)
-    add_subdirectory(mesh_merger)
 endif()
 if(ALP_BUILD_INDEX_BROWSER)
     add_subdirectory(index_browser)

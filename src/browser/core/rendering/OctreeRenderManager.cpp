@@ -37,10 +37,11 @@ namespace octree
 
             // LOG_DEBUG("DIST: {}, RATIO: {}", distance, current_ratio);
 
-            if (current_ratio <= refining_ratio && current.has_children())
+            const auto children = current.children();
+            if (current_ratio <= refining_ratio && children.has_value())
             {
                 // Split node into 8 children, and add them to the refining list
-                for (Id child : current.children().value())
+                for (Id child : children.value())
                 {
                     refining_ids.push_back(child);
                 }

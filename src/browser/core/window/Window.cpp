@@ -1,5 +1,6 @@
 #include "Window.h"
 #include <log.h>
+#include <limits>
 
 std::atomic<bool> Window::glfw_initialized(false);
 std::atomic<size_t> Window::window_instances(0);
@@ -235,24 +236,30 @@ void Window::framebuffer_size_callback(GLFWwindow* window, int width, int height
 }
 
 void Window::update_window_count(int delta) {
-    if (delta == 0) {
-        return;
-    }
-
     auto w_instances = Window::window_instances.load(std::memory_order_acquire);
     auto g_initialized = Window::glfw_initialized.load(std::memory_order_acquire);
 
-    if (w_instances + delta < 0) {
-        LOG_ERROR_AND_EXIT("Illegal window count change from {} >> {} by {}!", w_instances, w_instances + delta, delta);
+    if (delta != 1 && delta != -1) {
+        LOG_ERROR_AND_EXIT("Illegal window-count delta: {}", delta);
     }
 
-    LOG_INFO("Window count changed from {} >> {} by {}!", w_instances, w_instances + delta, delta);
+    if (delta == -1 && w_instances == 0) {
+        LOG_ERROR_AND_EXIT("Cannot decrement window count below zero");
+    }
+
+    if (delta == 1 && w_instances == std::numeric_limits<size_t>::max()) {
+        LOG_ERROR_AND_EXIT("Cannot increment window count beyond size_t maximum");
+    }
+
+    const size_t new_count = delta == 1 ? w_instances + 1 : w_instances - 1;
+
+    LOG_INFO("Window count changed from {} >> {} by {}!", w_instances, new_count, delta);
 
     // If the previous window count was 0 AND glfw is not initialized, initialize GLFW
     bool needs_glfw_init = w_instances == 0 && !Window::glfw_initialized;
 
     // If the current window count is 0, AND glfw is initialized, destruct GLFW
-    bool needs_glfw_destruction = w_instances + delta == 0 && Window::glfw_initialized;
+    bool needs_glfw_destruction = new_count == 0 && Window::glfw_initialized;
 
     if (needs_glfw_init) {
         LOG_INFO("Initializing GLFW");
@@ -272,6 +279,5 @@ void Window::update_window_count(int delta) {
         Window::glfw_initialized.store(g_initialized, std::memory_order_release);
     }
 
-    w_instances += delta;
-    Window::window_instances.store(w_instances, std::memory_order_release);
+    Window::window_instances.store(new_count, std::memory_order_release);
 }

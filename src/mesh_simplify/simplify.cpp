@@ -8,8 +8,7 @@
 #include <CGAL/Surface_mesh_simplification/Edge_collapse_visitor_base.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Bounded_normal_change_filter.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Constrained_placement.h>
-#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/Count_ratio_stop_predicate.h>
-#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/GarlandHeckbert_policies.h>
+#include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/GarlandHeckbert_plane_policies.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/LindstromTurk_cost.h>
 #include <CGAL/Surface_mesh_simplification/Policies/Edge_collapse/LindstromTurk_placement.h>
 #include <CGAL/Surface_mesh_simplification/edge_collapse.h>
@@ -447,7 +446,7 @@ inline size_t _simplify_mesh(
 
     switch (algorithm) {
         case Algorithm::GarlandHeckbert:
-            typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_policies<cgal::Mesh, cgal::Kernel> GH_policies;
+            typedef CGAL::Surface_mesh_simplification::GarlandHeckbert_plane_policies<cgal::Mesh, cgal::Kernel> GH_policies;
             return _simplify_mesh_with_policies<GH_policies>(mesh, uv_map, GH_policies(mesh), args);
         case Algorithm::LindstromTurk:
             typedef CGAL::Surface_mesh_simplification::LindstromTurk_cost<cgal::Mesh> LT_cost;

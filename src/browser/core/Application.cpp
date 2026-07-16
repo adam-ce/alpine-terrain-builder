@@ -536,7 +536,7 @@ void Application::draw_octree_settings_section() {
     ImGui::SetNextItemOpen(true, ImGuiCond_FirstUseEver);
     if (ImGui::TreeNode("Stats")) {
 
-        ImGui::Text("Nodes Rendered: %d", m_last_draw_amount);
+        ImGui::Text("Nodes Rendered: %zu", m_last_draw_amount);
 
         ImGui::TreePop();
     }
@@ -553,7 +553,7 @@ void Application::draw_octree_settings_section() {
         size_t selected_idx = 0;
 
         if (ImGui::BeginCombo("Metric", metrics[selected_idx].c_str())) {
-            for (int i = 0; i < metrics.size(); i++) {
+            for (size_t i = 0; i < metrics.size(); i++) {
                 bool selected = selected_idx == i;
 
                 if (ImGui::Selectable(metrics[i].c_str(), selected)) {

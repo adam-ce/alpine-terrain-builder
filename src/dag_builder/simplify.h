@@ -159,7 +159,7 @@ inline Clustering simplify(
         cluster_positions_f.clear();
         cluster_positions_f.reserve(original_vertex_count);
         to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
-        const float max_extents = glm::compMax(bounds.size());
+        const float max_extents = glm::compMax(bounds.size()) / 2.0f;
         if (max_extents == 0.0f) {
             // Empty or degenerate cluster
             if (options.preserve_cluster_count) {
@@ -168,7 +168,7 @@ inline Clustering simplify(
             continue;
         }
         const float relative_target_error = absolute_target_error == meshopt::NO_TARGET_ERROR ?
-            meshopt::NO_TARGET_ERROR : absolute_target_error / (max_extents * 2);
+            meshopt::NO_TARGET_ERROR : absolute_target_error / max_extents;
 
         // Prepare vertex attributes (uv)
         cluster_uvs_f.clear();
@@ -266,7 +266,7 @@ inline Clustering simplify(
         }
         
         // Make error absolute and combine with the input cluster's error
-        const double absolute_error = result.relative_error * (max_extents * 2);
+        const double absolute_error = result.relative_error * max_extents;
         const double combined_error = detail::combine_error(options.error_mode, original_cluster.absolute_error, absolute_error);
 
         // Create new cluster

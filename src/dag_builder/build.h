@@ -38,6 +38,6 @@ void build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,
-    const Range<uint32_t> &level_range);
+    const AnyRange<uint32_t> &level_range);
 
 } // namespace dag

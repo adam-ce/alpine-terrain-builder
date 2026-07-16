@@ -68,6 +68,7 @@ add_executable(unittests_terrainlib
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/quantize.cpp
+    terrainlib/range.cpp
     terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp

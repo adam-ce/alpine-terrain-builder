@@ -26,7 +26,7 @@ constexpr uint32_t invalid_index = VertexMap::invalid_index;
 inline VertexMap create_reindex_map(const std::span<const glm::uvec3> triangles) {
     const Range<uint32_t> vertex_range = find_vertex_index_range(triangles);
     OffsetVector<uint32_t> old_to_new;
-    old_to_new.offset = vertex_range.min;
+    old_to_new.offset = vertex_range.start;
     old_to_new.resize(vertex_range.size(), detail::invalid_index);
 
     uint32_t next_index = 0;

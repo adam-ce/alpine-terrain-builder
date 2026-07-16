@@ -45,19 +45,19 @@ const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
     {"TutteBarycentricMapping", uv::Algorithm::TutteBarycentricMapping},
     {"tutte", uv::Algorithm::TutteBarycentricMapping}};
 
-Range<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
+AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
     switch (input.size()) {
         case 0:
-            return full_range<uint32_t>();
+            return RangeFull{};
         case 1:
-            return Range<uint32_t>(input[0]);
+            return RangeInclusive<uint32_t>(input[0]);
         case 2: {
             const uint32_t min_level = input[0];
             const uint32_t max_level = input[1];
             if (min_level > max_level) {
                 throw CLI::ValidationError("--levels minimum must be <= maximum");
             }
-            return Range<uint32_t>{min_level, max_level};
+            return RangeInclusive<uint32_t>{min_level, max_level};
         }
         default:
             UNREACHABLE();
@@ -97,7 +97,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .input_path = {},
         .output_path = {},
         .root_node = octree::Id::root(),
-        .level_range = full_range<uint32_t>(),
+        .level_range = RangeFull{},
         .uv_unwrap_algorithm = {},
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,

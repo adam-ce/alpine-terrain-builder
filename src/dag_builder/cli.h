@@ -19,7 +19,7 @@ struct Args {
     std::filesystem::path input_path;
     std::filesystem::path output_path;
     octree::Id root_node;
-    Range<uint32_t> level_range;
+    AnyRange<uint32_t> level_range;
 
     uv::Algorithm uv_unwrap_algorithm;
     uint32_t clusters_per_partition;

@@ -511,7 +511,7 @@ void build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,
-    const Range<uint32_t> &level_range) {
+    const AnyRange<uint32_t> &level_range) {
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
     const octree::Space space = octree::Space::earth();
     const octree::Id root_node = options.root_node;
@@ -527,16 +527,15 @@ void build_levels(
     const uint32_t max_input_level = max_input_level_opt.value();
 
     const Range<uint32_t> valid_range{root_node.level(), max_input_level + 1};
-    const Range<uint32_t> range = valid_range.intersection(level_range);
-    if (range.empty()) {
+    const Range<uint32_t> range = valid_range.intersect(level_range).to_range(max_input_level + 1);
+    if (range.is_empty()) {
         LOG_WARN("Requested level range does not overlap with buildable levels {}-{}", root_node.level(), max_input_level);
         return;
     }
 
     BuildContext ctx{input_storage, ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
 
-    std::unordered_set<octree::Id> prev_level_built;
-    for (uint32_t level = range.max; level-- > range.min;) {
+    for (uint32_t level = range.end; level-- > range.start;) {
         prev_level_built = build_level(
             level,
             input_by_level,
@@ -552,7 +551,7 @@ void build_full(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options) {
-    build_levels(input_storage, output_storage, options, full_range<uint32_t>());
+    build_levels(input_storage, output_storage, options, RangeFull{});
 }
 
 } // namespace dag

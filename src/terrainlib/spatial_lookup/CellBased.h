@@ -16,7 +16,7 @@ namespace detail {
 // Calculate distance^2, works with all types
 template <glm::length_t n_dims, typename T1, typename T2>
 auto distance_sq(const glm::vec<n_dims, T1> &a, const glm::vec<n_dims, T2> &b) {
-    using T = std::common_type_t<int, unsigned int>;
+    using T = std::common_type_t<T1, T2>;
     using Vec = glm::vec<n_dims, T>;
 
     if constexpr (std::is_floating_point_v<T>) {

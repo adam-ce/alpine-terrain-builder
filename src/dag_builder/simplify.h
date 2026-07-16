@@ -70,7 +70,7 @@ struct SimplifyOptions {
     std::optional<float> absolute_target_error;
     VertexLock vertex_lock = VertexLock::none();
     float uv_weight = 0.5;
-    ErrorMode error_mode = ErrorMode::Overwrite;
+    ErrorMode error_mode = ErrorMode::Add;
     // Emit exactly one output cluster per input cluster
     bool preserve_cluster_count = false;
 

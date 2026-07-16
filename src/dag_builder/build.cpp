@@ -200,7 +200,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     // Merge remaining clusterings
     const Clustering merged = merge_clusterings(filtered, epsilon);
 
-    const auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
+    auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
     // Run nanite-style grouping, simplification, splitting.
 
     // Create map from cluster index to child cluster id.
@@ -211,7 +211,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         });
     });
 
-    return {simplified, std::move(child_id_map)};
+    return {std::move(simplified), std::move(child_id_map)};
 }
 
 // Combine input clusters with inner clusters.

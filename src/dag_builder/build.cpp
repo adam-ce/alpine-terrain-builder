@@ -467,7 +467,7 @@ std::unordered_set<octree::Id> build_level(
         }
     }
 
-    if (ctx.options.continuation_mode == ContinuationMode::Error && already_built.empty()) {
+    if (ctx.options.continuation_mode == ContinuationMode::Error && !already_built.empty()) {
         LOG_ERROR_AND_EXIT("Found some of target nodes already in built in the output directory, use --resume or --overwrite");
     }
 

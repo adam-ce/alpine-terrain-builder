@@ -76,14 +76,14 @@ if(TARGET tilebuilderlib)
     atb_configure_test(unittests_tilebuilder)
 endif()
 
-if(TARGET meshbuilderlib)
-    add_executable(unittests_meshbuilder
+if(TARGET sfbuilderlib)
+    add_executable(unittests_sfbuilder
         catch2_helpers.h
-        mesh_builder/mesh.cpp
-        mesh_builder/texture.cpp
+        sf_builder/mesh.cpp
+        sf_builder/texture.cpp
     )
-    target_link_libraries(unittests_meshbuilder PRIVATE meshbuilderlib Catch2::Catch2WithMain)
-    atb_configure_test(unittests_meshbuilder)
+    target_link_libraries(unittests_sfbuilder PRIVATE sfbuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_sfbuilder)
 endif()
 
 if(TARGET dagbuilderlib)

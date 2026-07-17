@@ -50,7 +50,7 @@ add_library(terrainlib
     ProgressIndicator.cpp
 )
 
-target_compile_features(terrainlib PUBLIC cxx_std_20)
+target_compile_features(terrainlib PUBLIC cxx_std_23)
 target_compile_definitions(terrainlib PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pch.h)

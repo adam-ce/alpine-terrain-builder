@@ -10,19 +10,16 @@ Args cli::parse(int argc, const char * const * argv) {
     DEBUG_ASSERT(argc >= 0);
 
     Args args;
-    CLI::App app{"mesh merger"};
+    CLI::App app{"sf_index_browser"};
     app.positionals_at_end(false);
     app.allow_windows_style_options(false);
 
-    app.add_option("--input", args.mesh_paths, "Meshes to to merge together")
-        ->check(CLI::ExistingFile)
+    app.add_option("dataset,--dataset", args.dataset_path, "Folder or index file of dataset to browser")
+        ->check(CLI::ExistingPath)
         ->required();
 
-    app.add_option("--output", args.output_path, "Path to write the merged mesh to")
-        ->required();
-
-    app.add_option("--epsilon", args.epsilon, "Epsilon for vertex deduplication")
-        ->check(CLI::Range(std::numeric_limits<double>::min(), std::numeric_limits<double>::max()));
+    args.full_view = false;
+    app.add_flag("--full", args.full_view, "Start at octree root instead of dataset root.");
 
     const std::map<std::string, spdlog::level::level_enum>
         log_level_names{

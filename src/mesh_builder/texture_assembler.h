@@ -5,7 +5,7 @@
 #include <numeric>
 #include <span>
 #include <vector>
-
+#include <cstdint>
 #include <csignal>
 
 #include <fmt/core.h>
@@ -24,14 +24,14 @@
 namespace terrainbuilder {
 
 /// Estimates the zoom level of the target bounds in relation to some reference tile given by its zoom level and bounds.
-[[nodiscard]] unsigned int estimate_zoom_level(
-    const unsigned int reference_zoom_level,
+[[nodiscard]] uint32_t estimate_zoom_level(
+    const uint32_t reference_zoom_level,
     const radix::tile::SrsBounds reference_tile_bounds,
     const radix::tile::SrsBounds target_bounds) {
     const glm::dvec2 relative_size = reference_tile_bounds.size() / target_bounds.size();
     const double relative_factor = (relative_size.x + relative_size.y) / 2;
-    const int zoom_level_change = std::rint(std::log2(relative_factor));
-    DEBUG_ASSERT(static_cast<int>(reference_zoom_level) + zoom_level_change >= 0);
+    const int32_t zoom_level_change = std::rint(std::log2(relative_factor));
+    DEBUG_ASSERT(static_cast<int32_t>(reference_zoom_level) + zoom_level_change >= 0);
     return reference_zoom_level + zoom_level_change;
 }
 
@@ -48,9 +48,9 @@ namespace terrainbuilder {
     /// Provider class that maps tile ids to their textures.
     const TileProvider &tile_provider,
     /// The maximal zoom level to be considered.
-    const std::optional<unsigned int> max_zoom_level_to_consider = std::nullopt,
+    const std::optional<uint32_t> max_zoom_level_to_consider = std::nullopt,
     /// The minimum zoom level to be surely examined.
-    std::optional<unsigned int> min_zoom_level_to_examine = std::nullopt) {
+    std::optional<uint32_t> min_zoom_level_to_examine = std::nullopt) {
     // It can happen that the root tile is very large because the target tile was (slightly) over the tile border
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
@@ -127,11 +127,11 @@ namespace terrainbuilder {
     /// The image size of each tile.
     const glm::uvec2 tile_image_pixel_size,
     /// The range of zoom levels from the root to the maximum zoom.
-    const unsigned int zoom_level_range) {
+    const uint32_t zoom_level_range) {
     const glm::dvec2 relative_min = (target_bounds.min - root_tile_bounds.min) / root_tile_bounds.size();
     const glm::dvec2 relative_max = (target_bounds.max - root_tile_bounds.min) / root_tile_bounds.size();
 
-    const unsigned int full_image_size_factor = std::pow(2, zoom_level_range);
+    const uint32_t full_image_size_factor = std::pow(2, zoom_level_range);
     const glm::uvec2 root_tile_image_size = tile_image_pixel_size * glm::uvec2(full_image_size_factor);
     const glm::uvec2 target_pixel_offset_min(glm::floor(relative_min * glm::dvec2(root_tile_image_size)));
     const glm::uvec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
@@ -147,7 +147,7 @@ namespace terrainbuilder {
     radix::tile::Id tile,
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
-    const unsigned int max_zoom_level) {
+    const uint32_t max_zoom_level) {
     tile = tile.to(radix::tile::Scheme::SlippyMap);
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
     const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
@@ -160,16 +160,16 @@ namespace terrainbuilder {
 [[nodiscard]] cv::Rect to_cv_rect(radix::geometry::Aabb2ui aabb) {
     const glm::uvec2 size = aabb.size();
     return cv::Rect{
-        static_cast<int>(aabb.min.x),
-        static_cast<int>(aabb.min.y),
-        static_cast<int>(size.x),
-        static_cast<int>(size.y)
+        static_cast<int32_t>(aabb.min.x),
+        static_cast<int32_t>(aabb.min.y),
+        static_cast<int32_t>(size.x),
+        static_cast<int32_t>(size.y)
     };
 }
 [[nodiscard]] cv::Size to_cv_size(glm::uvec2 vec) {
     return cv::Size{
-        static_cast<int>(vec.x),
-        static_cast<int>(vec.y)
+        static_cast<int32_t>(vec.x),
+        static_cast<int32_t>(vec.y)
     };
 }
 
@@ -289,12 +289,12 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
 
     const radix::tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
 
-    unsigned int max_zoom_level = 0;
+    uint32_t max_zoom_level = 0;
     for (const radix::tile::Id &tile : tiles_to_splatter) {
         max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
     }
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
-    const unsigned int zoom_level_range = max_zoom_level - root_tile.zoom_level;
+    const uint32_t zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
     // Choose any tile to infer tile size and format to allocate our texture buffer accordingly.
     const radix::tile::Id &any_tile = tiles_to_splatter.front();
@@ -368,7 +368,7 @@ std::optional<std::filesystem::path> try_get_tile_path(const radix::tile::Id til
     /// Provider class that maps tile ids to their textures.
     const TileProvider &tile_provider,
     /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
-    const std::optional<unsigned int> max_zoom = std::nullopt,
+    const std::optional<uint32_t> max_zoom = std::nullopt,
     /// The filter used to rescale the tile images if required due to missing detail tiles.
     const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
     if (target_bounds.width() == 0 || target_bounds.height() == 0) {

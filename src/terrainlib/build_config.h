@@ -1,5 +1,7 @@
 #pragma once
 
+#define ALP_UNUSED(value) static_cast<void>(value)
+
 #ifdef NDEBUG
 constexpr bool IS_DEBUG_BUILD = false;
 #else

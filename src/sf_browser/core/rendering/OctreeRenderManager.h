@@ -11,12 +11,12 @@ namespace octree
     {
         std::vector<float> instances_active;
         std::vector<glm::mat4> instances_model_mats;
-        size_t instance_count;
+        size_t instance_count = 0;
 
-        std::optional<double> min_scene_distance;
-        std::optional<double> max_scene_distance;
+        std::optional<double> min_scene_distance = std::nullopt;
+        std::optional<double> max_scene_distance = std::nullopt;
 
-        std::optional<Id> closest_node;
+        std::optional<Id> closest_node = std::nullopt;
     };
 
     enum OctreeFilterParamType

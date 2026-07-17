@@ -41,7 +41,7 @@ TEST_CASE("depth_first_tile_traverser interface")
     const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
     const unsigned max_zoom_level = 3;
 
-    ReadType result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
+    traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
 }
 
 TEST_CASE("depth_first_tile_traverser basics")

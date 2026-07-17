@@ -53,11 +53,11 @@ namespace {
         glUniform2uiv(location, count, data);
     }
     template <>
-    void glUniformv<unsigned int, 3>(const GLint location, const GLsizei count, const unsigned int* data) {
+    [[maybe_unused]] void glUniformv<unsigned int, 3>(const GLint location, const GLsizei count, const unsigned int* data) {
         glUniform3uiv(location, count, data);
     }
     template <>
-    void glUniformv<unsigned int, 4>(const GLint location, const GLsizei count, const unsigned int* data) {
+    [[maybe_unused]] void glUniformv<unsigned int, 4>(const GLint location, const GLsizei count, const unsigned int* data) {
         glUniform4uiv(location, count, data);
     }
 

@@ -1,6 +1,7 @@
 #include "ShaderProgram.h"
 #include <glad/gl.h>
 #include <log.h>
+#include <utility>
 
 ShaderProgram::ShaderProgram() {
 	m_handle = glCreateProgram();
@@ -48,9 +49,21 @@ void ShaderProgram::link() {
 	std::string name;
 	name.resize(16); // name buffer
 	for (GLint i = 0; i < uniformCount; i++) {
+		size_t name_length = 0;
 		while (true) {
-			glGetActiveUniform(m_handle, (GLuint)i, (GLsizei)name.length(), &length, &size, &type, name.data());
-			if (name.length() - 1 > length) {
+			if (!std::in_range<GLsizei>(name.size())) {
+				LOG_ERROR_AND_EXIT("Uniform-name buffer is too large for GLsizei");
+			}
+
+			const GLsizei buffer_size = static_cast<GLsizei>(name.size());
+			glGetActiveUniform(m_handle, static_cast<GLuint>(i), buffer_size, &length, &size, &type, name.data());
+
+			if (length < 0 || length >= buffer_size) {
+				LOG_ERROR_AND_EXIT("glGetActiveUniform returned invalid length {} for buffer size {}", length, buffer_size);
+			}
+
+			name_length = static_cast<size_t>(length);
+			if (name_length < name.size() - 1) {
 				break;
 			} else {
 				name.resize(name.length() * 2);
@@ -58,8 +71,8 @@ void ShaderProgram::link() {
 		}
 
 		const auto location = glGetUniformLocation(m_handle, name.c_str());
-		m_uniform_locations.insert(std::make_pair(name.substr(0, length), location));
-		LOG_DEBUG("Uniform #{} Name: {}", i, name.substr(0, length));
+		m_uniform_locations.insert(std::make_pair(name.substr(0, name_length), location));
+		LOG_DEBUG("Uniform #{} Name: {}", i, name.substr(0, name_length));
 	}
 
 	// load all attribute locations

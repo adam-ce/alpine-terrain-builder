@@ -9,6 +9,7 @@
 #include <tbb/concurrent_vector.h>
 
 #include "build.h"
+#include "build_config.h"
 #include "centroids.h"
 #include "cluster.h"
 #include "clusterize.h"
@@ -479,6 +480,7 @@ std::unordered_set<octree::Id> build_level(
         if (result) {
             const auto save_result = ctx.output_storage.save(target, *result);
             DEBUG_ASSERT(save_result.has_value());
+            ALP_UNUSED(save_result);
             if (debug_storage) {
                 debug_storage->save(target, clustering_to_mesh(result->clustering));
             }

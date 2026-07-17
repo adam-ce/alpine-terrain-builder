@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <functional>
+#include <type_traits>
 
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
@@ -283,7 +284,7 @@ struct fmt::formatter<octree::Id> {
 
     // Format the Id object.
     template <typename FormatContext>
-    auto format(const octree::Id &id, FormatContext &ctx) {
+    auto format(const octree::Id &id, FormatContext &ctx) const {
         return fmt::format_to(
             ctx.out(),
             "Id(level={}, coords=({}, {}, {}), index={})",
@@ -313,7 +314,7 @@ struct hash<octree::Id> {
 } // namespace std
 
 #include <zpp_bits.h>
-namespace zpp::bits {
+namespace octree {
 namespace {
 constexpr zpp::bits::errc success() {
     return zpp::bits::errc(std::errc());
@@ -323,19 +324,24 @@ constexpr auto serialize(auto &archive, octree::Id &id) {
     octree::Id::Level level;
     octree::Id::Index index;
     auto result = archive(level, index);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
-    }
+    } else {
+        if (zpp::bits::failure(result)) {
+            return result;
+        }
 
-    auto maybe_id = octree::Id::try_make(level, index);
-    if (!maybe_id) {
-        return zpp::bits::errc(std::errc::bad_message);
-    }
+        auto maybe_id = octree::Id::try_make(level, index);
+        if (!maybe_id) {
+            return zpp::bits::errc(std::errc::bad_message);
+        }
 
-    id = *maybe_id;
-    return success();
+        id = *maybe_id;
+        return success();
+    }
 }
 constexpr auto serialize(auto &archive, const octree::Id &id) {
     return archive(id.level(), id.index_on_level());
 }
-}
+} // namespace octree

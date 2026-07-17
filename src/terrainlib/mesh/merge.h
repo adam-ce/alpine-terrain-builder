@@ -53,7 +53,7 @@ concept SimpleMeshRefConcept =
     std::is_same_v<T, std::reference_wrapper<SimpleMesh>>;
 
 template <SimpleMeshRefConcept Mesh, typename... Args>
-SimpleMesh merge(Mesh&& mesh1, Args &&...args) {
+SimpleMesh merge(Mesh&& mesh1, Args &&... /*args*/) {
     return mesh1;
 }
 template <SimpleMeshRefConcept Mesh1, SimpleMeshRefConcept Mesh2, typename... Args>

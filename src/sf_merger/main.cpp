@@ -19,7 +19,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
         auto result = mask::load_from_path(path, radius_range);
         if (result.has_value()) {
             const auto mask = result.value();
-            LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)", 
+            LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)",
                 mask.mesh.vertex_count(), mask.mesh.face_count());
             return mask;
         } else {
@@ -42,7 +42,7 @@ void run(const cli::MergeArgs& args) {
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
     octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = ".glb"});
-    
+
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
     return merge_datasets(base_dataset, new_dataset, output_dataset, mask);
@@ -81,4 +81,3 @@ int main(int argc, char **argv) {
     //             std::filesystem::copy_options::recursive |
     //             std::filesystem::copy_options::overwrite_existing);
 }
-

@@ -30,7 +30,7 @@ TEST_CASE("TileHeightsGenerator")
     constexpr auto file_name = "height_data.atb";
 
     SECTION("mercator") {
-        const auto generator = TileHeightsGenerator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
+        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
         generator.run(8);
 
         const auto heights = TileHeights::read_from(base_path / file_name);
@@ -50,7 +50,7 @@ TEST_CASE("TileHeightsGenerator")
     }
 
     SECTION("geodetic") {
-        const auto generator = TileHeightsGenerator(ATB_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::WGS84, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
+        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::WGS84, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
         generator.run(8);
 
         const auto heights = TileHeights::read_from(base_path / file_name);

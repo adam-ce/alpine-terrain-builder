@@ -8,7 +8,7 @@
 # For usage see: https://github.com/vector-of-bool/cmrc/tree/master#usage
 
 cmrc_add_resource_library(
-    resources-lib
+    sf-browser-resources
     NAMESPACE res
 
 # ADD NEW RESOURCES AFTER HERE
@@ -16,3 +16,6 @@ cmrc_add_resource_library(
     shaders/octree_lines.frag
     # shaders/select.csh
 )
+
+# Generated CMRC sources reuse internal symbol names and cannot share a unity translation unit.
+set_target_properties(sf-browser-resources PROPERTIES UNITY_BUILD OFF)

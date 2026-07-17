@@ -173,7 +173,7 @@ jobs:
         status=0
         ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark" || status=$?
         ./unittests/unittests_tilebuilder || status=$?
-        ./unittests/unittests_meshbuilder || status=$?
+        ./unittests/unittests_sfbuilder || status=$?
         ./unittests/unittests_dagbuilder || status=$?
         ./unittests/unittests_sfmerger || status=$?
         exit $status

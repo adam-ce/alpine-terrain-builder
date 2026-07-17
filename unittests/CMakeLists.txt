@@ -1,38 +1,21 @@
-cmake_minimum_required(VERSION 3.21)
-
-project(alpine-terrain-builder-unittests)
-
-option(ATB_UNITTESTS_EXTENDED "perform extended unit tests (they take long)" OFF)
-option(ATB_UNITTESTS_DEBUG_IMAGES "output debug height images for visual comparison" OFF)
-set(ATB_UNITTESTS_AUSTRIA_HIGHRES CACHE FILEPATH "path to the high res austrian dataset (terrain model, i.e., OeRect_01m_gt_31287.img)")
-
-add_compile_definitions(CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS)
-if (NOT TARGET Catch2)
+if(NOT TARGET Catch2::Catch2)
     alp_add_git_repository(catch2 URL https://github.com/catchorg/Catch2.git COMMITISH v3.8.1)
 endif()
 
-
-add_compile_definitions(
-    ATB_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
-    ATB_UNITTESTS_AUSTRIA_HIGHRES="${ATB_UNITTESTS_AUSTRIA_HIGHRES}"
-)
-
-if (ATB_UNITTESTS_EXTENDED)
-    add_compile_definitions(ATB_UNITTESTS_EXTENDED=true)
-else()
-    add_compile_definitions(ATB_UNITTESTS_EXTENDED=false)
-endif()
-
-if (ATB_UNITTESTS_DEBUG_IMAGES)
-    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=true)
-else()
-    add_compile_definitions(ATB_UNITTESTS_DEBUG_IMAGES=false)
-endif()
+function(atb_configure_test target)
+    target_compile_definitions(${target} PRIVATE
+        CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS
+        ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
+        ALP_UNITTESTS_AUSTRIA_HIGHRES="${ALP_UNITTESTS_AUSTRIA_HIGHRES}"
+        ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
+        ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>
+    )
+endfunction()
 
 add_executable(unittests_terrainlib
     catch2_helpers.h
     opencv_helpers.h
-    
+
     terrainlib/convert.cpp
     terrainlib/cow.cpp
     terrainlib/dataset.cpp
@@ -74,39 +57,49 @@ add_executable(unittests_terrainlib
     terrainlib/tiny_vector.cpp
     terrainlib/union_find.cpp
 )
-target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
+target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
+atb_configure_test(unittests_terrainlib)
 
+if(TARGET tilebuilderlib)
+    add_executable(unittests_tilebuilder
+        catch2_helpers.h
+        tilebuilder/alpine_raster_format.cpp
+        tilebuilder/dataset_reading.cpp
+        tilebuilder/depth_first_tile_traverser.cpp
+        tilebuilder/image.cpp
+        tilebuilder/parallel_tile_generator.cpp
+        tilebuilder/parallel_tiler.cpp
+        tilebuilder/tile_heights_generator.cpp
+        tilebuilder/top_down_tiler.cpp
+    )
+    target_link_libraries(unittests_tilebuilder PRIVATE tilebuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_tilebuilder)
+endif()
 
-add_executable(unittests_tilebuilder
-    catch2_helpers.h
-    tilebuilder/alpine_raster_format.cpp
-    tilebuilder/dataset_reading.cpp
-    tilebuilder/depth_first_tile_traverser.cpp
-    tilebuilder/image.cpp
-    tilebuilder/parallel_tile_generator.cpp
-    tilebuilder/parallel_tiler.cpp
-    tilebuilder/tile_heights_generator.cpp
-    tilebuilder/top_down_tiler.cpp
-)  
-target_link_libraries(unittests_tilebuilder PUBLIC tilebuilderlib Catch2::Catch2WithMain)
+if(TARGET sfbuilderlib)
+    add_executable(unittests_sfbuilder
+        catch2_helpers.h
+        sf_builder/mesh.cpp
+        sf_builder/texture.cpp
+    )
+    target_link_libraries(unittests_sfbuilder PRIVATE sfbuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_sfbuilder)
+endif()
 
-add_executable(unittests_meshbuilder
-    catch2_helpers.h
-    mesh_builder/mesh.cpp
-    mesh_builder/texture.cpp
-)
-target_link_libraries(unittests_meshbuilder PUBLIC meshbuilderlib terrainlib Catch2WithMain)
-target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${CMAKE_SOURCE_DIR}/unittests/data/\"")
+if(TARGET dagbuilderlib)
+    add_executable(unittests_dagbuilder
+        catch2_helpers.h
+        dag_builder/slice.cpp
+    )
+    target_link_libraries(unittests_dagbuilder PRIVATE dagbuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_dagbuilder)
+endif()
 
-
-add_executable(unittests_dagbuilder
-    catch2_helpers.h
-    dag_builder/slice.cpp
-)
-target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
-
-add_executable(unittests_sfmerger
-    catch2_helpers.h
-    sf_merger/sphere_projector.cpp
-)
-target_link_libraries(unittests_sfmerger PUBLIC sfmergerlib terrainlib Catch2WithMain)
+if(TARGET sfmergerlib)
+    add_executable(unittests_sfmerger
+        catch2_helpers.h
+        sf_merger/sphere_projector.cpp
+    )
+    target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_sfmerger)
+endif()

@@ -5,13 +5,13 @@ project(alpine-terrain-builder LANGUAGES C CXX)
 # Executable targets
 option(ALP_BUILD_TILE_BUILDER "Build tile-builder" ON)
 option(ALP_BUILD_SF_MERGER "Build sf-merger" ON)
-option(ALP_BUILD_MESH_BUILDER "Build mesh-builder" ON)
+option(ALP_BUILD_SF_BUILDER "Build sf-builder" ON)
 option(ALP_BUILD_TILE_DOWNLOADER "Build tile-downloader" ON)
 option(ALP_BUILD_MESH_CONVERT "Build mesh-convert" ON)
-option(ALP_BUILD_INDEX_BROWSER "Build index-browser" ON)
+option(ALP_BUILD_SF_INDEX_BROWSER "Build sf-index-browser" ON)
 option(ALP_BUILD_DAG_BUILDER "Build dag-builder" ON)
 option(ALP_BUILD_DAG_CONVERT_DEBUG "Build dag-convert-debug" ON)
-option(ALP_BUILD_BROWSER "Build browser" ON)
+option(ALP_BUILD_SF_BROWSER "Build sf-browser" ON)
 option(ALP_BUILD_UNITTESTS "Build unit tests for enabled components" ON)
 
 # Project configuration

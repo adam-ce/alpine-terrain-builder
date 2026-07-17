@@ -1,6 +1,6 @@
 add_subdirectory(res)
 
-add_executable(browser
+add_executable(sf-browser
     main.cpp
     core/Application.cpp
     core/window/Window.cpp
@@ -13,5 +13,5 @@ add_executable(browser
     core/geometry/UnitCube.h
     core/rendering/OctreeRenderManager.cpp
 )
-target_include_directories(browser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(browser PRIVATE terrainlib glfw glad_gl_core_46 resources-lib imgui)
+target_include_directories(sf-browser PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(sf-browser PRIVATE terrainlib glfw glad_gl_core_46 sf-browser-resources imgui)

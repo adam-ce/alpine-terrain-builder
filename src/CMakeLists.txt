@@ -58,10 +58,10 @@ alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMM
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER
-    ALP_BUILD_MESH_BUILDER
+    ALP_BUILD_SF_BUILDER
     ALP_BUILD_TILE_DOWNLOADER
     ALP_BUILD_MESH_CONVERT
-    ALP_BUILD_INDEX_BROWSER
+    ALP_BUILD_SF_INDEX_BROWSER
     ALP_BUILD_DAG_BUILDER
     ALP_BUILD_DAG_CONVERT_DEBUG
 )
@@ -79,7 +79,7 @@ if(ALP_BUILD_TILE_DOWNLOADER)
     find_package(CURL REQUIRED)
 endif()
 
-if(ALP_BUILD_INDEX_BROWSER)
+if(ALP_BUILD_SF_INDEX_BROWSER)
     alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 endif()
 
@@ -96,7 +96,7 @@ if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
     target_compile_definitions(metis INTERFACE IDXTYPEWIDTH=32 REALTYPEWIDTH=32)
 endif()
 
-if(ALP_BUILD_BROWSER)
+if(ALP_BUILD_SF_BROWSER)
     set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
     set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -141,8 +141,8 @@ endif()
 if(ALP_BUILD_SF_MERGER)
     add_subdirectory(sf_merger)
 endif()
-if(ALP_BUILD_MESH_BUILDER)
-    add_subdirectory(mesh_builder)
+if(ALP_BUILD_SF_BUILDER)
+    add_subdirectory(sf_builder)
 endif()
 if(ALP_BUILD_TILE_DOWNLOADER)
     add_subdirectory(tile_downloader)
@@ -150,8 +150,8 @@ endif()
 if(ALP_BUILD_MESH_CONVERT)
     add_subdirectory(mesh_convert)
 endif()
-if(ALP_BUILD_INDEX_BROWSER)
-    add_subdirectory(index_browser)
+if(ALP_BUILD_SF_INDEX_BROWSER)
+    add_subdirectory(sf_index_browser)
 endif()
 if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
     add_subdirectory(dag_builder)
@@ -159,6 +159,6 @@ endif()
 if(ALP_BUILD_DAG_CONVERT_DEBUG)
     add_subdirectory(dag_convert_debug)
 endif()
-if(ALP_BUILD_BROWSER)
-    add_subdirectory(browser)
+if(ALP_BUILD_SF_BROWSER)
+    add_subdirectory(sf_browser)
 endif()

@@ -256,7 +256,7 @@ dag::ClusterBatch combine_input_and_inner(
 
 // Compute epsilon value for merging clusters based on the size of the node bounds.
 double compute_epsilon(const radix::geometry::Aabb3d &bounds) {
-    return glm::compAdd(bounds.size()) / 10000;
+    return glm::compAdd(bounds.size()) / 1'000'000;
 }
 
 // Build a single target node by loading input clusters (preserved as-is) and

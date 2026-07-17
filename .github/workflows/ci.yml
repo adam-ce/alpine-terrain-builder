@@ -122,6 +122,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        -DALP_WARNINGS_AS_ERRORS=ON
         ${{ matrix.cmake_flags }}
 
     - name: Save installed CMake dependencies

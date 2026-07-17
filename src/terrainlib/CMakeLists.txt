@@ -54,6 +54,12 @@ target_compile_features(terrainlib PUBLIC cxx_std_23)
 target_compile_definitions(terrainlib PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/pch.h)
+if(ALP_WARNINGS_AS_ERRORS)
+    target_compile_options(terrainlib PUBLIC
+        $<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Werror>
+        $<$<COMPILE_LANG_AND_ID:CXX,MSVC>:/WX>
+    )
+endif()
 target_link_libraries(terrainlib PUBLIC
     radix
     ZLIB::ZLIB

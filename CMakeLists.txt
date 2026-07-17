@@ -19,6 +19,7 @@ option(ALP_ENABLE_THREAD_SANITIZER "Compile with ThreadSanitizer enabled" OFF)
 option(ALP_ENABLE_ADDRESS_SANITIZER "Compile with AddressSanitizer enabled" OFF)
 option(ALP_ENABLE_OVERVIEW_READING "Enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
+option(ALP_WARNINGS_AS_ERRORS "Treat first-party compiler warnings as errors" OFF)
 
 set(ALP_ENABLE_ASSERTS_DEFAULT OFF)
 if(CMAKE_BUILD_TYPE MATCHES "^(Debug|RelWithDebInfo)$")

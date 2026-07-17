@@ -21,9 +21,15 @@ if(NOT COMMAND alp_setup_cmake_project)
 endif()
 
 function(alp_setup_opencv version)
+    set(_alp_opencv_sanitizer_arguments)
+    if(ALP_ENABLE_ADDRESS_SANITIZER OR ALP_ENABLE_THREAD_SANITIZER)
+        list(APPEND _alp_opencv_sanitizer_arguments -DOPENCV_SKIP_LINK_NO_UNDEFINED=ON)
+    endif()
+
     alp_setup_cmake_project(opencv
         URL https://github.com/opencv/opencv.git COMMITISH ${version}
         CMAKE_ARGUMENTS
+            ${_alp_opencv_sanitizer_arguments}
             -DBUILD_TESTS=OFF
             -DBUILD_PERF_TESTS=OFF
             -DBUILD_EXAMPLES=OFF
@@ -41,4 +47,3 @@ function(alp_setup_opencv version)
         )
     find_package(OpenCV REQUIRED)
 endfunction()
-

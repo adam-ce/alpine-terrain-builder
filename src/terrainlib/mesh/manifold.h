@@ -47,7 +47,7 @@ void duplicate_non_manifold_vertices(
 template <typename Duplicate>
 void duplicate_non_manifold_vertices(
     std::span<glm::uvec3> triangles,
-    const uint32_t vertex_count,
+    uint32_t vertex_count,
     Duplicate &&duplicate_vertex);
 
 template <glm::length_t n_dims, typename T>

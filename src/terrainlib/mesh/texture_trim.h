@@ -8,6 +8,7 @@
 #include <opencv2/opencv.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 #include "range_utils.h"
@@ -51,6 +52,7 @@ namespace detail {
 inline void check_uv(const glm::dvec2 &uv) {
     DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
     DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
+    ALP_UNUSED(uv);
 }
 }
 

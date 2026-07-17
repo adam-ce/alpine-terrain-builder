@@ -217,7 +217,7 @@ auto length2(const Vec &v) -> decltype(glm::dot(v, v)) {
     return glm::dot(v, v);
 }
 
-glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
+[[maybe_unused]] glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
     const double infinity = std::numeric_limits<double>::infinity();
     double min_radius_sq = +infinity;
     double max_radius_sq = -infinity;
@@ -230,11 +230,11 @@ glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
 
     return glm::dvec2(min_radius_sq, max_radius_sq);
 }
-glm::dvec2 calculate_radius_range(const SimpleMesh3d &mesh) {
+[[maybe_unused]] glm::dvec2 calculate_radius_range(const SimpleMesh3d &mesh) {
     return glm::sqrt(calculate_radius_squared_range(mesh));
 }
 
-glm::dvec2 calculate_radius_squared_range(const std::span<const SimpleMesh3d> meshes) {
+[[maybe_unused]] glm::dvec2 calculate_radius_squared_range(const std::span<const SimpleMesh3d> meshes) {
     const double infinity = std::numeric_limits<double>::infinity();
     double min_radius_sq = +infinity;
     double max_radius_sq = -infinity;
@@ -247,7 +247,7 @@ glm::dvec2 calculate_radius_squared_range(const std::span<const SimpleMesh3d> me
 
     return glm::dvec2(min_radius_sq, max_radius_sq);
 }
-glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
+[[maybe_unused]] glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
     return glm::sqrt(calculate_radius_squared_range(meshes));
 }
 

@@ -111,7 +111,7 @@ struct fmt::formatter<mesh::io::SaveMeshError> {
     }
 
     template <typename FormatContext>
-    auto format(const mesh::io::SaveMeshError &error, FormatContext &ctx) {
+    auto format(const mesh::io::SaveMeshError &error, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "{}", error.description());
     }
 };
@@ -124,7 +124,7 @@ struct fmt::formatter<mesh::io::LoadMeshError> {
     }
 
     template <typename FormatContext>
-    auto format(const mesh::io::LoadMeshError &error, FormatContext &ctx) {
+    auto format(const mesh::io::LoadMeshError &error, FormatContext &ctx) const {
         return fmt::format_to(ctx.out(), "{}", error.description());
     }
 };

@@ -9,6 +9,7 @@
 #include <tbb/concurrent_vector.h>
 
 #include "build.h"
+#include "build_config.h"
 #include "centroids.h"
 #include "cluster.h"
 #include "clusterize.h"
@@ -491,8 +492,8 @@ std::unordered_set<octree::Id> build_level(
             return;
         }
 
-        const auto dag_ids = find_value(inner_nodes, target).value_or({});
-        const auto target_input_ids = find_value(input_sources, target).value_or({});
+        const auto dag_ids = find_value(inner_nodes, target).value_or(std::vector<octree::Id>{});
+        const auto target_input_ids = find_value(input_sources, target).value_or(std::vector<octree::Id>{});
 
         auto result = build_node(target, target_input_ids, dag_ids, ctx);
         if (result) {

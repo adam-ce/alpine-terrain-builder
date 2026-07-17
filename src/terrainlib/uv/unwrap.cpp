@@ -18,6 +18,7 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "build_config.h"
 #include "unwrap.h"
 #include "fit.h"
 #include "mesh/compute_topology.h"
@@ -78,6 +79,7 @@ inline cgal::Point2 min(const cgal::Point2 &a, const cgal::Point2 &b) {
 inline void check_uv(const glm::dvec2 &uv) {
     DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
     DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
+    ALP_UNUSED(uv);
 }
 
 template <typename UvMap>

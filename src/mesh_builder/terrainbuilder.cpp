@@ -1,9 +1,24 @@
 #include <chrono>
+#include <cstddef>
+#include <cstdlib>
+#include <filesystem>
+#include <functional>
+#include <iomanip>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <ogr_spatialref.h>
+#include <opencv2/core/mat.hpp>
 #include <radix/geometry.h>
+#include <tl/expected.hpp>
 
 #include <tbb/concurrent_vector.h>
 #include <tbb/enumerable_thread_specific.h>
@@ -139,7 +154,7 @@ void build_and_save_patch(
     //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
     if (!mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
         LOG_ERROR("Failed to save mesh to file {}", output_path);
-        exit(2);
+        std::exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
     LOG_INFO("Done writing mesh to {}", output_path);

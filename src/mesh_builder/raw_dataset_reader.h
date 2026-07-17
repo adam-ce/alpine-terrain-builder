@@ -1,7 +1,12 @@
 #pragma once
 
+#include <array>
+#include <cmath>
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
 
+#include <cpl_error.h>
 #include <fmt/core.h>
 #include <gdal.h>
 #include <gdal_priv.h>

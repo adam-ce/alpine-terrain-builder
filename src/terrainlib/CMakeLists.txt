@@ -71,7 +71,6 @@ target_link_libraries(terrainlib PUBLIC
     zpp_bits
     cgltf
     TBB::tbb
-    tl_expected
     opencv_core
     opencv_imgproc
     opencv_imgcodecs

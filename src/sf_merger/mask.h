@@ -253,7 +253,7 @@ auto length2(const Vec &v) -> decltype(glm::dot(v, v)) {
 
 } // namespace
 
-inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_dataset(Dataset& mask_dataset) {
+inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_dataset(Dataset& mask_dataset) {
     GDALDataset *dataset = mask_dataset.gdalDataset();
 
     MultipolygonWithHoles2 polygons;
@@ -265,7 +265,7 @@ inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_datas
 
     if (polygons.is_empty()) {
         LOG_ERROR("No valid polygons found in mask dataset '{}'", mask_dataset.name());
-        return tl::unexpected(LoadErrorKind::EmptySource);
+        return std::unexpected(LoadErrorKind::EmptySource);
     }
 
     OGRSpatialReference srs;
@@ -438,25 +438,25 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
-inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
+inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) {
         LOG_ERROR("Mask file does not exist: {}", path);
-        return tl::unexpected(LoadErrorKind::FileNotFound);
+        return std::unexpected(LoadErrorKind::FileNotFound);
     }
 
     auto ds_opt = Dataset::open_vector(path);
     if (!ds_opt.has_value()) {
         LOG_ERROR("Failed to load mask datset: {}", path);
-        return tl::unexpected(LoadErrorKind::FileNotFound);
+        return std::unexpected(LoadErrorKind::FileNotFound);
     }
     Dataset dataset = std::move(ds_opt.value());
     return load_referenced_from_dataset(dataset);
 }
 
-inline tl::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
+inline std::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     auto ref_mask_res = load_referenced_from_path(path);
     if (!ref_mask_res.has_value()) {
-        return tl::unexpected(ref_mask_res.error());
+        return std::unexpected(ref_mask_res.error());
     }
     ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());
     SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);

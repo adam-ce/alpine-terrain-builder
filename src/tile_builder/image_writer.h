@@ -2,6 +2,7 @@
  * Alpine Terrain Builder
  * Copyright (C) 2022 alpinemaps.org
  * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
+ * Copyright (C) 2025 Martin Braunsperger <e11909911@student.tuwien.ac.at>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,36 +18,34 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *****************************************************************************/
 
-#ifndef ALPINERASTERGENERATOR_H
-#define ALPINERASTERGENERATOR_H
+#pragma once
 
+#include <algorithm>
+#include <cstdint>
+#include <ranges>
+#include <stdexcept>
 #include <string>
 
 #include <glm/glm.hpp>
-#include <vector>
-
 #include <radix/raster.h>
-#include "ParallelTileGenerator.h"
-#include <radix/tile.h>
-#include "ctb/Grid.hpp"
 
-namespace alpine_raster {
+namespace image {
 
-class TileWriter : public ParallelTileWriterInterface {
-public:
-    TileWriter(radix::tile::Border border)
-        : ParallelTileWriterInterface(border, "png")
-    {
-    }
-    void write(const std::string& base_path, const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const override;
-};
-[[nodiscard]] ParallelTileGenerator make_generator(
-    const std::string& input_data_path,
-    const std::string& output_data_path,
-    ctb::Grid::Srs srs,
-    radix::tile::Scheme tiling_scheme,
-    radix::tile::Border border,
-    unsigned grid_resolution = 256);
-};
+void saveImageAsPng(const radix::Raster<glm::u8vec3>& image, const std::string& path);
 
-#endif // ALPINERASTERGENERATOR_H
+template <typename T>
+void debugOut(const radix::Raster<T>& image, const std::string& path)
+{
+    if (image.buffer().empty())
+        throw std::invalid_argument("Can't write an empty raster to " + path);
+
+    const auto [min, max] = std::ranges::minmax(image);
+    const auto range = float(max) - float(min);
+    saveImageAsPng(radix::raster::transform(image, [min, range](const auto value) {
+        const auto intensity = range == 0.F ? std::uint8_t(0) : std::uint8_t(255.F * (float(value) - float(min)) / range);
+        return glm::u8vec3(intensity);
+    }),
+        path);
+}
+
+} // namespace image

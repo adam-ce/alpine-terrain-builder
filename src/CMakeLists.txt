@@ -35,10 +35,6 @@ alp_add_git_repository(stb URL https://github.com/nothings/stb COMMITISH f4a71b1
 add_library(stb INTERFACE)
 target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 
-alp_add_git_repository(tl_expected URL https://github.com/TartanLlama/expected.git COMMITISH v1.1.0 DO_NOT_ADD_SUBPROJECT)
-add_library(tl_expected INTERFACE)
-target_include_directories(tl_expected SYSTEM INTERFACE ${tl_expected_SOURCE_DIR}/include)
-
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
 
@@ -54,7 +50,7 @@ set(LIBIGL_COPYLEFT_CORE ON)
 set(LIBIGL_RESTRICTED_TRIANGLE ON)
 alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 2ce3484513b826bb11e5433f868b048eaffe3e5d NOT_SYSTEM DEEP_CLONE)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 9720bce6399f4581e35edc88f87651f020348b34 NOT_SYSTEM DEEP_CLONE)
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_SF_MERGER

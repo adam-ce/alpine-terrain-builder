@@ -4,7 +4,7 @@
 #include <memory>
 #include <optional>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "io/Error.h"
 #include "octree/disk/layout/strategy/Default.h"
@@ -21,7 +21,7 @@ struct OpenOptions {
 };
 
 template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-tl::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path);
+std::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path);
 template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
 Storage_<T, Codec> open_folder(
     const std::filesystem::path &base_path,

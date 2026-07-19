@@ -5,7 +5,7 @@
 #include <memory>
 
 #include <cgltf_write.h>
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/io/error.h"
@@ -15,19 +15,19 @@ namespace mesh::io::gltf {
 
 using RawMesh = std::unique_ptr<cgltf_data, decltype(&cgltf_free)>;
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_path(
+std::expected<SimpleMesh, LoadMeshError> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions &options = {});
-tl::expected<SimpleMesh, LoadMeshError> load_from_raw(
+std::expected<SimpleMesh, LoadMeshError> load_from_raw(
     const RawMesh &mesh,
     const LoadOptions &options = {});
 
-tl::expected<void, SaveMeshError> save_to_path(
+std::expected<void, SaveMeshError> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions &options = {});
-// tl::expected<SimpleMesh, LoadMeshError> save_to_raw(const RawMesh &mesh, const SaveOptions &options = {});
+// std::expected<SimpleMesh, LoadMeshError> save_to_raw(const RawMesh &mesh, const SaveOptions &options = {});
 
-tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path);
+std::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path);
 
 } // namespace mesh::io::gltf

@@ -4,7 +4,7 @@
 #include <string_view>
 #include <vector>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "mesh/io.h"
 
@@ -15,11 +15,11 @@ struct MeshCodec {
     using load_error = mesh::io::LoadMeshError;
     using save_error = mesh::io::SaveMeshError;
 
-    static tl::expected<value_type, load_error> load_from_path(const std::filesystem::path& path) noexcept {
+    static std::expected<value_type, load_error> load_from_path(const std::filesystem::path& path) noexcept {
         return mesh::io::load_from_path(path);
     }
 
-    static tl::expected<void, save_error> save_to_path(const value_type& value, const std::filesystem::path& path) noexcept {
+    static std::expected<void, save_error> save_to_path(const value_type& value, const std::filesystem::path& path) noexcept {
         return mesh::io::save_to_path(value, path);
     }
 

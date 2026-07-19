@@ -66,7 +66,7 @@ if(TARGET tilebuilderlib)
         tilebuilder/alpine_raster_format.cpp
         tilebuilder/dataset_reading.cpp
         tilebuilder/depth_first_tile_traverser.cpp
-        tilebuilder/image.cpp
+        tilebuilder/image_writer.cpp
         tilebuilder/parallel_tile_generator.cpp
         tilebuilder/parallel_tiler.cpp
         tilebuilder/tile_heights_generator.cpp

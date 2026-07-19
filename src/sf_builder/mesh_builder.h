@@ -1,6 +1,6 @@
 #pragma once
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "Dataset.h"
 #include "srs.h"
@@ -17,7 +17,7 @@ enum class BuildMeshError {
 std::ostream &operator<<(std::ostream &os, BuildMeshError error);
 
 /// Builds a mesh from the given height dataset.
-tl::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
+std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     Dataset &dataset,
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,

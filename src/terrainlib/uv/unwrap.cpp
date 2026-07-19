@@ -124,7 +124,7 @@ void clamp_uv_map(UvMap &map, size_t vertex_count) {
     }
 }
 
-tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
+std::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
     const cgal::HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
     DEBUG_ASSERT(bhd != boost::graph_traits<cgal::Mesh>::null_halfedge());
 
@@ -173,7 +173,7 @@ tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorit
     }
 
     if (result != CGAL::Surface_mesh_parameterization::OK) {
-        return tl::unexpected(UnwrapError(result));
+        return std::unexpected(UnwrapError(result));
     }
 
     const auto vertex_count = CGAL::num_vertices(mesh);
@@ -201,7 +201,7 @@ std::vector<glm::dvec2> decode_uv_map(const UvMap &map, size_t vertex_count) {
 }
 }
 
-tl::expected<Map, UnwrapError> unwrap(
+std::expected<Map, UnwrapError> unwrap(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
     Algorithm algorithm,
@@ -213,7 +213,7 @@ tl::expected<Map, UnwrapError> unwrap(
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     auto result = parameterize_mesh(cgal_mesh, algorithm, border);
     if (!result) {
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
     const CgalUvMap cgal_uv_map = result.value();
     const Map uv_map = decode_uv_map(cgal_uv_map, mesh.vertex_count());

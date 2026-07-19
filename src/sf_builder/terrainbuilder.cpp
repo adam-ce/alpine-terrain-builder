@@ -56,7 +56,7 @@ std::optional<SimpleMesh> build_patch(
     std::chrono::high_resolution_clock::time_point start;
     start = std::chrono::high_resolution_clock::now();
     LOG_INFO("Building mesh...");
-    tl::expected<SimpleMesh, BuildMeshError> mesh_result = build_reference_mesh_patch(
+    std::expected<SimpleMesh, BuildMeshError> mesh_result = build_reference_mesh_patch(
         dataset,
         mesh_srs,
         target_bounds_srs, target_bounds,

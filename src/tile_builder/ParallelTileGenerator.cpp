@@ -64,7 +64,7 @@ const ctb::Grid& ParallelTileGenerator::grid() const
     return m_grid;
 }
 
-void ParallelTileGenerator::write(const radix::tile::Descriptor& tile, const HeightData& heights) const
+void ParallelTileGenerator::write(const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const
 {
     const auto dir_path = fmt::format("{}/{}/{}", m_output_data_path, tile.id.zoom_level, tile.id.coords.x);
     const auto file_path = fmt::format("{}/{}.{}", dir_path, tile.id.coords.y, m_tile_writer->formatFileEnding());

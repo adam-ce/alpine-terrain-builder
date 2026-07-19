@@ -1,7 +1,7 @@
 add_library(tilebuilderlib
     alpine_raster.cpp
     DatasetReader.cpp
-    Image.cpp
+    image_writer.cpp
     ParallelTileGenerator.cpp
     ParallelTiler.cpp
     TileHeightsGenerator.cpp

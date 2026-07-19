@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "io/serialize.h"
 #include "log.h"
@@ -19,13 +19,13 @@
 namespace octree {
 
 template <typename T, CodecFor<T> Codec>
-tl::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path) {
+std::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path) {
     LOG_TRACE("Opening storage index {}", index_path);
 
     const auto result = io::read_from_path<disk::v1::IndexFile>(index_path);
     if (!result.has_value()) {
         LOG_TRACE("Failed to open storage index due to {}", result.error());
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
     auto index_file = result.value();
     LOG_TRACE("Successfully read storage index with {} entries.", index_file.map.size());

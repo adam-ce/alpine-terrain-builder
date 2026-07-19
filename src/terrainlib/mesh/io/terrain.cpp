@@ -34,24 +34,24 @@ SaveMeshError save_error_from_io_error(::io::Error error) {
     }
 }
 
-tl::expected<void, SaveMeshError> write_bytes_to_path(
+std::expected<void, SaveMeshError> write_bytes_to_path(
     const std::span<const uint8_t> bytes, const std::filesystem::path &path) {
     const auto result = ::io::write_bytes_to_path(bytes, path);
     if (!result.has_value()) {
-        return tl::unexpected(save_error_from_io_error(result.error()));
+        return std::unexpected(save_error_from_io_error(result.error()));
     }
     return {};
 }
 
-tl::expected<std::vector<uint8_t>, LoadMeshError> read_bytes_from_path(const std::filesystem::path &path) {
+std::expected<std::vector<uint8_t>, LoadMeshError> read_bytes_from_path(const std::filesystem::path &path) {
     const auto result = ::io::read_bytes_from_path(path);
     if (!result.has_value()) {
-        return tl::unexpected(load_error_from_io_error(result.error()));
+        return std::unexpected(load_error_from_io_error(result.error()));
     }
     return result.value();
 }
 
-tl::expected<std::vector<uint8_t>, SaveMeshError> save_encoded_to_buffer(const mesh::Encoded &mesh) {
+std::expected<std::vector<uint8_t>, SaveMeshError> save_encoded_to_buffer(const mesh::Encoded &mesh) {
     LOG_TRACE("Serializing mesh to buffer");
 
     // TODO: this ignores the texture format in SaveOptions
@@ -66,7 +66,7 @@ tl::expected<std::vector<uint8_t>, SaveMeshError> save_encoded_to_buffer(const m
         case std::errc::no_buffer_space:
         case std::errc::message_size:
         case std::errc::result_out_of_range:
-            return tl::unexpected(SaveMeshErrorKind::OutOfMemory);
+            return std::unexpected(SaveMeshErrorKind::OutOfMemory);
             break;
         default:
             UNREACHABLE();
@@ -77,7 +77,7 @@ tl::expected<std::vector<uint8_t>, SaveMeshError> save_encoded_to_buffer(const m
     return data;
 }
 
-tl::expected<mesh::Encoded, LoadMeshError> load_encoded_from_buffer(const std::span<const uint8_t> bytes) {
+std::expected<mesh::Encoded, LoadMeshError> load_encoded_from_buffer(const std::span<const uint8_t> bytes) {
     LOG_TRACE("Deserializing mesh from buffer");
 
     zpp::bits::in in(bytes);
@@ -90,12 +90,12 @@ tl::expected<mesh::Encoded, LoadMeshError> load_encoded_from_buffer(const std::s
         switch (result) {
         case std::errc::no_buffer_space:
         case std::errc::message_size:
-            return tl::unexpected(LoadMeshErrorKind::OutOfMemory);
+            return std::unexpected(LoadMeshErrorKind::OutOfMemory);
         case std::errc::value_too_large:
         case std::errc::bad_message:
         case std::errc::protocol_error:
         case std::errc::result_out_of_range:
-            return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+            return std::unexpected(LoadMeshErrorKind::InvalidFormat);
         case std::errc::not_supported:
         case std::errc::invalid_argument:
             UNREACHABLE();
@@ -109,61 +109,61 @@ tl::expected<mesh::Encoded, LoadMeshError> load_encoded_from_buffer(const std::s
 }
 }
 
-tl::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& options) {
+std::expected<std::vector<uint8_t>, SaveMeshError> save_to_buffer(const SimpleMesh &mesh, const SaveOptions& options) {
     const auto encode_result = mesh::encode(mesh, mesh::EncodeOptions{
                                                       .texture_format = options.texture_format});
     if (!encode_result.has_value()) {
-        return tl::unexpected(SaveMeshErrorKind::UnsupportedFormat);
+        return std::unexpected(SaveMeshErrorKind::UnsupportedFormat);
     }
     const mesh::Encoded encoded = encode_result.value();
 
     const auto deser_result = save_encoded_to_buffer(encoded);
     if (!deser_result.has_value()) {
-        return tl::unexpected(deser_result.error());
+        return std::unexpected(deser_result.error());
     }
     const std::vector<uint8_t> buffer = deser_result.value();
 
     return buffer;
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions & /* options */) {
+std::expected<SimpleMesh, LoadMeshError> load_from_buffer(const std::span<const uint8_t> bytes, const LoadOptions & /* options */) {
     const auto deser_result = load_encoded_from_buffer(bytes);
     if (!deser_result.has_value()) {
-        return tl::unexpected(deser_result.error());
+        return std::unexpected(deser_result.error());
     }
     const mesh::Encoded encoded = deser_result.value();
 
     const auto decode_result = mesh::decode(encoded);
     if (!decode_result.has_value()) {
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
     const mesh::Simple mesh = decode_result.value();
 
     return mesh;
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions & /* options */) {
+std::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions & /* options */) {
     const auto bytes_result = read_bytes_from_path(path);
     if (!bytes_result.has_value()) {
-        return tl::unexpected(bytes_result.error());
+        return std::unexpected(bytes_result.error());
     }
     const std::vector<uint8_t> bytes = bytes_result.value();
 
     return load_from_buffer(bytes);
 }
 
-tl::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std::filesystem::path &path, const SaveOptions& options) {
+std::expected<void, SaveMeshError> save_to_path(const SimpleMesh &mesh, const std::filesystem::path &path, const SaveOptions& options) {
     LOG_TRACE("Saving mesh as high precision terrain");
 
     const auto result = save_to_buffer(mesh, options);
     if (!result.has_value()) {
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
     const std::vector<uint8_t> bytes = result.value();
 
     const auto write_result = write_bytes_to_path(bytes, path);
     if (!write_result.has_value()) {
-        return tl::unexpected(write_result.error());
+        return std::unexpected(write_result.error());
     }
 
     return {};

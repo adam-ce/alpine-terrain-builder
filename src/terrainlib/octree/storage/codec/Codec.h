@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <ranges>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 template <typename Codec, typename T>
 concept CodecFor =
@@ -16,10 +16,10 @@ concept CodecFor =
         requires std::same_as<typename Codec::value_type, T>;
 
         { Codec::load_from_path(path) } noexcept
-            -> std::same_as<tl::expected<T, typename Codec::load_error>>;
+            -> std::same_as<std::expected<T, typename Codec::load_error>>;
 
         { Codec::save_to_path(value, path) } noexcept
-            -> std::same_as<tl::expected<void, typename Codec::save_error>>;
+            -> std::same_as<std::expected<void, typename Codec::save_error>>;
 
         { Codec::file_not_found() } noexcept
             -> std::same_as<typename Codec::load_error>;

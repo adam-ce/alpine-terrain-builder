@@ -32,7 +32,7 @@
 #include <glm/glm.hpp>
 #include <ogr_spatialref.h>
 #include <radix/geometry.h>
-#include <tl/expected.hpp>
+#include <expected>
 #include <radix/tile.h>
 
 namespace srs {
@@ -352,19 +352,19 @@ inline radix::geometry::Aabb3d encompassing_bounds_transfer(
     return encompassing_bounds_transfer(transform.get(), source_bounds, intermediate_points_edges, intermediate_points_faces);
 }
 
-inline tl::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg) {
+inline std::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg) {
     OGRSpatialReference srs;
     if (srs.importFromEPSG(epsg) != OGRERR_NONE) {
-        return tl::unexpected(fmt::format("Failed to import spatial reference from EPSG code: {}", epsg));
+        return std::unexpected(fmt::format("Failed to import spatial reference from EPSG code: {}", epsg));
     }
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }
 
-inline tl::expected<OGRSpatialReference, std::string> from_user_input(const std::string &user_input) {
+inline std::expected<OGRSpatialReference, std::string> from_user_input(const std::string &user_input) {
     OGRSpatialReference srs;
     if (srs.SetFromUserInput(user_input.c_str()) != OGRERR_NONE) {
-        return tl::unexpected(fmt::format("Failed to set spatial reference from user input: {}", user_input));
+        return std::unexpected(fmt::format("Failed to set spatial reference from user input: {}", user_input));
     }
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;

@@ -43,7 +43,7 @@ TEST_CASE("parallel tile generator")
             , m_validation_error_counter(validation_error_counter)
         {
         }
-        void write(const std::string& file_path, const radix::tile::Descriptor& tile, const HeightData& heights) const override
+        void write(const std::string& file_path, const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const override
         {
             if (file_path.empty() || tile.gridSize != 256 || heights.width() != 256 || heights.height() != 256)
                 (*m_validation_error_counter)++;

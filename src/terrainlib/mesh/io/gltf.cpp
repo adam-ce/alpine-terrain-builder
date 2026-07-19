@@ -212,7 +212,7 @@ std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material
 #define GET_OR_INVALID_FORMAT(var, opt)                              \
     do {                                                             \
         if (!(opt).has_value()) {                                    \
-            return tl::unexpected(LoadMeshErrorKind::InvalidFormat); \
+            return std::unexpected(LoadMeshErrorKind::InvalidFormat); \
         } else {                                                     \
             var = opt.value();                                       \
         }                                                            \
@@ -277,56 +277,56 @@ static std::string image_ext_to_mime(std::string_view extension) {
 }
 }
 
-tl::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path) {
+std::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path) {
     cgltf_options options = {};
     cgltf_data *data = NULL;
     const std::string path_str = path.string();
     const char *path_ptr = path_str.c_str();
     cgltf_result result = cgltf_parse_file(&options, path_ptr, &data);
     if (result != cgltf_result::cgltf_result_success) {
-        return tl::unexpected(result);
+        return std::unexpected(result);
     }
 
     result = cgltf_load_buffers(&options, data, path_ptr);
     if (result != cgltf_result::cgltf_result_success) {
         cgltf_free(data);
-        return tl::unexpected(result);
+        return std::unexpected(result);
     }
 
     result = cgltf_validate(data);
     if (result != cgltf_result_success) {
         cgltf_free(data);
-        return tl::unexpected(result);
+        return std::unexpected(result);
     }
 
     return RawMesh(data, cgltf_free);
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
+std::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
     LOG_TRACE("Loading mesh from gltf data");
 
     const cgltf_data &data = *raw;
 
     const auto mesh_opt = get_single_element("mesh", data.meshes_count, data.meshes);
     if (!mesh_opt.has_value()) {
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
     const cgltf_mesh &mesh = mesh_opt.value();
 
     const auto mesh_primitive_opt = get_single_element("mesh primitive", mesh.primitives_count, mesh.primitives);
     if (!mesh_primitive_opt.has_value()) {
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
     const cgltf_primitive &mesh_primitive = mesh_primitive_opt.value();
     if (mesh_primitive.type != cgltf_primitive_type::cgltf_primitive_type_triangles) {
         LOG_ERROR("mesh has invalid primitive type");
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
 
     // indices
     if (mesh_primitive.indices == nullptr) {
         LOG_ERROR("mesh primitive has no indices");
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
     cgltf_accessor &index_accessor = *mesh_primitive.indices;
     std::vector<glm::uvec3> indices;
@@ -342,13 +342,13 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const 
     cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
     if (position_attr == nullptr) {
         LOG_ERROR("mesh has no position attribute");
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
 
     cgltf_accessor &position_accessor = *position_attr->data;
     if (position_accessor.type != cgltf_type_vec3) {
         LOG_WARN("mesh positions are not vec3");
-        return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
     }
     std::vector<glm::vec3> positions;
     positions.resize(position_accessor.count);
@@ -363,7 +363,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const 
         cgltf_accessor &uv_accessor = *uv_attr->data;
         if (uv_accessor.type != cgltf_type_vec2) {
             LOG_WARN("mesh uvss are not vec2");
-            return tl::unexpected(LoadMeshErrorKind::InvalidFormat);
+            return std::unexpected(LoadMeshErrorKind::InvalidFormat);
         }
         uvs.resize(uv_accessor.count);
         cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
@@ -393,7 +393,7 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const 
 }
 
 /// Saves the mesh as a .gltf or .glb file at the given path.
-tl::expected<void, SaveMeshError> save_to_path(
+std::expected<void, SaveMeshError> save_to_path(
     const SimpleMesh &terrain_mesh,
     const std::filesystem::path &path,
     const SaveOptions& options) {
@@ -731,10 +731,10 @@ tl::expected<void, SaveMeshError> save_to_path(
     return {};
 }
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions &options) {
-    tl::expected<RawMesh, cgltf_result> raw_mesh = load_raw_from_path(path);
+std::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions &options) {
+    std::expected<RawMesh, cgltf_result> raw_mesh = load_raw_from_path(path);
     if (!raw_mesh) {
-        return tl::unexpected(map_cgltf_error(raw_mesh.error()));
+        return std::unexpected(map_cgltf_error(raw_mesh.error()));
     }
     return load_from_raw(*raw_mesh, options);
 }

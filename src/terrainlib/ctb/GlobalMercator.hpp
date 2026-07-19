@@ -29,10 +29,11 @@ class GlobalMercator;
 }
 
 /**
- * @brief An implementation of the TMS Global Mercator Profile
+ * @brief An implementation of the global Mercator grid profile
  *
  * This class models the [Tile Mapping Service Global Mercator
  * Profile](http://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-mercator).
+ * Its public tile identifiers use Google/Mapbox/XYZ coordinates.
  */
 class ctb::GlobalMercator : public Grid {
 public:
@@ -41,7 +42,7 @@ public:
                radix::tile::SrsBounds{{-cOriginShift, -cOriginShift}, {cOriginShift, cOriginShift}},
                cSRS,
                3857,
-               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}, radix::tile::Scheme::Tms}},
+               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}}},
                2) {
     }
 

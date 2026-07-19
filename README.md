@@ -24,15 +24,20 @@ The tools typically only handle one tile per command which makes it infeasible t
 In this example, we'll show how to build the hierarchy for Vienna's city center (Zoom: 13, X: 4468, Y:2840).
 
 ### 1. Downloading tiles
-The following command will download the basemap tiles from our mirror with the following format: 
-https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{zoom}/{Y}/{X}.jpeg
+Tile coordinates always use the Google/Mapbox/XYZ convention internally: the origin is north-west, X grows east, and Y grows south. Google Maps, Mapbox, OpenStreetMap, and most XYZ services use the common URL order `{zoom}/{x}/{y}`; this is the downloader default.
+
+Some providers use `{zoom}/{y}/{x}` instead. Both built-in Austrian providers currently require `--url-coordinate-order yx`; for example, the Gataki mirror uses:
+
+`https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{zoom}/{y}/{x}.jpeg`
 
 Example for the root tile: https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/13/2840/4468.jpeg
 
-The tiles will be downloaded into the folder `./tiles/`.
+Select URL coordinate order with `--url-coordinate-order xy|yx`. Select the URL Y direction with `--url-y-direction down|up`; `down` is the common Google/Mapbox convention and `up` is the legacy TMS convention. These options affect only remote URLs. Downloaded files always use the common Google/Mapbox layout `{zoom}/{x}/{y}.jpeg`.
+
+The following command downloads the mirror's `{zoom}/{y}/{x}` URLs and writes the root tile to `./tiles/13/4468/2840.jpeg`:
 
 ```
-./tile-downloader --provider gataki --zoom 13 --row 2840 --col 4468 --max-zoom-level 19
+./tile-downloader --provider gataki --zoom 13 --x 4468 --y 2840 --url-coordinate-order yx --max-zoom-level 19
 ```
 
 ### 2. Download heightmap dataset

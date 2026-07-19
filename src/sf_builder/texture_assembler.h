@@ -148,7 +148,6 @@ namespace terrainbuilder {
     const radix::tile::Id root_tile,
     const glm::uvec2 tile_image_pixel_size,
     const unsigned int max_zoom_level) {
-    tile = tile.to(radix::tile::Scheme::SlippyMap);
     const size_t relative_zoom_level = tile.zoom_level - root_tile.zoom_level;
     const glm::uvec2 tile_size_factor = glm::uvec2(std::pow(2, max_zoom_level - tile.zoom_level));
     const glm::uvec2 tile_size = tile_image_pixel_size * tile_size_factor;
@@ -379,7 +378,7 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
     // Start by transforming the input bounds into the srs the tiles are in.
     const radix::tile::SrsBounds encompassing_bounds = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
     // Then we find the smallest tile (id) that encompasses these bounds.
-    const radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value().to(radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value();
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {

@@ -20,12 +20,12 @@ int main(int argc, char *argv[]) {
     std::transform(provider.begin(), provider.end(), provider.begin(),
                    [](unsigned char c) { return std::tolower(c); });
     if (provider == "basemap") {
-        url_builder = std::make_unique<BasemapTileUrlBuilder>(args.layer, args.style);
+        url_builder = std::make_unique<BasemapTileUrlBuilder>(args.layer, args.style, TileUrlFormat { args.url_coordinate_order, args.url_y_direction });
     } else {
-        url_builder = std::make_unique<GatakiTileUrlBuilder>();
+        url_builder = std::make_unique<GatakiTileUrlBuilder>(TileUrlFormat { args.url_coordinate_order, args.url_y_direction });
     }
 
-    const radix::tile::Id root_id = {args.zoom, {args.x, args.y}, args.scheme};
+    const radix::tile::Id root_id = {args.zoom, {args.x, args.y}};
 
     TileDownloader downloader(*url_builder, args.output, args.early_skip, args.max_zoom_level);
     downloader.download_recursive(root_id);

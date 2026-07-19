@@ -41,7 +41,7 @@ class ParallelTileGenerator {
 public:
     ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path);
     [[nodiscard]] static ParallelTileGenerator make(const std::string& input_data_path,
-        ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme,
+        ctb::Grid::Srs srs,
         std::unique_ptr<ParallelTileWriterInterface> tile_writer,
         const std::string& output_data_path,
         unsigned grid_resolution = 256);

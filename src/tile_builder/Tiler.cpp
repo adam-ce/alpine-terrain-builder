@@ -20,11 +20,10 @@
 
 #include <utility>
 
-Tiler::Tiler(ctb::Grid  grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme)
+Tiler::Tiler(ctb::Grid grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border)
     : m_grid(std::move(grid))
     , m_bounds(bounds)
     , m_border_south_east(border)
-    , m_scheme(scheme)
 {
 
 }
@@ -55,11 +54,6 @@ radix::tile::Descriptor Tiler::tile_for(const radix::tile::Id& tile_id) const
     return {tile_id, srs_bounds, grid().getEpsgCode(), grid_size(), tile_size()};
 }
 
-radix::tile::Scheme Tiler::scheme() const
-{
-    return m_scheme;
-}
-
 const radix::tile::SrsBounds& Tiler::bounds() const
 {
     return m_bounds;
@@ -69,4 +63,3 @@ void Tiler::setBounds(const radix::tile::SrsBounds& newBounds)
 {
     m_bounds = newBounds;
 }
-

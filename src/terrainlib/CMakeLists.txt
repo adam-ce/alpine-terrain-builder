@@ -48,6 +48,7 @@ add_library(terrainlib
     init.cpp
     log.cpp
     ProgressIndicator.cpp
+    tile_path.h
 )
 
 target_compile_features(terrainlib PUBLIC cxx_std_23)

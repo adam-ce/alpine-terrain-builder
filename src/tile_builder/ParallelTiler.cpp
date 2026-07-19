@@ -22,32 +22,31 @@
 #include "Exception.h"
 #include <functional>
 
-ParallelTiler::ParallelTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme) : Tiler(grid, bounds, border, scheme)
+ParallelTiler::ParallelTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border) : Tiler(grid, bounds, border)
 {
 }
 
 radix::tile::Id ParallelTiler::southWestTile(unsigned zoom_level) const
 {
-    return grid().crsToTile(bounds().min, zoom_level).to(scheme());
+    return grid().crsToTile(bounds().min, zoom_level);
 }
 
 radix::tile::Id ParallelTiler::northEastTile(unsigned zoom_level) const
 {
     const auto epsilon = grid().resolution(zoom_level) / 100;
-    return grid().crsToTile(bounds().max - epsilon, zoom_level).to(scheme());
+    return grid().crsToTile(bounds().max - epsilon, zoom_level);
 }
 
 std::vector<radix::tile::Descriptor> ParallelTiler::generateTiles(unsigned zoom_level) const
 {
-    // in the tms scheme south west corresponds to the smaller numbers. hence we can iterate from sw to ne
-    const auto sw = southWestTile(zoom_level).to(radix::tile::Scheme::Tms).coords;
-    const auto ne = northEastTile(zoom_level).to(radix::tile::Scheme::Tms).coords;
+    const auto sw = southWestTile(zoom_level).coords;
+    const auto ne = northEastTile(zoom_level).coords;
 
     std::vector<radix::tile::Descriptor> tiles;
-    tiles.reserve((ne.y - sw.y + 1) * (ne.x - sw.x + 1));
-    for (auto ty = sw.y; ty <= ne.y; ++ty) {
+    tiles.reserve((sw.y - ne.y + 1) * (ne.x - sw.x + 1));
+    for (auto ty = ne.y; ty <= sw.y; ++ty) {
         for (auto tx = sw.x; tx <= ne.x; ++tx) {
-            const auto tile_id = radix::tile::Id { zoom_level, { tx, ty }, radix::tile::Scheme::Tms }.to(scheme());
+            const auto tile_id = radix::tile::Id { zoom_level, { tx, ty } };
             tiles.emplace_back(tile_for(tile_id));
             if (tiles.size() >= 1'000'000'000)
                 // think about creating an on the fly tile generator. storing so many tiles takes a lot of memory.

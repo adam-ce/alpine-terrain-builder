@@ -18,24 +18,30 @@ Args parse(int argc, const char *const *argv) {
         ->check(CLI::IsMember({"basemap", "gataki"}, CLI::ignore_case));
 
     app.add_option("--zoom", args.zoom, "Root tile zoom level")->required();
-    app.add_option("--x,--row", args.x, "Root tile x coordinate")->required();
-    app.add_option("--y,--col", args.y, "Root tile y coordinate")->required();
+    app.add_option("--x,--col", args.x, "Root tile x/column in Google/Mapbox coordinates")->required();
+    app.add_option("--y,--row", args.y, "Root tile y/row in Google/Mapbox coordinates")->required();
 
-    const std::map<std::string, radix::tile::Scheme> scheme_map{
-        {"slippymap", radix::tile::Scheme::SlippyMap},
-        {"google", radix::tile::Scheme::SlippyMap},
-        {"xyz", radix::tile::Scheme::SlippyMap},
-        {"tms", radix::tile::Scheme::Tms}};
-    args.scheme = radix::tile::Scheme::SlippyMap;
-    app.add_option("--scheme", args.scheme, "Tile scheme")
-        ->default_val(radix::tile::Scheme::SlippyMap)
-        ->transform(CLI::CheckedTransformer(scheme_map, CLI::ignore_case));
+    const std::map<std::string, TileCoordinateOrder> coordinate_order_map{
+        {"xy", TileCoordinateOrder::Xy},
+        {"yx", TileCoordinateOrder::Yx}};
+    args.url_coordinate_order = TileCoordinateOrder::Xy;
+    app.add_option("--url-coordinate-order", args.url_coordinate_order, "URL coordinate order: xy (common Google/Mapbox format) or yx")
+        ->default_str("xy")
+        ->transform(CLI::CheckedTransformer(coordinate_order_map, CLI::ignore_case));
+
+    const std::map<std::string, TileYDirection> y_direction_map{
+        {"down", TileYDirection::Down},
+        {"up", TileYDirection::Up}};
+    args.url_y_direction = TileYDirection::Down;
+    app.add_option("--url-y-direction", args.url_y_direction, "URL y direction: down (common Google/Mapbox format) or up (legacy TMS)")
+        ->default_str("down")
+        ->transform(CLI::CheckedTransformer(y_direction_map, CLI::ignore_case));
 
     args.srs = 3857;
     app.add_option("--srs", args.srs, "Spatial reference system EPSG code")->default_val(3857);
 
-    args.output = "tiles/{zoom}/{y}/{x}.{ext}";
-    app.add_option("--output", args.output, "Output path template")->default_val(args.output);
+    args.output = "tiles";
+    app.add_option("--output", args.output, "Output directory; files use Google/Mapbox zoom/x/y.jpeg layout")->default_val(args.output.string());
 
     const std::map<std::string, spdlog::level::level_enum> log_level_names{
         {"off", spdlog::level::off},

@@ -86,6 +86,15 @@ if(TARGET sfbuilderlib)
     atb_configure_test(unittests_sfbuilder)
 endif()
 
+if(TARGET tile-downloader)
+    add_executable(unittests_tile_downloader
+        tile_downloader/url_builder.cpp
+    )
+    target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
+    target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_tile_downloader)
+endif()
+
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h

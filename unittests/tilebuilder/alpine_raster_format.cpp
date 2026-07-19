@@ -41,7 +41,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("raste write")
     {
-        const auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes);
+        const auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Border::Yes);
         generator.write(radix::tile::Descriptor { {0, glm::uvec2(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, radix::Raster<float>({ 257, 257 }));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
@@ -58,7 +58,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("process all tiles")
     {
-        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 0, 7 });
         const auto tiles = generator.tiler().generateTiles({ 0, 7 });
@@ -71,7 +71,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 #if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
     SECTION("process all tiles with max zoom")
     {
-        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 4, 8 });
         const auto tiles = generator.tiler().generateTiles({ 4, 8 });

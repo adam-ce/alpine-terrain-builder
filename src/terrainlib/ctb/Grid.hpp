@@ -51,15 +51,8 @@ class Grid;
  * The code here generalises the logic in the `gdal2tiles.py` script available
  * with the GDAL library.
  *
- * Warning: The y directino is dangerous. Sometimes the positve y axis points north, sometimes not.
- *          - GlobalMercator has y positive pointing north
- *          - GlobalGeodetic as well.
- *          - https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#1/175.75/56.27
- *            - google webmercator has tile coordinates where y=0 is the northern most tile.
- *            - tms webmercator has tile coordinates with y=0 being southern most.
- *
- *         Effectively, ctb::Grid is always positive pointing north. Support for google webmercator /
- *         slippyMap is done in Tile.h
+ * Tile identifiers use Google/Mapbox/XYZ coordinates: the origin is north-west and y grows south.
+ * CRS and pixel coordinates inside Grid retain their conventional positive-north orientation.
  */
 class ctb::Grid {
 public:
@@ -143,23 +136,25 @@ public:
     /// Get the tile coordinate in which a location falls at a specific zoom level
     [[nodiscard]] inline radix::tile::Id crsToTile(const CRSPoint &coord, i_zoom zoom) const {
         const PixelPoint pixel = crsToPixels(coord, zoom);
-        TilePoint tile = pixelsToTile(pixel);
+        const TilePoint tile = pixelsToTile(pixel);
+        const auto tile_count = i_tile(1u << zoom);
 
-        return {zoom, tile, radix::tile::Scheme::Tms};
+        return {zoom, {tile.x, tile_count - tile.y - 1}};
     }
 
     /// Get the CRS bounds of a particular tile
     /// border_se should be true if a border should be included on the south eastern corner
     /// e.g., for the cesium raster terrain format (https://github.com/CesiumGS/cesium/wiki/heightmap-1%2E0)
     [[nodiscard]] inline radix::tile::SrsBounds srsBounds(const radix::tile::Id &tile_id, bool border_se) const {
-        const auto tms_tile_id = tile_id.to(radix::tile::Scheme::Tms);
+        const auto tile_count = i_tile(1u << tile_id.zoom_level);
+        const auto grid_y = tile_count - tile_id.coords.y - 1;
         // get the pixels coordinates representing the tile bounds
-        const PixelPoint pxMinLeft(tms_tile_id.coords.x * mGridSize, tms_tile_id.coords.y * mGridSize);
-        const PixelPoint pxMaxRight((tms_tile_id.coords.x + 1) * mGridSize + border_se, (tms_tile_id.coords.y + 1) * mGridSize + border_se);
+        const PixelPoint pxMinLeft(tile_id.coords.x * mGridSize, grid_y * mGridSize);
+        const PixelPoint pxMaxRight((tile_id.coords.x + 1) * mGridSize + border_se, (grid_y + 1) * mGridSize + border_se);
 
         // convert pixels to native coordinates
-        const CRSPoint minLeft = pixelsToCrs(pxMinLeft, tms_tile_id.zoom_level);
-        const CRSPoint maxRight = pixelsToCrs(pxMaxRight, tms_tile_id.zoom_level);
+        const CRSPoint minLeft = pixelsToCrs(pxMinLeft, tile_id.zoom_level);
+        const CRSPoint maxRight = pixelsToCrs(pxMaxRight, tile_id.zoom_level);
 
         return { minLeft, maxRight };
     }

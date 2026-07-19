@@ -12,13 +12,14 @@
 #include "HttpClient.h"
 #include "TileLogger.h"
 #include "TileUrlBuilder.h"
+#include "tile_path.h"
 
 class TileDownloader {
 public:
-    TileDownloader(const TileUrlBuilder &url_builder, std::string output_pattern,
+    TileDownloader(const TileUrlBuilder &url_builder, std::filesystem::path output_directory,
                    bool early_skip, std::optional<unsigned int> max_zoom_level)
         : _url_builder(url_builder),
-          _output_pattern(std::move(output_pattern)),
+          _output_directory(std::move(output_directory)),
           _early_skip(early_skip),
           _max_zoom_level(max_zoom_level) {}
 
@@ -51,7 +52,7 @@ public:
 
 private:
     const TileUrlBuilder &_url_builder;
-    std::string _output_pattern;
+    std::filesystem::path _output_directory;
     HttpClient _http;
     TileLogger _logger;
     bool _early_skip;
@@ -69,21 +70,8 @@ private:
         return std::filesystem::exists(this->tile_path(tile));
     }
 
-    std::string tile_path(const radix::tile::Id &tile) const {
-        std::string path = this->_output_pattern;
-        replace_all(path, "{zoom}", std::to_string(tile.zoom_level));
-        replace_all(path, "{x}", std::to_string(tile.coords.x));
-        replace_all(path, "{y}", std::to_string(tile.coords.y));
-        replace_all(path, "{ext}", "jpeg");
-        return path;
-    }
-
-    static void replace_all(std::string &s, std::string_view find, std::string_view replace) {
-        size_t pos = 0;
-        while ((pos = s.find(find, pos)) != std::string::npos) {
-            s.replace(pos, find.length(), replace);
-            pos += replace.length();
-        }
+    std::filesystem::path tile_path(const radix::tile::Id &tile) const {
+        return google_tile_path(_output_directory, tile, ".jpeg");
     }
 
     static void ensure_parent_dirs(const std::filesystem::path &path) {

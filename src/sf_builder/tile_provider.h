@@ -6,6 +6,8 @@
 #include <opencv2/opencv.hpp>
 #include <radix/tile.h>
 
+#include "tile_path.h"
+
 class TileProvider {
 public:
     virtual ~TileProvider() = default;
@@ -52,16 +54,13 @@ class StaticTileProvider : public TileProvider {
 public:
     std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher> tiles;
 
-    StaticTileProvider(const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher>& tiles) {
-        // TODO: remove this once the == operator of tile::Id is updated.
-        for (const auto& tile : tiles) {
-            const radix::tile::Id tile_id = tile.first.to(radix::tile::Scheme::SlippyMap);
-            this->tiles[tile_id] = tile.second;
-        }
+    StaticTileProvider(const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher>& tiles)
+        : tiles(tiles)
+    {
     }
 
     virtual std::optional<cv::Mat> get_tile(const radix::tile::Id tile_id) const override {
-        const auto tile = this->tiles.find(tile_id.to(radix::tile::Scheme::SlippyMap));
+        const auto tile = this->tiles.find(tile_id);
         if (tile != this->tiles.end()) {
             return tile->second;
         } else {
@@ -70,7 +69,7 @@ public:
     }
 
     virtual bool has_tile(const radix::tile::Id tile_id) const override {
-        return this->tiles.find(tile_id.to(radix::tile::Scheme::SlippyMap)) != this->tiles.cend();
+        return this->tiles.find(tile_id) != this->tiles.cend();
     }
 };
 
@@ -139,13 +138,13 @@ private:
     uint32_t _max_zoom;
 };
 
-class BasemapSchemeTilePathProvider : public TilePathProvider {
+class GoogleMapboxTilePathProvider : public TilePathProvider {
 public:
-    BasemapSchemeTilePathProvider(std::filesystem::path base_path)
+    GoogleMapboxTilePathProvider(std::filesystem::path base_path)
         : base_path(base_path) {}
 
     std::optional<std::filesystem::path> get_tile_path(const radix::tile::Id tile_id) const override {
-        return base_path / std::to_string(tile_id.zoom_level) / std::to_string(tile_id.coords.y) / (std::to_string(tile_id.coords.x) + ".jpeg");
+        return google_tile_path(base_path, tile_id, ".jpeg");
     }
 
 private:

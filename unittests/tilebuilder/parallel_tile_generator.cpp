@@ -55,7 +55,7 @@ TEST_CASE("parallel tile generator")
     };
 
     std::filesystem::path base_path = "./unittest_tiles/";
-    auto generator = ParallelTileGenerator::make(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, std::make_unique<MockTileWriter>(&tile_counter, &validation_error_counter), base_path);
+    auto generator = ParallelTileGenerator::make(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, std::make_unique<MockTileWriter>(&tile_counter, &validation_error_counter), base_path);
     generator.setWarnOnMissingOverviews(false);
     SECTION("dataset tiles only")
     {
@@ -63,12 +63,12 @@ TEST_CASE("parallel tile generator")
         CHECK(validation_error_counter == 0);
         CHECK(tile_counter == 27);
         CHECK(std::filesystem::exists(base_path / "0" / "0" / "0.empty"));
-        CHECK(std::filesystem::exists(base_path / "1" / "1" / "1.empty"));
-        CHECK(std::filesystem::exists(base_path / "2" / "2" / "2.empty"));
-        CHECK(std::filesystem::exists(base_path / "3" / "4" / "5.empty"));
-        CHECK(std::filesystem::exists(base_path / "4" / "8" / "10.empty"));
-        CHECK(std::filesystem::exists(base_path / "5" / "16" / "20.empty"));
-        CHECK(std::filesystem::exists(base_path / "7" / "70" / "84.empty"));
+        CHECK(std::filesystem::exists(base_path / "1" / "1" / "0.empty"));
+        CHECK(std::filesystem::exists(base_path / "2" / "2" / "1.empty"));
+        CHECK(std::filesystem::exists(base_path / "3" / "4" / "2.empty"));
+        CHECK(std::filesystem::exists(base_path / "4" / "8" / "5.empty"));
+        CHECK(std::filesystem::exists(base_path / "5" / "16" / "11.empty"));
+        CHECK(std::filesystem::exists(base_path / "7" / "70" / "43.empty"));
     }
     SECTION("world wide tiles")
     {

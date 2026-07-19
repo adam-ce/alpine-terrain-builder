@@ -44,7 +44,6 @@ public:
     const std::string& input_data_path,
     const std::string& output_data_path,
     ctb::Grid::Srs srs,
-    radix::tile::Scheme tiling_scheme,
     radix::tile::Border border,
     unsigned grid_resolution = 256);
 };

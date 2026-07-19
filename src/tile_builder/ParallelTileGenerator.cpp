@@ -41,7 +41,7 @@ ParallelTileGenerator::ParallelTileGenerator(const std::string& input_data_path,
 }
 
 ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_path,
-    ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme,
+    ctb::Grid::Srs srs,
     std::unique_ptr<ParallelTileWriterInterface> tile_writer,
     const std::string& output_data_path,
     unsigned grid_resolution)
@@ -51,7 +51,7 @@ ParallelTileGenerator ParallelTileGenerator::make(const std::string& input_data_
     if (srs == ctb::Grid::Srs::SphericalMercator)
         grid = ctb::GlobalMercator(grid_resolution);
     const auto border = tile_writer->formatRequiresBorder();
-    return { input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border, tiling_scheme), std::move(tile_writer), output_data_path };
+    return { input_data_path, grid, ParallelTiler(grid, dataset->bounds(grid.getSRS()), border), std::move(tile_writer), output_data_path };
 }
 
 const ParallelTiler& ParallelTileGenerator::tiler() const

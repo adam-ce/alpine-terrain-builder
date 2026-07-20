@@ -58,7 +58,7 @@ private:
 
 	int m_width, m_height, m_max_dimension, m_min_dimension;
 	std::string m_title;
-	int m_msaa_samples;
+	// int m_msaa_samples;
 
 	GLFWwindow* m_handle;
 

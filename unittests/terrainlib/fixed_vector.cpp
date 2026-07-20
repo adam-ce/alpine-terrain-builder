@@ -30,8 +30,9 @@ TEST_CASE("FixedVector copy constructor and assignment") {
     REQUIRE(assign_vec.size() == vec.size());
     CHECK(assign_vec[2] == 3);
 
-    // Self-assignment
-    vec = vec;
+    // Exercise self-assignment through an alias to avoid Clang's syntactic self-assignment warning.
+    const auto *self = &vec;
+    vec = *self;
     CHECK(vec.size() == 3);
 }
 

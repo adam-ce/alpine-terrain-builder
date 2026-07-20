@@ -20,18 +20,6 @@ using namespace mesh::io::utils;
 namespace mesh::io::gltf {
 
 namespace {
-const int GL_NEAREST = 0x2600;
-const int GL_LINEAR = 0x2601;
-const int GL_NEAREST_MIPMAP_NEAREST = 0x2700;
-const int GL_LINEAR_MIPMAP_NEAREST = 0x2701;
-const int GL_NEAREST_MIPMAP_LINEAR = 0x2702;
-const int GL_LINEAR_MIPMAP_LINEAR = 0x2703;
-const int GL_TEXTURE_MAG_FILTER = 0x2800;
-const int GL_TEXTURE_MIN_FILTER = 0x2801;
-const int GL_REPEAT = 0x2901;
-const int GL_CLAMP_TO_EDGE = 0x812F;
-const int GL_MIRRORED_REPEAT = 0x8370;
-
 cgltf_attribute *find_attribute_with_type(cgltf_attribute *attributes, size_t attribute_count, cgltf_attribute_type type) {
     for (unsigned int i = 0; i < attribute_count; i++) {
         cgltf_attribute *attribute = &attributes[i];
@@ -575,10 +563,10 @@ std::expected<void, SaveMeshError> save_to_path(
 
     std::array<cgltf_sampler, 1> samplers;
     cgltf_sampler &sampler = samplers[0] = {};
-    sampler.min_filter = GL_LINEAR_MIPMAP_LINEAR;
-    sampler.mag_filter = GL_LINEAR;
-    sampler.wrap_s = GL_CLAMP_TO_EDGE;
-    sampler.wrap_t = GL_CLAMP_TO_EDGE;
+    sampler.min_filter = cgltf_filter_type_linear_mipmap_linear;
+    sampler.mag_filter = cgltf_filter_type_linear;
+    sampler.wrap_s = cgltf_wrap_mode_clamp_to_edge;
+    sampler.wrap_t = cgltf_wrap_mode_clamp_to_edge;
 
     std::array<cgltf_texture, 1> textures;
     cgltf_texture &texture = textures[0] = {};

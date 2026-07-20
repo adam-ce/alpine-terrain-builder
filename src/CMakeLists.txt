@@ -22,7 +22,7 @@ find_package(CGAL REQUIRED)
 include(../cmake/SetupOpenCV.cmake)
 alp_setup_opencv(4.11.0)
 
-alp_add_git_repository(cgltf URL https://github.com/jkuhlmann/cgltf COMMITISH 7331a5adf4b0fde15f0e682a5803e4f17137e0ad DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cgltf.git COMMITISH e035b820ccde6ab20451b612d8033c9b76ea0ce4 DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
 target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 
@@ -38,7 +38,7 @@ target_include_directories(stb SYSTEM INTERFACE ${stb_SOURCE_DIR})
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
 
-alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.2 DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.3 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
 target_include_directories(zpp_bits SYSTEM INTERFACE ${zpp_bits_SOURCE_DIR})
 

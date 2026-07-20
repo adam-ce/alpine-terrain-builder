@@ -139,25 +139,25 @@ std::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algori
     if (algorithm == Algorithm::TutteBarycentricMapping) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, TutteBarycentricMappingParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, TutteBarycentricMappingParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::DiscreteAuthalic) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteAuthalicParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteAuthalicParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::DiscreteConformalMap) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteConformalMapParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteConformalMapParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::FloaterMeanValueCoordinates) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerSquareBorder(), bhd, uv_map);
         } 
     } else if (algorithm == Algorithm::LeastSquaresConformalMap) {

@@ -24,13 +24,6 @@ jobs:
             sanitizer: normal
             warnings_as_errors: OFF
             cmake_flags: ""
-          - name: gcc-15-normal
-            cc: gcc-15
-            cxx: g++-15
-            build_type: Release
-            sanitizer: normal
-            warnings_as_errors: ON
-            cmake_flags: ""
           - name: gcc-16-normal
             cc: gcc-16
             cxx: g++-16
@@ -101,7 +94,7 @@ jobs:
         sudo apt-get install -y --no-install-recommends libclang-rt-23-dev
 
     - name: Install GCC ${{ matrix.cxx }}
-      if: matrix.cxx == 'g++-15' || matrix.cxx == 'g++-16'
+      if: matrix.cxx == 'g++-16'
       run: |
         sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
         sudo apt-get update

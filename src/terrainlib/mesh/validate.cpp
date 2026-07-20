@@ -21,29 +21,29 @@
 
 namespace mesh {
 namespace {
-inline constexpr double EPSILON = 1e-12;
+// inline constexpr double EPSILON = 1e-12;
 
 constexpr bool has_flag(const ValidationFlags set, const ValidationFlags flag) noexcept {
     return (set & flag) != ValidationFlags::None;
 }
 
-inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
-    std::unordered_map<glm::uvec3, uint32_t> counts;
-    counts.reserve(triangles.size());
-
-    for (const glm::uvec3 &triangle : triangles) {
-        const glm::uvec3 normalized = normalize_triangle(triangle, !ignore_orientation);
-        counts[normalized] += 1;
-    }
-
-    for (const auto &[_triangle, count] : counts) {
-        if (count > 1) {
-            return true;
-        }
-    }
-
-    return false;
-}
+// inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
+//     std::unordered_map<glm::uvec3, uint32_t> counts;
+//     counts.reserve(triangles.size());
+//
+//     for (const glm::uvec3 &triangle : triangles) {
+//         const glm::uvec3 normalized = normalize_triangle(triangle, !ignore_orientation);
+//         counts[normalized] += 1;
+//     }
+//
+//     for (const auto &[_triangle, count] : counts) {
+//         if (count > 1) {
+//             return true;
+//         }
+//     }
+//
+//     return false;
+// }
 
 template <glm::length_t n_dims, typename T>
 void validate_impl_basic(const mesh::View_<n_dims, T> &mesh) {

@@ -22,24 +22,42 @@ jobs:
             cxx: g++-14
             build_type: Release
             sanitizer: normal
+            warnings_as_errors: OFF
+            cmake_flags: ""
+          - name: gcc-15-normal
+            cc: gcc-15
+            cxx: g++-15
+            build_type: Release
+            sanitizer: normal
+            warnings_as_errors: ON
+            cmake_flags: ""
+          - name: gcc-16-normal
+            cc: gcc-16
+            cxx: g++-16
+            build_type: Release
+            sanitizer: normal
+            warnings_as_errors: ON
             cmake_flags: ""
           - name: clang-23-asan
             cc: clang-23
             cxx: clang++-23
             build_type: RelWithDebInfo
             sanitizer: asan
+            warnings_as_errors: ON
             cmake_flags: -DALP_ENABLE_ADDRESS_SANITIZER=ON
           - name: clang-23-tsan
             cc: clang-23
             cxx: clang++-23
             build_type: RelWithDebInfo
             sanitizer: tsan
+            warnings_as_errors: ON
             cmake_flags: -DALP_ENABLE_THREAD_SANITIZER=ON
           - name: clang-23-unity
             cc: clang-23
             cxx: clang++-23
             build_type: Release
             sanitizer: normal
+            warnings_as_errors: ON
             cmake_flags: -DALP_ENABLE_UNITY_BUILD=ON
 
     steps:
@@ -82,6 +100,13 @@ jobs:
         sudo /tmp/llvm.sh 23
         sudo apt-get install -y --no-install-recommends libclang-rt-23-dev
 
+    - name: Install GCC ${{ matrix.cxx }}
+      if: matrix.cxx == 'g++-15' || matrix.cxx == 'g++-16'
+      run: |
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends ${{ matrix.cc }} ${{ matrix.cxx }}
+
     - name: Restore installed CMake dependencies
       id: cmake_dependency_cache
       uses: actions/cache/restore@v4
@@ -122,7 +147,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DALP_WARNINGS_AS_ERRORS=ON
+        -DALP_WARNINGS_AS_ERRORS=${{ matrix.warnings_as_errors }}
         ${{ matrix.cmake_flags }}
 
     - name: Save installed CMake dependencies

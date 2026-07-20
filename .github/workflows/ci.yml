@@ -8,7 +8,6 @@ on:
 env:
   CCACHE_DIR: ${{ github.workspace }}/.ccache
   CCACHE_MAXSIZE: 1G
-  ALP_CI_WARNINGS_AS_ERRORS: ${{ (github.ref_name == 'raster-store' || github.head_ref == 'raster-store') && 'OFF' || 'ON' }}
 
 jobs:
   build-and-test:
@@ -123,7 +122,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
         -DCMAKE_C_COMPILER_LAUNCHER=ccache
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-        -DALP_WARNINGS_AS_ERRORS=${{ env.ALP_CI_WARNINGS_AS_ERRORS }}
+        -DALP_WARNINGS_AS_ERRORS=ON
         ${{ matrix.cmake_flags }}
 
     - name: Save installed CMake dependencies

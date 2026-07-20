@@ -9,8 +9,8 @@ open unless explicitly marked confirmed.
 ### Confirmed
 
 - The persistent hierarchy is a Web Mercator quadtree keyed by Radix tile IDs.
-- Store chunks are non-overlapping and approximately 10-100 MB.
-- Every stored pixel has one payload value and one source attribution.
+- Store chunks are non-overlapping and approximately 10-100 MB after compression.
+- Every stored pixel has one payload value (can be vector type) and one source attribution.
 - A coarse physical chunk may coexist with more accurate descendants.
 - Rendering overlap and delivery encodings are not stored authoritatively.
 

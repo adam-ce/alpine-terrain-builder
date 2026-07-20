@@ -1,7 +1,3 @@
-#include <algorithm>
-#include <memory>
-#include <string>
-
 #include "TileDownloader.h"
 #include "TileUrlBuilder.h"
 #include "cli.h"
@@ -15,19 +11,14 @@ int main(int argc, char *argv[]) {
         LOG_ERROR_AND_EXIT("unsupported srs EPSG \"{}\"", args.srs);
     }
 
-    std::unique_ptr<TileUrlBuilder> url_builder;
-    std::string provider = args.provider;
-    std::transform(provider.begin(), provider.end(), provider.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-    if (provider == "basemap") {
-        url_builder = std::make_unique<BasemapTileUrlBuilder>(args.layer, args.style, TileUrlFormat { args.url_coordinate_order, args.url_y_direction });
-    } else {
-        url_builder = std::make_unique<GatakiTileUrlBuilder>(TileUrlFormat { args.url_coordinate_order, args.url_y_direction });
-    }
+    const auto provider_config = args.provider.has_value()
+        ? tile_provider_config(*args.provider)
+        : TileProviderConfig { *args.url_pattern, args.url_y_direction };
+    const TileUrlBuilder url_builder(provider_config);
 
     const radix::tile::Id root_id = {args.zoom, {args.x, args.y}};
 
-    TileDownloader downloader(*url_builder, args.output, args.early_skip, args.max_zoom_level);
+    TileDownloader downloader(url_builder, args.output, args.early_skip, args.max_zoom_level);
     downloader.download_recursive(root_id);
 
     return 0;

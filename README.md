@@ -24,21 +24,23 @@ The tools typically only handle one tile per command which makes it infeasible t
 In this example, we'll show how to build the hierarchy for Vienna's city center (Zoom: 13, X: 4468, Y:2840).
 
 ### 1. Downloading tiles
-Tile coordinates always use the Google/Mapbox/XYZ convention internally: the origin is north-west, X grows east, and Y grows south. Google Maps, Mapbox, OpenStreetMap, and most XYZ services use the common URL order `{zoom}/{x}/{y}`; this is the downloader default.
+Tile coordinates always use the Google/Mapbox/XYZ convention internally: the origin is north-west, X grows east, and Y grows south. Google Maps, Mapbox, OpenStreetMap, and most XYZ services use the common URL order `{zoom}/{x}/{y}`.
 
-Some providers use `{zoom}/{y}/{x}` instead. Both built-in Austrian providers currently require `--url-coordinate-order yx`; for example, the Gataki mirror uses:
+The `basemap` and `gataki` providers select their complete URL pattern and Y direction automatically. Both currently use downward Y with the URL order `{zoom}/{y}/{x}`. The `basemap` provider downloads the basemap.at orthophoto, and the Gataki mirror uses:
 
 `https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{zoom}/{y}/{x}.jpeg`
 
 Example for the root tile: https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/13/2840/4468.jpeg
 
-Select URL coordinate order with `--url-coordinate-order xy|yx`. Select the URL Y direction with `--url-y-direction down|up`; `down` is the common Google/Mapbox convention and `up` is the legacy TMS convention. These options affect only remote URLs. Downloaded files always use the common Google/Mapbox layout `{zoom}/{x}/{y}.jpeg`.
+For another service, pass a quoted `--url` pattern containing `{zoom}`, `{x}`, and `{y}`. Placeholder placement selects URL coordinate order. Custom URLs default to downward Y; use `--url-y-direction up` for legacy TMS. Downloaded files always use the common Google/Mapbox layout `{zoom}/{x}/{y}.jpeg`, independently of the remote URL.
 
 The following command downloads the mirror's `{zoom}/{y}/{x}` URLs and writes the root tile to `./tiles/13/4468/2840.jpeg`:
 
 ```
-./tile-downloader --provider gataki --zoom 13 --x 4468 --y 2840 --url-coordinate-order yx --max-zoom-level 19
+./tile-downloader --provider gataki --zoom 13 --x 4468 --y 2840 --max-zoom-level 19
 ```
+
+For example, a custom Google/Mapbox URL can be selected with `--url 'https://example.test/{zoom}/{x}/{y}.jpeg'`.
 
 ### 2. Download heightmap dataset
 The meshes are built from a heightmap dataset, therefore we need to download one. For this example we'll only use a small part of the complete dataset for the whole of austria (available at https://gataki.cg.tuwien.ac.at/raw/Oe_2020/, 268 GB to 1.1 TB). The part we're gonna use contains Vienna's city center and it is available at https://gataki.cg.tuwien.ac.at/raw/vienna/innenstadt_gs_1m_mgi.tif (228 MB).

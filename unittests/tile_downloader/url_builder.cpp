@@ -5,38 +5,47 @@
 
 namespace {
 constexpr radix::tile::Id tile { 3, { 1, 2 } };
-
-void check_urls(const TileUrlFormat format, const std::string& coordinate_path)
-{
-    const BasemapTileUrlBuilder basemap("layer", "style", format);
-    CHECK(basemap.build_url(tile) == "https://mapsneu.wien.gv.at/basemap/layer/style/google3857/" + coordinate_path + ".jpeg");
-
-    const GatakiTileUrlBuilder gataki(format);
-    CHECK(gataki.build_url(tile) == "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/" + coordinate_path + ".jpeg");
-}
 }
 
-TEST_CASE("tile URL coordinate formats")
+TEST_CASE("configured tile provider URLs")
 {
-    SECTION("xy with downward y")
     {
-        check_urls({ TileCoordinateOrder::Xy, TileYDirection::Down }, "3/1/2");
+        const TileUrlBuilder builder(tile_provider_config(TileDownloadProvider::Basemap));
+        CHECK(builder.build_url(tile) == "https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/3/2/1.jpeg");
     }
 
-    SECTION("yx with downward y")
     {
-        check_urls({ TileCoordinateOrder::Yx, TileYDirection::Down }, "3/2/1");
+        const TileUrlBuilder builder(tile_provider_config(TileDownloadProvider::Gataki));
+        CHECK(builder.build_url(tile) == "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/3/2/1.jpeg");
+    }
+}
+
+TEST_CASE("custom tile URL patterns")
+{
+    SECTION("zoom/x/y with downward y")
+    {
+        const TileUrlBuilder builder({ "https://example.test/{zoom}/{x}/{y}.png", TileYDirection::Down });
+        CHECK(builder.build_url(tile) == "https://example.test/3/1/2.png");
     }
 
-    SECTION("xy with upward legacy TMS y")
+    SECTION("zoom/y/x with downward y")
     {
-        check_urls({ TileCoordinateOrder::Xy, TileYDirection::Up }, "3/1/5");
+        const TileUrlBuilder builder({ "https://example.test/{zoom}/{y}/{x}.png", TileYDirection::Down });
+        CHECK(builder.build_url(tile) == "https://example.test/3/2/1.png");
     }
 
-    SECTION("yx with upward legacy TMS y")
+    SECTION("upward legacy TMS y")
     {
-        check_urls({ TileCoordinateOrder::Yx, TileYDirection::Up }, "3/5/1");
+        const TileUrlBuilder builder({ "https://example.test/{zoom}/{x}/{y}.png", TileYDirection::Up });
+        CHECK(builder.build_url(tile) == "https://example.test/3/1/5.png");
     }
+}
+
+TEST_CASE("tile URL patterns require all coordinate placeholders")
+{
+    CHECK_THROWS_AS(TileUrlBuilder({ "https://example.test/{x}/{y}.png", TileYDirection::Down }), std::invalid_argument);
+    CHECK_THROWS_AS(TileUrlBuilder({ "https://example.test/{zoom}/{y}.png", TileYDirection::Down }), std::invalid_argument);
+    CHECK_THROWS_AS(TileUrlBuilder({ "https://example.test/{zoom}/{x}.png", TileYDirection::Down }), std::invalid_argument);
 }
 
 TEST_CASE("downloaded tile path uses Google and Mapbox layout")

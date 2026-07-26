@@ -82,7 +82,7 @@ Storage_<T, Codec> open_folder(
         LOG_WARN("Unable to determine layout of dataset, using layout strategy {} and extension {}",
                  disk::layout::StrategyRegister::instance().get_id(*default_layout_strategy),
                  default_extension_with_dot);
-        layout_info_opt = std::move(octree::helpers::LayoutWithoutBase(std::move(default_layout_strategy), default_extension_with_dot));
+        layout_info_opt = octree::helpers::LayoutWithoutBase(std::move(default_layout_strategy), default_extension_with_dot);
     }
 
     disk::Layout layout(base_path, std::move(layout_info_opt->strategy), layout_info_opt->extension_with_dot);

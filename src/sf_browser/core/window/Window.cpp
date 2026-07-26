@@ -5,7 +5,7 @@
 std::atomic<bool> Window::glfw_initialized(false);
 std::atomic<size_t> Window::window_instances(0);
 
-Window::Window(WindowConfig config) : m_width(config.width), m_height(config.height), m_title(config.title), m_msaa_samples(config.msaa_samples) {
+Window::Window(WindowConfig config) : m_width(config.width), m_height(config.height), m_title(config.title) /*, m_msaa_samples(config.msaa_samples)*/ {
     update_window_count(1);
 
     const auto [gl_major_version, gl_minor_version] = config.opengl_version;

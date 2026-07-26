@@ -108,6 +108,7 @@ inline constexpr glm::uvec3 change_vertex(const glm::uvec3 &triangle, const uint
     } else if (!allow_missing) {
         UNREACHABLE();
     }
+    return triangle;
 }
 
 inline constexpr void flip_triangle_orientation(glm::uvec3 &triangle) {

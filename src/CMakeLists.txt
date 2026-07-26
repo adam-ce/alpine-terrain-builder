@@ -16,7 +16,7 @@ find_package(TBB REQUIRED)
 include(../cmake/SetupGDAL.cmake)
 alp_setup_gdal(GDAL_VERSION v3.10.3 PROJ_VERSION 9.6.0)
 
-alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DCGAL_HEADER_ONLY=ON -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF)
+alp_setup_cmake_project(cgal URL https://github.com/CGAL/cgal.git COMMITISH "v6.0.1" CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DWITH_examples=OFF)
 find_package(CGAL REQUIRED)
 
 include(../cmake/SetupOpenCV.cmake)

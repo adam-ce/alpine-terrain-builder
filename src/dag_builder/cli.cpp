@@ -7,9 +7,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <unordered_map>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace cli;
@@ -98,6 +99,23 @@ ContinuationMode make_continuation_mode(const bool resume, const bool overwrite)
     } else if (overwrite) {
         return ContinuationMode::Overwrite;
     }
+
+    // TODO(ORIGINAL AUTHOR): !!! THIS FALLBACK NEEDS AN AUTHORITATIVE BEHAVIOUR DECISION !!!
+    //
+    // Neither --resume nor --overwrite is a normal command-line combination, but the intended
+    // continuation semantics are unclear. Do not replace this exception without first confirming
+    // the desired behaviour with the original author.
+    //
+    // Codex believes the correct implementation is:
+    //
+    //     return ContinuationMode::Error;
+    //
+    // ContinuationMode::Error is already the default in Args and BuildOptions, and build_level()
+    // contains a dedicated branch for it. Returning Error would therefore preserve the apparent
+    // design: refuse to overwrite existing output unless the user explicitly selects --resume or
+    // --overwrite. The exception below intentionally keeps the unsupported path loud until the
+    // original author confirms or corrects that interpretation.
+    throw std::runtime_error("unsupported operation");
 }
 
 } // namespace

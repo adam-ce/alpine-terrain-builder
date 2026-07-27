@@ -34,9 +34,13 @@ A store root contains immutable snapshots. Each snapshot contains an index, a so
 store/
 └── snapshot-id/
     ├── source_attribution_table.ard
-    ├── index
-    └── chunks/...[.arft|.artb] (or, z/x/y.[arft|artb])
+    ├── raster_store.index
+    └── <zoom>/<x>/<y>.amort
 ```
+
+The shown payload path is the default `zoom/x/y_google` layout. Other layouts
+may map the same tile IDs differently; there is no mandatory `chunks/`
+directory.
 
 ## Sparse quadtree index
 
@@ -97,6 +101,19 @@ When merging, we need to create new hardlinks for unchanged rf tiles (taken comp
 
 Cross-filesystem hard links cannot be created. The builder must expose this as
 a clear configuration error rather than discovering it after a long build.
+
+A new snapshot is assembled in a sibling directory named
+`<snapshot-id>.part`. The builder writes the index last, validates the
+snapshot, flushes and closes all files, and atomically renames the directory
+to `<snapshot-id>` on the same filesystem. The final destination must not
+already exist. A `.part` directory is incomplete and must not be exposed as a
+published snapshot during normal operation.
+
+Publication does not guarantee durability or safe recovery across a power
+failure, operating-system crash, or storage failure. The implementation does
+not perform platform-specific filesystem syncing. After such a failure,
+either a `.part` directory or a final snapshot may be unusable and must be
+validated and rebuilt.
 
 ## Pyramid generator interface (to be confirmed, LLM, do not use the following without consultation)
 

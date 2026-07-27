@@ -141,10 +141,10 @@ src/terrainlib/
     ├── IndexFile.h
     ├── Storage.h
     ├── codec/
-    │   ├── Arft.h
+    │   ├── Amort.h
     │   └── Debug.h
     └── store_layout/
-        └── Zxy.h
+        └── ZoomXYGoogle.h
 ```
 
 The exact file grouping may be collapsed if a file would only contain a few
@@ -197,10 +197,15 @@ changing `octree::Id`.
 - treat zoom zero as the only root;
 - never call `radix::tile::Id::parent()` at zoom zero, where it underflows;
 - reject coordinates outside `[0, 2^zoom)`;
-- define a supported maximum zoom without an overflowing shift;
+- accept zoom levels 0 through
+  `std::numeric_limits<uint32_t>::digits`, inclusive;
+- treat that maximum zoom as terminal because a child cannot be represented
+  by the `uint32_t` x/y coordinates;
+- validate the maximum zoom without evaluating an overflowing
+  `uint32_t{1} << 32`;
 - use `radix::tile::Id::Hasher`; and
-- accept only one canonical XYZ/Slippy interpretation at the persistent
-  boundary.
+- use the Google/XYZ convention, with the origin at the north-west, at the
+  persistent boundary.
 
 The shared code must obtain roots, parents, children, validation, and hashing
 through the traits. It must not use dimension checks or specialize behaviour
@@ -266,7 +271,7 @@ octree::store_layout::level_and_coordinate_directories()
 octree::store_layout::from_id(id)
 octree::store_layout::all()
 
-raster_store::store_layout::zxy()
+raster_store::store_layout::zoom_x_y_google()
 raster_store::store_layout::from_id(id)
 ```
 
@@ -399,9 +404,11 @@ the known codec endings, removes them to obtain a `NodePath`, and then invokes
 the selected layout parser. The generic layout does not recover keys directly
 from codec-owned file paths.
 
-For 2D, the adapter reads and writes a separately versioned
-`raster_store::v1` DTO using the serialization envelope required by
-[storage-format.md](storage-format.md).
+For 2D, the adapter reads and writes `raster_store.index` as a separately
+versioned `raster_store::v1` DTO using the serialization envelope required by
+[storage-format.md](storage-format.md). Version 1 stores the layout ID and
+sparse key/status entries. `Missing` is represented by absence; derivable
+aggregate metadata is not stored.
 
 Automatic dirty-index saving currently happens in the 3D storage destructor.
 Preserve that behaviour for existing 3D entry points during the migration.
@@ -692,9 +699,8 @@ callers still build through aliases; no filesystem code has changed.
    in the 3D format adapter.
 5. Port legacy layout discovery so it strips recognized 3D file endings before
    calling `node_path_to_key()`.
-6. Add the proposed 2D `z/x/y` mapping only after the review decision listed
-   below is resolved. The raster codec, not the mapping, adds `.arft` or debug
-   endings.
+6. Add the 2D `z/x/y` mapping with stable ID `zoom/x/y_google`. The raster
+   codec, not the mapping, adds `.amort` or debug endings.
 7. Switch node-path and layout-detection tests to the new implementation.
 8. Delete the old strategy base class, registration machinery, and concrete
    strategy classes once no call site uses them.
@@ -773,30 +779,42 @@ or raster dependencies.
 
 ### Phase 5 — Add the 2D raster-fundamentalis adapter
 
-This phase starts only after the unresolved 2D format decisions below are
-edited into decisions in this document.
+All required 2D format decisions are resolved below.
 
-1. Add the checked 2D persistent-key conversion around `radix::tile::Id`.
-2. Add the chosen 2D path mapping and stable ID.
-3. Define the versioned 2D index DTO and index filename.
-4. Use the required magic/version/checksum/compression serialization envelope.
+1. Add the checked 2D persistent-key conversion around `radix::tile::Id`,
+   supporting zoom 0 through `std::numeric_limits<uint32_t>::digits` and
+   treating that maximum zoom as terminal.
+2. Add the default `<zoom>/<x>/<y>` path mapping with stable ID
+   `zoom/x/y_google`.
+3. Define `raster_store.index` with a versioned 2D DTO containing the layout
+   ID and sparse key/status entries, without derived aggregate metadata. Use
+   fixed-width `uint32_t` zoom/x/y fields and serialize entries in
+   lexicographic `(zoom, x, y)` order.
+4. Implement the version-1 magic/version/checksum/compression envelope. Store
+   zlib CRC-32 as `uint32_t`, computed over the compressed payload, and use
+   zstd at its best-compression setting. Import zstd through the project's
+   CMake dependency facility; use the existing `ZLIB::ZLIB` dependency for
+   CRC-32.
 5. Add the 2D format adapter and storage aliases under
    `raster_store`.
-6. Add `raster_store::codec::Arft<Payload>` with runtime format options when
-   the final `.arft` serialization is available.
+6. Add `raster_store::codec::Amort<Payload>` with runtime format options when
+   the final `.amort` serialization is available.
 7. Add the output-only `raster_store::codec::Debug<Payload>` with runtime
    options for its data and attribution files.
-8. If the final `.arft` serialization is not available, exercise storage with
-   the Phase 3 test codec and do not make `.arft` claims from it.
+8. If the final `.amort` serialization is not available, exercise storage
+   with the Phase 3 test codec and do not make `.amort` claims from it.
 9. Test:
-   - invalid and boundary tile IDs;
+   - invalid and boundary tile IDs, including the maximum zoom and rejected
+     children beyond it;
    - index serialization and validation;
    - `Leaf`/`Inner` coexistence;
    - sparse traversal and ancestor lookup;
    - path round trips;
    - snapshot hard-link reuse;
-   - ARFT-to-debug output conversion; and
-   - explicit cross-filesystem/preflight failure.
+   - AMORT-to-debug output conversion;
+   - explicit cross-filesystem/preflight failure;
+   - publication from `<snapshot-id>.part` to `<snapshot-id>`; and
+   - publication rejection when the destination already exists.
 
 Exit criterion: the same shared store can create, open, traverse, and reuse a
 minimal 2D raster-fundamentalis fixture without changing the 3D fixtures.
@@ -891,35 +909,54 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 
 ## Decisions required before Phase 5
 
-These are intentionally unresolved because the current raster-store documents
-mark them as unclear:
+The review resolved the layout, key, index-content, checksum, and publication
+mechanism questions. One detail remains before Phase 5.
 
-1. **2D index filename:** choose the filename used inside a
-   raster-fundamentalis snapshot.
-   => call it raster_store.index.
-2. **2D node and payload paths:** confirm the extensionless `z/x/y`
-   `NodePath`, the ARFT codec's resulting `z/x/y.arft` file, and whether
-   chunks live directly under the snapshot or below a `chunks/` directory.
-   => I already renamed .arft into .amort (alpine maps org raster tile) in several places. look for places i missed and rename it. the chunks / tiles shall live under a path defined by the store_layout, the default 2d store layout shall put them into z/x/y, not in chunks/z/x/y.
-3. **2D layout ID:** choose the stable string serialized in the index.
-   => "zoom/x/y_google"
-4. **Maximum zoom:** choose the supported persistent range and integer widths
-   for zoom, x, and y.
-   => use the tile id from radix. x and y are unsigned 32, that would give maximum zoom 31 or 32? that should be well enough.
-5. **Index contents:** decide whether v1 stores only sparse status entries or
-   also derived aggregate metadata. The first implementation should omit
-   derivable metadata unless a concrete query requires it.
-   => is this a question?
-6. **Index envelope constants:** assign the 2D index magic number, compression
-   choice, and version according to the common serialization rules.
-   => erm, question?
-7. **Publication:** define whether snapshot completion uses an atomic rename,
-   a manifest marker, or an external store-level operation. The generic
-   storage layer should expose finalization but not invent store-level
-   lifecycle policy.
-   => use an atomic rename, but don't hide the file. use a .part extension to the new directory name, and then remove it. make sure to flush and close all files before renaming.
+### Resolved decisions
 
-Until these decisions are made, Phases 0–4 can complete and the shared
-implementation can be proven with `radix::tile::Id` in memory and with
-temporary-directory tests. No provisional 2D disk format should escape into
-production data.
+1. **Index filename and location:** each snapshot stores
+   `raster_store.index` directly at its root.
+2. **Node and payload paths:** `store_layout` determines the extensionless
+   node path. The default 2D mapping produces `<zoom>/<x>/<y>` directly below
+   the snapshot; there is no fixed `chunks/` directory. The AMORT codec
+   expands it to `<zoom>/<x>/<y>.amort`.
+3. **Layout identity and coordinates:** the stable layout ID serialized in the
+   index is `zoom/x/y_google`. It uses Google/XYZ coordinates with the origin
+   at the north-west.
+4. **Persistent key and zoom range:** use `radix::tile::Id`, whose x and y
+   coordinates must fit in `uint32_t`. The maximum zoom is therefore
+   `std::numeric_limits<uint32_t>::digits` (32): at that zoom every
+   `uint32_t` x/y value is representable and valid. A maximum-zoom tile is
+   terminal because its children would require another coordinate bit.
+   Validation must special-case this boundary rather than evaluate an
+   overflowing `uint32_t{1} << 32`. The versioned disk DTO uses fixed-width
+   `uint32_t` fields for zoom, x, and y rather than serializing the platform
+   `unsigned` type directly.
+5. **Version-1 index contents:** store the layout ID and sparse key/status
+   entries. `Leaf`, `Inner`, and `Virtual` are serialized; `Missing` is
+   represented by absence. Do not store derived aggregate metadata until a
+   concrete query demonstrates that it is required. Serialize entries in
+   lexicographic `(zoom, x, y)` order and reject duplicate keys while reading.
+6. **Serialization envelope:** version 1 uses a fixed, file-type-specific
+   64-bit magic value generated once during implementation, a 32-bit version,
+   zlib CRC-32 stored as `uint32_t` and computed over the compressed payload,
+   a compression enum, and the compressed payload. Use zstd with its
+   best-compression setting. The exact magic value is an implementation
+   constant, not a further design decision.
+7. **Publication:** build a snapshot in a sibling directory named
+   `<snapshot-id>.part`. Write the index last, validate the completed snapshot,
+   flush and close every file, and atomically rename the directory to
+   `<snapshot-id>` on the same filesystem. The destination must not already
+   exist. A `.part` directory is never considered published; the rename
+   removes the suffix without a separate marker or manifest. This guarantees
+   atomic visibility to concurrent readers during normal operation.
+8. **Crash behavior:** the store does not guarantee durability or safe
+   recovery across a power failure, operating-system crash, or storage
+   failure. Do not add `fsync()`, `fdatasync()`, `FlushFileBuffers()`, or
+   equivalent platform-specific synchronization to this refactor. After such
+   a failure, either a `.part` directory or a final snapshot may be unusable
+   and must be validated and rebuilt. Flushing and closing files remains
+   required before the rename for normal-operation correctness, but must not
+   be documented as a crash-durability guarantee.
+
+There are no remaining decisions blocking Phase 5.

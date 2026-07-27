@@ -31,6 +31,9 @@ this is the binary format used to store rf and tb tiles. both share the same bas
 - the source attribution index is stored as uint16, and indexes into a global source attribution table (see above)
 - data is stored in radix::Raster<Type> objects (one for source attribution index, one for the actual data), i.e. template <typename PixelType> struct raster_store::Tile { radix::Raster<PixelType> data; radix::Raster<uint16> source_attribution; };
 - the file ending is .amort (AlpineMapsOrg raster tile), it is serialised used the principles outlined below.
+- each snapshot stores its index as `raster_store.index`.
+- the default `zoom/x/y_google` layout stores a tile as
+  `<zoom>/<x>/<y>.amort`, directly below the snapshot root.
 
 ## raster-fundamentalis (rf) format
 raster-fundamentalis is our authoritative raster-store, containing only the data and no overviews / downsampled version.
@@ -51,18 +54,19 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 ### unclear
 - how to build tile-base from raster-fundamentalis
 - details of the tile server
-- file names / index file name
 
 ## serialization / deserialization and versioning
 - all files are serialised with zpp::bits in two levels
  - first level contains:
   - an uint64 long file type specific random magic number, generated once at coding time, as an definitive file type identifier
   - a version number (uint32)
-  - a checksum for the payload, computed from the compressed data
-  - an enum for the compression algorithm
+  - an enum for the checksum, default to HandledByCompressionLib, other option None
+  - a string checksum for the payload, computed from the uncompressed data (default empty)
+  - an enum for the compression algorithm, default to to ZStd_BestCompression, other option None.
   - a payload (byte vector), the second level
  - the second level is a compressed byte array. the compressed payload is deserialised directly into the respective versioned data classes (tile or source attribution table)
-- data structs are stored in versioned namespaces, e.g.: raster::fundamentalis::v1::Tile
+- data structs are stored in versioned namespaces, e.g.:
+  `raster_store::v1::Tile`
 - outside the versioned namespace, there is a using declaration for the newest version
 - outside the versioned namespace, there is serialization function, taking only the newest version
 - outside the versioned namespace, there is a deserialization function, taking a byte stream, and returning the newest version (convert to the newest version, if the payload encodes an older version)
@@ -73,7 +77,8 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
  - if the compression algorithm is missing or unsupported.
  - deserialization fails
 - we fail by throwing in these cases
-- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd
+- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. the context must be configured to compute and check a checksum. do compression and decompression in functions with an std::byte interface (and error handling). dispatch is done via a simple switch case.
+- checksum: assert the enum is either None or HandledByCompressionLib.
 
 
 ## to be defined

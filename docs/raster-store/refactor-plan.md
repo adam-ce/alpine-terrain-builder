@@ -27,7 +27,10 @@ This plan describes how to extract the existing octree-specific index, traversal
 - A configured codec owns all filename endings and maps one `NodePath` to one
   or more physical files. `Codec::paths()` must not need a payload.
 - Codecs are stateful runtime objects behind a small interface. They may
-  support reading, writing, or both; an unsupported operation throws. reading and writing must be reentrant (callable concurrently from different threads).
+  support reading, writing, or both. Reading and writing return
+  `std::expected`; unsupported operations and other operational failures are
+  reported as error values. Reading and writing must be reentrant (callable
+  concurrently from different threads).
 - `copy_from()` hard-links every file when the input and output codecs return
   the same path list for a common dummy `NodePath`. Otherwise it decodes with
   the input codec and encodes with the output codec. Callers can force
@@ -298,21 +301,26 @@ public:
     virtual std::vector<std::filesystem::path>
     paths(const NodePath& node_path) const = 0;
 
-    virtual NodeData read(const NodePath&) const {
-        throw UnsupportedCodecOperation{"read"};
+    virtual std::expected<NodeData, CodecError>
+    read(const NodePath&) const {
+        return std::unexpected(
+            CodecError::unsupported_operation("read"));
     }
 
-    virtual void write(
+    virtual std::expected<void, CodecError> write(
         const NodePath&,
         const NodeData&) const {
-        throw UnsupportedCodecOperation{"write"};
+        return std::unexpected(
+            CodecError::unsupported_operation("write"));
     }
 };
 ```
 
 Concrete codecs contain their configuration and are constructed before
-storage use. Unsupported read or write operations may use the base
-implementation and throw at runtime.
+storage use. `CodecError` is a payload-neutral operational error that records
+the failed operation, an error category, and a diagnostic message. Concrete
+codecs convert their domain errors to it. Unsupported read or write operations
+may use the base implementation and return its `UnsupportedOperation` error.
 
 `Codec::paths()` has the following contract:
 
@@ -475,8 +483,8 @@ order, and filename endings.
 
 If linking several files fails partway through, remove the target links
 created by that call before returning the error. There is no silent copy
-fallback. An unsupported read or write needed for re-encoding throws through
-the codec interface.
+fallback. An unsupported read or write needed for re-encoding is returned
+through `CopyError`, retaining the underlying `CodecError`.
 
 Codec settings that do not change `paths()`, such as compression level or
 JPEG quality, do not force re-encoding by default. A caller that needs those
@@ -601,11 +609,11 @@ handle these failures.
 
 The shared copier must return the failure through `copy_subtree()` and the
 merge call chain until the application boundary can report it with the
-affected key and path. An unsupported codec read or write may propagate as
-the codec's runtime exception. Assertions remain appropriate for internal
-invariants, but filesystem conditions, unsupported conversions, malformed
-datasets, and overwrite conflicts are operational errors rather than
-assertion failures.
+affected key and path. Codec, filesystem, unsupported-conversion, malformed
+dataset, and overwrite failures are propagated with `std::expected`;
+`CopyError` retains any underlying `CodecError`. Assertions remain appropriate
+for internal invariants, but operational failures are not assertion failures
+or intentionally thrown exceptions.
 
 ### Paired hierarchy walking
 
@@ -902,15 +910,12 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Linked snapshots are modified in place | Immutable snapshot API and overwrite-disabled output |
 | Multi-file hard linking fails partway through | Remove links created by the failed `copy_from()` before returning |
 | Incompatible codecs return the same path list | Treat path-list equality as a codec contract and test every concrete codec pairing |
-| Output-only codec is selected for required input | Throw a clear unsupported-operation error at runtime |
+| Output-only codec is selected for required input | Return a clear `UnsupportedOperation` error |
 | Hard-link failure appears late | 2D operation preflight and explicit errors |
 | Shared code accumulates mesh/raster policy | Dependency tests/review against the source boundary |
 | Generic index accidentally dictates both disk formats | Separate 3D and 2D format adapters |
 
 ## Decisions required before Phase 5
-
-The review resolved the layout, key, index-content, checksum, and publication
-mechanism questions. One detail remains before Phase 5.
 
 ### Resolved decisions
 

@@ -88,12 +88,14 @@ if(TARGET sfbuilderlib)
 endif()
 
 if(TARGET tile-downloader)
+    find_package(CURL REQUIRED)
     add_executable(unittests_tile_downloader
+        tile_downloader/http_client.cpp
         tile_downloader/logger.cpp
         tile_downloader/url_builder.cpp
     )
     target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
-    target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain)
+    target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)
     atb_configure_test(unittests_tile_downloader)
 endif()
 

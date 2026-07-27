@@ -19,7 +19,10 @@
 
 #include "ProgressIndicator.h"
 #include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <condition_variable>
 #include <execution>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -99,5 +102,29 @@ TEST_CASE("progress indicator")
         std::for_each(std::execution::par, tasks.begin(), tasks.end(), [&](const auto&) { std::this_thread::sleep_for(10ms); pi.task_finished(); });
         monitoring_thread.join();
         CHECK_THROWS(pi.task_finished());
+    }
+
+    SECTION("monitoring can be stopped before all tasks finish")
+    {
+        ProgressIndicator pi(1);
+        auto monitoring_thread = pi.start_monitoring();
+
+        std::condition_variable_any fallback_condition;
+        std::mutex fallback_mutex;
+        std::jthread fallback([&](std::stop_token stop_token) {
+            std::unique_lock lock(fallback_mutex);
+            fallback_condition.wait_for(lock, stop_token, 2s, []() { return false; });
+            if (!stop_token.stop_requested()) {
+                pi.task_finished();
+            }
+        });
+
+        const auto before_stop = std::chrono::steady_clock::now();
+        monitoring_thread.request_stop();
+        monitoring_thread.join();
+        const auto stop_duration = std::chrono::steady_clock::now() - before_stop;
+        fallback.request_stop();
+
+        CHECK(stop_duration < 250ms);
     }
 }

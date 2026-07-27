@@ -21,12 +21,16 @@
 
 #include <atomic>
 #include <cassert>
+#include <condition_variable>
+#include <mutex>
 #include <string>
 #include <thread>
 
 class ProgressIndicator {
     const size_t m_n_steps;
     std::atomic<size_t> m_step = 0;
+    mutable std::condition_variable_any m_monitor_condition;
+    mutable std::mutex m_monitor_mutex;
 
 public:
     ProgressIndicator(size_t n_steps);

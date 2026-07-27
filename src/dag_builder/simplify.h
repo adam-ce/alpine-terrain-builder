@@ -1,10 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <variant>
 #include <unordered_set>
 #include <type_traits>
 #include <vector>
 #include <span>
+#include <optional>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
@@ -52,14 +54,47 @@ private:
     explicit VertexLock(T t) : v(std::move(t)) {}
 };
 
+// Target ratio used when neither a ratio nor an error target is specified
+inline constexpr float DEFAULT_TARGET_RATIO = 0.5f;
+
+// Controls how the input cluster's error is combined with the error introduced by this
+// simplification when setting the simplified cluster's error.
+enum class ErrorMode {
+    Overwrite, // keep only this simplification's error, discarding the input error
+    Add,       // add this simplification's error to the input error
+    Max,       // keep the larger of the input error and this simplification's error
+};
+
 struct SimplifyOptions {
-    float target_ratio = 0.5;
-    float absolute_target_error = meshopt::NO_TARGET_ERROR;
+    std::optional<float> target_ratio;
+    std::optional<float> absolute_target_error;
     VertexLock vertex_lock = VertexLock::none();
     float uv_weight = 0.5;
+    ErrorMode error_mode = ErrorMode::Overwrite;
+    // Emit exactly one output cluster per input cluster
+    bool preserve_cluster_count = false;
+
+    // Default options apply a target ratio when no stop condition is specified.
+    static SimplifyOptions defaults() {
+        SimplifyOptions options;
+        options.target_ratio = DEFAULT_TARGET_RATIO;
+        return options;
+    }
 };
 
 namespace detail {
+    inline double combine_error(const ErrorMode mode, const double input_error, const double current_error) {
+        switch (mode) {
+        case ErrorMode::Overwrite:
+            return current_error;
+        case ErrorMode::Add:
+            return input_error + current_error;
+        case ErrorMode::Max:
+            return std::max(input_error, current_error);
+        }
+        return current_error;
+    }
+
     inline std::vector<uint8_t> resolve_vertex_lock(const VertexLock& v, const Clustering& clustering, const Cluster& cluster) {
         constexpr const uint8_t UNLOCKED = VertexLock::UNLOCKED;
         constexpr const uint8_t LOCKED = VertexLock::LOCKED;
@@ -99,7 +134,7 @@ namespace detail {
 [[nodiscard]]
 inline Clustering simplify(
     const Clustering& original_clustering,
-    const SimplifyOptions options = {}
+    const SimplifyOptions options = SimplifyOptions::defaults()
 ) {
     Clustering simplified_clustering;
     simplified_clustering.textures = original_clustering.textures;
@@ -109,6 +144,10 @@ inline Clustering simplify(
     std::vector<glm::vec3> cluster_positions_f;
     std::vector<glm::vec2> cluster_uvs_f;
     std::vector<uint32_t> vertex_remap;
+
+    const float target_ratio = options.target_ratio.value_or(0.0f);
+    const float absolute_target_error = options.absolute_target_error.value_or(meshopt::NO_TARGET_ERROR);
+
     for (const Cluster &original_cluster : original_clustering.clusters) {
         const size_t original_vertex_count = original_cluster.vertex_indices.size();
 
@@ -120,9 +159,16 @@ inline Clustering simplify(
         cluster_positions_f.clear();
         cluster_positions_f.reserve(original_vertex_count);
         to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
-        const float max_extents = glm::compMax(bounds.size());
-        const float relative_target_error = options.absolute_target_error == meshopt::NO_TARGET_ERROR ?
-            meshopt::NO_TARGET_ERROR : options.absolute_target_error / (max_extents * 2);
+        const float max_extents = glm::compMax(bounds.size()) / 2.0f;
+        if (max_extents == 0.0f) {
+            // Empty or degenerate cluster
+            if (options.preserve_cluster_count) {
+                simplified_clustering.clusters.push_back(original_cluster);
+            }
+            continue;
+        }
+        const float relative_target_error = absolute_target_error == meshopt::NO_TARGET_ERROR ?
+            meshopt::NO_TARGET_ERROR : absolute_target_error / max_extents;
 
         // Prepare vertex attributes (uv)
         cluster_uvs_f.clear();
@@ -141,7 +187,11 @@ inline Clustering simplify(
 
         // Perform simplification
         const size_t original_triangle_count = original_cluster.local_triangles.size();
-        const size_t target_triangle_count = static_cast<size_t>(options.target_ratio * original_triangle_count);
+        size_t target_triangle_count = static_cast<size_t>(target_ratio * original_triangle_count);
+        if (options.preserve_cluster_count) {
+            // Keep at least one triangle so the cluster cannot disappear
+            target_triangle_count = std::max(target_triangle_count, size_t{1});
+        }
         meshopt::SimplifyResult result = meshopt::simplify_with_attributes(
             original_cluster.local_triangles,
             cluster_positions_f,
@@ -153,7 +203,10 @@ inline Clustering simplify(
             relative_target_error,
             meshopt_SimplifyErrorAbsolute);
         if (result.triangles.empty()) {
-            // Simplification removed all triangles, go to next cluster
+            // Simplification removed all triangles
+            if (options.preserve_cluster_count) {
+                simplified_clustering.clusters.push_back(original_cluster);
+            }
             continue;
         }
 
@@ -212,21 +265,26 @@ inline Clustering simplify(
             }
         }
         
-        // Make error absolute
-        const float absolute_error = result.relative_error * (max_extents * 2);
+        // Make error absolute and combine with the input cluster's error
+        const double absolute_error = result.relative_error * max_extents;
+        const double combined_error = detail::combine_error(options.error_mode, original_cluster.absolute_error, absolute_error);
 
         // Create new cluster
         Cluster simplified_cluster{
+            .id = original_cluster.id,
             .vertex_indices = std::move(vertex_indices),
             .local_triangles = std::move(local_triangles),
             .uvs = std::move(uvs),
             .texture_id = original_cluster.texture_id,
-            .absolute_error = absolute_error
+            .absolute_error = combined_error
         };
         validate(simplified_cluster, simplified_clustering.positions);
         simplified_clustering.clusters.push_back(std::move(simplified_cluster));
     }
 
+    if (options.preserve_cluster_count) {
+        DEBUG_ASSERT(original_clustering.cluster_count() == simplified_clustering.cluster_count());
+    }
     validate(simplified_clustering);
     return simplified_clustering;
 }

@@ -21,6 +21,10 @@ struct ClusterBatch {
     static ClusterBatch make_leaves(Clustering clustering) {
         return {clustering, {}};
     }
+
+    bool is_leaves() const {
+        return this->child_map.empty();
+    }
 };
 
 /*

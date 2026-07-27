@@ -157,7 +157,7 @@ void duplicate_non_manifold_vertices(
             }
 
             // Collect connected face fans
-            std::unordered_map<uint32_t, std::vector<uint32_t>> face_fans = union_find.get_sets();
+            std::unordered_map<uint32_t, std::vector<uint32_t>> face_fans = union_find.get_sets_as_map();
             const auto largest_fan_it = std::max_element(
                 face_fans.begin(),
                 face_fans.end(),

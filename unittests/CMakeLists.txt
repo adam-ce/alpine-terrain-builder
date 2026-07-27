@@ -51,6 +51,7 @@ add_executable(unittests_terrainlib
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/quantize.cpp
+    terrainlib/range.cpp
     terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp
@@ -89,6 +90,9 @@ endif()
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h
+        dag_builder/fixed_point.cpp
+        dag_builder/merge_clusterings.cpp
+        dag_builder/pull_reproject_texture.cpp
         dag_builder/slice.cpp
     )
     target_link_libraries(unittests_dagbuilder PRIVATE dagbuilderlib Catch2::Catch2WithMain)

@@ -25,7 +25,7 @@ public:
     }
     static VertexMap identity(const std::span<const glm::uvec3> triangles) {
         const auto range = mesh::find_vertex_index_range(triangles);
-        return VertexMap::identity(range.size(), range.min);
+        return VertexMap::identity(range.size(), range.start);
     }
     static VertexMap from_forward(std::vector<uint32_t> forward, const uint32_t offset = 0) {
         return from_forward(OffsetVector(std::move(forward), offset));

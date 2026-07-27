@@ -4,6 +4,7 @@
 
 #include <xatlas/xatlas.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 
 #include "log.h"
 #include "Packer.h"
@@ -37,10 +38,13 @@ inline void normalize_uvs(std::span<glm::dvec2> uvs) {
 
 struct Packer::Impl {
     std::unique_ptr<xatlas::Atlas, decltype(&xatlas::Destroy)> atlas;
+    double total_effective_pixel_area = 0.0;
 
     Impl() : atlas(xatlas::Create(), xatlas::Destroy) {}
 
     void add_uv_mesh(const UvMesh& mesh) {
+        this->total_effective_pixel_area += glm::compMul(glm::dvec2(mesh.texture_size));
+
         std::vector<glm::vec2> scaled_uvs = transform_vector(mesh.uvs, [&](const glm::dvec2 &uv) {
             const glm::dvec2 scaled = uv * glm::dvec2(mesh.texture_size);
             return glm::vec2(scaled);
@@ -87,9 +91,7 @@ struct Packer::Impl {
 
         normalize_uvs(uvs.flat());
 
-        // TODO: return atlas->width and atlas->height or aspect?
-
-        return Packing(uvs);
+        return Packing(uvs, this->atlas->utilization[0]);
     }
 };
 

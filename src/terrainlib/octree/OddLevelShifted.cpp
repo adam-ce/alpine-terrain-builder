@@ -101,13 +101,17 @@ IdRect OddLevelShifted::find_intersecting_standard_nodes(const Id &id) const {
 }
 
 Bounds OddLevelShifted::get_node_bounds_with_children(const Id &id) const {
+    Bounds bounds = this->get_node_bounds(id);
     if (!id.has_children()) {
-        return this->get_node_bounds(id);
+        return bounds;
     }
 
-    const Bounds first_bounds = this->get_node_bounds(id.child(0).value());
-    const Bounds last_bounds = this->get_node_bounds(id.child(7).value());
-    return Bounds(first_bounds.min, last_bounds.max);
+    // The node and its children live in different shifted regions (children are
+    // one level finer, so an odd node has unshifted children and vice versa).
+    // Union both so the bounds cover the node regardless of its level parity.
+    bounds.expand_by(this->get_node_bounds(id.child(0).value()));
+    bounds.expand_by(this->get_node_bounds(id.child(7).value()));
+    return bounds;
 }
 
 Bounds OddLevelShifted::get_node_bounds(const Id &id) const {

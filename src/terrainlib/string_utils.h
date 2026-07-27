@@ -1,10 +1,27 @@
 #pragma once
 
+#include <array>
 #include <charconv>
+#include <cstdio>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <type_traits>
+
+// Format a byte count as a human-readable string, e.g. "1.5 GiB".
+inline std::string human_byte_size(const size_t bytes) {
+    constexpr std::array<const char *, 5> units = {"B", "KiB", "MiB", "GiB", "TiB"};
+    double value = static_cast<double>(bytes);
+    size_t unit = 0;
+    while (value >= 1024.0 && unit + 1 < units.size()) {
+        value /= 1024.0;
+        unit++;
+    }
+    std::array<char, 32> buffer;
+    const char *format = unit == 0 ? "%.0f %s" : "%.1f %s";
+    std::snprintf(buffer.data(), buffer.size(), format, value, units[unit]);
+    return std::string(buffer.data());
+}
 
 template <typename T, typename CharT>
 std::optional<T> from_chars(const std::basic_string_view<CharT> sv) {

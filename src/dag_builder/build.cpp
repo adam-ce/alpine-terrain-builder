@@ -15,7 +15,6 @@
 #include "clusterize.h"
 #include "compact.h"
 #include "encoded.h"
-#include "error_bounds.h"
 #include "int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"
@@ -38,6 +37,7 @@
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
+#include "ContinuationMode.h"
 
 namespace dag {
 
@@ -74,11 +74,11 @@ struct LodResult {
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build child map.
-LodResult build_lod(const Clustering &input, const BuildOptions &options) {
-    const Partitioning partitioning = create_partitioning(input, PartitionOptions{
-                                                                     .clusters_per_partition = options.clusters_per_partition});
+LodResult build_lod(const Clustering &clusters, const BuildOptions &options, const radix::geometry::Aabb3d &node_bounds) {
+    const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
+                                                                        .clusters_per_partition = options.clusters_per_partition});
     // Construct new clusters and generate new textures.
-    Clustering clustering = apply_partitioning(input, partitioning);
+    Clustering clustering = apply_partitioning(clusters, partitioning, options.uv_unwrap_algorithm);
     // Create partition to cluster map
     std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
     for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {
@@ -89,29 +89,36 @@ LodResult build_lod(const Clustering &input, const BuildOptions &options) {
     trim_textures_inplace(clustering);
 
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering);
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, node_bounds);
 
-    // Simplify each cluster
-    clustering = simplify(clustering, SimplifyOptions{
-                                          .target_ratio = options.target_ratio,
-                                          .vertex_lock = VertexLock::mask(vertex_lock)});
+    // Convert relative_target_error (a fraction of the node bounds) to an absolute
+    // error; both targets stay optional so simplify() can apply its own default.
+    std::optional<float> absolute_target_error;
+    if (options.relative_target_error) {
+        const double node_extent = glm::compMax(node_bounds.size());
+        absolute_target_error = static_cast<float>(options.relative_target_error.value() * node_extent);
+    }
+    const SimplifyOptions simplify_options{
+        .target_ratio = options.target_ratio,
+        .absolute_target_error = absolute_target_error,
+        .vertex_lock = VertexLock::mask(vertex_lock),
+        .error_mode = ErrorMode::Add,
+        .preserve_cluster_count = true
+    };
+    clustering = simplify(clustering, simplify_options);
     remove_unused_vertices_inplace(clustering);
 
     // Split each cluster into roughly 4 parts
     auto result = clusterize(clustering);
-    clustering = result.clustering;
 
-    // Build child map
-    std::vector<std::vector<uint32_t>> child_map(clustering.cluster_count());
+    // Build child map. Simplification preserves the cluster count, so each final
+    // cluster's backward mapping index is its partition index.
+    std::vector<std::vector<uint32_t>> child_map(result.clustering.cluster_count());
     for (const auto [final_index, partition_index] : enumerate(result.backward_mapping)) {
-        auto &children = child_map[final_index];
-        const auto &original_clusters = partition_to_clusters[partition_index];
-        for (const uint32_t original_index : original_clusters) {
-            children.push_back(original_index);
-        }
+        child_map[final_index] = partition_to_clusters[partition_index];
     }
 
-    return {clustering, child_map};
+    return {std::move(result.clustering), std::move(child_map)};
 }
 
 // Load input meshes, clusterize, and filter them to the target region.
@@ -157,17 +164,21 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     const std::vector<octree::Id> &dag_ids,
     const RegionFilter &filter,
     const double epsilon,
+    const radix::geometry::Aabb3d &node_bounds,
     const BuildContext &ctx) {
     std::vector<dag::Id> cluster_sources;
     std::vector<Clustering> filtered;
 
     for (const octree::Id &id : dag_ids) {
-        const auto dag_node = ctx.output_storage.load(id);
+        // Load dag node clusters
+        auto dag_node = ctx.output_storage.load(id);
         if (!dag_node) {
             LOG_WARN("Failed to load DAG node {}, skipping", id);
             continue;
         }
         Clustering clustering = std::move(dag_node.value().clustering);
+
+        // Assign canonical cluster ids
         for (auto &[cluster_index, cluster] : enumerate(clustering.clusters)) {
             cluster.id = cluster_sources.size();
             cluster_sources.emplace_back(id, cluster_index);
@@ -177,16 +188,23 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         }
 
         auto indices = find_clusters_matching(clustering, filter);
+        // Find relevant clusters from this node.
         if (indices.empty()) {
             continue;
         }
         filtered.push_back(slice_clusters(clustering, indices));
     }
+    if (filtered.empty()) {
+        return {};
+    }
 
+    // Merge remaining clusterings
     const Clustering merged = merge_clusterings(filtered, epsilon);
 
-    const auto [simplified, child_map] = build_lod(merged, ctx.options);
+    auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
+    // Run nanite-style grouping, simplification, splitting.
 
+    // Create map from cluster index to child cluster id.
     auto child_id_map = transform_vector(child_map, [&](const auto &children) {
         return transform_vector(children, [&](const uint32_t merged_index) {
             const uint32_t source_index = merged.clusters[merged_index].id;
@@ -194,7 +212,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
         });
     });
 
-    return {simplified, std::move(child_id_map)};
+    return {std::move(simplified), std::move(child_id_map)};
 }
 
 // Combine input clusters with inner clusters.
@@ -239,7 +257,7 @@ dag::ClusterBatch combine_input_and_inner(
 
 // Compute epsilon value for merging clusters based on the size of the node bounds.
 double compute_epsilon(const radix::geometry::Aabb3d &bounds) {
-    return glm::compAdd(bounds.size()) / 30000.0;
+    return glm::compAdd(bounds.size()) / 10000;
 }
 
 // Build a single target node by loading input clusters (preserved as-is) and
@@ -254,6 +272,8 @@ std::optional<dag::ClusterBatch> build_node(
     const auto node_bounds = ctx.shifted_space.get_node_bounds(target_id);
     const double epsilon = compute_epsilon(node_bounds);
 
+    // Prepare filter to only include clusters inside the target_id bounds. 
+    // In CurrentAndCoarser mode, input regions represented by the relevant DAG nodes are excluded as well.
     RegionFilter input_filter;
     input_filter.include = {node_bounds};
     if (ctx.options.include_mode == IncludeMode::CurrentAndCoarser) {
@@ -265,8 +285,7 @@ std::optional<dag::ClusterBatch> build_node(
 
     RegionFilter dag_filter;
     dag_filter.include = {node_bounds};
-    dag::ClusterBatch inner = load_and_simplify_dag_nodes(
-        dag_ids, dag_filter, epsilon, ctx);
+    dag::ClusterBatch inner = load_and_simplify_dag_nodes(dag_ids, dag_filter, epsilon, node_bounds, ctx);
 
     if (input_clusters.empty() && inner.clustering.is_empty()) {
         LOG_WARN("No valid clusters for node {}, skipping", target_id);
@@ -313,7 +332,7 @@ std::vector<octree::Id> find_relevant_input_nodes(
     } else if (include_mode == IncludeMode::CurrentAndCoarser) {
         // Include inputs at same or coarser levels whose bounds intersect target_id in the shifted tree.
         const radix::geometry::Aabb3d target_bounds = shifted_space.get_node_bounds(target_id);
-        for (uint32_t level = target_id.level(); level < input_by_level.size(); level++) {
+        for (uint32_t level = 0; level <= target_id.level(); level++) {
             const std::vector<octree::Id> &input_nodes = input_by_level[level];
             for (const octree::Id& input_id : input_nodes) {
                 const radix::geometry::Aabb3d input_bounds = space.get_node_bounds(input_id);
@@ -332,9 +351,9 @@ std::vector<octree::Id> find_relevant_dag_nodes(
     const std::unordered_set<octree::Id> &prev_level_built,
     const octree::OddLevelShifted &shifted_space) {
     std::vector<octree::Id> result;
-    for (const octree::Id &parent : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
-        if (prev_level_built.contains(parent)) {
-            result.push_back(parent);
+    for (const octree::Id &child : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
+        if (prev_level_built.contains(child)) {
+            result.push_back(child);
         }
     }
     return result;
@@ -351,7 +370,10 @@ std::unordered_set<octree::Id> find_nodes_to_build_on_level(
     // Consider input nodes at this level
     const std::span<const octree::Id> level_input_ids = input_by_level[level];
     for (const octree::Id &input_id : level_input_ids) {
-        target_set.insert(input_id);
+        const octree::IdRect shifted_nodes = ctx.shifted_space.find_intersecting_nodes_for_standard_id(input_id);
+        for (const octree::Id &shifted_id : shifted_nodes) {
+            target_set.insert(shifted_id);
+        }
     }
 
     // Consider parents of previously built nodes
@@ -438,12 +460,16 @@ std::unordered_set<octree::Id> build_level(
     LOG_INFO("Building level {} ({} targets)", level, targets.size());
 
     std::unordered_set<octree::Id> already_built;
-    if (ctx.options.resume) {
+    if (ctx.options.continuation_mode != ContinuationMode::Overwrite) {
         for (const octree::Id &target : targets) {
             if (ctx.output_storage.has(target)) {
                 already_built.insert(target);
             }
         }
+    }
+
+    if (ctx.options.continuation_mode == ContinuationMode::Error && already_built.empty()) {
+        LOG_ERROR_AND_EXIT("Found some of target nodes already in built in the output directory, use --resume or --overwrite");
     }
 
     // Initialize debug storage if requested (contains .glb meshes)
@@ -458,33 +484,28 @@ std::unordered_set<octree::Id> build_level(
     tbb::concurrent_vector<octree::Id> saved_ids;
 
     ProgressIndicator progress(targets.size());
-    for (size_t i = 0; i < already_built.size(); i++) {
-        progress.task_finished();
-    }
     auto progress_thread = progress.start_monitoring();
 
     parallel_foreach(targets, [&](const octree::Id &target) {
         if (already_built.contains(target)) {
+            progress.task_finished();
             return;
         }
 
         const auto dag_ids = find_value(inner_nodes, target).value_or(std::vector<octree::Id>{});
         const auto target_input_ids = find_value(input_sources, target).value_or(std::vector<octree::Id>{});
 
-        auto result = build_node(
-            target,
-            target_input_ids,
-            dag_ids,
-            ctx);
-
+        auto result = build_node(target, target_input_ids, dag_ids, ctx);
         if (result) {
             const auto save_result = ctx.output_storage.save(target, *result);
-            DEBUG_ASSERT(save_result.has_value());
-            ALP_UNUSED(save_result);
-            if (debug_storage) {
-                debug_storage->save(target, clustering_to_mesh(result->clustering));
+            if (save_result) {
+                if (debug_storage) {
+                    debug_storage->save(target, clustering_to_mesh(result->clustering));
+                }
+                saved_ids.push_back(target);
+            } else {
+                LOG_ERROR("Failed to save node {}: {}", target, save_result.error());
             }
-            saved_ids.push_back(target);
         }
         progress.task_finished();
     }, ctx.options.parallelize);
@@ -506,7 +527,7 @@ void build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,
-    const Range<uint32_t> &level_range) {
+    const AnyRange<uint32_t> &level_range) {
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
     const octree::Space space = octree::Space::earth();
     const octree::Id root_node = options.root_node;
@@ -522,16 +543,24 @@ void build_levels(
     const uint32_t max_input_level = max_input_level_opt.value();
 
     const Range<uint32_t> valid_range{root_node.level(), max_input_level + 1};
-    const Range<uint32_t> range = valid_range.intersection(level_range);
-    if (range.empty()) {
+    const Range<uint32_t> range = valid_range.intersect(level_range).to_range(max_input_level + 1);
+    if (range.is_empty()) {
         LOG_WARN("Requested level range does not overlap with buildable levels {}-{}", root_node.level(), max_input_level);
         return;
     }
 
+    // Seed prev_level_built with any already-built nodes one level finer than the first level.
+    // TODO: use hierachical lookup here based on root_bounds and IdRect
+    std::unordered_set<octree::Id> prev_level_built;
+    for (const auto &[id, status] : output_storage.index()) {
+        if (id.level() == range.end && status != octree::NodeStatus::Virtual) {
+            prev_level_built.insert(id);
+        }
+    }
+
     BuildContext ctx{input_storage, ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
 
-    std::unordered_set<octree::Id> prev_level_built;
-    for (uint32_t level = range.max; level-- > range.min;) {
+    for (uint32_t level = range.end; level-- > range.start;) {
         prev_level_built = build_level(
             level,
             input_by_level,
@@ -547,7 +576,7 @@ void build_full(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options) {
-    build_levels(input_storage, output_storage, options, full_range<uint32_t>());
+    build_levels(input_storage, output_storage, options, RangeFull{});
 }
 
 } // namespace dag

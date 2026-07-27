@@ -8,6 +8,7 @@
 #include <meshoptimizer.h>
 
 #include "glm_utils.h"
+#include "range_utils.h"
 
 namespace meshopt {
 
@@ -212,7 +213,7 @@ inline PartitionClustersResult partition_clusters(
     const size_t cluster_count = cluster_vertex_counts.size();
     std::vector<uint32_t> partitions(cluster_count);
 
-    const size_t total_index_count = std::accumulate(cluster_vertex_counts.begin(), cluster_vertex_counts.end(), 0u);
+    const size_t total_index_count = sum(cluster_vertex_counts, size_t{0});
     const std::span<const float> positions_flat = flatten(vertex_positions);
 
     const size_t partition_count = meshopt_partitionClusters(

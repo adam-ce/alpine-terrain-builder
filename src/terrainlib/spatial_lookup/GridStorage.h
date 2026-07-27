@@ -135,22 +135,22 @@ public:
 
     template <typename Func>
     bool for_all_in_cell(const CellIndex index, Func &&func) const {
-        if (!this->is_valid_cell_index(index)) {
-            return false;
-        }
-
-        const Cell &cell = this->_data[index];
-        for (const Item &item : cell.items) {
-            func(item.point, item.value);
-        }
-
-        return !cell.items.empty();
+        return for_all_in_cell_impl(*this, index, std::forward<Func>(func));
     }
+
     template <typename Func>
     bool for_all_in_cell(const CellIndex index, Func &&func) {
-        return const_cast<const Self *>(this)->for_all_in_cell(index, [&](const Vec &vec, const Value &value) {
-            func(vec, const_cast<Value &>(value));
-        });
+        return for_all_in_cell_impl(*this, index, std::forward<Func>(func));
+    }
+
+    template <typename Func>
+    bool for_all_points(Func &&func) const {
+        return for_all_points_impl(*this, std::forward<Func>(func));
+    }
+
+    template <typename Func>
+    bool for_all_points(Func &&func) {
+        return for_all_points_impl(*this, std::forward<Func>(func));
     }
 
     [[nodiscard]] Vec cell_size() const {
@@ -167,6 +167,33 @@ private:
     Vec _origin;
     Vec _size;
     glm::vec<n_dims, uint32_t> _divisions;
+
+    template <typename SelfT, typename Func>
+    static bool for_all_in_cell_impl(SelfT &self, const CellIndex index, Func &&func) {
+        using ValueRef = std::conditional_t<std::is_const_v<SelfT>, const Value &, Value &>;
+
+        if (!self.is_valid_cell_index(index)) {
+            return false;
+        }
+
+        auto &cell = self._data[index];
+        for (auto &item : cell.items) {
+            func(item.point, static_cast<ValueRef>(item.value));
+        }
+        return !cell.items.empty();
+    }
+
+    template <typename SelfT, typename Func>
+    static bool for_all_points_impl(SelfT &self, Func &&func) {
+        using ValueRef = std::conditional_t<std::is_const_v<SelfT>, const Value &, Value &>;
+
+        for (auto &cell : self._data) {
+            for (auto &item : cell.items) {
+                func(item.point, static_cast<ValueRef>(item.value));
+            }
+        }
+        return self._point_count > 0;
+    }
 
     // static_assert(CellBasedStorage<Self, n_dims, Component, Value>);
 };

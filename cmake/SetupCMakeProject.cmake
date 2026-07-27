@@ -37,7 +37,7 @@ function(_alp_build_and_install NAME SRC_DIR BUILD_DIR INSTALL_DIR)
                 "-DCMAKE_EXE_LINKER_FLAGS=${CMAKE_EXE_LINKER_FLAGS} ${_alp_sanitizer_flags}"
                 "-DCMAKE_MODULE_LINKER_FLAGS=${CMAKE_MODULE_LINKER_FLAGS} ${_alp_sanitizer_flags}"
                 "-DCMAKE_SHARED_LINKER_FLAGS=${CMAKE_SHARED_LINKER_FLAGS} ${_alp_sanitizer_flags}"
-                -DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}
+                "-DCMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}"
                 -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
                 -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                 ${ARGN}

@@ -475,6 +475,18 @@ Codec settings that do not change `paths()`, such as compression level or
 JPEG quality, do not force re-encoding by default. A caller that needs those
 settings applied to every node passes `force_reencode = true`.
 
+Hard-link rules:
+
+- never modify an existing linked payload in place;
+- a matching codec path list hard-links every file;
+- a different path list decodes with the input codec and encodes with the
+  output codec;
+- `force_reencode` always selects decode/encode;
+- hard-link failure is explicit;
+- 2D snapshot tools preflight that source and destination support hard links
+  before a long operation starts; and
+- no silent file-copy fallback is introduced.
+
 #### Shared subtree copier
 
 Move the payload-neutral traversal in
@@ -587,18 +599,6 @@ the codec's runtime exception. Assertions remain appropriate for internal
 invariants, but filesystem conditions, unsupported conversions, malformed
 datasets, and overwrite conflicts are operational errors rather than
 assertion failures.
-
-Hard-link rules:
-
-- never modify an existing linked payload in place;
-- a matching codec path list hard-links every file;
-- a different path list decodes with the input codec and encodes with the
-  output codec;
-- `force_reencode` always selects decode/encode;
-- hard-link failure is explicit;
-- 2D snapshot tools preflight that source and destination support hard links
-  before a long operation starts; and
-- no silent file-copy fallback is introduced.
 
 ### Paired hierarchy walking
 

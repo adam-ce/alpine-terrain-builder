@@ -20,7 +20,6 @@ struct Args {
     unsigned int srs;
     std::filesystem::path output;
     spdlog::level::level_enum log_level;
-    bool early_skip;
     std::optional<unsigned int> max_zoom_level;
 };
 

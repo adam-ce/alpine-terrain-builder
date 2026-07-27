@@ -18,8 +18,6 @@ int main(int argc, char *argv[]) {
 
     const radix::tile::Id root_id = {args.zoom, {args.x, args.y}};
 
-    TileDownloader downloader(url_builder, args.output, args.early_skip, args.max_zoom_level, root_id.zoom_level);
-    downloader.download_recursive(root_id);
-
-    return 0;
+    TileDownloader downloader(url_builder, args.output, args.max_zoom_level, root_id.zoom_level);
+    return downloader.download_recursive(root_id) ? 0 : 1;
 }

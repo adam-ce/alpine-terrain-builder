@@ -90,6 +90,7 @@ endif()
 if(TARGET tile-downloader)
     find_package(CURL REQUIRED)
     add_executable(unittests_tile_downloader
+        tile_downloader/downloader.cpp
         tile_downloader/http_client.cpp
         tile_downloader/logger.cpp
         tile_downloader/url_builder.cpp

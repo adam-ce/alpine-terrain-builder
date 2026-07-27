@@ -29,17 +29,40 @@ inline void write_file_checked_direct(const std::filesystem::path &path, const s
 
 }
 
-inline void write_file_checked(const std::filesystem::path &path, const std::vector<char> &data)
+[[nodiscard]] inline std::filesystem::path partial_tile_path(const std::filesystem::path &path)
 {
-    auto staging_path = path;
-    staging_path += ".part";
+    auto partial_path = path;
+    partial_path += ".part";
+    return partial_path;
+}
+
+[[nodiscard]] inline std::filesystem::path children_pending_tile_path(const std::filesystem::path &path)
+{
+    auto pending_path = path;
+    pending_path += ".children-pending";
+    return pending_path;
+}
+
+inline void write_file_children_pending(const std::filesystem::path &path, const std::vector<char> &data)
+{
+    const auto partial_path = partial_tile_path(path);
+    const auto pending_path = children_pending_tile_path(path);
 
     try {
-        tile_downloader_detail::write_file_checked_direct(staging_path, data);
-        std::filesystem::rename(staging_path, path);
+        tile_downloader_detail::write_file_checked_direct(partial_path, data);
+        std::filesystem::rename(partial_path, pending_path);
     } catch (...) {
         std::error_code cleanup_error;
-        std::filesystem::remove(staging_path, cleanup_error);
+        std::filesystem::remove(partial_path, cleanup_error);
         throw;
     }
+}
+
+inline void mark_tile_children_complete(
+    const std::filesystem::path &path,
+    std::filesystem::file_time_type completion_time)
+{
+    const auto pending_path = children_pending_tile_path(path);
+    std::filesystem::last_write_time(pending_path, completion_time);
+    std::filesystem::rename(pending_path, path);
 }

@@ -20,6 +20,7 @@
 
 struct TileResult {
     struct Downloaded {};
+    struct ChildrenPending {};
     struct Skipped {};
     struct Absent {};
     struct HttpError { long status_code; };
@@ -27,7 +28,7 @@ struct TileResult {
     struct CurlError { CURLcode code; };
     struct TimedOut {};
 
-    using Status = std::variant<Downloaded, Skipped, Absent, HttpError, BadContentType, CurlError, TimedOut>;
+    using Status = std::variant<Downloaded, ChildrenPending, Skipped, Absent, HttpError, BadContentType, CurlError, TimedOut>;
 };
 
 class TileLogger {

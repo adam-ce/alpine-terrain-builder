@@ -54,10 +54,6 @@ Args parse(int argc, const char *const *argv) {
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
         ->default_val(spdlog::level::info);
 
-    args.early_skip = true;
-    app.add_option("--early-skip", args.early_skip, "Resume optimization: skip completed subtrees")
-        ->default_val(true);
-
     app.add_option("--max-zoom-level", args.max_zoom_level, "Maximum zoom level to descend to");
 
     try {

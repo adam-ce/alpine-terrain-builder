@@ -410,7 +410,40 @@ step; a destructor must not make an incomplete snapshot authoritative.
 
 ### Copying and unchanged-subtree reuse
 
-Keep `Storage::copy_from()` close to its current role. Add:
+There are two separate responsibilities in the current implementation:
+
+1. `sf_merger::NodeWriter` traverses a source subtree and decides which
+   indexed nodes to reuse.
+2. `octree::Storage::copy_from()` delegates to
+   `octree::RawStorage::copy_from()`, where
+   `std::filesystem::create_hard_link()` performs the actual hard link and the
+   target index is updated on success.
+
+The filesystem hard-link implementation is therefore already in terrainlib.
+This refactor shall move the payload-neutral subtree traversal and copy
+orchestration out of `sf_merger`.
+
+The current call chain is:
+
+```text
+sf_merger decides to keep a source subtree unchanged
+    -> NodeWriter traverses the source index
+    -> octree::Storage::copy_from()
+    -> octree::RawStorage::copy_from()
+    -> create_hard_link(), or decode/encode when formats differ
+```
+
+The target call chain becomes:
+
+```text
+merge policy decides to keep a source subtree unchanged
+    -> store::copy_subtree()
+    -> store::Storage::copy_from()
+    -> hard-link every codec path, or decode/encode
+```
+
+`Storage::copy_from()` remains the operation for copying one logical node.
+Add:
 
 ```cpp
 struct CopyOptions {
@@ -442,17 +475,118 @@ Codec settings that do not change `paths()`, such as compression level or
 JPEG quality, do not force re-encoding by default. A caller that needs those
 settings applied to every node passes `force_reencode = true`.
 
-Move payload-neutral subtree copying out of `sf_merger::NodeWriter`. The
-shared operation:
+#### Shared subtree copier
+
+Move the payload-neutral traversal in
+`sf_merger::NodeWriter::copy_subtree_to_output()` to a shared operation such
+as:
+
+```cpp
+std::expected<void, CopyError>
+store::copy_subtree(
+    const IndexedStorage& source,
+    Storage& target,
+    const Key& root,
+    CopyOptions options = {});
+```
+
+The shared operation:
 
 1. traverses an indexed source subtree;
 2. skips `Virtual` nodes;
 3. calls `copy_from()` for physical payloads in both `Leaf` and `Inner`
-   states; and
-4. propagates errors instead of asserting or terminating.
+   states;
+4. continues traversal below `Inner` nodes; and
+5. returns copy failures to its caller instead of converting them into an
+   assertion or immediate process termination.
 
-This fixes the current incorrect assumption that every non-virtual visited
-node is a `Leaf`.
+The operation is payload-neutral because it only interprets hierarchy status
+and delegates each physical node to `Storage::copy_from()`. It does not know
+about meshes, rasters, masks, attribution, or their encodings.
+
+#### `Leaf`, `Inner`, and `Virtual`
+
+The sparse index distinguishes payload presence from descendant presence:
+
+| Status | Physical payload | Indexed descendants |
+|---|---:|---:|
+| `Leaf` | yes | no |
+| `Inner` | yes | yes |
+| `Virtual` | no | yes |
+
+`Missing` is represented by absence from the sparse index and is not visited
+by subtree traversal.
+
+The current `NodeWriter` callback effectively does:
+
+```cpp
+if (status == NodeStatus::Virtual) {
+    return;
+}
+
+DEBUG_ASSERT(status == NodeStatus::Leaf);
+DEBUG_ASSERT_VAL(target.copy_from(id, source));
+```
+
+The `DEBUG_ASSERT(status == Leaf)` is an incorrect assumption. `Inner` is
+also a physical state and its payload must be copied. The existing
+`IndexMap::add()` creates an `Inner` node whenever a physical `Leaf` gains a
+physical descendant. Such a hierarchy is valid in 3D and is explicitly
+required for raster-fundamentalis, where a coarse physical tile may coexist
+with more accurate descendants.
+
+For example:
+
+```text
+zoom 10 physical tile       -> Inner
+└── zoom 11 physical tile   -> Leaf
+```
+
+Reusing this subtree must preserve both payloads. Skipping the `Inner`
+payload would lose the coarse fallback; asserting on `Inner` rejects a valid
+hierarchy.
+
+The shared copier shall instead handle status as:
+
+```cpp
+switch (status) {
+case NodeStatus::Virtual:
+    break;
+case NodeStatus::Leaf:
+case NodeStatus::Inner:
+    target.copy_from(id, source, options);
+    break;
+}
+```
+
+Traversal shall continue below the `Inner` node. Copying the parent first adds it
+to the target as a `Leaf`; copying its descendant then promotes the parent to
+`Inner`, reconstructing the source topology through the normal index
+transitions.
+
+The existing paired merger has a related limitation: its dispatcher only
+handles `Missing`, `Leaf`, and `Virtual` pairs and sends any pair containing
+`Inner` to `UNREACHABLE()`. The paired hierarchy-walking work below must
+handle or explicitly reject all 16 status combinations without treating
+valid input data as an impossible program state.
+
+#### Error propagation
+
+The lower storage layer already represents ordinary copy failures, including
+missing source files, directory creation failure, hard-link failure, decode
+failure, and encode failure. The current `NodeWriter` consumes
+`Storage::copy_from()` with `DEBUG_ASSERT_VAL`, while some overwrite paths
+terminate through `LOG_ERROR_AND_EXIT()`. Because
+`copy_subtree_to_output()` returns `void`, the merge caller cannot report or
+handle these failures.
+
+The shared copier must return the failure through `copy_subtree()` and the
+merge call chain until the application boundary can report it with the
+affected key and path. An unsupported codec read or write may propagate as
+the codec's runtime exception. Assertions remain appropriate for internal
+invariants, but filesystem conditions, unsupported conversions, malformed
+datasets, and overwrite conflicts are operational errors rather than
+assertion failures.
 
 Hard-link rules:
 

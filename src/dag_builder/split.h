@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cmath>
-#include <type_traits>
 #include <vector>
 
 #include <libassert/assert.hpp>
@@ -17,33 +16,6 @@
 #include "utils.h"
 #include "validate.h"
 
-namespace {
-template <typename A, typename B>
-inline constexpr auto int_div_ceil(A a, B b) {
-    static_assert(std::is_integral_v<A>);
-    static_assert(std::is_integral_v<B>);
-    using T = std::conditional_t<(sizeof(A) >= sizeof(B)), A, B>;
-    ASSERT(b != 0);
-
-    const T a_t = static_cast<T>(a);
-    const T b_t = static_cast<T>(b);
-    const T q = a_t / b_t;
-    const T r = a_t % b_t;
-
-    // Exact division -> already the ceiling
-    if (r == 0) {
-        return q;
-    }
-
-    // Same sign
-    if ((a > 0 && b > 0) || (a < 0 && b < 0)) {
-        return q + 1;
-    }
-
-    // Opposite signs -> truncation toward zero already gave the ceiling
-    return q;
-}
-}
 
 template <Size S>
 inline Clustering split_each_into_equal_parts(const Clustering &input, const S num_parts) {
@@ -66,10 +38,10 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
         const bool has_uvs = !cluster.uvs.empty();
 
         // Ensure we can meaningfully split triangles and vertices
-        ASSERT(triangle_count >= num_parts && "Cluster has fewer triangles than requested parts");
-        ASSERT(vertex_count >= num_parts && "Cluster has fewer vertices than requested parts");
+        ASSERT(triangle_count >= num_parts, "Cluster has fewer triangles than requested parts");
+        ASSERT(vertex_count >= num_parts, "Cluster has fewer vertices than requested parts");
 
-        // Initialize eptr and eind based on the triangle data<
+        // Initialize eptr and eind based on the triangle data
         std::vector<idx_t> eptr(triangle_count + 1); // Offsets in eind where faces start/end
         std::vector<idx_t> eind(triangle_count * 3); // Indices into vertex array
 
@@ -137,7 +109,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
             const uint32_t partition_index = epart[i];
             Cluster &partition = partitions[partition_index];
             glm::uvec3 triangle = cluster.local_triangles[i];
-            for (uint8_t k=0; k<3; k++) {
+            for (uint8_t k = 0; k < 3; k++) {
                 const uint32_t original_index = triangle[k];
                 uint32_t &new_index = remap[partition_index][original_index];
                 if (new_index == invalid_remap) {

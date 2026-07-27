@@ -68,18 +68,36 @@ public:
         return for_all_in_cell_impl(*this, index, std::forward<Func>(func));
     }
 
+    template <typename Func>
+    bool for_all_points(Func &&func) const {
+        return for_all_points_impl(*this, std::forward<Func>(func));
+    }
+
+    template <typename Func>
+    bool for_all_points(Func &&func) {
+        return for_all_points_impl(*this, std::forward<Func>(func));
+    }
+
 private:
     template <typename SelfT, typename Func>
     static bool for_all_in_cell_impl(SelfT &self, const CellIndex &index, Func &&func) {
         auto [begin, end] = self._store.equal_range(index.quantized);
 
         bool any_found = false;
-
         for (auto it = begin; it != end; ++it) {
             any_found = true;
             func(it->first, it->second);
         }
+        return any_found;
+    }
 
+    template <typename SelfT, typename Func>
+    static bool for_all_points_impl(SelfT &self, Func &&func) {
+        bool any_found = false;
+        for (auto &[point, value] : self._store) {
+            any_found = true;
+            func(point, value);
+        }
         return any_found;
     }
 

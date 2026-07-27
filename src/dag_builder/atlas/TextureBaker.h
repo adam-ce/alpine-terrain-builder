@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
 #include <cstddef>
@@ -12,10 +13,12 @@
 
 #include <opencv2/opencv.hpp>
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 
 #include "atlas/Packer.h"
 #include "atlas/pull_reproject_texture.h"
 #include "mesh/bounds.h"
+#include "number_utils.h"
 #include "opencv_utils.h"
 #include "range_utils.h"
 #include "TextureSet.h"
@@ -84,12 +87,24 @@ inline glm::uvec2 get_effective_texture_size(const TextureMap &map) {
 inline glm::uvec2 get_effective_texture_size(const TextureComposition &comp) {
     double area = 0;
     for (const auto &map : comp.maps) {
-        const auto size = get_effective_texture_size(map);
-        area += size.x * size.y;
+        area += glm::compMul(glm::dvec2(get_effective_texture_size(map)));
     }
     return glm::uvec2(std::ceil(std::sqrt(area)));
 }
 } // namespace detail
+
+// Resolution needed to give a compression_ratio fraction of effective_pixel_area
+// worth of resolution, after accounting for atlas packing waste (unused texels
+// between packed charts), capped at max_texture_size.
+inline glm::uvec2 compute_bake_texture_size(const double effective_pixel_area, const float utilization, const double compression_ratio, const uint32_t max_texture_size) {
+    const double target_area = effective_pixel_area * compression_ratio / std::max<double>(utilization, 1e-3);
+    const uint32_t side = static_cast<uint32_t>(std::ceil(std::sqrt(target_area)));
+    return glm::uvec2(std::min(next_power_of_two(side), max_texture_size));
+}
+
+inline glm::uvec2 compute_bake_texture_size(const atlas::Packing &packing, const double compression_ratio, const uint32_t max_texture_size) {
+    return compute_bake_texture_size(packing.effective_pixel_area(), packing.utilization(), compression_ratio, max_texture_size);
+}
 
 class TextureBaker {
 public:
@@ -128,36 +143,72 @@ public:
         return id;
     }
 
-    TextureCake bake(const glm::uvec2 texture_size) {
-        if (this->_entries.size() == 1) {
-            return this->bake_single(this->_entries.front(), texture_size);
-        } else {
-            return this->bake_multi(texture_size);
-        }
+    // Exact output resolution.
+    TextureCake bake(const glm::uvec2 texture_size) const {
+        return this->bake(this->pack(), texture_size);
     }
 
-private:
-    using Entry = std::variant<TexturedMesh, TextureComposition>;
+    // Runs atlas packing (chart computation for multi-mesh atlases; a cheap
+    // passthrough for a single entry). Callers that need packing.utilization()
+    // or packing.effective_pixel_area() to choose an output resolution should
+    // call this once and pass the result to bake(packing, texture_size) below,
+    // rather than letting bake(texture_size) compute it again.
+    atlas::Packing pack() const {
+        if (this->_entries.size() == 1) {
+            return this->pack_single(this->_entries.front());
+        }
 
-    TextureCake bake_multi(const glm::uvec2 texture_size) const {
+        atlas::Packer packer;
+
+        std::vector<glm::uvec3> target_triangles;
+        for (const Entry& entry : this->_entries) {
+            visit_entry(entry,
+                [&](const TexturedMesh& mesh) {
+                    packer.add_uv_mesh(mesh.triangles, mesh.map.uvs, detail::get_effective_texture_size(mesh.map));
+                },
+                [&](const TextureComposition& comp) {
+                    target_triangles.clear();
+                    target_triangles.reserve(comp.triangles.size());
+                    for (const MappedTriangle &triangle : comp.triangles) {
+                        target_triangles.push_back(triangle.target);
+                    }
+                    packer.add_uv_mesh(
+                        target_triangles,
+                        comp.target_uvs,
+                        detail::get_effective_texture_size(comp)
+                    );
+                });
+        }
+
+        return packer.pack();
+    }
+
+    // Bakes using an already-computed packing (e.g. from pack()), so no atlas repacking happens.
+    TextureCake bake(const atlas::Packing &packing, const glm::uvec2 texture_size) const {
+        if (this->_entries.size() == 1) {
+            return visit_entry<TextureCake>(this->_entries.front(),
+                [&](const TexturedMesh &mesh) {
+                    TextureCake cake;
+                    cake._packing = packing;
+                    cake._texture = rescale_texture(mesh.map.texture, texture_size);
+                    return cake;
+                },
+                [&](const TextureComposition &) {
+                    TextureCake cake;
+                    cake._packing = packing;
+                    cake._texture = this->bake_texture(cake._packing, texture_size);
+                    return cake;
+                });
+        }
+
         TextureCake cake;
-        cake._packing = this->pack();
+        cake._packing = packing;
         cake._texture = this->bake_texture(cake._packing, texture_size);
         return cake;
     }
 
-    TextureCake bake_single(const Entry &entry, const glm::uvec2 texture_size) const {
-        return visit_entry<TextureCake>(entry,
-            [&](const TexturedMesh &mesh) {
-                TextureCake cake;
-                cake._packing = this->pack_single(mesh);
-                cake._texture = rescale_texture(mesh.map.texture, texture_size);
-                return cake;
-            },
-            [&](const TextureComposition &) {
-                return this->bake_multi(texture_size);
-            });
-    }
+private:
+    using Entry = std::variant<TexturedMesh, TextureComposition>;
 
     Texture bake_texture(const atlas::Packing &packing, const glm::uvec2 texture_size) const {
         TextureReprojector reprojector(texture_size, CV_8UC3);
@@ -233,43 +284,24 @@ private:
     }
 
     atlas::Packing pack_single(const Entry &entry) const {
+        const double area = effective_pixel_area(entry);
         return visit_entry<atlas::Packing>(entry,
             [&](const TexturedMesh &mesh) {
-                return atlas::Packing(mesh.map.uvs);
+                return atlas::Packing(mesh.map.uvs, area);
             },
             [&](const TextureComposition &comp) {
-                return atlas::Packing(comp.target_uvs);
+                return atlas::Packing(comp.target_uvs, area);
             });
     }
 
-    atlas::Packing pack() const {
-        if (this->_entries.size() == 1) {
-            return this->pack_single(this->_entries.front());
-        }
-
-        atlas::Packer packer;
-
-        std::vector<glm::uvec3> target_triangles;
-        for (const Entry& entry : this->_entries) {
-            visit_entry(entry,
-                [&](const TexturedMesh& mesh) {
-                    packer.add_uv_mesh(mesh.triangles, mesh.map.uvs, detail::get_effective_texture_size(mesh.map));
-                },
-                [&](const TextureComposition& comp) {
-                    target_triangles.clear();
-                    target_triangles.reserve(comp.triangles.size());
-                    for (const MappedTriangle &triangle : comp.triangles) {
-                        target_triangles.push_back(triangle.target);
-                    }
-                    packer.add_uv_mesh(
-                        target_triangles,
-                        comp.target_uvs,
-                        detail::get_effective_texture_size(comp)
-                    );
-                });
-        }
-
-        return packer.pack();
+    static double effective_pixel_area(const Entry &entry) {
+        return visit_entry<double>(entry,
+            [](const TexturedMesh &mesh) {
+                return glm::compMul(glm::dvec2(detail::get_effective_texture_size(mesh.map)));
+            },
+            [](const TextureComposition &comp) {
+                return glm::compMul(glm::dvec2(detail::get_effective_texture_size(comp)));
+            });
     }
 
     template <class R = void, class MeshFn, class CompFn>

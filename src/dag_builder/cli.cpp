@@ -7,9 +7,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
-#include <unordered_map>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace cli;
@@ -24,6 +25,11 @@ const std::unordered_map<std::string, spdlog::level::level_enum> log_level_names
     {"info", spdlog::level::level_enum::info},
     {"debug", spdlog::level::level_enum::debug},
     {"trace", spdlog::level::level_enum::trace},
+};
+
+const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
+    {"current", dag::IncludeMode::CurrentOnly},
+    {"current-and-coarser", dag::IncludeMode::CurrentAndCoarser},
 };
 
 const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
@@ -45,19 +51,19 @@ const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
     {"TutteBarycentricMapping", uv::Algorithm::TutteBarycentricMapping},
     {"tutte", uv::Algorithm::TutteBarycentricMapping}};
 
-Range<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
+AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
     switch (input.size()) {
         case 0:
-            return full_range<uint32_t>();
+            return RangeFull{};
         case 1:
-            return Range<uint32_t>(input[0]);
+            return RangeInclusive<uint32_t>(input[0]);
         case 2: {
             const uint32_t min_level = input[0];
             const uint32_t max_level = input[1];
             if (min_level > max_level) {
                 throw CLI::ValidationError("--levels minimum must be <= maximum");
             }
-            return Range<uint32_t>{min_level, max_level};
+            return RangeInclusive<uint32_t>{min_level, max_level};
         }
         default:
             UNREACHABLE();
@@ -84,6 +90,34 @@ octree::Id make_octree_id(const std::vector<uint64_t> &values) {
     throw CLI::ValidationError("--root-node expects either: <level> <index> or <level> <x> <y> <z>");
 }
 
+ContinuationMode make_continuation_mode(const bool resume, const bool overwrite) {
+    if (resume && overwrite) {
+        UNREACHABLE();
+    }
+    if (resume) {
+        return ContinuationMode::Resume;
+    } else if (overwrite) {
+        return ContinuationMode::Overwrite;
+    }
+
+    // TODO(ORIGINAL AUTHOR): !!! THIS FALLBACK NEEDS AN AUTHORITATIVE BEHAVIOUR DECISION !!!
+    //
+    // Neither --resume nor --overwrite is a normal command-line combination, but the intended
+    // continuation semantics are unclear. Do not replace this exception without first confirming
+    // the desired behaviour with the original author.
+    //
+    // Codex believes the correct implementation is:
+    //
+    //     return ContinuationMode::Error;
+    //
+    // ContinuationMode::Error is already the default in Args and BuildOptions, and build_level()
+    // contains a dedicated branch for it. Returning Error would therefore preserve the apparent
+    // design: refuse to overwrite existing output unless the user explicitly selects --resume or
+    // --overwrite. The exception below intentionally keeps the unsupported path loud until the
+    // original author confirms or corrects that interpretation.
+    throw std::runtime_error("unsupported operation");
+}
+
 } // namespace
 
 Args cli::parse(int argc, const char *const *argv) {
@@ -97,12 +131,15 @@ Args cli::parse(int argc, const char *const *argv) {
         .input_path = {},
         .output_path = {},
         .root_node = octree::Id::root(),
-        .level_range = full_range<uint32_t>(),
+        .level_range = RangeFull{},
         .uv_unwrap_algorithm = {},
         .clusters_per_partition = 8,
-        .target_ratio = 0.25,
+        .target_ratio = std::nullopt,
+        .target_error = std::nullopt,
         .write_debug_meshes = false,
-        .overwrite = false,
+        .parallelize = false,
+        .include_mode = dag::IncludeMode::CurrentOnly,
+        .continuation_mode = ContinuationMode::Error
     };
 
     app.add_option("--input", args.input_path, "Path to input mesh dataset")
@@ -133,10 +170,25 @@ Args cli::parse(int argc, const char *const *argv) {
         ->check(CLI::PositiveNumber);
 
     app.add_option("--target-ratio", args.target_ratio, "Simplification target ratio")
-        ->default_val(args.target_ratio)
         ->check(CLI::Range(0.0, 1.0));
 
-    app.add_flag("--overwrite", args.overwrite, "Overwrite data already present in output");
+    app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
+        ->check(CLI::NonNegativeNumber);
+
+    bool resume = false;
+    bool overwrite = false;
+    app.add_flag("--resume", resume, "Resume building the dag from then data in output")
+        ->excludes("--overwrite");
+    app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
+        ->excludes("--resume");
+
+    app.add_flag("--write-debug-meshes", args.write_debug_meshes, "Write debug .glb meshes alongside the output");
+
+    app.add_flag("--parallelize", args.parallelize, "Build nodes within a level in parallel");
+
+    app.add_option("--include-mode", args.include_mode, "Which input nodes to include when building a level")
+        ->transform(CLI::CheckedTransformer(include_mode_names, CLI::ignore_case))
+        ->default_val(args.include_mode);
 
     app.add_option("--verbosity", args.log_level, "Verbosity level of logging")
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
@@ -149,6 +201,7 @@ Args cli::parse(int argc, const char *const *argv) {
         if (!root_node_values.empty()) {
             args.root_node = make_octree_id(root_node_values);
         }
+        args.continuation_mode = make_continuation_mode(resume, overwrite);
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));
     }

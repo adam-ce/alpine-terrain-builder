@@ -57,7 +57,7 @@ void export_storage_folder(const cli::Args &args) {
             continue;
         }
 
-        const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering, true);
+        const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
         const auto save_result = output_storage.save(id, mesh);
         if (!save_result.has_value()) {

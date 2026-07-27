@@ -25,12 +25,13 @@
 #include "mesh/split.h"
 #include "mesh/topology.h"
 #include "opencv_utils.h"
-#include "partition.h"
 #include "range_utils.h"
 #include "uv/unwrap.h"
 #include "vector_utils.h"
 #include "atlas/TextureBaker.h"
 #include "TinyVector.h"
+#include "Partitioning.h"
+
 
 namespace detail {
 inline bool check_all_same_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
@@ -477,12 +478,16 @@ struct UvMap {
     std::vector<glm::dvec2> uvs;
 };
 
+// Algorithm used to retry a UV unwrap when the requested algorithm fails.
+inline constexpr uv::Algorithm fallback_algorithm = uv::Algorithm::TutteBarycentricMapping;
+
 
 inline UvMap unwrap_merged_cluster(
     const Clustering &clustering,
     const Cluster &merged_cluster,
     HybridIndexPairMap<uint32_t, uint32_t> &merged_to_original,
-    const std::span<const uint32_t> cluster_indices) {
+    const std::span<const uint32_t> cluster_indices,
+    const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
     // Materialize cluster mesh
     const mesh::Simple merged_mesh = materialize_cluster(merged_cluster, clustering.positions);
     DEBUG_ASSERT(!merged_mesh.has_uvs());
@@ -500,6 +505,10 @@ inline UvMap unwrap_merged_cluster(
 
     // Prepare atlas for new texture
     TextureBaker baker;
+
+    // Texture map id each component is baked into, used to gather the packed
+    // UVs back into merged-vertex order.
+    std::vector<TextureMapId> component_map_ids(components.size());
 
     // Preallocate
     std::vector<uint32_t> source_clusters;
@@ -537,15 +546,14 @@ inline UvMap unwrap_merged_cluster(
             });
             const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
             const cv::Mat texture = clustering.textures[texture_id];
-            baker.add_mesh(TexturedMesh{component.triangles, TextureMap{uvs, texture}});
+            component_map_ids[component_index] = baker.add_mesh(TexturedMesh{component.triangles, TextureMap{uvs, texture}});
         } else {
             // If multiple clusters are relevant, we have to perform an unwrap.
-            /*auto result = uv::unwrap(component, uv::Algorithm::AsRigidAsPossible);
-            if (!result.has_value()) {
-                LOG_WARN("Failed to unwrap using ARAP: {}", result.error().description());
-                result = uv::unwrap(component);
-            }*/
-            auto result = uv::unwrap(component);
+            auto result = uv::unwrap(component, algorithm);
+            if (!result.has_value() && algorithm != fallback_algorithm) {
+                LOG_WARN("Failed to unwrap using requested algorithm: {}, falling back to TutteBarycentricMapping", result.error().description());
+                result = uv::unwrap(component, fallback_algorithm);
+            }
             if (!result.has_value()) {
                 LOG_ERROR_AND_EXIT("Failed to unwrap using default: {}", result.error().description());
             }
@@ -595,15 +603,34 @@ inline UvMap unwrap_merged_cluster(
                     .target = target_triangle,
                 });
             }
-            baker.add_composition(comp);
+            component_map_ids[component_index] = baker.add_composition(comp);
         }
     }
 
-    // Combine all textures together
-    const auto baked = baker.bake(glm::uvec2(2048));
+    // Combine all textures together, compressing resolution in proportion to
+    // how many clusters are being merged so the DAG's texture budget shrinks
+    // going up the LOD hierarchy.
+    const atlas::Packing packing = baker.pack();
+    const double compression_ratio = 1.0 / double(cluster_indices.size());
+    const glm::uvec2 texture_size = compute_bake_texture_size(packing, compression_ratio, 4096);
+    const auto baked = baker.bake(packing, texture_size);
+
+    // Gather the per-component packed UVs into merged-vertex order. Each
+    // component is baked using component-local vertex indices, so the flat
+    // buffer cannot be assigned to the merged cluster directly.
+    std::vector<glm::dvec2> merged_uvs(merged_cluster.vertex_count());
+    for (const auto &[component_index, component] : enumerate(components)) {
+        const std::span<const glm::dvec2> component_uvs = baked.uvs_for(component_map_ids[component_index]);
+        const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
+        DEBUG_ASSERT(component_uvs.size() == local_to_merged.size());
+        for (const auto [local_index, merged_index] : enumerate(local_to_merged)) {
+            merged_uvs[merged_index] = component_uvs[local_index];
+        }
+    }
+
     return UvMap{
         baked.texture(),
-        baked.uvs()
+        std::move(merged_uvs)
     };
 }
 
@@ -615,7 +642,8 @@ struct ClusterAndTexture {
 inline ClusterAndTexture merge_clusters_with_unwrap(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
-    const std::span<uint32_t> vertex_remap) {
+    const std::span<uint32_t> vertex_remap,
+    const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
     // Merge raw geometry
     auto [merged_cluster, merged_to_original] = merge_cluster_geometry(clustering, cluster_indices, vertex_remap);
 
@@ -633,14 +661,14 @@ inline ClusterAndTexture merge_clusters_with_unwrap(
     }
 
     // Unwrap cluster and generate new texture
-    auto [texture, uvs] = unwrap_merged_cluster(clustering, merged_cluster, merged_to_original, cluster_indices);
+    auto [texture, uvs] = unwrap_merged_cluster(clustering, merged_cluster, merged_to_original, cluster_indices, algorithm);
     merged_cluster.uvs = std::move(uvs);
 
     return ClusterAndTexture{merged_cluster, texture};
 }
 }
 
-inline Clustering merge_clusters(const Clustering &clustering, const Partitioning &partitioning) {
+inline Clustering merge_clusters(const Clustering &clustering, const Partitioning &partitioning, const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
     const uint32_t cluster_count = clustering.cluster_count();
     const size_t partition_count = partitioning.partition_count;
     const std::vector<uint32_t> &cluster_partitions = partitioning.cluster_partitions;
@@ -664,9 +692,8 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
                 cluster_indices.push_back(i);
             }
         }
-        if (cluster_indices.empty()) {
-            continue;
-        }
+        // Empty partitions would break the cluster index == partition index mapping relied on by build_lod.
+        ASSERT(!cluster_indices.empty());
 
         // Check if we need to perform a fresh uv unwrap due to different textures or inconsistent uvs
         const bool needs_unwrap = detail::check_merge_needs_unwrap(clustering, cluster_indices);
@@ -675,7 +702,7 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
         Texture texture;
         if (needs_unwrap) {
             // We need to perform a fresh uv unwrap and generate a new texture
-            const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap);
+            const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap, algorithm);
             merged_cluster = result.cluster;
             texture = result.texture;
             unwrap_count++;
@@ -688,6 +715,14 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
             reuse_count++;
         }
         merged_cluster.texture_id = textures.add(texture);
+
+        // Carry the largest child error into the merged cluster.
+        double max_child_error = 0.0;
+        for (const uint32_t cluster_index : cluster_indices) {
+            max_child_error = std::max(max_child_error, clustering.clusters[cluster_index].absolute_error);
+        }
+        merged_cluster.absolute_error = max_child_error;
+
         partitioned_clusters.push_back(std::move(merged_cluster));
     }
 

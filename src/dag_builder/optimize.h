@@ -13,7 +13,7 @@ inline Cluster optimize(Cluster cluster) {
 }
 
 inline void optimize_inplace(Clustering &clustering) {
-    for (auto &cluster : clustering) {
+    for (auto &cluster : clustering.clusters) {
         optimize_inplace(cluster);
     }
 }

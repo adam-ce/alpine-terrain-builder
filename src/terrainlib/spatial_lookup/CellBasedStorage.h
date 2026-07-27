@@ -35,6 +35,14 @@ concept CellBasedStorage = requires(
     {
         const_storage.for_all_in_cell(index, [](const glm::vec<n_dims, Component>&, const Value&) {})
     } -> std::same_as<bool>;
+
+    {
+        storage.for_all_points([](const glm::vec<n_dims, Component> &, Value &) {})
+    } -> std::same_as<bool>;
+
+    {
+        const_storage.for_all_points([](const glm::vec<n_dims, Component> &, const Value &) {})
+    } -> std::same_as<bool>;
 };
 
 } // namespace spatial_lookup

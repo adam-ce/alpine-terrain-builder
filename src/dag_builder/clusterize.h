@@ -27,7 +27,7 @@ struct ClusterOptions {
     uint32_t min_triangles = 256;
     uint32_t max_triangles = 256;
     float cone_weight = 0.5;
-    float split_factor = 0.0;
+    float split_factor = 2.0;
 };
 
 inline std::vector<Cluster> clusterize(

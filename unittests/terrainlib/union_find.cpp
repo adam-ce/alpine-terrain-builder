@@ -59,7 +59,7 @@ TEST_CASE("UnionFind get_sets", "[UnionFind]") {
     uf.make_union(0, 2);
     uf.make_union(1, 3);
 
-    auto sets = uf.get_sets();
+    auto sets = uf.get_sets_as_map();
     REQUIRE(sets.size() == 3);
 
     // Each set should contain the right elements

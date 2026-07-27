@@ -47,11 +47,11 @@ glm::dvec2 clamp_uv(const glm::dvec2 &uv) {
 }
 
 FixedPoint sample_cell_center(const glm::uvec2 sample) {
-    return FixedPoint::from_real(glm::dvec2(sample) + 0.5);
-}
-
-bool is_left_of_or_on_edge(const FixedPoint edge_start, const FixedPoint edge_end, const FixedPoint sample) {
-    return fp::orient(edge_start, edge_end, sample) >= FixedScalar::zero();
+    // Fixed-point encoding of sample + 0.5; exactly representable, so no rounding happens.
+    const FixedCoord::repr_t half = FixedCoord::scale / 2;
+    return FixedPoint{{
+        FixedCoord::from_integer(FixedCoord::repr_t{sample.x}).value + half,
+        FixedCoord::from_integer(FixedCoord::repr_t{sample.y}).value + half}};
 }
 
 radix::geometry::Aabb2ui clamp_bounds(
@@ -79,23 +79,51 @@ radix::geometry::Aabb2ui get_pixel_bounds(
     return clamp_bounds(pixel_bounds, grid_bounds);
 }
 
+// Edge function of a directed edge, evaluated incrementally over the sample grid.
+// The value is the raw cross product (edge_end - edge_start) x (sample - edge_start)
+// without rescaling, so its sign is the exact orientation of the sample.
+struct EdgeFunction {
+    FixedCoord::repr_t value = 0;
+    FixedCoord::repr_t step_x = 0;
+    FixedCoord::repr_t step_y = 0;
+
+    EdgeFunction(const FixedPoint edge_start, const FixedPoint edge_end, const FixedPoint sample) {
+        const auto edge = edge_end.raw - edge_start.raw;
+        const auto offset = sample.raw - edge_start.raw;
+        this->value = edge.x * offset.y - edge.y * offset.x;
+        this->step_x = -edge.y * FixedCoord::scale;
+        this->step_y = edge.x * FixedCoord::scale;
+    }
+};
+
 void rasterize_triangle(
     const FixedTriangle &triangle,
     const int32_t triangle_id,
     const glm::uvec2 grid_size,
     Vector2D<int32_t> &triangle_index_map) {
     const radix::geometry::Aabb2ui bounds = get_pixel_bounds(triangle, grid_size);
-    for (uint32_t sample_y = bounds.min.y; sample_y <= bounds.max.y; sample_y++) {
-        for (uint32_t sample_x = bounds.min.x; sample_x <= bounds.max.x; sample_x++) {
-            const FixedPoint sample = sample_cell_center({sample_x, sample_y});
+    const FixedPoint start = sample_cell_center({bounds.min.x, bounds.min.y});
 
-            if (!is_left_of_or_on_edge(triangle[0], triangle[1], sample) ||
-                !is_left_of_or_on_edge(triangle[1], triangle[2], sample) ||
-                !is_left_of_or_on_edge(triangle[2], triangle[0], sample)) {
-                continue;
+    std::array<EdgeFunction, 3> edges = {
+        EdgeFunction(triangle[0], triangle[1], start),
+        EdgeFunction(triangle[1], triangle[2], start),
+        EdgeFunction(triangle[2], triangle[0], start)};
+
+    for (uint32_t sample_y = bounds.min.y; sample_y <= bounds.max.y; sample_y++) {
+        std::array<FixedCoord::repr_t, 3> row = {edges[0].value, edges[1].value, edges[2].value};
+
+        for (uint32_t sample_x = bounds.min.x; sample_x <= bounds.max.x; sample_x++) {
+            if (row[0] >= 0 && row[1] >= 0 && row[2] >= 0) {
+                triangle_index_map(sample_y, sample_x) = triangle_id;
             }
 
-            triangle_index_map(sample_y, sample_x) = triangle_id;
+            for (uint32_t k = 0; k < 3; k++) {
+                row[k] += edges[k].step_x;
+            }
+        }
+
+        for (uint32_t k = 0; k < 3; k++) {
+            edges[k].value += edges[k].step_y;
         }
     }
 }
@@ -182,7 +210,7 @@ glm::dvec2 target_to_source(const PreparedTriangle &triangle, const FixedPoint t
 // Clamp-to-edge: out-of-bounds coordinates reuse the nearest border pixel.
 cv::Vec3f source_texel(const cv::Mat &image, const glm::ivec2 pos) {
     const glm::ivec2 clamped = glm::clamp(pos, glm::ivec2(0), glm::ivec2(image.cols - 1, image.rows - 1));
-    return cv::Vec3f(image.at<cv::Vec3b>(clamped.y, clamped.x)) * (1.0f / 255.0f);
+    return cv::Vec3f(image.at<cv::Vec3b>(clamped.y, clamped.x));
 }
 
 cv::Vec3f sample_source_linear(
@@ -245,8 +273,51 @@ public:
         const Vector2D<int32_t> triangle_index_map =
             build_triangle_index_map(prepared_triangles, grid_size);
 
-        cv::Mat output(this->_output_size.y, this->_output_size.x, CV_32FC3, cv::Scalar(0, 0, 0));
+        cv::Mat output(this->_output_size.y, this->_output_size.x, this->_output_type, cv::Scalar::all(0));
+        this->render_by_depth(output, prepared_triangles, triangle_index_map);
+        return output;
+    }
 
+private:
+    // Resolve the destination channel type once so the per-pixel write is a
+    // compile-time cv::saturate_cast, matching convertTo's rounding without its
+    // per-pixel dispatch or a full-image float accumulator.
+    void render_by_depth(
+        cv::Mat &output,
+        const std::vector<PreparedTriangle> &prepared_triangles,
+        const Vector2D<int32_t> &triangle_index_map) {
+        switch (CV_MAT_DEPTH(this->_output_type)) {
+            case CV_8U:
+                this->render_into<uchar>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_8S:
+                this->render_into<schar>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_16U:
+                this->render_into<ushort>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_16S:
+                this->render_into<short>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_32S:
+                this->render_into<int>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_32F:
+                this->render_into<float>(output, prepared_triangles, triangle_index_map);
+                break;
+            case CV_64F:
+                this->render_into<double>(output, prepared_triangles, triangle_index_map);
+                break;
+            default:
+                throw std::invalid_argument("TextureReprojector: unsupported output depth");
+        }
+    }
+
+    template <typename Channel>
+    void render_into(
+        cv::Mat &output,
+        const std::vector<PreparedTriangle> &prepared_triangles,
+        const Vector2D<int32_t> &triangle_index_map) {
         for (uint32_t y = 0; y < this->_output_size.y; y++) {
             for (uint32_t x = 0; x < this->_output_size.x; x++) {
                 cv::Vec3f color(0, 0, 0);
@@ -279,17 +350,16 @@ public:
 
                 // Dividing by sample_count (not sample_scale^2) correctly averages partially covered pixels.
                 if (sample_count > 0) {
-                    output.at<cv::Vec3f>(y, x) = color / static_cast<float>(sample_count);
+                    const cv::Vec3f averaged = color / static_cast<float>(sample_count);
+                    output.at<cv::Vec<Channel, 3>>(y, x) = cv::Vec<Channel, 3>(
+                        cv::saturate_cast<Channel>(averaged[0]),
+                        cv::saturate_cast<Channel>(averaged[1]),
+                        cv::saturate_cast<Channel>(averaged[2]));
                 }
             }
         }
-
-        cv::Mat converted;
-        output.convertTo(converted, this->_output_type);
-        return converted;
     }
 
-private:
     glm::uvec2 _output_size;
     int _output_type;
     ReprojectionOptions _options;

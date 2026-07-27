@@ -7,6 +7,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "build.h"
 #include "octree/Id.h"
 #include "Range.h"
 #include "uv/unwrap.h"
@@ -19,14 +20,17 @@ struct Args {
     std::filesystem::path input_path;
     std::filesystem::path output_path;
     octree::Id root_node;
-    Range<uint32_t> level_range;
+    AnyRange<uint32_t> level_range;
 
     uv::Algorithm uv_unwrap_algorithm;
     uint32_t clusters_per_partition;
-    float target_ratio;
+    std::optional<float> target_ratio;
+    std::optional<float> target_error;
 
     bool write_debug_meshes;
-    bool overwrite;
+    bool parallelize;
+    dag::IncludeMode include_mode;
+    ContinuationMode continuation_mode;
 };
 
 Args parse(int argc, const char *const *argv);

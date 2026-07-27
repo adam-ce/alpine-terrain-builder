@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 
+#include "ContinuationMode.h"
 #include "Range.h"
 #include "build_config.h"
 #include "octree/storage/MeshStorage.h"
@@ -18,13 +20,14 @@ enum class IncludeMode {
 
 struct BuildOptions {
     uint32_t clusters_per_partition;
-    float target_ratio;
+    std::optional<float> target_ratio;
+    std::optional<float> relative_target_error;
     uv::Algorithm uv_unwrap_algorithm;
     octree::Id root_node = octree::Id::root();
     IncludeMode include_mode = IncludeMode::CurrentOnly;
     bool write_debug_meshes = IS_DEBUG_BUILD;
     bool parallelize = false;
-    bool resume = true;
+    ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
 void build_full(
@@ -36,6 +39,6 @@ void build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,
-    const Range<uint32_t> &level_range);
+    const AnyRange<uint32_t> &level_range);
 
 } // namespace dag

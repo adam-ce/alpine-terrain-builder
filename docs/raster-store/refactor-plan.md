@@ -896,21 +896,28 @@ mark them as unclear:
 
 1. **2D index filename:** choose the filename used inside a
    raster-fundamentalis snapshot.
+   => call it raster_store.index.
 2. **2D node and payload paths:** confirm the extensionless `z/x/y`
    `NodePath`, the ARFT codec's resulting `z/x/y.arft` file, and whether
    chunks live directly under the snapshot or below a `chunks/` directory.
+   => I already renamed .arft into .amort (alpine maps org raster tile) in several places. look for places i missed and rename it. the chunks / tiles shall live under a path defined by the store_layout, the default 2d store layout shall put them into z/x/y, not in chunks/z/x/y.
 3. **2D layout ID:** choose the stable string serialized in the index.
+   => "zoom/x/y_google"
 4. **Maximum zoom:** choose the supported persistent range and integer widths
    for zoom, x, and y.
+   => use the tile id from radix. x and y are unsigned 32, that would give maximum zoom 31 or 32? that should be well enough.
 5. **Index contents:** decide whether v1 stores only sparse status entries or
    also derived aggregate metadata. The first implementation should omit
    derivable metadata unless a concrete query requires it.
+   => is this a question?
 6. **Index envelope constants:** assign the 2D index magic number, compression
    choice, and version according to the common serialization rules.
+   => erm, question?
 7. **Publication:** define whether snapshot completion uses an atomic rename,
    a manifest marker, or an external store-level operation. The generic
    storage layer should expose finalization but not invent store-level
    lifecycle policy.
+   => use an atomic rename, but don't hide the file. use a .part extension to the new directory name, and then remove it. make sure to flush and close all files before renaming.
 
 Until these decisions are made, Phases 0–4 can complete and the shared
 implementation can be proven with `radix::tile::Id` in memory and with

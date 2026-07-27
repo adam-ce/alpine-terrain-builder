@@ -72,7 +72,8 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
  - if the checksum check fails
  - if the compression algorithm is missing or unsupported.
  - deserialization fails
-- we fail by throwing
+- we fail by throwing in these cases
+- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd
 
 
 ## to be defined

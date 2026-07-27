@@ -7,7 +7,9 @@
 
 #include <fmt/core.h>
 
-inline void write_file_checked(const std::filesystem::path &path, const std::vector<char> &data)
+namespace tile_downloader_detail {
+
+inline void write_file_checked_direct(const std::filesystem::path &path, const std::vector<char> &data)
 {
     std::ofstream output(path, std::ios::binary);
     if (!output) {
@@ -22,5 +24,22 @@ inline void write_file_checked(const std::filesystem::path &path, const std::vec
     output.close();
     if (!output) {
         throw std::runtime_error(fmt::format("failed to finish writing \"{}\"", path.string()));
+    }
+}
+
+}
+
+inline void write_file_checked(const std::filesystem::path &path, const std::vector<char> &data)
+{
+    auto staging_path = path;
+    staging_path += ".part";
+
+    try {
+        tile_downloader_detail::write_file_checked_direct(staging_path, data);
+        std::filesystem::rename(staging_path, path);
+    } catch (...) {
+        std::error_code cleanup_error;
+        std::filesystem::remove(staging_path, cleanup_error);
+        throw;
     }
 }

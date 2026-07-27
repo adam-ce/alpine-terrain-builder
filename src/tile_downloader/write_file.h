@@ -58,11 +58,8 @@ inline void write_file_children_pending(const std::filesystem::path &path, const
     }
 }
 
-inline void mark_tile_children_complete(
-    const std::filesystem::path &path,
-    std::filesystem::file_time_type completion_time)
+inline void mark_tile_children_complete(const std::filesystem::path &path)
 {
     const auto pending_path = children_pending_tile_path(path);
-    std::filesystem::last_write_time(pending_path, completion_time);
     std::filesystem::rename(pending_path, path);
 }

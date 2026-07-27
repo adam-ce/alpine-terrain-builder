@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -74,7 +73,7 @@ private:
             return false;
         }
 
-        mark_tile_children_complete(this->tile_path(root_id), this->completion_time(children));
+        mark_tile_children_complete(this->tile_path(root_id));
         return true;
     }
 
@@ -87,28 +86,6 @@ private:
 
     std::filesystem::path tile_path(const radix::tile::Id &tile) const {
         return google_tile_path(_output_directory, tile, ".jpeg");
-    }
-
-    std::filesystem::file_time_type completion_time(
-        const std::array<radix::tile::Id, 4> &children) const
-    {
-        auto completion_time = std::filesystem::file_time_type::clock::now();
-        for (const auto &child : children) {
-            if (this->_max_zoom_level.has_value() && child.zoom_level > *this->_max_zoom_level) {
-                continue;
-            }
-
-            const auto child_path = this->tile_path(child);
-            if (!std::filesystem::exists(child_path)) {
-                continue;
-            }
-
-            const auto child_time = std::filesystem::last_write_time(child_path);
-            if (child_time >= completion_time) {
-                completion_time = child_time + std::filesystem::file_time_type::duration{1};
-            }
-        }
-        return completion_time;
     }
 
     static void ensure_parent_dirs(const std::filesystem::path &path) {

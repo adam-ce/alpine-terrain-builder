@@ -62,8 +62,7 @@ TEST_CASE("checked file writer persists the complete response")
     const std::vector<char> actual(begin, std::istreambuf_iterator<char>{});
     CHECK(actual == expected);
 
-    mark_tile_children_complete(
-        output.path(), std::filesystem::file_time_type::clock::now());
+    mark_tile_children_complete(output.path());
     CHECK(std::filesystem::exists(output.path()));
     CHECK_FALSE(std::filesystem::exists(output.pending_path()));
 }
@@ -75,8 +74,7 @@ TEST_CASE("checked file writer preserves the final path when promotion fails")
     write_file_children_pending(output.path(), std::vector<char>{'t', 'i', 'l', 'e'});
 
     CHECK_THROWS_AS(
-        mark_tile_children_complete(
-            output.path(), std::filesystem::file_time_type::clock::now()),
+        mark_tile_children_complete(output.path()),
         std::filesystem::filesystem_error);
 
     CHECK(std::filesystem::is_directory(output.path()));

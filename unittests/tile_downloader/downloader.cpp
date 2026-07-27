@@ -38,8 +38,7 @@ public:
 
     void create_complete(const radix::tile::Id &tile) const {
         create_pending(tile);
-        mark_tile_children_complete(
-            tile_path(tile), std::filesystem::file_time_type::clock::now());
+        mark_tile_children_complete(tile_path(tile));
     }
 
 private:
@@ -69,12 +68,10 @@ TEST_CASE("tile downloader promotes parents after completed children")
 
     REQUIRE(std::filesystem::exists(pyramid.tile_path(root)));
     CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root))));
-    const auto root_time = std::filesystem::last_write_time(pyramid.tile_path(root));
 
     for (const auto &child : children) {
         CHECK(std::filesystem::exists(pyramid.tile_path(child)));
         CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(child))));
-        CHECK(std::filesystem::last_write_time(pyramid.tile_path(child)) < root_time);
     }
 
     REQUIRE(std::filesystem::remove(pyramid.tile_path(children.front())));

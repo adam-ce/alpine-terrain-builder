@@ -23,36 +23,30 @@ The source attribution table is used in raster-fundamentalis, tile-base, and in 
 - there is one per directory tree (it's valid for all tiles stored within the same directory tree, all siblings and children).
 - given a tile (either rf or tb), the lookup of the source attribution table is first in the same directory and then in all parrent dirs, until a source_attribution_table.ard is found (or a failure is thrown).
 
+## alpine maps raster store format
+this is the binary format used to store rf and tb tiles. both share the same basic tile format, but use it in different ways.
+- The hierarchy is a Web Mercator (EPSG:3857) quadtree keyed by tile IDs (radix::tile::ID, https://docs.maptiler.com/google-maps-coordinates-tile-bounds-projection/).
+- stored tiles have a resolution of 4096x4096 pixels
+- Every stored pixel has one data value (can be vector type) and one source attribution index.
+- the source attribution index is stored as uint16, and indexes into a global source attribution table (see above)
+- data is stored in radix::Raster<Type> objects (one for source attribution index, one for the actual data), i.e. template <typename PixelType> struct raster_store::Tile { radix::Raster<PixelType> data; radix::Raster<uint16> source_attribution; };
+- the file ending is .amort (AlpineMapsOrg raster tile), it is serialised used the principles outlined below.
+
 ## raster-fundamentalis (rf) format
 raster-fundamentalis is our authoritative raster-store, containing only the data and no overviews / downsampled version.
-- The hierarchy is a Web Mercator (EPSG:3857) quadtree keyed by tile IDs (radix::tile::ID, https://docs.maptiler.com/google-maps-coordinates-tile-bounds-projection/).
 - unlike a tile pyramid, not every level is occupied (there is no downsampled versions of the data).
-- stored tiles have a resolution of 4096x4096 pixels
-- Every stored pixel has one payload value (can be vector type) and one source attribution index.
 - Coarse physical tiles (e.g. zoom level 10) may coexist with more accurate descendants (e.g. zoom level 15).
-- the source attribution index is stored as uint16, and indexes into a global source attribution table (see above). 
-- data is stored in radix::Raster<type> objects (one for source attribution index, one for the actual data)
-- raster-fundamentalis is implemented in src/terrainlib/raster/fundamentalis.h, in the namespace raster::fundamentalis::*
-- tiles are stored in .arft files (alpine raster fundamentalis tile)
-
-### unclear
-- exact quadtree format / how to reuse structura fundamentalis code
-- file names / paths / index file name
+- the raster-fundamentalis builder is implemented in src/rf-builder/*, it consumes raw gdal data.
 
 ## Tile-base Format (tb)
 tile-base is a hierarchy build from raster-fundamentalis, containing all data and its overviews / downsampled versions. it is used directly by the tile-server to generate tiles at the requested resolution and format.
-- The hierarchy is a Web Mercator (EPSG:3857) quadtree keyed by tile IDs (radix::tile::ID, https://docs.maptiler.com/google-maps-coordinates-tile-bounds-projection/).
 - every level is occupied, and every level selects an adequate data source
-- stored tiles have a resolution of 4096x4096 pixels (?)
-- Every stored pixel has one payload value (can be vector type) and one source attribution index.
-- the source attribution index is stored as uint16, and indexes into a global source attribution table (see above)
-- data is stored in radix::Raster<type> objects (one for source attribution index, one for the actual data)
-- tile-base is implemented in src/terrainlib/raster/tile_base.h, in the namespace raster::tile_base::*
-- tiles are stored in .artb files (alpine raster tile base)
+- the tile-base builder is implemented in src/tb-builder, it consumes rf
 
 ### tile-server
 - should generate tiles of requested resolution and pixel type (vertex|area) on the fly
 - requests by url, e.g.: layer/vertex|area/resolution/z/x/y.ending
+- live in src/tile-server/*
 
 ### unclear
 - how to build tile-base from raster-fundamentalis

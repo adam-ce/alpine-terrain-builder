@@ -3,6 +3,10 @@
 Status: proposal for review. This document is an implementation plan, not a
 record of completed work.
 
+## Purpose
+
+This plan describes how to extract the existing octree-specific index, traversal, storage, codec, and subtree-reuse code into a shared 2D/3D store. The refactor must preserve existing 3D datasets while enabling raster-fundamentalis storage without duplicating infrastructure.
+
 ## Decisions already made
 
 - The shared implementation will live in `src/terrainlib/store` and use the
@@ -13,13 +17,21 @@ record of completed work.
   writable without changing their on-disk contract.
 - 3D compatibility includes both existing path layouts:
   `flat` and `level_and_coordinate_directories`.
-- The 2D raster-fundamentalis format is a separate format. Requirements in
+- The 2D raster tile format is a separate format. Requirements in
   this directory apply to that 2D format and must not be retrofitted onto
-  existing 3D datasets.
+  existing 3D datasets. The storage format for 2d tiles is defined in storage-format.md
 - A path layout strategy should contain a stable identifier and two
-  operations: key to relative path, and relative path to key. It should not
-  require an inheritance hierarchy, RTTI, global self-registration, or heap
-  allocation.
+  operations: key to extensionless `NodePath`, and `NodePath` to key. It
+  should not require an inheritance hierarchy, RTTI, global
+  self-registration, or heap allocation.
+- A configured codec owns all filename endings and maps one `NodePath` to one
+  or more physical files. `Codec::paths()` must not need a payload.
+- Codecs are stateful runtime objects behind a small interface. They may
+  support reading, writing, or both; an unsupported operation throws. reading and writing must be reentrant (callable concurrently from different threads).
+- `copy_from()` hard-links every file when the input and output codecs return
+  the same path list for a common dummy `NodePath`. Otherwise it decodes with
+  the input codec and encodes with the output codec. Callers can force
+  re-encoding.
 - 3D geometry, ECEF bounds, mesh codecs, mesh reconstruction, mask geometry,
   and raster-specific processing remain outside the shared store.
 
@@ -27,16 +39,18 @@ record of completed work.
 
 1. Use one sparse hierarchy implementation for `octree::Id` and
    `radix::tile::Id`.
-2. Use one traversal, storage, cache, codec boundary, and unchanged-subtree
-   copier for 2D and 3D.
+2. Use one traversal, storage, cache, runtime codec boundary, and
+   unchanged-subtree copier for 2D and 3D.
 3. Make paired-tree walking reusable without putting mesh or raster merge
    policy into the shared layer.
 4. Replace the current layout-strategy class hierarchy with small path-mapping
    values backed by function pairs.
-5. Preserve all valid existing 3D index files and payload paths.
-6. Introduce the 2D storage adapter without inventing unspecified raster file
+5. Allow one logical node payload to consist of multiple files without making
+   layouts aware of those files.
+6. Preserve all valid existing 3D index files and payload paths.
+7. Introduce the 2D storage adapter without inventing unspecified raster file
    details.
-7. Land the refactor in small, testable steps. Every phase should build and
+8. Land the refactor in small, testable steps. Every phase should build and
    pass tests before the next phase begins.
 
 ## Non-goals
@@ -45,7 +59,7 @@ record of completed work.
   other 3D spatial calculations.
 - Defining or implementing GDAL ingestion, raster resampling, filtering,
   source selection, or mask rasterisation.
-- Defining the `.arft` payload or source-attribution-table serialization
+- Defining the `.amort` payload or source-attribution-table serialization
   beyond the requirements already in [storage-format.md](storage-format.md).
 - Implementing an `rf_builder`, `rf_merger`, tile-base generator, or tile
   server in this refactor.
@@ -69,8 +83,9 @@ Before moving code, tests must lock down the following 3D behaviour:
 | Coordinate path | `<level>/<x>/<y>/<z><extension>` |
 | Default layout | existing level/coordinate layout |
 | Layout detection | both existing layouts remain detectable |
-| Copy with equal extensions | hard link, or an explicit error |
-| Copy with different extensions | decode and encode through the codec |
+| Codec selection | legacy preferred extension selects terrain or configured glTF codec |
+| Equal codec path lists | hard-link every file, or report an explicit error |
+| Different codec path lists | decode with input codec and encode with output codec |
 
 Compatibility means that the refactored code can open datasets written before
 the refactor and produces datasets that the pre-refactor code can open. Exact
@@ -91,6 +106,7 @@ src/terrainlib/
 │   ├── Traits.h
 │   ├── Index.h
 │   ├── traverse.h
+│   ├── NodePath.h
 │   ├── PathMapping.h
 │   ├── Layout.h
 │   ├── Codec.h
@@ -106,6 +122,10 @@ src/terrainlib/
 │   └── merge/
 │       ├── Action.h
 │       └── walk.h
+├── mesh/
+│   └── codec/
+│       ├── Terrain.h
+│       └── Gltf.h
 ├── octree/
 │   ├── Id.h
 │   ├── StoreTraits.h
@@ -120,6 +140,9 @@ src/terrainlib/
     ├── StoreTraits.h
     ├── IndexFile.h
     ├── Storage.h
+    ├── codec/
+    │   ├── Arft.h
+    │   └── Debug.h
     └── store_layout/
         └── Zxy.h
 ```
@@ -128,8 +151,10 @@ The exact file grouping may be collapsed if a file would only contain a few
 lines. The important boundaries are:
 
 - `store` contains dimension- and payload-neutral mechanisms;
-- `octree` contains the legacy 3D format and key adapters;
-- `raster_store` contains the new 2D format and key adapters; and
+- `mesh::codec` contains the separately configured terrain and glTF codecs;
+- `octree` contains the 3D format and key adapters;
+- `raster_store` contains the new 2D format, key adapters, and raster codecs;
+  and
 - subdirectory names match their namespaces where a subnamespace is used.
 
 Temporary forwarding headers and aliases under `octree` are allowed during
@@ -204,25 +229,33 @@ Traversal must follow only indexed nodes and use `Traits::children`. Child
 order is the order supplied by the traits and is therefore deterministic per
 hierarchy, not universally fixed by `store`.
 
-### Path mappings
+### Node paths and path mappings
 
-Replace `octree::disk::layout::Strategy` and
+`store::NodePath` is an extensionless logical location for one hierarchy
+node. For example:
+
+```text
+octree flat          12-123456
+octree coordinates   12/34/56/78
+raster-store ZXY     12/2200/1400
+```
+
+It does not necessarily name a physical file. Replace
+`octree::disk::layout::Strategy` and
 `octree::disk::layout::StrategyRegister` with a value similar to:
 
 ```cpp
 template<typename Key>
 struct store::PathMapping {
     std::string_view id;
-    std::filesystem::path (*key_to_path)(
-        const Key&, std::string_view extension_with_dot);
-    std::optional<Key> (*path_to_key)(
-        const std::filesystem::path& relative_path);
+    NodePath (*key_to_node_path)(const Key&);
+    std::optional<Key> (*node_path_to_key)(const NodePath&);
 };
 ```
 
-`store::Layout<Key>` owns the base directory, preferred extension, and one
-`PathMapping<Key>`. It only adds/removes the base directory around the two
-mapping functions.
+`store::Layout<Key>` owns the base directory and one `PathMapping<Key>`. It
+does not own a preferred extension. A configured codec expands the
+extensionless `NodePath` into the physical file or files.
 
 The stable ID is format metadata, not a third strategy operation. The
 dimension adapters provide ordinary lookup functions:
@@ -241,40 +274,132 @@ This retains runtime selection from an index file while removing virtual
 dispatch, RTTI type-to-ID lookup, static registration, and ownership through
 `unique_ptr`.
 
-Path parsers must validate the complete relative path and the expected file
-extension at the `Layout` boundary. They must return an error or `nullopt`;
-they must not assert on input read from disk.
+Path parsers validate the complete logical `NodePath`, not a file ending.
+Codec or format-adapter code removes and validates physical file endings
+before asking the layout to recover a key. Invalid disk input returns an error
+or `nullopt`; it must not trigger an assertion.
+
+### Codec interface
+
+A codec is a configured runtime object for one logical payload type. It owns
+all physical filename endings and may map one `NodePath` to several files:
+
+```cpp
+template<typename NodeData>
+class store::Codec {
+public:
+    virtual ~Codec() = default;
+
+    virtual std::vector<std::filesystem::path>
+    paths(const NodePath& node_path) const = 0;
+
+    virtual NodeData read(const NodePath&) const {
+        throw UnsupportedCodecOperation{"read"};
+    }
+
+    virtual void write(
+        const NodePath&,
+        const NodeData&) const {
+        throw UnsupportedCodecOperation{"write"};
+    }
+};
+```
+
+Concrete codecs contain their configuration and are constructed before
+storage use. Unsupported read or write operations may use the base
+implementation and throw at runtime.
+
+`Codec::paths()` has the following contract:
+
+- it needs no NodeData payload and performs no filesystem access;
+- it returns every physical file belonging to the logical node;
+- results depend only on codec configuration and the supplied `NodePath`;
+- result order is stable and pairs corresponding input/output files;
+- two codecs returning the same path list for the same `NodePath` must produce
+  mutually compatible files; and
+- different artifact counts or filename endings produce different lists.
+
+Examples:
+
+```text
+Terrain codec
+  12/34/56/78
+    -> 12/34/56/78.terrain
+
+glTF codec configured for binary output
+  12/34/56/78
+    -> 12/34/56/78.glb
+
+glTF codec configured for JSON output
+  12/34/56/78
+    -> 12/34/56/78.gltf
+
+Debug raster codec configured for JPEG data and PNG attribution
+  12/2200/1400
+    -> 12/2200/1400.data.jpg
+    -> 12/2200/1400.attribution.png
+```
+
+The mesh side has separate terrain and glTF codecs because they use different
+format implementations. Binary `.glb` and JSON `.gltf` remain configurations
+of one glTF codec because both use the same `cgltf` implementation.
+
+The raster side has similarly shaped codecs specialized on PixelType:
+
+```cpp
+template <typename PixelType> struct raster_store::codec::Amort<PixelType> : store::Codec<raster_store::Tile<PixelType>> { .. };
+template <typename PixelType> struct raster_store::codec::Debug<PixelType> : store::Codec<raster_store::Tile<PixelType>> { .. };
+```
+
+`Amort` supports reading and writing. `Debug` supports writing only and may
+contain runtime options for data format, attribution format, JPEG quality, or
+similar debugging choices. It is not template-composed from separate image
+codec types.
+
 
 ### Storage and format adapters
 
-Generalize these mechanisms over traits, payload, and codec:
+Generalize storage over traits and NodeData. It owns a configured codec through
+the runtime interface:
 
 ```cpp
-store::RawStorage<Traits, Payload, Codec>
-store::Storage<Traits, Payload, Codec>
-store::IndexedStorage<Traits, Payload, Codec>
-store::cache::Interface<Traits, Payload>
+store::RawStorage<Traits, NodeData>
+store::Storage<Traits, NodeData>
+store::IndexedStorage<Traits, NodeData>
+store::cache::Interface<Traits, NodeData>
 ```
 
-The payload codec remains path-based and key-neutral. Mesh and raster codecs
-remain with their payload domains.
+The NodeData codecs remain with their domains under `mesh::codec` and
+`raster_store::codec`.
 
 Index serialization is not a responsibility of `store::Index`. Opening and
-saving a dataset must receive a dimension-specific format adapter which
-provides:
+saving a dataset receives a dimension-specific format adapter which provides:
 
 - the index filename;
 - index read/write conversion;
 - mapping lookup by stable ID;
 - the default mapping; and
-- the mappings considered during legacy directory scanning.
+- legacy directory discovery where it is required.
 
 This adapter may be a compile-time policy or a small value of function
 pointers. Choose the smaller implementation after the Phase 0 tests exist.
-It must not reintroduce a class hierarchy or global registration.
+It must not reintroduce a layout class hierarchy or global registration.
 
 For 3D, the adapter reads and writes the current `octree` index DTO unchanged.
-For 2D, it reads and writes a separately versioned
+Its legacy `preferred_extension` field selects the configured codec:
+
+```text
+.terrain -> terrain codec
+.glb     -> glTF codec with binary container
+.gltf    -> glTF codec with JSON container
+```
+
+Legacy unindexed-directory discovery remains in the 3D adapter: it recognizes
+the known codec endings, removes them to obtain a `NodePath`, and then invokes
+the selected layout parser. The generic layout does not recover keys directly
+from codec-owned file paths.
+
+For 2D, the adapter reads and writes a separately versioned
 `raster_store::v1` DTO using the serialization envelope required by
 [storage-format.md](storage-format.md).
 
@@ -283,17 +408,48 @@ Preserve that behaviour for existing 3D entry points during the migration.
 The new 2D snapshot API should require an explicit finalization/publication
 step; a destructor must not make an incomplete snapshot authoritative.
 
-### Unchanged-subtree reuse
+### Copying and unchanged-subtree reuse
+
+Keep `Storage::copy_from()` close to its current role. Add:
+
+```cpp
+struct CopyOptions {
+    bool force_reencode = false;
+};
+```
+
+For one key, `copy_from()`:
+
+1. calls the input and output `Codec::paths()` with the same fixed dummy
+   `NodePath`;
+2. when the lists are equal and `force_reencode` is false, calls both codecs
+   again with their actual source and target `NodePath` values and hard-links
+   every source path to the corresponding target path;
+3. when the dummy lists differ or re-encoding is forced, reads the payload
+   with the input codec and writes it with the output codec; and
+4. updates the target index only after all links or the write complete.
+
+The dummy path must be fixed and collision-free, for example
+`__codec_probe__/node`. Path lists are compared exactly, including count,
+order, and filename endings.
+
+If linking several files fails partway through, remove the target links
+created by that call before returning the error. There is no silent copy
+fallback. An unsupported read or write needed for re-encoding throws through
+the codec interface.
+
+Codec settings that do not change `paths()`, such as compression level or
+JPEG quality, do not force re-encoding by default. A caller that needs those
+settings applied to every node passes `force_reencode = true`.
 
 Move payload-neutral subtree copying out of `sf_merger::NodeWriter`. The
-shared operation should:
+shared operation:
 
-1. traverse an indexed source subtree;
-2. skip `Virtual` nodes;
-3. copy physical payloads for both `Leaf` and `Inner`;
-4. use `Storage::copy_from` so equal-format payloads are hard-linked;
-5. update the target index incrementally; and
-6. return an error instead of asserting or terminating.
+1. traverses an indexed source subtree;
+2. skips `Virtual` nodes;
+3. calls `copy_from()` for physical payloads in both `Leaf` and `Inner`
+   states; and
+4. propagates errors instead of asserting or terminating.
 
 This fixes the current incorrect assumption that every non-virtual visited
 node is a `Leaf`.
@@ -301,12 +457,14 @@ node is a `Leaf`.
 Hard-link rules:
 
 - never modify an existing linked payload in place;
-- matching extensions require hard-link creation;
-- different extensions retain the current decode/re-encode path;
+- a matching codec path list hard-links every file;
+- a different path list decodes with the input codec and encodes with the
+  output codec;
+- `force_reencode` always selects decode/encode;
 - hard-link failure is explicit;
-- 2D snapshot tools must preflight that source and destination support hard
-  links before a long operation starts; and
-- no silent copy fallback is introduced by this refactor.
+- 2D snapshot tools preflight that source and destination support hard links
+  before a long operation starts; and
+- no silent file-copy fallback is introduced.
 
 ### Paired hierarchy walking
 
@@ -361,6 +519,7 @@ No production behaviour changes.
 4. Add storage tests for:
    - matching-extension hard links;
    - different-extension decode/re-encode;
+   - `.terrain`, `.glb`, and `.gltf` dispatch;
    - overwrite rejection;
    - indexed and unindexed opens; and
    - final index creation by directory scan.
@@ -388,59 +547,95 @@ callers still build through aliases; no filesystem code has changed.
 
 ### Phase 2 — Replace disk layout strategies
 
-1. Add `store::PathMapping<Key>` and `store::Layout<Key>`.
+1. Add `store::NodePath`, `store::PathMapping<Key>`, and
+   `store::Layout<Key>`.
 2. Port the two existing 3D layouts to ordinary function pairs without
-   changing paths or stable IDs.
+   changing stable IDs. The mappings return `level-index` and
+   `level/x/y/z` without file endings.
 3. Replace the singleton strategy registry with explicit `from_id()` and
    `all()` functions in the 3D adapter.
-4. Port layout guessing to consume a span of mappings supplied by the format
-   adapter.
-5. Add the proposed 2D `z/x/y.arft` mapping only after the review decision
-   listed below is resolved.
-6. Switch path and layout-detection tests to the new implementation.
-7. Delete the old strategy base class, registration machinery, and concrete
+4. Move the legacy preferred extension out of generic `Layout` and retain it
+   in the 3D format adapter.
+5. Port legacy layout discovery so it strips recognized 3D file endings before
+   calling `node_path_to_key()`.
+6. Add the proposed 2D `z/x/y` mapping only after the review decision listed
+   below is resolved. The raster codec, not the mapping, adds `.arft` or debug
+   endings.
+7. Switch node-path and layout-detection tests to the new implementation.
+8. Delete the old strategy base class, registration machinery, and concrete
    strategy classes once no call site uses them.
 
-Exit criterion: both legacy fixtures resolve to identical payload paths;
+Exit criterion: the legacy 3D adapter plus codec resolves both fixtures to
+identical physical payload paths; generic `Layout` contains no extension;
 there is no layout inheritance, RTTI lookup, static registrar, or owning
 strategy pointer.
 
 ### Phase 3 — Generalize storage and index lifecycle
 
-1. Move the codec concept, copy error, raw storage, caches, logical storage,
-   and indexed storage into `store`.
-2. Replace every embedded `octree::Id` with `Traits::Key`.
-3. Keep payload codecs outside the shared module:
-   `octree::MeshCodec` remains 3D, and the future `.arft` codec remains under
-   `raster_store`.
-4. Split generic directory scanning from 3D index serialization.
-5. Implement the small format-adapter boundary described above.
-6. Keep the current 3D `terrain.index` DTO and open functions as compatibility
-   adapters over the shared storage.
-7. Migrate the existing octree storage aliases and all application callers.
-8. Preserve the current 3D destructor-save behaviour until all callers have
-   explicit index finalization.
+1. Add the stateful `store::Codec<Payload>` interface with `paths()`, `read()`,
+   and `write()`.
+2. Split the current extension-dispatching `octree::MeshCodec` into:
+   - a terrain codec; and
+   - one glTF codec configured for binary `.glb` or JSON `.gltf`.
+3. Move copy error, raw storage, caches, logical storage, and indexed storage
+   into `store`.
+4. Make storage own a configured `std::unique_ptr<Codec<Payload>>`; remove the
+   codec template parameter from storage.
+5. Replace every embedded `octree::Id` with `Traits::Key`.
+6. Make every raw file operation obtain its complete file list through
+   `Codec::paths()`. `has()` requires every listed file, and `remove()` removes
+   every listed file.
+7. Keep payload codecs outside the shared module under `mesh::codec` and
+   `raster_store::codec`.
+8. Split generic index maintenance from 3D index serialization and legacy
+   folder discovery.
+9. Keep the current 3D `terrain.index` DTO and open functions as compatibility
+   adapters over the shared storage. Map its preferred extension to a
+   configured terrain or glTF codec.
+10. Migrate the existing octree storage aliases and all application callers.
+11. Preserve the current 3D destructor-save behaviour until all callers have
+    explicit index finalization.
+
+Add focused codec tests using single-file, multi-file, read/write, and
+write-only test codecs before depending on the raster payload implementation.
 
 Exit criterion: all existing applications build and all Phase 0 fixtures pass
-through the shared storage implementation. No second storage implementation
-remains under `octree`.
+through the shared runtime codec and storage implementation. No
+extension-dispatching mesh codec or second storage implementation remains
+under `octree`.
 
 ### Phase 4 — Generalize subtree reuse and paired walking
 
-1. Add the shared unchanged-subtree copier.
-2. Test copies containing `Leaf`, `Virtual`, and `Inner` nodes.
-3. Add the paired hierarchy walker and typed actions.
-4. Cover all 16 status pairs with table-driven tests.
-5. Adapt the 3D merger to the shared walker while keeping mesh policy in
+1. Change `Storage::copy_from()` to compare input and output codec path lists
+   for the fixed dummy `NodePath`.
+2. Hard-link all actual files when the lists match, with cleanup of links
+   created by a partially failed call.
+3. Decode with the input codec and encode with the output codec when lists
+   differ.
+4. Add `CopyOptions::force_reencode`, defaulting to false.
+5. Test:
+   - one-file hard linking;
+   - multi-file hard linking;
+   - different path counts and endings;
+   - forced re-encoding with otherwise equal paths;
+   - conversion between terrain and glTF;
+   - conversion into a write-only codec; and
+   - runtime failure when a required codec operation is unsupported.
+6. Add the shared unchanged-subtree copier.
+7. Test copies containing `Leaf`, `Virtual`, and `Inner` nodes.
+8. Add the paired hierarchy walker and typed actions.
+9. Cover all 16 status pairs with table-driven tests.
+10. Adapt the 3D merger to the shared walker while keeping mesh policy in
    `sf_merger`.
-6. Remove generic recursion and copy logic from `sf_merger::Merger` and
+11. Remove generic recursion and copy logic from `sf_merger::Merger` and
    `NodeWriter`.
-7. Add a 3D integration test proving an unchanged subtree is hard-linked and
+12. Add a 3D integration test proving an unchanged subtree is hard-linked and
    a changed boundary node is newly written.
 
 Exit criterion: the existing 3D merger behaviour is preserved, `Inner` no
-longer reaches `UNREACHABLE()`, and the shared walker contains no mesh, ECEF,
-GDAL, OpenCV, or raster dependencies.
+longer reaches `UNREACHABLE()`, multi-file reuse works through
+`Codec::paths()`, and the shared walker contains no mesh, ECEF, GDAL, OpenCV,
+or raster dependencies.
 
 ### Phase 5 — Add the 2D raster-fundamentalis adapter
 
@@ -453,15 +648,20 @@ edited into decisions in this document.
 4. Use the required magic/version/checksum/compression serialization envelope.
 5. Add the 2D format adapter and storage aliases under
    `raster_store`.
-6. Exercise storage with a small test codec if the final `.arft` codec is not
-   implemented yet; do not make `.arft` claims from a placeholder codec.
-7. Test:
+6. Add `raster_store::codec::Arft<Payload>` with runtime format options when
+   the final `.arft` serialization is available.
+7. Add the output-only `raster_store::codec::Debug<Payload>` with runtime
+   options for its data and attribution files.
+8. If the final `.arft` serialization is not available, exercise storage with
+   the Phase 3 test codec and do not make `.arft` claims from it.
+9. Test:
    - invalid and boundary tile IDs;
    - index serialization and validation;
    - `Leaf`/`Inner` coexistence;
    - sparse traversal and ancestor lookup;
    - path round trips;
-   - snapshot hard-link reuse; and
+   - snapshot hard-link reuse;
+   - ARFT-to-debug output conversion; and
    - explicit cross-filesystem/preflight failure.
 
 Exit criterion: the same shared store can create, open, traverse, and reuse a
@@ -493,6 +693,7 @@ files:
 unittests/terrainlib/store_index.cpp
 unittests/terrainlib/store_traverse.cpp
 unittests/terrainlib/store_layout.cpp
+unittests/terrainlib/store_codec.cpp
 unittests/terrainlib/store_storage.cpp
 unittests/terrainlib/store_compatibility.cpp
 unittests/terrainlib/store_merge_walk.cpp
@@ -519,13 +720,15 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `octree/NodeStatusOrMissing.h` | `store/NodeStatusOrMissing.h` plus temporary alias |
 | `octree/IndexMap.*` | `store/Index.h` |
 | `octree/traverse.h` | `store/traverse.h` |
+| complete node paths embedded in layouts | extensionless `store/NodePath.h` plus codec endings |
 | `octree/disk/Layout.h` | `store/Layout.h` |
 | `octree/disk/layout/Strategy.h` | `store/PathMapping.h` |
 | `StrategyRegister.h` | explicit dimension-adapter lookup functions |
 | `strategy/Flat.h` | `octree/store_layout/Flat.h` |
 | `strategy/LevelAndCoordinateDirectories.h` | `octree/store_layout/LevelAndCoordinateDirectories.h` |
 | `octree/storage/cache/*` | `store/cache/*` |
-| `octree/storage/codec/Codec.h` | `store/Codec.h` |
+| `octree/storage/codec/Codec.h` | runtime `store/Codec.h` |
+| `octree/storage/codec/MeshCodec.h` | `mesh/codec/Terrain.h` and configured `mesh/codec/Gltf.h` |
 | `octree/storage/RawStorage.h` | `store/RawStorage.h` |
 | `octree/storage/Storage.h` | `store/Storage.h` |
 | `octree/storage/IndexedStorage.h` | `store/IndexedStorage.h` |
@@ -545,6 +748,9 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Invalid 2D coordinates become persistent | Validate on every disk/API boundary |
 | `Inner` payloads are lost during subtree reuse | Copy every physical status and test mixed-depth fixtures |
 | Linked snapshots are modified in place | Immutable snapshot API and overwrite-disabled output |
+| Multi-file hard linking fails partway through | Remove links created by the failed `copy_from()` before returning |
+| Incompatible codecs return the same path list | Treat path-list equality as a codec contract and test every concrete codec pairing |
+| Output-only codec is selected for required input | Throw a clear unsupported-operation error at runtime |
 | Hard-link failure appears late | 2D operation preflight and explicit errors |
 | Shared code accumulates mesh/raster policy | Dependency tests/review against the source boundary |
 | Generic index accidentally dictates both disk formats | Separate 3D and 2D format adapters |
@@ -556,8 +762,9 @@ mark them as unclear:
 
 1. **2D index filename:** choose the filename used inside a
    raster-fundamentalis snapshot.
-2. **2D payload path:** confirm `z/x/y.arft`, including whether chunks live
-   directly under the snapshot or below a `chunks/` directory.
+2. **2D node and payload paths:** confirm the extensionless `z/x/y`
+   `NodePath`, the ARFT codec's resulting `z/x/y.arft` file, and whether
+   chunks live directly under the snapshot or below a `chunks/` directory.
 3. **2D layout ID:** choose the stable string serialized in the index.
 4. **Maximum zoom:** choose the supported persistent range and integer widths
    for zoom, x, and y.

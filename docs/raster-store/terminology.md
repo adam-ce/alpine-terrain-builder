@@ -1,7 +1,4 @@
 # Terminology
-** payload raster **
-: A square data matrix (image), containing the actual data (e.g. elevation, colour..)
-
 ** attribution raster **
 : A square data matrix (image), containing indices into the source-attribution table
 

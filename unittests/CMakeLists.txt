@@ -89,6 +89,7 @@ endif()
 
 if(TARGET tile-downloader)
     add_executable(unittests_tile_downloader
+        tile_downloader/logger.cpp
         tile_downloader/url_builder.cpp
     )
     target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)

@@ -25,9 +25,9 @@ public:
           _max_zoom_level(max_zoom_level) {}
 
     void download_recursive(const radix::tile::Id &root_id) {
-        this->_logger.start();
+        auto progress_session = this->_logger.start();
         this->download_recursive_core(root_id);
-        this->_logger.finish();
+        progress_session.finish();
     }
 
 private:

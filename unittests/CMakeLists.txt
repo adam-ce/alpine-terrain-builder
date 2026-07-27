@@ -93,6 +93,7 @@ if(TARGET tile-downloader)
         tile_downloader/http_client.cpp
         tile_downloader/logger.cpp
         tile_downloader/url_builder.cpp
+        tile_downloader/write_file.cpp
     )
     target_include_directories(unittests_tile_downloader PRIVATE ${CMAKE_SOURCE_DIR}/src/tile_downloader)
     target_link_libraries(unittests_tile_downloader PRIVATE terrainlib Catch2::Catch2WithMain CURL::libcurl)

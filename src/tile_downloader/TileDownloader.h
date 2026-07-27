@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <fstream>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,6 +12,7 @@
 #include "TileLogger.h"
 #include "TileUrlBuilder.h"
 #include "tile_path.h"
+#include "write_file.h"
 
 class TileDownloader {
 public:
@@ -89,14 +89,6 @@ private:
         }
     }
 
-    static void write_file(const std::filesystem::path &path, const std::vector<char> &data) {
-        std::ofstream out(path, std::ios::binary);
-        if (!out) {
-            throw std::runtime_error(fmt::format("failed to open \"{}\" for writing", path.string()));
-        }
-        out.write(data.data(), data.size());
-    }
-
     TileResult::Status download_tile(const radix::tile::Id &tile) {
         const auto path = std::filesystem::absolute(this->tile_path(tile));
 
@@ -112,7 +104,7 @@ private:
             HttpResponse response = this->_http.get(url);
 
             if (response.curl_code == CURLE_OK && this->_http.is_image(response)) {
-                write_file(path, response.body);
+                write_file_checked(path, response.body);
                 return TileResult::Downloaded{};
             }
 

@@ -15,6 +15,9 @@ This plan describes how to extract the existing octree-specific index, traversal
   `raster_store` namespace.
 - Existing 3D Structura Fundamentalis datasets must remain readable and
   writable without changing their on-disk contract.
+- Existing DAG datasets stored in the 3D hierarchy with `.bin` payloads must
+  also remain readable and writable without changing their index or payload
+  serialization.
 - 3D compatibility includes both existing path layouts:
   `flat` and `level_and_coordinate_directories`.
 - The 2D raster tile format is a separate format. Requirements in
@@ -31,6 +34,9 @@ This plan describes how to extract the existing octree-specific index, traversal
   `std::expected`; unsupported operations and other operational failures are
   reported as error values. Reading and writing must be reentrant (callable
   concurrently from different threads).
+- Legacy index metadata selects a codec through an explicit, caller-supplied
+  resolver. The octree format adapter does not contain a global codec registry
+  or depend on mesh or DAG payload types.
 - `copy_from()` hard-links every file when the input and output codecs return
   the same path list for a common dummy `NodePath`. Otherwise it decodes with
   the input codec and encodes with the output codec. Callers can force
@@ -69,6 +75,7 @@ This plan describes how to extract the existing octree-specific index, traversal
 - Changing the existing 3D hard-link policy by adding a silent file-copy
   fallback.
 - Refactoring unrelated octree, DAG, mesh, or tile-builder code.
+- Changing the serialized schema of existing DAG `.bin` payloads.
 
 ## Compatibility contract
 
@@ -86,7 +93,9 @@ Before moving code, tests must lock down the following 3D behaviour:
 | Coordinate path | `<level>/<x>/<y>/<z><extension>` |
 | Default layout | existing level/coordinate layout |
 | Layout detection | both existing layouts remain detectable |
-| Codec selection | legacy preferred extension selects terrain or configured glTF codec |
+| Mesh codec selection | legacy preferred extension selects terrain or configured glTF codec |
+| DAG codec selection | legacy `.bin` preferred extension selects the ZPP Bits codec |
+| DAG payload encoding | existing `dag::ClusterBatch` ZPP Bits serialization |
 | Equal codec path lists | hard-link every file, or report an explicit error |
 | Different codec path lists | decode with input codec and encode with output codec |
 
@@ -122,6 +131,8 @@ src/terrainlib/
 │   │   ├── Interface.h
 │   │   ├── Dummy.h
 │   │   └── Lru.h
+│   ├── codec/
+│   │   └── ZppBits.h
 │   └── merge/
 │       ├── Action.h
 │       └── walk.h
@@ -154,6 +165,8 @@ The exact file grouping may be collapsed if a file would only contain a few
 lines. The important boundaries are:
 
 - `store` contains dimension- and payload-neutral mechanisms;
+- `store::codec::ZppBits` is the reusable concrete codec for payload types
+  that provide ZPP Bits serialization;
 - `mesh::codec` contains the separately configured terrain and glTF codecs;
 - `octree` contains the 3D format and key adapters;
 - `raster_store` contains the new 2D format, key adapters, and raster codecs;
@@ -162,6 +175,12 @@ lines. The important boundaries are:
 
 Temporary forwarding headers and aliases under `octree` are allowed during
 migration. They must not contain a second implementation.
+
+DAG serialization remains owned by `dag_builder`. Consolidate the existing
+`dag::Id`, `dag::ClusterBatch`, `Clustering`, `Cluster`, and `TextureSet`
+serialization functions in `src/dag_builder/serialization.h`. The DAG storage
+adapter includes that header explicitly so template instantiation does not
+depend on callers including `encoded.h` in the correct order.
 
 ## Shared interfaces
 
@@ -357,6 +376,19 @@ The mesh side has separate terrain and glTF codecs because they use different
 format implementations. Binary `.glb` and JSON `.gltf` remain configurations
 of one glTF codec because both use the same `cgltf` implementation.
 
+The shared module also provides:
+
+```cpp
+template <typename NodeData>
+struct store::codec::ZppBits : store::Codec<NodeData> { .. };
+```
+
+It uses the existing `io::read_from_path()` and `io::write_to_path()`
+functions, maps one node to `<NodePath>.bin`, and converts `io::Error` to
+`CodecError`. It contains no DAG-specific serialization logic. DAG payload
+serialization remains in `dag_builder/serialization.h`, and its field order
+and meshoptimizer/JPEG encoding remain unchanged.
+
 The raster side has similarly shaped codecs specialized on PixelType:
 
 ```cpp
@@ -382,8 +414,9 @@ store::IndexedStorage<Traits, NodeData>
 store::cache::Interface<Traits, NodeData>
 ```
 
-The NodeData codecs remain with their domains under `mesh::codec` and
-`raster_store::codec`.
+Domain-specific NodeData codecs remain under `mesh::codec` and
+`raster_store::codec`. The reusable ZPP Bits codec remains under
+`store::codec`.
 
 Index serialization is not a responsibility of `store::Index`. Opening and
 saving a dataset receives a dimension-specific format adapter which provides:
@@ -399,18 +432,33 @@ pointers. Choose the smaller implementation after the Phase 0 tests exist.
 It must not reintroduce a layout class hierarchy or global registration.
 
 For 3D, the adapter reads and writes the current `octree` index DTO unchanged.
-Its legacy `preferred_extension` field selects the configured codec:
+When opening indexed storage or discovering a legacy unindexed directory, it
+passes the legacy `preferred_extension` to a caller-supplied codec resolver.
+The resolver is an ordinary callable and returns
+`std::expected<std::unique_ptr<store::Codec<NodeData>>, CodecError>`. It is not
+a global registry.
+
+The payload domains provide ordinary resolver functions:
 
 ```text
-.terrain -> terrain codec
-.glb     -> glTF codec with binary container
-.gltf    -> glTF codec with JSON container
+mesh::codec::from_extension
+  .terrain -> terrain codec
+  .glb     -> glTF codec with binary container
+  .gltf    -> glTF codec with JSON container
+
+dag::codec::from_extension
+  .bin     -> store::codec::ZppBits<dag::ClusterBatch>
 ```
 
+An unknown extension returns an explicit `UnsupportedCodec` error. Opening a
+new empty store may receive an already constructed codec instead of a resolver.
+Convenience functions in `src/dag_builder/storage.h` supply the DAG resolver so
+application call sites do not handle it directly.
+
 Legacy unindexed-directory discovery remains in the 3D adapter: it recognizes
-the known codec endings, removes them to obtain a `NodePath`, and then invokes
-the selected layout parser. The generic layout does not recover keys directly
-from codec-owned file paths.
+candidate endings by asking the supplied resolver, removes an accepted ending
+to obtain a `NodePath`, and then invokes the selected layout parser. The
+generic layout does not recover keys directly from codec-owned file paths.
 
 For 2D, the adapter reads and writes `raster_store.index` as a separately
 versioned `raster_store::v1` DTO using the serialization envelope required by
@@ -660,15 +708,19 @@ No production behaviour changes.
 1. Add golden 3D fixtures created by the current code:
    - one `terrain.index` using `flat`;
    - one using `level_and_coordinate_directories`;
+   - one DAG dataset whose index selects `.bin` and whose payload contains a
+     valid serialized `dag::ClusterBatch`;
    - physical payload paths for a root, child, and deeper descendant; and
    - an index containing `Leaf`, `Virtual`, and `Inner`.
-2. Test that both fixtures open, resolve the expected IDs and extensions, and
+2. Test that all fixtures open, resolve the expected IDs and extensions, and
    traverse the expected sparse nodes.
 3. Add path round-trip tests for boundary IDs and both layouts.
 4. Add storage tests for:
    - matching-extension hard links;
    - different-extension decode/re-encode;
-   - `.terrain`, `.glb`, and `.gltf` dispatch;
+   - `.terrain`, `.glb`, `.gltf`, and `.bin` dispatch through the appropriate
+     domain resolver;
+   - explicit failure for an unknown preferred extension;
    - overwrite rejection;
    - indexed and unindexed opens; and
    - final index creation by directory scan.
@@ -677,7 +729,8 @@ No production behaviour changes.
 
 Exit criterion: the compatibility tests pass against the untouched
 implementation and fail when any stable filename, layout ID, path encoding,
-status value, or index field order is deliberately changed.
+status value, index field order, or DAG payload serialization is deliberately
+changed.
 
 ### Phase 1 — Extract topology into `store`
 
@@ -713,8 +766,8 @@ callers still build through aliases; no filesystem code has changed.
 8. Delete the old strategy base class, registration machinery, and concrete
    strategy classes once no call site uses them.
 
-Exit criterion: the legacy 3D adapter plus codec resolves both fixtures to
-identical physical payload paths; generic `Layout` contains no extension;
+Exit criterion: the legacy 3D adapter plus codecs resolve all Phase 0 fixtures
+to identical physical payload paths; generic `Layout` contains no extension;
 there is no layout inheritance, RTTI lookup, static registrar, or owning
 strategy pointer.
 
@@ -722,35 +775,48 @@ strategy pointer.
 
 1. Add the stateful `store::Codec<Payload>` interface with `paths()`, `read()`,
    and `write()`.
-2. Split the current extension-dispatching `octree::MeshCodec` into:
+2. Move the current generic `octree::ZppBitsCodec<T>` to the runtime
+   `store::codec::ZppBits<T>`, preserving its `.bin` paths and serialized
+   payload bytes.
+3. Consolidate the DAG serialization functions in
+   `src/dag_builder/serialization.h` without changing their serialized field
+   order, meshoptimizer encoding, or JPEG texture encoding.
+4. Split the current extension-dispatching `octree::MeshCodec` into:
    - a terrain codec; and
    - one glTF codec configured for binary `.glb` or JSON `.gltf`.
-3. Move copy error, raw storage, caches, logical storage, and indexed storage
+5. Move copy error, raw storage, caches, logical storage, and indexed storage
    into `store`.
-4. Make storage own a configured `std::unique_ptr<Codec<Payload>>`; remove the
+6. Make storage own a configured `std::unique_ptr<Codec<Payload>>`; remove the
    codec template parameter from storage.
-5. Replace every embedded `octree::Id` with `Traits::Key`.
-6. Make every raw file operation obtain its complete file list through
+7. Replace every embedded `octree::Id` with `Traits::Key`.
+8. Make every raw file operation obtain its complete file list through
    `Codec::paths()`. `has()` requires every listed file, and `remove()` removes
    every listed file.
-7. Keep payload codecs outside the shared module under `mesh::codec` and
-   `raster_store::codec`.
-8. Split generic index maintenance from 3D index serialization and legacy
+9. Keep domain-specific payload codecs outside the shared module under
+   `mesh::codec` and `raster_store::codec`.
+10. Split generic index maintenance from 3D index serialization and legacy
    folder discovery.
-9. Keep the current 3D `terrain.index` DTO and open functions as compatibility
-   adapters over the shared storage. Map its preferred extension to a
-   configured terrain or glTF codec.
-10. Migrate the existing octree storage aliases and all application callers.
-11. Preserve the current 3D destructor-save behaviour until all callers have
+11. Keep the current 3D `terrain.index` DTO and open functions as compatibility
+    adapters over the shared storage. Resolve its preferred extension through
+    the caller-supplied mesh or DAG resolver.
+12. Add DAG storage convenience functions that supply
+    `dag::codec::from_extension`, and migrate `dag_builder` and
+    `dag_convert_debug` to them.
+13. Migrate the existing octree storage aliases and all other application
+    callers.
+14. Preserve the current 3D destructor-save behaviour until all callers have
     explicit index finalization.
 
 Add focused codec tests using single-file, multi-file, read/write, and
 write-only test codecs before depending on the raster payload implementation.
+Test that a pre-refactor DAG fixture opens through the new resolver and that a
+new deterministic `.bin` payload matches the Phase 0 golden bytes and remains
+readable through the unchanged ZPP serialization functions.
 
 Exit criterion: all existing applications build and all Phase 0 fixtures pass
-through the shared runtime codec and storage implementation. No
-extension-dispatching mesh codec or second storage implementation remains
-under `octree`.
+through the shared runtime codec and storage implementation. Existing DAG
+payload bytes and `.bin` paths remain compatible. No extension-dispatching
+mesh codec or second storage implementation remains under `octree`.
 
 ### Phase 4 — Generalize subtree reuse and paired walking
 
@@ -846,8 +912,8 @@ Exit criterion: repository search finds no generic implementation tied to
 
 ## Test and verification plan
 
-Tests should live in the existing `unittests_terrainlib` target. Suggested
-files:
+Generic store tests should live in the existing `unittests_terrainlib` target.
+Suggested files:
 
 ```text
 unittests/terrainlib/store_index.cpp
@@ -859,16 +925,22 @@ unittests/terrainlib/store_compatibility.cpp
 unittests/terrainlib/store_merge_walk.cpp
 ```
 
+The DAG payload-compatibility fixture and resolver integration test belong in
+`unittests_dagbuilder`, because `terrainlib` must not depend on
+`dag::ClusterBatch` or its serializers.
+
 During implementation:
 
 1. Build in `$source_dir/build/$config_name`.
 2. Run unit tests from that build directory.
 3. Run the focused store tests after each edit.
 4. Run the full `unittests_terrainlib` target at every phase boundary.
-5. Build `sf_builder`, `sf_merger`, `sf_index_browser`, `dag_builder`, and
+5. Run `unittests_dagbuilder` after the ZPP codec, DAG serialization header, or
+   DAG resolver changes.
+6. Build `sf_builder`, `sf_merger`, `sf_index_browser`, `dag_builder`, and
    `dag_convert_debug` after their storage aliases move.
-6. Run any existing merger integration fixture after Phase 4.
-7. Inspect `git diff --check` and the final worktree before each commit.
+7. Run any existing merger integration fixture after Phase 4.
+8. Inspect `git diff --check` and the final worktree before each commit.
 
 No formatting-only pass or unrelated refactor belongs in these commits.
 
@@ -888,12 +960,15 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `strategy/LevelAndCoordinateDirectories.h` | `octree/store_layout/LevelAndCoordinateDirectories.h` |
 | `octree/storage/cache/*` | `store/cache/*` |
 | `octree/storage/codec/Codec.h` | runtime `store/Codec.h` |
+| `octree/storage/codec/DefaultCodec.h` | runtime `store/codec/ZppBits.h` |
 | `octree/storage/codec/MeshCodec.h` | `mesh/codec/Terrain.h` and configured `mesh/codec/Gltf.h` |
 | `octree/storage/RawStorage.h` | `store/RawStorage.h` |
 | `octree/storage/Storage.h` | `store/Storage.h` |
 | `octree/storage/IndexedStorage.h` | `store/IndexedStorage.h` |
 | `octree/storage/helpers.*` | generic scan helpers plus 3D format adapter |
 | `octree/disk/IndexFile.h` | versioned 3D format adapter under `octree` |
+| DAG serializers in `dag_node.h` and `encoded.h` | `dag_builder/serialization.h` |
+| `dag_builder/storage.h` aliases | DAG storage aliases plus codec resolver convenience functions |
 | `sf_merger::NodeWriter` subtree loop | `store/copy_subtree.h` |
 | `sf_merger::Merger` recursion | `store/merge/walk.h` |
 
@@ -902,6 +977,9 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Risk | Control |
 |---|---|
 | Existing indexes stop loading | Golden pre-refactor fixtures and unchanged 3D DTO |
+| Existing DAG `.bin` datasets stop loading | Golden DAG fixture, unchanged serializers, and explicit `.bin` resolver |
+| Octree format adapter gains DAG dependencies | Caller-supplied resolver owned by `dag_builder` |
+| Unknown legacy extension silently selects the wrong codec | Return an explicit `UnsupportedCodec` error |
 | Valid legacy paths are parsed differently | Characterization and round-trip tests before replacement |
 | Template migration creates a large unreviewable diff | Compatibility aliases and phase-by-phase caller migration |
 | `radix::tile::Id` root underflows | Traits intercept root parent lookup |

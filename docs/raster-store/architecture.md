@@ -99,21 +99,34 @@ Because hard links share inodes, a linked container must never be opened for
 in-place modification. Existing snapshots are considered immutable. Obsolete snapshots can be deleted, the data will be preserved if necessary due to reference counting in the inodes.
 When merging, we need to create new hardlinks for unchanged rf tiles (taken completely from either snapshot), and we need to create new rf tiles if the new tile shares information from both.
 
-Cross-filesystem hard links cannot be created. The builder must expose this as
-a clear configuration error rather than discovering it after a long build.
+### Publication
 
 A new snapshot is assembled in a sibling directory named
-`<snapshot-id>.part`. The builder writes the index last, validates the
-snapshot, flushes and closes all files, and atomically renames the directory
-to `<snapshot-id>` on the same filesystem. The final destination must not
-already exist. A `.part` directory is incomplete and must not be exposed as a
-published snapshot during normal operation.
+`<snapshot-id>.part`. Publication follows this protocol:
+
+1. Write all payload and metadata files into the `.part` directory.
+2. Write the index last and validate the completed snapshot.
+3. Flush and close every file.
+4. Atomically rename the directory to `<snapshot-id>` on the same filesystem.
+
+The final destination must not already exist. A `.part` directory is
+incomplete and is never considered published. The rename removes the suffix;
+there is no separate marker or manifest. During normal operation this gives
+readers atomic visibility: they see either no final snapshot or the completed
+one.
+
+Cross-filesystem publication is unsupported because the final rename and any
+hard links must remain on one filesystem. A builder or merger must reject that
+configuration before starting a long operation.
 
 Publication does not guarantee durability or safe recovery across a power
-failure, operating-system crash, or storage failure. The implementation does
-not perform platform-specific filesystem syncing. After such a failure,
-either a `.part` directory or a final snapshot may be unusable and must be
-validated and rebuilt.
+failure, operating-system crash, or storage failure. Flushing and closing
+files before the rename is required for normal-operation correctness, but is
+not a crash-durability guarantee. The implementation does not require
+`fsync()`, `fdatasync()`, `FlushFileBuffers()`, or equivalent
+platform-specific synchronization. After such a failure, either a `.part`
+directory or a final snapshot may be unusable and must be validated and
+rebuilt.
 
 ## Pyramid generator interface (to be confirmed, LLM, do not use the following without consultation)
 

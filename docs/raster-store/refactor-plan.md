@@ -5,24 +5,39 @@ record of completed work.
 
 ## Purpose
 
-This plan describes how to extract the existing octree-specific index, traversal, storage, codec, and subtree-reuse code into a shared 2D/3D store. The refactor must preserve existing 3D datasets while enabling raster-fundamentalis storage without duplicating infrastructure.
+This plan describes how to extract the existing octree-specific index,
+traversal, storage, and codec code into a shared 2D/3D store. The refactor
+must preserve existing 3D datasets and prove, using test-only mappings and
+codecs where necessary, that the shared mechanisms work with a 2D key.
+Persistent raster-fundamentalis formats, adapters, and tools are later work.
 
 ## Decisions already made
 
 - The shared implementation will live in `src/terrainlib/store` and use the
   `store` namespace.
-- The 2D implementation will live in `src/terrainlib/raster_store` and use the
-  `raster_store` namespace.
+- The minimal 2D traits adapter used to exercise the shared hierarchy will
+  live in `src/terrainlib/raster_store` and use the `raster_store` namespace.
+- Common Structura Fundamentalis validation and errors will live in
+  `src/terrainlib/sf` and use the `sf` namespace.
 - Existing 3D Structura Fundamentalis datasets must remain readable and
   writable without changing their on-disk contract.
 - Existing DAG datasets stored in the 3D hierarchy with `.bin` payloads must
   also remain readable and writable without changing their index or payload
   serialization.
+- `Inner` is a valid shared topology state and is supported by DAG,
+  raster-fundamentalis, and tile-base datasets. It is not valid in Structura
+  Fundamentalis datasets.
+- SF producer and processing boundaries validate indexed SF data and return a
+  typed `sf::InvalidTopology` error containing an offending key when `Inner`
+  is present. The diagnostic `sf_index_browser` is exempt. This is an SF data
+  invariant, not a generic store or octree-format rule.
 - 3D compatibility includes both existing path layouts:
   `flat` and `level_and_coordinate_directories`.
-- The 2D raster tile format is a separate format. Requirements in
-  this directory apply to that 2D format and must not be retrofitted onto
-  existing 3D datasets. The storage format for 2d tiles is defined in storage-format.md
+- A persistent 2D raster tile format is not defined by this refactor.
+  [architecture.md](architecture.md) and
+  [storage-format.md](storage-format.md) describe intended direction and
+  provisional requirements that will be finalized in later RF work. They must
+  not be retrofitted onto existing 3D datasets.
 - A path layout strategy should contain a stable identifier and two
   operations: key to extensionless `NodePath`, and `NodePath` to key. It
   should not require an inheritance hierarchy, RTTI, global
@@ -39,8 +54,7 @@ This plan describes how to extract the existing octree-specific index, traversal
   or depend on mesh or DAG payload types.
 - `copy_from()` hard-links every file when the input and output codecs return
   the same path list for a common dummy `NodePath`. Otherwise it decodes with
-  the input codec and encodes with the output codec. Callers can force
-  re-encoding.
+  the input codec and encodes with the output codec.
 - 3D geometry, ECEF bounds, mesh codecs, mesh reconstruction, mask geometry,
   and raster-specific processing remain outside the shared store.
 
@@ -48,18 +62,17 @@ This plan describes how to extract the existing octree-specific index, traversal
 
 1. Use one sparse hierarchy implementation for `octree::Id` and
    `radix::tile::Id`.
-2. Use one traversal, storage, cache, runtime codec boundary, and
-   unchanged-subtree copier for 2D and 3D.
-3. Make paired-tree walking reusable without putting mesh or raster merge
-   policy into the shared layer.
-4. Replace the current layout-strategy class hierarchy with small path-mapping
+2. Make traversal, storage, cache, and the runtime codec boundary
+   dimension-neutral while keeping production format adapters 3D-only in this
+   refactor.
+3. Replace the current layout-strategy class hierarchy with small path-mapping
    values backed by function pairs.
-5. Allow one logical node payload to consist of multiple files without making
+4. Allow one logical node payload to consist of multiple files without making
    layouts aware of those files.
-6. Preserve all valid existing 3D index files and payload paths.
-7. Introduce the 2D storage adapter without inventing unspecified raster file
-   details.
-8. Land the refactor in small, testable steps. Every phase should build and
+5. Preserve all valid existing 3D index files and payload paths.
+6. Prove the shared topology and traversal with `radix::tile::Id` without
+   defining a persistent 2D adapter or format.
+7. Land the refactor in small, testable steps. Every phase should build and
    pass tests before the next phase begins.
 
 ## Non-goals
@@ -68,10 +81,18 @@ This plan describes how to extract the existing octree-specific index, traversal
   other 3D spatial calculations.
 - Defining or implementing GDAL ingestion, raster resampling, filtering,
   source selection, or mask rasterisation.
-- Defining the `.amort` payload or source-attribution-table serialization
-  beyond the requirements already in [storage-format.md](storage-format.md).
-- Implementing an `rf_builder`, `rf_merger`, tile-base generator, or tile
-  server in this refactor.
+- Defining or implementing a raster-fundamentalis index, payload format,
+  layout ID, codec, publication lifecycle, or persistent storage adapter.
+- Implementing an `rf_builder`, `rf_merger`, tile-base generator, tile server,
+  snapshot-reuse operation, or other RF tool in this refactor.
+- Defining the raster-fundamentalis merge policy or the final paired-hierarchy
+  walker/action algebra. That work is deferred until `rf_merger` requirements
+  are defined.
+- Defining a shared subtree-copy abstraction, `Inner` subtree-copy behaviour,
+  or forced re-encoding policy for RF. Those decisions are deferred until
+  `rf_merger`.
+- Adding merge semantics for `Inner` nodes in SF. Such nodes are invalid SF
+  input and must be rejected before merge dispatch.
 - Changing the existing 3D hard-link policy by adding a silent file-copy
   fallback.
 - Refactoring unrelated octree, DAG, mesh, or tile-builder code.
@@ -87,6 +108,8 @@ Before moving code, tests must lock down the following 3D behaviour:
 | Index field order | layout ID, preferred extension, index map |
 | Node-key encoding | existing `octree::Id` level/index serialization |
 | Node-status encoding | `Leaf = 0`, `Inner = 1`, `Virtual = 2` |
+| Valid SF statuses | `Leaf` and `Virtual`; reject `Inner` with `sf::InvalidTopology` |
+| Valid DAG statuses | `Leaf`, `Inner`, and `Virtual` |
 | Flat layout ID | `flat` |
 | Flat path | `<level>-<index><extension>` |
 | Coordinate layout ID | `level_and_coordinate_directories` |
@@ -126,20 +149,19 @@ src/terrainlib/
 │   ├── RawStorage.h
 │   ├── Storage.h
 │   ├── IndexedStorage.h
-│   ├── copy_subtree.h
 │   ├── cache/
 │   │   ├── Interface.h
 │   │   ├── Dummy.h
 │   │   └── Lru.h
-│   ├── codec/
-│   │   └── ZppBits.h
-│   └── merge/
-│       ├── Action.h
-│       └── walk.h
+│   └── codec/
+│       └── ZppBits.h
 ├── mesh/
 │   └── codec/
 │       ├── Terrain.h
 │       └── Gltf.h
+├── sf/
+│   ├── InvalidTopology.h
+│   └── validate_index.h
 ├── octree/
 │   ├── Id.h
 │   ├── StoreTraits.h
@@ -151,14 +173,7 @@ src/terrainlib/
 │       ├── IndexFile.h
 │       └── open.h
 └── raster_store/
-    ├── StoreTraits.h
-    ├── IndexFile.h
-    ├── Storage.h
-    ├── codec/
-    │   ├── Amort.h
-    │   └── Debug.h
-    └── store_layout/
-        └── ZoomXYGoogle.h
+    └── StoreTraits.h
 ```
 
 The exact file grouping may be collapsed if a file would only contain a few
@@ -168,10 +183,24 @@ lines. The important boundaries are:
 - `store::codec::ZppBits` is the reusable concrete codec for payload types
   that provide ZPP Bits serialization;
 - `mesh::codec` contains the separately configured terrain and glTF codecs;
+- `sf` contains SF-specific topology validation and errors shared by
+  `sf_builder`, `sf_merger`, and `dag_builder`;
 - `octree` contains the 3D format and key adapters;
-- `raster_store` contains the new 2D format, key adapters, and raster codecs;
-  and
+- `raster_store` contains only the minimal 2D hierarchy traits adapter in this
+  refactor; and
 - subdirectory names match their namespaces where a subnamespace is used.
+
+Shared topology and octree-format adapters accept `Inner`. The SF restriction
+is enforced by `sf::validate_index()` at SF producer/consumer boundaries and
+reported as `sf::InvalidTopology`. It must not be embedded in `store::Index`,
+traversal, or the generic 3D disk adapter. `sf_index_browser` is a diagnostic
+tool and intentionally does not apply SF validation, so it can display invalid
+trees including `Inner`.
+
+`sf::validate_index()` returns
+`std::expected<void, sf::InvalidTopology>`. SF application-level error types
+must retain this error and `CopyError` when propagating failures; neither is
+reduced to a log message, assertion, or generic boolean.
 
 Temporary forwarding headers and aliases under `octree` are allowed during
 migration. They must not contain a second implementation.
@@ -225,9 +254,10 @@ changing `octree::Id`.
   by the `uint32_t` x/y coordinates;
 - validate the maximum zoom without evaluating an overflowing
   `uint32_t{1} << 32`;
-- use `radix::tile::Id::Hasher`; and
-- use the Google/XYZ convention, with the origin at the north-west, at the
-  persistent boundary.
+- use `radix::tile::Id::Hasher`.
+
+This traits adapter defines only hierarchy operations. It does not define
+persistent coordinates, a path layout, or an RF disk format.
 
 The shared code must obtain roots, parents, children, validation, and hashing
 through the traits. It must not use dimension checks or specialize behaviour
@@ -264,7 +294,6 @@ node. For example:
 ```text
 octree flat          12-123456
 octree coordinates   12/34/56/78
-raster-store ZXY     12/2200/1400
 ```
 
 It does not necessarily name a physical file. Replace
@@ -292,9 +321,6 @@ octree::store_layout::flat()
 octree::store_layout::level_and_coordinate_directories()
 octree::store_layout::from_id(id)
 octree::store_layout::all()
-
-raster_store::store_layout::zoom_x_y_google()
-raster_store::store_layout::from_id(id)
 ```
 
 This retains runtime selection from an index file while removing virtual
@@ -366,10 +392,10 @@ glTF codec configured for JSON output
   12/34/56/78
     -> 12/34/56/78.gltf
 
-Debug raster codec configured for JPEG data and PNG attribution
-  12/2200/1400
-    -> 12/2200/1400.data.jpg
-    -> 12/2200/1400.attribution.png
+Multi-file test codec
+  12/34/56/78
+    -> 12/34/56/78.data
+    -> 12/34/56/78.metadata
 ```
 
 The mesh side has separate terrain and glTF codecs because they use different
@@ -389,19 +415,6 @@ functions, maps one node to `<NodePath>.bin`, and converts `io::Error` to
 serialization remains in `dag_builder/serialization.h`, and its field order
 and meshoptimizer/JPEG encoding remain unchanged.
 
-The raster side has similarly shaped codecs specialized on PixelType:
-
-```cpp
-template <typename PixelType> struct raster_store::codec::Amort<PixelType> : store::Codec<raster_store::Tile<PixelType>> { .. };
-template <typename PixelType> struct raster_store::codec::Debug<PixelType> : store::Codec<raster_store::Tile<PixelType>> { .. };
-```
-
-`Amort` supports reading and writing. `Debug` supports writing only and may
-contain runtime options for data format, attribution format, JPEG quality, or
-similar debugging choices. It is not template-composed from separate image
-codec types.
-
-
 ### Storage and format adapters
 
 Generalize storage over traits and NodeData. It owns a configured codec through
@@ -414,9 +427,8 @@ store::IndexedStorage<Traits, NodeData>
 store::cache::Interface<Traits, NodeData>
 ```
 
-Domain-specific NodeData codecs remain under `mesh::codec` and
-`raster_store::codec`. The reusable ZPP Bits codec remains under
-`store::codec`.
+Domain-specific mesh codecs remain under `mesh::codec`. The reusable ZPP Bits
+codec remains under `store::codec`. RF codecs are deferred.
 
 Index serialization is not a responsibility of `store::Index`. Opening and
 saving a dataset receives a dimension-specific format adapter which provides:
@@ -460,69 +472,49 @@ candidate endings by asking the supplied resolver, removes an accepted ending
 to obtain a `NodePath`, and then invokes the selected layout parser. The
 generic layout does not recover keys directly from codec-owned file paths.
 
-For 2D, the adapter reads and writes `raster_store.index` as a separately
-versioned `raster_store::v1` DTO using the serialization envelope required by
-[storage-format.md](storage-format.md). Version 1 stores the layout ID and
-sparse key/status entries. `Missing` is represented by absence; derivable
-aggregate metadata is not stored.
-
 Automatic dirty-index saving currently happens in the 3D storage destructor.
 Preserve that behaviour for existing 3D entry points during the migration.
-The new 2D snapshot API should require an explicit finalization/publication
-step; a destructor must not make an incomplete snapshot authoritative.
 
-### Copying and unchanged-subtree reuse
+### Copying one node and SF subtree reuse
 
 There are two separate responsibilities in the current implementation:
 
-1. `sf_merger::NodeWriter` traverses a source subtree and decides which
-   indexed nodes to reuse.
+1. `sf_merger::NodeWriter` traverses a source subtree and
+   `sf_merger::cut_leaf_node()` identifies an unchanged leaf.
 2. `octree::Storage::copy_from()` delegates to
    `octree::RawStorage::copy_from()`, where
    `std::filesystem::create_hard_link()` performs the actual hard link and the
    target index is updated on success.
 
 The filesystem hard-link implementation is therefore already in terrainlib.
-This refactor shall move the payload-neutral subtree traversal and copy
-orchestration out of `sf_merger`.
+Move the one-node storage operation into the shared store, but keep subtree
+selection and traversal in `sf_merger`. There is no current DAG caller, and RF
+subtree-copy requirements will be defined with `rf_merger`.
 
-The current call chain is:
+The migrated call chains are:
 
 ```text
 sf_merger decides to keep a source subtree unchanged
     -> NodeWriter traverses the source index
-    -> octree::Storage::copy_from()
-    -> octree::RawStorage::copy_from()
-    -> create_hard_link(), or decode/encode when formats differ
-```
+    -> store::Storage::copy_from()
+    -> hard-link every codec path, or decode/encode
 
-The target call chain becomes:
-
-```text
-merge policy decides to keep a source subtree unchanged
-    -> store::copy_subtree()
+sf_merger determines that a cut leaf is unchanged
+    -> cut_leaf_node()
     -> store::Storage::copy_from()
     -> hard-link every codec path, or decode/encode
 ```
 
 `Storage::copy_from()` remains the operation for copying one logical node.
-Add:
-
-```cpp
-struct CopyOptions {
-    bool force_reencode = false;
-};
-```
-
 For one key, `copy_from()`:
 
 1. calls the input and output `Codec::paths()` with the same fixed dummy
    `NodePath`;
-2. when the lists are equal and `force_reencode` is false, calls both codecs
-   again with their actual source and target `NodePath` values and hard-links
-   every source path to the corresponding target path;
-3. when the dummy lists differ or re-encoding is forced, reads the payload
-   with the input codec and writes it with the output codec; and
+2. when the lists are equal, calls both codecs again with their actual source
+   and target `NodePath` values and hard-links every source path to the
+   corresponding target path;
+3. when the dummy lists differ, reads the payload with the input codec and
+   writes it with the output codec; and
 4. updates the target index only after all links or the write complete.
 
 The dummy path must be fixed and collision-free, for example
@@ -534,166 +526,73 @@ created by that call before returning the error. There is no silent copy
 fallback. An unsupported read or write needed for re-encoding is returned
 through `CopyError`, retaining the underlying `CodecError`.
 
-Codec settings that do not change `paths()`, such as compression level or
-JPEG quality, do not force re-encoding by default. A caller that needs those
-settings applied to every node passes `force_reencode = true`.
-
 Hard-link rules:
 
 - never modify an existing linked payload in place;
 - a matching codec path list hard-links every file;
 - a different path list decodes with the input codec and encodes with the
   output codec;
-- `force_reencode` always selects decode/encode;
 - hard-link failure is explicit;
-- 2D snapshot tools preflight that source and destination support hard links
-  before a long operation starts; and
 - no silent file-copy fallback is introduced.
 
-#### Shared subtree copier
+#### SF-local subtree traversal
 
-Move the payload-neutral traversal in
-`sf_merger::NodeWriter::copy_subtree_to_output()` to a shared operation such
-as:
+`sf_merger::NodeWriter::copy_subtree_to_output()` remains in `sf_merger`. It
+uses shared traversal and `Storage::copy_from()`, but it is not promoted to a
+generic store API during this refactor.
 
-```cpp
-std::expected<void, CopyError>
-store::copy_subtree(
-    const IndexedStorage& source,
-    Storage& target,
-    const Key& root,
-    CopyOptions options = {});
-```
+SF validation guarantees that its indexed inputs contain only `Leaf` and
+`Virtual` nodes. The SF-local traversal skips `Virtual`, copies `Leaf`, and
+does not define behaviour for `Inner`. An `Inner` node is rejected before
+merge or cut processing with `sf::InvalidTopology` containing the offending
+key.
 
-The shared operation:
-
-1. traverses an indexed source subtree;
-2. skips `Virtual` nodes;
-3. calls `copy_from()` for physical payloads in both `Leaf` and `Inner`
-   states;
-4. continues traversal below `Inner` nodes; and
-5. returns copy failures to its caller instead of converting them into an
-   assertion or immediate process termination.
-
-The operation is payload-neutral because it only interprets hierarchy status
-and delegates each physical node to `Storage::copy_from()`. It does not know
-about meshes, rasters, masks, attribution, or their encodings.
-
-#### `Leaf`, `Inner`, and `Virtual`
-
-The sparse index distinguishes payload presence from descendant presence:
-
-| Status | Physical payload | Indexed descendants |
-|---|---:|---:|
-| `Leaf` | yes | no |
-| `Inner` | yes | yes |
-| `Virtual` | no | yes |
-
-`Missing` is represented by absence from the sparse index and is not visited
-by subtree traversal.
-
-The current `NodeWriter` callback effectively does:
-
-```cpp
-if (status == NodeStatus::Virtual) {
-    return;
-}
-
-DEBUG_ASSERT(status == NodeStatus::Leaf);
-DEBUG_ASSERT_VAL(target.copy_from(id, source));
-```
-
-The `DEBUG_ASSERT(status == Leaf)` is an incorrect assumption. `Inner` is
-also a physical state and its payload must be copied. The existing
-`IndexMap::add()` creates an `Inner` node whenever a physical `Leaf` gains a
-physical descendant. Such a hierarchy is valid in 3D and is explicitly
-required for raster-fundamentalis, where a coarse physical tile may coexist
-with more accurate descendants.
-
-For example:
-
-```text
-zoom 10 physical tile       -> Inner
-└── zoom 11 physical tile   -> Leaf
-```
-
-Reusing this subtree must preserve both payloads. Skipping the `Inner`
-payload would lose the coarse fallback; asserting on `Inner` rejects a valid
-hierarchy.
-
-The shared copier shall instead handle status as:
-
-```cpp
-switch (status) {
-case NodeStatus::Virtual:
-    break;
-case NodeStatus::Leaf:
-case NodeStatus::Inner:
-    target.copy_from(id, source, options);
-    break;
-}
-```
-
-Traversal shall continue below the `Inner` node. Copying the parent first adds it
-to the target as a `Leaf`; copying its descendant then promotes the parent to
-`Inner`, reconstructing the source topology through the normal index
-transitions.
-
-The existing paired merger has a related limitation: its dispatcher only
-handles `Missing`, `Leaf`, and `Virtual` pairs and sends any pair containing
-`Inner` to `UNREACHABLE()`. The paired hierarchy-walking work below must
-handle or explicitly reject all 16 status combinations without treating
-valid input data as an impossible program state.
+When `rf_merger` is designed, it can initially compose `store::traverse` and
+`Storage::copy_from()`. At that point, the SF and RF implementations provide
+enough evidence to decide whether a shared subtree copier is useful and how it
+must handle RF `Inner` nodes.
 
 #### Error propagation
 
 The lower storage layer already represents ordinary copy failures, including
 missing source files, directory creation failure, hard-link failure, decode
 failure, and encode failure. The current `NodeWriter` consumes
-`Storage::copy_from()` with `DEBUG_ASSERT_VAL`, while some overwrite paths
-terminate through `LOG_ERROR_AND_EXIT()`. Because
-`copy_subtree_to_output()` returns `void`, the merge caller cannot report or
-handle these failures.
+`Storage::copy_from()` with `DEBUG_ASSERT_VAL`, as does the unchanged-leaf path
+in `cut_leaf_node()`, while some overwrite paths terminate through
+`LOG_ERROR_AND_EXIT()`. Their `void` call chains prevent the application from
+reporting or handling these failures.
 
-The shared copier must return the failure through `copy_subtree()` and the
-merge call chain until the application boundary can report it with the
-affected key and path. Codec, filesystem, unsupported-conversion, malformed
-dataset, and overwrite failures are propagated with `std::expected`;
-`CopyError` retains any underlying `CodecError`. Assertions remain appropriate
-for internal invariants, but operational failures are not assertion failures
-or intentionally thrown exceptions.
+Return failures from the SF-local subtree and cut functions through their
+callers until the application boundary can report the affected key and path.
+Codec, filesystem, unsupported-conversion, malformed-dataset, and overwrite
+failures are propagated with `std::expected`; `CopyError` retains any
+underlying `CodecError`. Assertions remain appropriate for internal
+invariants, but operational failures are not assertion failures or
+intentionally thrown exceptions.
 
-### Paired hierarchy walking
+### Paired hierarchy walking is deferred
 
-Extract only the dimension-neutral control flow from `sf_merger::Merger`.
-The shared walker obtains the left and right status for a key and asks a
-policy for one of:
+This refactor does not extract `sf_merger::Merger` into a shared paired-tree
+walker. SF only permits `Missing`, `Leaf`, and `Virtual`, and its current
+recursion does not provide enough evidence to define the `Inner` behaviour
+needed by raster-fundamentalis and tile-base merging.
 
-```cpp
-store::merge::Recurse<Context>
-store::merge::Ignore
-store::merge::KeepLeft
-store::merge::KeepRight
-store::merge::Write<Payload>
-```
+The previously proposed mutually exclusive actions `Recurse`, `Ignore`,
+`KeepLeft`, `KeepRight`, and `Write` cannot express both an action for the
+current physical payload and recursion into descendants. `Inner` merging may
+require both. Whether the future interface uses a combined `WriteAndRecurse`
+action or independent current-node and descendant decisions belongs to the
+`rf_merger` design.
 
-The walker owns recursion and unchanged-subtree reuse. The policy owns
-selection and payload combination.
+For this refactor:
 
-All 16 combinations of `Missing`, `Leaf`, `Inner`, and `Virtual` must be
-handled. Unsupported combinations may return a typed error, but they must not
-fall into `UNREACHABLE()`.
+- keep recursion, subtree traversal, and mesh policy in `sf_merger`;
+- validate SF inputs and reject `Inner` through `std::expected`;
+- move only the one-node `Storage::copy_from()` mechanism into `store`; and
+- do not add a shared `store::merge` namespace.
 
-The existing 3D adapter retains:
-
-- `NodeLoader` ancestor mesh reconstruction;
-- ECEF node bounds;
-- mesh masks and clipping;
-- mesh combination and texture atlas generation; and
-- mesh validation and auxiliary texture writes.
-
-A future 2D merger can supply a raster policy without changing the shared
-walker. Implementing that policy is outside this refactor.
+A future `rf_merger` task will define the paired-tree action algebra from the
+2D requirements and may migrate `sf_merger` once both use cases are known.
 
 ## Implementation phases
 
@@ -705,26 +604,30 @@ has failing tests.
 
 No production behaviour changes.
 
-1. Add golden 3D fixtures created by the current code:
+1. Add golden SF fixtures created by the current code:
    - one `terrain.index` using `flat`;
    - one using `level_and_coordinate_directories`;
-   - one DAG dataset whose index selects `.bin` and whose payload contains a
-     valid serialized `dag::ClusterBatch`;
-   - physical payload paths for a root, child, and deeper descendant; and
-   - an index containing `Leaf`, `Virtual`, and `Inner`.
-2. Test that all fixtures open, resolve the expected IDs and extensions, and
+   - across the fixtures, physical payload paths for a root, child, and deeper
+     descendant, without placing physical payloads at ancestor and descendant
+     keys in the same index; and
+   - index entries containing `Leaf` and `Virtual`, but no `Inner`.
+2. Add one golden DAG dataset whose index selects `.bin`, whose payload
+   contains a valid serialized `dag::ClusterBatch`, and whose index contains
+   `Leaf`, `Virtual`, and `Inner`.
+3. Test that all fixtures open, resolve the expected IDs and extensions, and
    traverse the expected sparse nodes.
-3. Add path round-trip tests for boundary IDs and both layouts.
-4. Add storage tests for:
+4. Add path round-trip tests for boundary IDs and both layouts.
+5. Add storage tests for:
    - matching-extension hard links;
    - different-extension decode/re-encode;
-   - `.terrain`, `.glb`, `.gltf`, and `.bin` dispatch through the appropriate
-     domain resolver;
+   - `.terrain`, `.glb`, `.gltf`, and `.bin` open/read dispatch through the
+     appropriate domain resolver; the `.bin` case does not exercise
+     `copy_from()`;
    - explicit failure for an unknown preferred extension;
    - overwrite rejection;
    - indexed and unindexed opens; and
    - final index creation by directory scan.
-5. Record the pre-refactor public aliases used by `sf_builder`, `sf_merger`,
+6. Record the pre-refactor public aliases used by `sf_builder`, `sf_merger`,
    `sf_index_browser`, `dag_builder`, and `dag_convert_debug`.
 
 Exit criterion: the compatibility tests pass against the untouched
@@ -760,10 +663,8 @@ callers still build through aliases; no filesystem code has changed.
    in the 3D format adapter.
 5. Port legacy layout discovery so it strips recognized 3D file endings before
    calling `node_path_to_key()`.
-6. Add the 2D `z/x/y` mapping with stable ID `zoom/x/y_google`. The raster
-   codec, not the mapping, adds `.amort` or debug endings.
-7. Switch node-path and layout-detection tests to the new implementation.
-8. Delete the old strategy base class, registration machinery, and concrete
+6. Switch node-path and layout-detection tests to the new implementation.
+7. Delete the old strategy base class, registration machinery, and concrete
    strategy classes once no call site uses them.
 
 Exit criterion: the legacy 3D adapter plus codecs resolve all Phase 0 fixtures
@@ -792,8 +693,8 @@ strategy pointer.
 8. Make every raw file operation obtain its complete file list through
    `Codec::paths()`. `has()` requires every listed file, and `remove()` removes
    every listed file.
-9. Keep domain-specific payload codecs outside the shared module under
-   `mesh::codec` and `raster_store::codec`.
+9. Keep domain-specific mesh codecs outside the shared module under
+   `mesh::codec`.
 10. Split generic index maintenance from 3D index serialization and legacy
    folder discovery.
 11. Keep the current 3D `terrain.index` DTO and open functions as compatibility
@@ -806,6 +707,10 @@ strategy pointer.
     callers.
 14. Preserve the current 3D destructor-save behaviour until all callers have
     explicit index finalization.
+15. Instantiate the shared storage tests with `raster_store::StoreTraits`
+    using a test-only path mapping and codec. This proves the storage templates
+    contain no hidden `octree::Id` dependency without defining a stable RF
+    layout, codec, or disk format.
 
 Add focused codec tests using single-file, multi-file, read/write, and
 write-only test codecs before depending on the raster payload implementation.
@@ -818,7 +723,7 @@ through the shared runtime codec and storage implementation. Existing DAG
 payload bytes and `.bin` paths remain compatible. No extension-dispatching
 mesh codec or second storage implementation remains under `octree`.
 
-### Phase 4 — Generalize subtree reuse and paired walking
+### Phase 4 — Harden node reuse and enforce SF topology
 
 1. Change `Storage::copy_from()` to compare input and output codec path lists
    for the fixed dummy `NodePath`.
@@ -826,74 +731,37 @@ mesh codec or second storage implementation remains under `octree`.
    created by a partially failed call.
 3. Decode with the input codec and encode with the output codec when lists
    differ.
-4. Add `CopyOptions::force_reencode`, defaulting to false.
-5. Test:
+4. Test:
    - one-file hard linking;
    - multi-file hard linking;
    - different path counts and endings;
-   - forced re-encoding with otherwise equal paths;
+   - cleanup after a partially failed multi-file hard link;
    - conversion between terrain and glTF;
-   - conversion into a write-only codec; and
-   - runtime failure when a required codec operation is unsupported.
-6. Add the shared unchanged-subtree copier.
-7. Test copies containing `Leaf`, `Virtual`, and `Inner` nodes.
-8. Add the paired hierarchy walker and typed actions.
-9. Cover all 16 status pairs with table-driven tests.
-10. Adapt the 3D merger to the shared walker while keeping mesh policy in
-   `sf_merger`.
-11. Remove generic recursion and copy logic from `sf_merger::Merger` and
-   `NodeWriter`.
-12. Add a 3D integration test proving an unchanged subtree is hard-linked and
-   a changed boundary node is newly written.
+   - overwrite rejection; and
+   - missing-file, hard-link, decode, and encode error propagation.
+5. Add `sf::validate_index()`, returning `sf::InvalidTopology` with the
+   offending key when it encounters `Inner`.
+6. Apply the validator to SF-builder output finalization, SF-merger merge and
+   cut inputs, SF-merger output, and the DAG builder's SF input. Do not apply
+   it when opening DAG datasets, through generic octree/store adapters, or in
+   the diagnostic `sf_index_browser`.
+7. Keep SF recursion, subtree traversal, and mesh policy in `sf_merger`.
+   Change its subtree and cut call chains to propagate validation and
+   `copy_from()` failures through `std::expected` to the application boundary.
+8. Add integration tests proving:
+    - valid `Leaf`/`Virtual` SF merge behaviour is unchanged;
+    - an SF input containing `Inner` fails validation before merge dispatch;
+    - an unchanged SF subtree is hard-linked and a changed boundary node is
+      newly written; and
+    - an unchanged leaf in the SF cut path is hard-linked while a clipped leaf
+      is newly written.
 
-Exit criterion: the existing 3D merger behaviour is preserved, `Inner` no
-longer reaches `UNREACHABLE()`, multi-file reuse works through
-`Codec::paths()`, and the shared walker contains no mesh, ECEF, GDAL, OpenCV,
-or raster dependencies.
+Exit criterion: one-node copying works through `Codec::paths()`, SF consumers
+reject `Inner` with a typed error before processing, existing valid SF merge
+and cut behaviour is preserved, and neither a shared subtree copier nor a
+paired-tree walker has been introduced.
 
-### Phase 5 — Add the 2D raster-fundamentalis adapter
-
-All required 2D format decisions are resolved below.
-
-1. Add the checked 2D persistent-key conversion around `radix::tile::Id`,
-   supporting zoom 0 through `std::numeric_limits<uint32_t>::digits` and
-   treating that maximum zoom as terminal.
-2. Add the default `<zoom>/<x>/<y>` path mapping with stable ID
-   `zoom/x/y_google`.
-3. Define `raster_store.index` with a versioned 2D DTO containing the layout
-   ID and sparse key/status entries, without derived aggregate metadata. Use
-   fixed-width `uint32_t` zoom/x/y fields and serialize entries in
-   lexicographic `(zoom, x, y)` order.
-4. Implement the version-1 magic/version/checksum/compression envelope. Store
-   zlib CRC-32 as `uint32_t`, computed over the compressed payload, and use
-   zstd at its best-compression setting. Import zstd through the project's
-   CMake dependency facility; use the existing `ZLIB::ZLIB` dependency for
-   CRC-32.
-5. Add the 2D format adapter and storage aliases under
-   `raster_store`.
-6. Add `raster_store::codec::Amort<Payload>` with runtime format options when
-   the final `.amort` serialization is available.
-7. Add the output-only `raster_store::codec::Debug<Payload>` with runtime
-   options for its data and attribution files.
-8. If the final `.amort` serialization is not available, exercise storage
-   with the Phase 3 test codec and do not make `.amort` claims from it.
-9. Test:
-   - invalid and boundary tile IDs, including the maximum zoom and rejected
-     children beyond it;
-   - index serialization and validation;
-   - `Leaf`/`Inner` coexistence;
-   - sparse traversal and ancestor lookup;
-   - path round trips;
-   - snapshot hard-link reuse;
-   - AMORT-to-debug output conversion;
-   - explicit cross-filesystem/preflight failure;
-   - publication from `<snapshot-id>.part` to `<snapshot-id>`; and
-   - publication rejection when the destination already exists.
-
-Exit criterion: the same shared store can create, open, traverse, and reuse a
-minimal 2D raster-fundamentalis fixture without changing the 3D fixtures.
-
-### Phase 6 — Cleanup and documentation
+### Phase 5 — Cleanup and documentation
 
 1. Remove temporary forwarding headers that no repository caller needs.
 2. Remove obsolete files under `octree/disk` and the old generic
@@ -902,10 +770,15 @@ minimal 2D raster-fundamentalis fixture without changing the 3D fixtures.
    `octree`.
 4. Update includes, CMake source lists, and precompiled-header includes.
 5. Update [architecture.md](architecture.md),
-   [status-quo.md](status-quo.md), and the before-refactor report with links to
-   the implemented boundary. Preserve the before-refactor report as history;
-   do not rewrite it as if it described the new code.
-6. Document the final public names and a minimal 2D/3D opening example.
+   [storage-format.md](storage-format.md), [status-quo.md](status-quo.md), and
+   the before-refactor report with links to the implemented boundary. State
+   clearly that RF formats and tools remain future work and that architecture
+   requirements are not acceptance criteria for this refactor. Preserve the
+   before-refactor report as history; do not rewrite it as if it described the
+   new code.
+6. Document the final public names, a legacy 3D opening example, and an
+   in-memory `radix::tile::Id` topology example. Do not document a persistent
+   RF format or opening API.
 
 Exit criterion: repository search finds no generic implementation tied to
 `octree::Id`; all tests pass; the old layout strategy hierarchy is gone.
@@ -922,12 +795,18 @@ unittests/terrainlib/store_layout.cpp
 unittests/terrainlib/store_codec.cpp
 unittests/terrainlib/store_storage.cpp
 unittests/terrainlib/store_compatibility.cpp
-unittests/terrainlib/store_merge_walk.cpp
+unittests/terrainlib/sf_validate_index.cpp
 ```
 
 The DAG payload-compatibility fixture and resolver integration test belong in
 `unittests_dagbuilder`, because `terrainlib` must not depend on
 `dag::ClusterBatch` or its serializers.
+
+The validator's unit tests belong in `unittests_terrainlib`. Boundary tests
+belong with their consumers: SF-builder output validation in
+`unittests_sfbuilder`, merge and cut validation/error propagation in
+`unittests_sfmerger`, and DAG-builder SF-input validation in
+`unittests_dagbuilder`. `sf_index_browser` remains unvalidated by design.
 
 During implementation:
 
@@ -939,7 +818,9 @@ During implementation:
    DAG resolver changes.
 6. Build `sf_builder`, `sf_merger`, `sf_index_browser`, `dag_builder`, and
    `dag_convert_debug` after their storage aliases move.
-7. Run any existing merger integration fixture after Phase 4.
+7. Run `unittests_sfbuilder`, `unittests_sfmerger`, and
+   `unittests_dagbuilder`, plus any existing merger integration fixture, after
+   the Phase 4 validation changes.
 8. Inspect `git diff --check` and the final worktree before each commit.
 
 No formatting-only pass or unrelated refactor belongs in these commits.
@@ -969,8 +850,9 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `octree/disk/IndexFile.h` | versioned 3D format adapter under `octree` |
 | DAG serializers in `dag_node.h` and `encoded.h` | `dag_builder/serialization.h` |
 | `dag_builder/storage.h` aliases | DAG storage aliases plus codec resolver convenience functions |
-| `sf_merger::NodeWriter` subtree loop | `store/copy_subtree.h` |
-| `sf_merger::Merger` recursion | `store/merge/walk.h` |
+| `sf_merger::NodeWriter` subtree loop | remains in `sf_merger`; return copy failures through `std::expected` |
+| `sf_merger::cut_leaf_node()` copy path | remains in `sf_merger`; return copy failures through `std::expected` |
+| SF merger `Inner` `UNREACHABLE()` path | `sf::validate_index()` returning `sf::InvalidTopology` |
 
 ## Risks and controls
 
@@ -983,63 +865,36 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Valid legacy paths are parsed differently | Characterization and round-trip tests before replacement |
 | Template migration creates a large unreviewable diff | Compatibility aliases and phase-by-phase caller migration |
 | `radix::tile::Id` root underflows | Traits intercept root parent lookup |
-| Invalid 2D coordinates become persistent | Validate on every disk/API boundary |
-| `Inner` payloads are lost during subtree reuse | Copy every physical status and test mixed-depth fixtures |
-| Linked snapshots are modified in place | Immutable snapshot API and overwrite-disabled output |
+| Invalid `radix::tile::Id` values enter the shared index | Validate through `raster_store::StoreTraits` and test boundary zooms |
+| Invalid `Inner` nodes reach SF merge dispatch | Validate every SF input first and return the offending key in a typed error |
+| SF subtree copying is generalized before RF requirements exist | Keep it in `sf_merger`; reconsider extraction with `rf_merger` |
+| A paired-walker API is fixed before RF semantics are known | Defer its action algebra until `rf_merger` requirements are defined |
 | Multi-file hard linking fails partway through | Remove links created by the failed `copy_from()` before returning |
 | Incompatible codecs return the same path list | Treat path-list equality as a codec contract and test every concrete codec pairing |
 | Output-only codec is selected for required input | Return a clear `UnsupportedOperation` error |
-| Hard-link failure appears late | 2D operation preflight and explicit errors |
-| Shared code accumulates mesh/raster policy | Dependency tests/review against the source boundary |
-| Generic index accidentally dictates both disk formats | Separate 3D and 2D format adapters |
+| Shared code accumulates mesh or provisional RF policy | Dependency tests/review against the source boundary |
+| The refactor accidentally fixes the future RF disk format | Do not add a persistent 2D format adapter, layout, or codec |
 
-## Decisions required before Phase 5
+## Deferred raster-fundamentalis work
 
-### Resolved decisions
+This refactor is a prerequisite for, not an implementation of, the system
+described in [architecture.md](architecture.md). That document and
+[storage-format.md](storage-format.md) remain useful design input, but their RF
+details are not acceptance criteria for this refactor and are not declared
+final here.
 
-1. **Index filename and location:** each snapshot stores
-   `raster_store.index` directly at its root.
-2. **Node and payload paths:** `store_layout` determines the extensionless
-   node path. The default 2D mapping produces `<zoom>/<x>/<y>` directly below
-   the snapshot; there is no fixed `chunks/` directory. The AMORT codec
-   expands it to `<zoom>/<x>/<y>.amort`.
-3. **Layout identity and coordinates:** the stable layout ID serialized in the
-   index is `zoom/x/y_google`. It uses Google/XYZ coordinates with the origin
-   at the north-west.
-4. **Persistent key and zoom range:** use `radix::tile::Id`, whose x and y
-   coordinates must fit in `uint32_t`. The maximum zoom is therefore
-   `std::numeric_limits<uint32_t>::digits` (32): at that zoom every
-   `uint32_t` x/y value is representable and valid. A maximum-zoom tile is
-   terminal because its children would require another coordinate bit.
-   Validation must special-case this boundary rather than evaluate an
-   overflowing `uint32_t{1} << 32`. The versioned disk DTO uses fixed-width
-   `uint32_t` fields for zoom, x, and y rather than serializing the platform
-   `unsigned` type directly.
-5. **Version-1 index contents:** store the layout ID and sparse key/status
-   entries. `Leaf`, `Inner`, and `Virtual` are serialized; `Missing` is
-   represented by absence. Do not store derived aggregate metadata until a
-   concrete query demonstrates that it is required. Serialize entries in
-   lexicographic `(zoom, x, y)` order and reject duplicate keys while reading.
-6. **Serialization envelope:** version 1 uses a fixed, file-type-specific
-   64-bit magic value generated once during implementation, a 32-bit version,
-   zlib CRC-32 stored as `uint32_t` and computed over the compressed payload,
-   a compression enum, and the compressed payload. Use zstd with its
-   best-compression setting. The exact magic value is an implementation
-   constant, not a further design decision.
-7. **Publication:** build a snapshot in a sibling directory named
-   `<snapshot-id>.part`. Write the index last, validate the completed snapshot,
-   flush and close every file, and atomically rename the directory to
-   `<snapshot-id>` on the same filesystem. The destination must not already
-   exist. A `.part` directory is never considered published; the rename
-   removes the suffix without a separate marker or manifest. This guarantees
-   atomic visibility to concurrent readers during normal operation.
-8. **Crash behavior:** the store does not guarantee durability or safe
-   recovery across a power failure, operating-system crash, or storage
-   failure. Do not add `fsync()`, `fdatasync()`, `FlushFileBuffers()`, or
-   equivalent platform-specific synchronization to this refactor. After such
-   a failure, either a `.part` directory or a final snapshot may be unusable
-   and must be validated and rebuilt. Flushing and closing files remains
-   required before the rename for normal-operation correctness, but must not
-   be documented as a crash-durability guarantee.
+A later RF design phase must resolve and test at least:
 
-There are no remaining decisions blocking Phase 5.
+- the persistent index filename, schema, versioning, and serialization
+  envelope;
+- persistent tile keys, coordinate convention, layout IDs, and node paths;
+- tile and source-attribution payload formats and codecs;
+- snapshot construction, validation, publication, and crash expectations;
+- hard-link preflight and unchanged-tile reuse;
+- `rf_merger` policy, paired-tree walking, and `Inner` copy behaviour; and
+- RF builders, converters, debugging outputs, and other tools.
+
+None of those decisions blocks completion of this refactor.
+The removed ideas are retained, without implementation-plan status, in the
+explicitly draft [rf_builder notes](rf_builder.md) and
+[rf_merger notes](rf_merger.md).

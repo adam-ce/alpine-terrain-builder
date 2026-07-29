@@ -49,12 +49,20 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   `std::expected`; unsupported operations and other operational failures are
   reported as error values. Reading and writing must be reentrant (callable
   concurrently from different threads).
+- This refactor does not add synchronization to storage, indexes, or caches
+  and does not change their concurrency guarantees. Existing caller-side
+  synchronization and concurrency behaviour are preserved; any concurrency
+  bug fix is separate work.
 - Legacy index metadata selects a codec through an explicit, caller-supplied
   resolver. The octree format adapter does not contain a global codec registry
   or depend on mesh or DAG payload types.
 - `copy_from()` hard-links every file when the input and output codecs return
   the same path list for a common dummy `NodePath`. Otherwise it decodes with
   the input codec and encodes with the output codec.
+- The `.png` written beside changed meshes by `sf_merger::NodeWriter` is an
+  unmanaged debug artifact. It is not part of a logical node, is not returned
+  by `Codec::paths()`, and is not indexed or copied by storage. Its existing
+  application-local behaviour is preserved.
 - 3D geometry, ECEF bounds, mesh codecs, mesh reconstruction, mask geometry,
   and raster-specific processing remain outside the shared store.
 
@@ -521,10 +529,11 @@ The dummy path must be fixed and collision-free, for example
 `__codec_probe__/node`. Path lists are compared exactly, including count,
 order, and filename endings.
 
-If linking several files fails partway through, remove the target links
-created by that call before returning the error. There is no silent copy
-fallback. An unsupported read or write needed for re-encoding is returned
-through `CopyError`, retaining the underlying `CodecError`.
+If linking several files fails partway through, return the error without a
+transactional rollback guarantee; target links already created by the call
+may remain. There is no silent copy fallback. An unsupported read or write
+needed for re-encoding is returned through `CopyError`, retaining the
+underlying `CodecError`.
 
 Hard-link rules:
 
@@ -727,15 +736,16 @@ mesh codec or second storage implementation remains under `octree`.
 
 1. Change `Storage::copy_from()` to compare input and output codec path lists
    for the fixed dummy `NodePath`.
-2. Hard-link all actual files when the lists match, with cleanup of links
-   created by a partially failed call.
+2. Hard-link all actual files when the lists match. A partially failed
+   multi-file operation returns an error without rolling back links already
+   created.
 3. Decode with the input codec and encode with the output codec when lists
    differ.
 4. Test:
    - one-file hard linking;
    - multi-file hard linking;
    - different path counts and endings;
-   - cleanup after a partially failed multi-file hard link;
+   - error propagation after a partially failed multi-file hard link;
    - conversion between terrain and glTF;
    - overwrite rejection; and
    - missing-file, hard-link, decode, and encode error propagation.
@@ -851,6 +861,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | DAG serializers in `dag_node.h` and `encoded.h` | `dag_builder/serialization.h` |
 | `dag_builder/storage.h` aliases | DAG storage aliases plus codec resolver convenience functions |
 | `sf_merger::NodeWriter` subtree loop | remains in `sf_merger`; return copy failures through `std::expected` |
+| `sf_merger::NodeWriter` auxiliary `.png` write | remains an unmanaged, application-local debug artifact |
 | `sf_merger::cut_leaf_node()` copy path | remains in `sf_merger`; return copy failures through `std::expected` |
 | SF merger `Inner` `UNREACHABLE()` path | `sf::validate_index()` returning `sf::InvalidTopology` |
 

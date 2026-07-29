@@ -11,8 +11,12 @@ baseline, not a finalized binary-format specification.
 - [Architecture](architecture.md)
 - [Storage format](storage-format.md)
 - [Sampling and pyramid generation](sampling-and-generation.md)
-- [DRAFT rf_builder idea notes](rf_builder.md)
-- [DRAFT rf_merger idea notes](rf_merger.md)
+
+## Plans
+
+- [Store refactoring plan](refactor-plan.md)
+- [DRAFT RF builder plan archive](rf_builder.md)
+- [DRAFT RF merger plan archive](rf_merger.md)
 
 ## Scope
 

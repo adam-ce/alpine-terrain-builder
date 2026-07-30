@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
@@ -66,10 +67,11 @@ std::optional<Clustering> load_and_clusterize_mesh(
     return clusterize(mesh);
 }
 
-// A clustering and a mapping from its clusters to the original input clusters that were merged to produce it.
+// A clustering with its group structure.
 struct LodResult {
     Clustering clustering;
-    std::vector<std::vector<uint32_t>> child_map;
+    std::vector<uint32_t> group_assignment; // per cluster group index
+    std::vector<std::vector<uint32_t>> group_children; // per group child indices
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build child map.
@@ -90,8 +92,7 @@ LodResult build_lod(const Clustering &clusters, const BuildOptions &options, con
     // Find vertices to lock
     const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, node_bounds);
 
-    // Convert relative_target_error (a fraction of the node bounds) to an absolute
-    // error; both targets stay optional so simplify() can apply its own default.
+    // Convert relative target error (a fraction of the node bounds) to absolute
     std::optional<float> absolute_target_error;
     if (options.relative_target_error) {
         const double node_extent = glm::compMax(node_bounds.size());
@@ -107,17 +108,10 @@ LodResult build_lod(const Clustering &clusters, const BuildOptions &options, con
     clustering = simplify(clustering, simplify_options);
     remove_unused_vertices_inplace(clustering);
 
-    // Split each cluster into roughly 4 parts
+    // Split each cluster into parts again.
     auto result = clusterize(clustering);
 
-    // Build child map. Simplification preserves the cluster count, so each final
-    // cluster's backward mapping index is its partition index.
-    std::vector<std::vector<uint32_t>> child_map(result.clustering.cluster_count());
-    for (const auto [final_index, partition_index] : enumerate(result.backward_mapping)) {
-        child_map[final_index] = partition_to_clusters[partition_index];
-    }
-
-    return {std::move(result.clustering), std::move(child_map)};
+    return {std::move(result.clustering), std::move(result.backward_mapping), std::move(partition_to_clusters)};
 }
 
 // Load input meshes, clusterize, and filter them to the target region.
@@ -158,6 +152,41 @@ struct BuildContext {
     const radix::geometry::Aabb3d &root_bounds;
 };
 
+// Assemble a node's metadata from a build_lod result.
+dag::NodeMetadata build_node_metadata(
+    std::vector<uint32_t> group_assignment,
+    const std::vector<std::vector<uint32_t>> &group_children,
+    const Clustering &merged,
+    const Clustering &simplified,
+    const std::vector<dag::Id> &cluster_sources,
+    const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
+    dag::NodeMetadata metadata;
+    metadata.group_assignment = std::move(group_assignment);
+    metadata.groups.resize(group_children.size());
+
+    // map child indices to dag ids
+    for (const auto &[group_index, local_indices] : enumerate(group_children)) {
+        metadata.groups[group_index].children = transform_vector(local_indices, [&](const uint32_t merged_index) {
+            return cluster_sources[merged.clusters[merged_index].id];
+        });
+    }
+
+    // compute group bounds
+    for (dag::Group &group : metadata.groups) {
+        for (const dag::Id &child : group.children) {
+            group.bounds.expand_by(dag::get_group_bounds(cluster_metadata.at(child.source_batch), child.cluster_index));
+        }
+    }
+
+    // compute group error
+    for (const auto &[final_index, group_index] : enumerate(metadata.group_assignment)) {
+        double &error = metadata.groups[group_index].error;
+        error = std::max(error, simplified.clusters[final_index].absolute_error);
+    }
+
+    return metadata;
+}
+
 // Load relevant DAG nodes, filter, merge, then simplify clusters.
 dag::ClusterBatch load_and_simplify_dag_nodes(
     const std::vector<octree::Id> &dag_ids,
@@ -167,6 +196,7 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     const BuildContext &ctx) {
     std::vector<dag::Id> cluster_sources;
     std::vector<Clustering> filtered;
+    std::unordered_map<octree::Id, dag::NodeMetadata> cluster_metadata;
 
     for (const octree::Id &id : dag_ids) {
         // Load dag node clusters
@@ -175,7 +205,8 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
             LOG_WARN("Failed to load DAG node {}, skipping", id);
             continue;
         }
-        Clustering clustering = std::move(dag_node.value().clustering);
+        auto &[metadata, clustering] = dag_node.value();
+        cluster_metadata.emplace(id, std::move(metadata));
 
         // Assign canonical cluster ids
         for (auto &[cluster_index, cluster] : enumerate(clustering.clusters)) {
@@ -200,18 +231,12 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
     // Merge remaining clusterings
     const Clustering merged = merge_clusterings(filtered, epsilon);
 
-    auto [simplified, child_map] = build_lod(merged, ctx.options, node_bounds);
     // Run nanite-style grouping, simplification, splitting.
+    auto [simplified, group_assignment, group_children] = build_lod(merged, ctx.options, node_bounds, filter);
 
-    // Create map from cluster index to child cluster id.
-    auto child_id_map = transform_vector(child_map, [&](const auto &children) {
-        return transform_vector(children, [&](const uint32_t merged_index) {
-            const uint32_t source_index = merged.clusters[merged_index].id;
-            return cluster_sources[source_index];
-        });
-    });
+    dag::NodeMetadata metadata = build_node_metadata(std::move(group_assignment), group_children, merged, simplified, cluster_sources, cluster_metadata);
 
-    return {std::move(simplified), std::move(child_id_map)};
+    return {std::move(metadata), std::move(simplified)};
 }
 
 // Combine input clusters with inner clusters.
@@ -229,29 +254,22 @@ dag::ClusterBatch combine_input_and_inner(
     }
 
     // If there are no inner clusters, just return the input clusters merged together.
-    uint32_t input_cluster_count = 0;
-    for (const auto &c : input_clusters) {
-        input_cluster_count += c.cluster_count();
-    }
     if (!has_inner) {
         Clustering merged = merge_clusterings(std::move(input_clusters), epsilon);
-        return dag::ClusterBatch::make_leaves(std::move(merged));
+        return dag::make_leaf_batch(std::move(merged));
     }
 
     // Otherwise, merge the input clusters with the inner clustering.
+    std::vector<dag::NodeMetadata> parts = transform_vector(input_clusters, [](const Clustering &input) {
+        return dag::build_leaf_metadata(input);
+    });
+    parts.push_back(std::move(inner.metadata));
+    dag::NodeMetadata metadata = concat_metadata(std::move(parts));
+
     input_clusters.push_back(std::move(inner.clustering));
     Clustering combined = merge_clusterings(std::move(input_clusters), epsilon);
 
-    std::vector<std::vector<dag::Id>> combined_child_map;
-    combined_child_map.reserve(combined.cluster_count());
-    for (uint32_t i = 0; i < input_cluster_count; i++) {
-        combined_child_map.emplace_back();
-    }
-    for (auto &entry : inner.child_map) {
-        combined_child_map.push_back(std::move(entry));
-    }
-
-    return {std::move(combined), std::move(combined_child_map)};
+    return {std::move(metadata), std::move(combined)};
 }
 
 // Compute epsilon value for merging clusters based on the size of the node bounds.

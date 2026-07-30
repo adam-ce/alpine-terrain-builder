@@ -1,53 +1,34 @@
 #pragma once
 
-#include <vector>
-#include <optional>
-
-#include "octree/Id.h"
 #include "cluster.h"
-#include "enumerate.h"
+#include "dag_id.h"
+#include "metadata.h"
 
 namespace dag {
 
-struct Id {
-    octree::Id source_batch;
-    uint32_t cluster_index;
-};
-
+// A batch of dag nodes.
 struct ClusterBatch {
+    NodeMetadata metadata;
     Clustering clustering;
-    std::vector<std::vector<Id>> child_map;
-
-    static ClusterBatch make_leaves(Clustering clustering) {
-        return {clustering, {}};
-    }
-
-    bool is_leaves() const {
-        return this->child_map.empty();
-    }
 };
+
+inline ClusterBatch make_leaf_batch(Clustering clustering) {
+    NodeMetadata metadata = build_leaf_metadata(clustering);
+    return {std::move(metadata), std::move(clustering)};
+}
 
 }
 
 namespace zpp::bits {
 
 template <typename Archive>
-auto serialize(Archive &archive, const dag::Id &id) {
-    return archive(id.source_batch, id.cluster_index);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, dag::Id &id) {
-    return archive(id.source_batch, id.cluster_index);
-}
-
-template <typename Archive>
 auto serialize(Archive &archive, const dag::ClusterBatch &node) {
-    return archive(node.clustering, node.child_map);
+    return archive(node.metadata, node.clustering);
 }
 
 template <typename Archive>
 auto serialize(Archive &archive, dag::ClusterBatch &node) {
-    return archive(node.clustering, node.child_map);
+    return archive(node.metadata, node.clustering);
 }
+
 }

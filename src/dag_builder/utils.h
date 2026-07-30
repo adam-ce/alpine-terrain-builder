@@ -81,6 +81,10 @@ inline std::vector<glm::dvec3> collect_cluster_positions(const Cluster &cluster,
     return positions;
 }
 
+inline radix::geometry::Aabb3d compute_cluster_bounds(const Cluster &cluster, const std::span<const glm::dvec3> global_positions) {
+    return radix::geometry::find_bounds(std::span<const glm::dvec3>(collect_cluster_positions(cluster, global_positions)));
+}
+
 inline mesh::Simple materialize_cluster(const Cluster& cluster, const std::span<const glm::dvec3> positions) {
     mesh::Simple mesh;
     mesh.positions = collect_cluster_positions(cluster, positions);

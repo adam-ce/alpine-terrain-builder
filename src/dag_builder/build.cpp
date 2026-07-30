@@ -74,8 +74,12 @@ struct LodResult {
     std::vector<std::vector<uint32_t>> group_children; // per group child indices
 };
 
-// Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build child map.
-LodResult build_lod(const Clustering &clusters, const BuildOptions &options, const radix::geometry::Aabb3d &node_bounds) {
+// Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build group structure.
+LodResult build_lod(
+    const Clustering &clusters,
+    const BuildOptions &options,
+    const radix::geometry::Aabb3d &node_bounds,
+    const RegionFilter &lock_filter) {
     const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
                                                                         .clusters_per_partition = options.clusters_per_partition});
     // Construct new clusters and generate new textures.
@@ -90,7 +94,7 @@ LodResult build_lod(const Clustering &clusters, const BuildOptions &options, con
     trim_textures_inplace(clustering);
 
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, node_bounds);
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, lock_filter);
 
     // Convert relative target error (a fraction of the node bounds) to absolute
     std::optional<float> absolute_target_error;
@@ -300,8 +304,14 @@ std::optional<dag::ClusterBatch> build_node(
     }
     std::vector<Clustering> input_clusters = load_input_clusters(input_ids, ctx.input_storage, input_filter);
 
+    // Mirror of input_filter: exclude the input regions so the seam vertices stay locked.
     RegionFilter dag_filter;
     dag_filter.include = {node_bounds};
+    if (ctx.options.include_mode == IncludeMode::CurrentAndCoarser) {
+        for (const octree::Id &input_id : input_ids) {
+            dag_filter.exclude.push_back(ctx.space.get_node_bounds(input_id));
+        }
+    }
     dag::ClusterBatch inner = load_and_simplify_dag_nodes(dag_ids, dag_filter, epsilon, node_bounds, ctx);
 
     if (input_clusters.empty() && inner.clustering.is_empty()) {

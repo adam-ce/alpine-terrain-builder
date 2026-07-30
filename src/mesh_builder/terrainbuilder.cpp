@@ -194,6 +194,7 @@ void build_all_patches(
             .preferred_extension_with_dot = output_format
         }
     );
+    storage.settings().allow_overwrite = overwrite_existing;
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d(true);

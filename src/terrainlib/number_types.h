@@ -58,7 +58,7 @@ using float64_t = double;
 
 // -------------- integer_for_width --------------
 #include "number_utils.h"
-#include <math/wide_integer/uintwide_t.h>
+#include "wide_integer.h"
 
 template <std::size_t Bits>
 inline constexpr std::size_t storage_bits_v = next_power_of_two(Bits < 8 ? 8 : Bits);
@@ -101,11 +101,6 @@ struct integer_for_width<128, Signed> {
 };
 #endif
 
-#if defined(HAS_INT128) && defined(HAS_UINT128)
-using wide_limb_t = std::uint64_t;
-#else
-using wide_limb_t = std::uint32_t;
-#endif
 template <std::size_t Width, bool Signed> requires(Width > 128)
 struct integer_for_width<Width, Signed> {
     static_assert(is_power_of_two(Width), "wide-integer width must be a power of two");

@@ -110,6 +110,8 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
+alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH v1.01)
+
 alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
 add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
 target_include_directories(xatlas PUBLIC ${xatlas_SOURCE_DIR}/source)
@@ -226,7 +228,7 @@ add_library(terrainlib
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
 target_link_libraries(terrainlib PUBLIC 
-    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle)
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle WideInteger)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

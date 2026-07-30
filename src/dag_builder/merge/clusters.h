@@ -437,40 +437,6 @@ inline std::vector<uint32_t> make_cluster_unwrappable(Cluster &cluster) {
     return backwards;
 }
 
-/*
-inline void make_cluster_unwrappable(
-    Cluster &cluster,
-    HybridIndexPairMap<uint32_t, uint32_t> &merged_to_original,
-    const Clustering &clustering,
-    const uint32_t source_cluster_count) {
-    auto add_duplicate_vertex_to_mapping = [&](const uint32_t old_vertex_index, const uint32_t new_vertex_index) {
-        for_each_vertex_mapping_to(old_vertex_index, merged_to_original, source_cluster_count, [&](const uint32_t cluster_index, const uint32_t source_vertex_index) {
-            merged_to_original.insert_or_assign(new_vertex_index, cluster_index, source_vertex_index);
-        });
-    };
-
-    // Make merged geometry manifold, keeping backward mapping consistent
-    const auto [manifold_triangles, backwards] = mesh::igl::make_manifold(merged_cluster.local_triangles);
-    std::vector<uint32_t> manifold_vertex_indices(backwards.size());
-    for (const auto [i, original_index] : enumerate(backwards)) {
-        manifold_vertex_indices[i] = merged_cluster.vertex_indices[original_index];
-        add_duplicate_vertex_to_mapping(original_index, i);
-    }
-    merged_cluster.local_triangles = manifold_triangles;
-    merged_cluster.vertex_indices = manifold_vertex_indices;
-
-    // Ensure each connectivity component is open and of genus 1 (topological disk)
-    mesh::cut_to_disk(
-        merged_cluster.local_triangles,
-        [&](const uint32_t new_vertex_count) {
-            merged_cluster.vertex_indices.resize(new_vertex_count);
-        },
-        [&](const uint32_t old_vertex_index, const uint32_t new_vertex_index) {
-            merged_cluster.vertex_indices[new_vertex_index] = merged_cluster.vertex_indices[old_vertex_index];
-            add_duplicate_vertex_to_mapping(old_vertex_index, new_vertex_index);
-        });
-}*/
-
 struct UvMap {
     Texture texture;
     std::vector<glm::dvec2> uvs;

@@ -27,18 +27,6 @@ struct ClusterBatch {
     }
 };
 
-/*
-std::vector<std::vector<uint32_t>> build_parent_map(const std::vector<std::vector<uint32_t>>& child_map) {
-    std::vector<std::vector<uint32_t>> parent_map(child_map.size());
-    for (const auto& [cluster_index, children] : enumerate(child_map)) {
-        for (const uint32_t child_index : children) {
-            auto &parents = parent_map[child_index];
-            parents.push_back(cluster_index);
-        }
-    }
-    return parent_map;
-}*/
-
 }
 
 namespace zpp::bits {

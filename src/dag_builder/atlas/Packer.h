@@ -7,7 +7,6 @@
 
 #include <glm/glm.hpp>
 
-#include "number_utils.h"
 #include "SegmentedBuffer.h"
 
 namespace atlas {

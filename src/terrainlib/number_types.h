@@ -57,7 +57,7 @@ using float64_t = double;
 
 
 // -------------- integer_for_width --------------
-#include "number_utils.h"
+#include "int_math.h"
 #include "wide_integer.h"
 
 template <std::size_t Bits>

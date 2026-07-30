@@ -1,9 +1,22 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
+#include <type_traits>
 #include <vector>
 
 #include <libassert/assert.hpp>
+
+// Build a vector of `count` elements, the i-th produced by `generator(i)`.
+template <typename Generator>
+auto generate_vector(const size_t count, Generator &&generator) {
+    std::vector<std::invoke_result_t<Generator &, size_t>> result;
+    result.reserve(count);
+    for (size_t index = 0; index < count; index++) {
+        result.push_back(generator(index));
+    }
+    return result;
+}
 
 template <typename Vector>
 void erase_by_index(Vector &vec, size_t index) {

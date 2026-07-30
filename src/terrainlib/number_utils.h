@@ -8,34 +8,6 @@
 #include <stdexcept>
 #include <type_traits>
 
-#include <libassert/assert.hpp>
-
-inline constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
-    DEBUG_ASSERT(n <= (uint32_t{1} << 31));
-    return std::bit_ceil(n);
-}
-
-inline constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
-    DEBUG_ASSERT(n <= (uint64_t{1} << 63));
-    return std::bit_ceil(n);
-}
-
-inline constexpr uint32_t prev_power_of_two(uint32_t n) noexcept {
-    return std::bit_floor(n);
-}
-
-inline constexpr uint64_t prev_power_of_two(uint64_t n) noexcept {
-    return std::bit_floor(n);
-}
-
-inline constexpr bool is_power_of_two(uint32_t n) noexcept {
-    return std::has_single_bit(n);
-}
-
-inline constexpr bool is_power_of_two(uint64_t n) noexcept {
-    return std::has_single_bit(n);
-}
-
 template <typename T>
 T next_higher(T x) {
     static_assert(std::is_arithmetic_v<T>, "T must be a primitive numeric type");

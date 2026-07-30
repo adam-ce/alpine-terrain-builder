@@ -1,7 +1,7 @@
 #pragma once
 
 #include <filesystem>
-#include <glm/gtx/string_cast.hpp>
+#include <glm/glm.hpp>
 #include <radix/geometry.h>
 
 #include <fmt/format.h>
@@ -29,7 +29,11 @@ struct formatter<glm::vec<N, T>> {
 
     template <typename FormatContext>
     auto format(const glm::vec<N, T> &vec, FormatContext &ctx) const {
-        return fmt::format_to(ctx.out(), "{}", glm::to_string(vec));
+        auto out = fmt::format_to(ctx.out(), "(");
+        for (glm::length_t i = 0; i < N; i++) {
+            out = fmt::format_to(out, "{}{}", i == 0 ? "" : ", ", vec[i]);
+        }
+        return fmt::format_to(out, ")");
     }
 };
 
@@ -42,7 +46,7 @@ struct formatter<radix::geometry::Aabb<N, T>> {
 
     template <typename FormatContext>
     auto format(const radix::geometry::Aabb<N, T> &aabb, FormatContext &ctx) const {
-        return fmt::format_to(ctx.out(), "[{}-{}]", glm::to_string(aabb.min), glm::to_string(aabb.max));
+        return fmt::format_to(ctx.out(), "[{}-{}]", aabb.min, aabb.max);
     }
 };
 }

@@ -40,6 +40,8 @@ function(alp_setup_gdal)
             -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF
             -DGDAL_ENABLE_DRIVER_HFA=ON
             -DOGR_BUILD_OPTIONAL_DRIVERS=OFF
+            -DOGR_ENABLE_DRIVER_GPKG=ON
+            -DOGR_ENABLE_DRIVER_SQLITE=ON
             -DBUILD_APPS=OFF
             -DBUILD_TESTING=OFF
             -DBUILD_PYTHON_BINDINGS=OFF
@@ -47,6 +49,7 @@ function(alp_setup_gdal)
             -DBUILD_CSHARP_BINDINGS=OFF
             -DGDAL_USE_ICONV=OFF
             -DGDAL_USE_EXTERNAL_LIBS=OFF
+            -DGDAL_USE_SQLITE3=ON
             "-DCMAKE_INSTALL_RPATH=\$ORIGIN/../../proj/lib"
         )
 

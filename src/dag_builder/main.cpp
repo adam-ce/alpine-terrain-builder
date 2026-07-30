@@ -34,7 +34,7 @@ int main(int argc, char **argv) {
         };
         // If the user specified neither target, fall back to a default error.
         if (!args.target_ratio && !args.target_error) {
-            options.relative_target_error = 0.01f;
+            options.relative_target_error = 0.001f;
         }
 
         dag::build_levels(input_storage, output_storage, options, args.level_range);

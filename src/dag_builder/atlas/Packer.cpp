@@ -91,7 +91,7 @@ struct Packer::Impl {
 
         normalize_uvs(uvs.flat());
 
-        return Packing(uvs, this->atlas->utilization[0]);
+        return Packing(uvs, this->total_effective_pixel_area, this->atlas->utilization[0]);
     }
 };
 

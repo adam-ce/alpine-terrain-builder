@@ -738,7 +738,6 @@ No production behaviour changes.
 5. Add storage tests for:
    - matching-extension hard links;
    - different-extension decode/re-encode;
-   - overwrite rejection;
    - overwrite-enabled replacement;
    - indexed and unindexed opens; and
    - final index creation by directory scan.
@@ -844,7 +843,8 @@ path.
 13. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
     overwrite mode and repeat debug export. Replace process termination on a
     rejected overwrite with `AlreadyExists` in the storage-level expected
-    error.
+    error. Test that a rejected save returns `AlreadyExists` and that enabling
+    overwrite replaces the existing payload.
 14. Add resolver tests for `.terrain`, `.glb`, `.gltf`, and `.bin` open/read
     dispatch, plus explicit failure for an unknown preferred extension.
 15. Instantiate the shared storage tests with `raster_store::StoreTraits`
@@ -882,8 +882,8 @@ pointer, or second storage implementation remains under `octree`.
    - different path counts and endings;
    - error propagation after a partially failed multi-file hard link;
    - conversion between terrain and glTF;
-   - overwrite rejection;
-   - overwrite-enabled replacement; and
+   - `copy_from()` overwrite rejection;
+   - `copy_from()` overwrite-enabled replacement; and
    - missing-file, hard-link, decode, and encode error propagation.
 5. Add `sf::validate_index()`, returning `sf::InvalidTopology` with the
    offending key when it encounters `Inner`. Do not add other validation rules

@@ -27,6 +27,7 @@
 
 #include <gdal_priv.h>
 #include <libassert/assert.hpp>
+#include <ogrsf_frmts.h>
 
 #include "ctb/Grid.hpp"
 #include "init.h"
@@ -213,11 +214,16 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 }
 
 OGRSpatialReference Dataset::srs() const {
-    const char *srcWKT = m_gdal_dataset->GetProjectionRef();
-    if (!strlen(srcWKT)) {
+    const OGRSpatialReference *source_srs = m_gdal_dataset->GetSpatialRef();
+    for (int layer_index = 0; source_srs == nullptr && layer_index < m_gdal_dataset->GetLayerCount(); ++layer_index) {
+        if (OGRLayer *layer = m_gdal_dataset->GetLayer(layer_index)) {
+            source_srs = layer->GetSpatialRef();
+        }
+    }
+    if (source_srs == nullptr) {
         throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
     }
-    auto srs = OGRSpatialReference(srcWKT);
+    auto srs = *source_srs;
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     return srs;
 }

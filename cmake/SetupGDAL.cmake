@@ -38,6 +38,7 @@ function(alp_setup_gdal)
         COMMITISH ${ARG_GDAL_VERSION}
         CMAKE_ARGUMENTS
             -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF
+            -DGDAL_ENABLE_DRIVER_HFA=ON
             -DOGR_BUILD_OPTIONAL_DRIVERS=OFF
             -DBUILD_APPS=OFF
             -DBUILD_TESTING=OFF

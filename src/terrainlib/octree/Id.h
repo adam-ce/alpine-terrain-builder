@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <functional>
 
+#include <fmt/format.h>
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
@@ -17,7 +18,7 @@ namespace octree {
 
 namespace detail {
 template <typename T>
-[[nodiscard]] static constexpr T low_mask(const size_t bit_count) {
+[[nodiscard]] inline constexpr T low_mask(const size_t bit_count) {
     if (bit_count == 0) {
         return T{0};
     }
@@ -42,17 +43,15 @@ static constexpr void for_each_nd_index_impl(
 }
 
 template <typename IndexT, size_t Dimensions, typename Function>
-static constexpr void for_each_nd_index(
-    const glm::vec<Dimensions, IndexT> &extents,
-    Function &&function) {
+inline constexpr void for_each_nd_index(const glm::vec<Dimensions, IndexT> &extents, Function &&function) {
     glm::vec<Dimensions, IndexT> index{};
-    for_each_nd_index_impl(extents, index, function);
+    for_each_nd_index_impl<IndexT, Dimensions, 0, Function>(extents, index, function);
 }
 
 template <typename IndexT, size_t Dimensions, typename Function>
-static constexpr void for_each_nd_index(const IndexT extent, Function &&function) {
+inline constexpr void for_each_nd_index(const IndexT extent, Function &&function) {
     const glm::vec<Dimensions, IndexT> extents(extent);
-    for_each_nd_index_impl(extents, function);
+    for_each_nd_index<IndexT, Dimensions, Function>(extents, std::forward<Function>(function));
 }
 }
 
@@ -333,7 +332,6 @@ using Id = Id_<3, 21>;
 
 } // namespace octree
 
-#include <fmt/format.h>
 template <
     size_t Dimensions,
     size_t MaxLevel,

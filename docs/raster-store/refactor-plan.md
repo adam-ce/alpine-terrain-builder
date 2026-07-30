@@ -76,6 +76,10 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   rejected overwrites return `AlreadyExists` through `std::expected`, and
   enabling it preserves the existing DAG-builder overwrite and debug-export
   behaviour.
+- The existing cache implementations are currently non-functional. Port their
+  public API where it remains useful, keep application call sites building, and
+  provide compile coverage only. Cache behaviour is not a compatibility
+  requirement of this refactor.
 - The `.png` written beside changed meshes by `sf_merger::NodeWriter` is an
   unmanaged debug artifact. It is not part of a logical node, is not returned
   by `Codec::paths()`, and is not indexed or copied by storage. Its existing
@@ -149,7 +153,7 @@ Before moving code, tests must lock down the following 3D behaviour:
 | Overwrite setting | `StorageSettings::allow_overwrite`, default `false`; enabled writes replace existing payloads |
 
 Compatibility means that the refactored code can open datasets written before
-the refactor and produces datasets that the pre-refactor code can open. Exact
+the refactor. Pre-refactor readers are not tested against post-refactor outpus. Exact
 byte-for-byte rewriting of an unordered index map is not required, but the
 serialized schema and values must remain compatible.
 
@@ -232,6 +236,10 @@ trees including `Inner`.
 `std::expected<void, sf::InvalidTopology>`. SF application-level error types
 must retain this error and `CopyError` when propagating failures; neither is
 reduced to a log message, assertion, or generic boolean.
+
+For this refactor, `sf::validate_index()` checks only for `Inner`. It does not
+validate other structural or disk/filesystem invariants. Possible future
+extensions are recorded in [todo.md](todo.md).
 
 Temporary forwarding headers and aliases under `octree` are allowed during
 migration. They must not contain a second implementation.
@@ -753,8 +761,7 @@ changed.
 6. Run the same index-transition and DFS/BFS tests with both trait types,
    including deterministic child order, invalid-key errors through
    `std::expected`, maximum-depth children, and explicit traversal roots.
-7. Provide temporary `octree` aliases so downstream migration is separate
-   from the algorithm extraction.
+7. Provide temporary `octree` aliases so downstream migration is separate where this makes sense, otherwise migrate downstream immediately.
 
 Exit criterion: 2D and 3D keys pass the same topology suite; existing 3D
 callers still build through aliases; no filesystem code has changed.
@@ -794,8 +801,9 @@ strategy pointer.
 4. Split the current extension-dispatching `octree::MeshCodec` into:
    - a terrain codec; and
    - one glTF codec configured for binary `.glb` or JSON `.gltf`.
-5. Move copy error, raw storage, caches, logical storage, and indexed storage
-   into `store`.
+5. Move copy error, raw storage, logical storage, and indexed storage into
+   `store`. Port the existing cache API where useful for source compatibility,
+   but do not require cache behaviour tests.
 6. Make `RawStorage<Traits, NodeData>` exclusively own a configured
    `std::unique_ptr<Codec<NodeData>>`. `Storage` owns it transitively through
    raw storage; remove the codec template parameter from every storage type.
@@ -864,17 +872,23 @@ mesh codec or second storage implementation remains under `octree`.
    - overwrite-enabled replacement; and
    - missing-file, hard-link, decode, and encode error propagation.
 5. Add `sf::validate_index()`, returning `sf::InvalidTopology` with the
-   offending key when it encounters `Inner`.
-6. Apply the validator to SF-builder output finalization, SF-merger merge and
-   cut inputs, SF-merger output, and the DAG builder's SF input. Do not apply
-   it when opening DAG datasets, through generic octree/store adapters, or in
-   the diagnostic `sf_index_browser`.
+   offending key when it encounters `Inner`. Do not add other validation rules
+   in this refactor.
+6. Apply the validator to SF-merger merge and cut inputs and the DAG builder's
+   SF input before processing. Apply it to SF-builder and SF-merger output
+   after the completed `terrain.index` has been written. If output validation
+   fails, retain the written index and payloads for diagnosis, propagate
+   `sf::InvalidTopology` to the command line, and report that the output is
+   invalid. Do not apply the validator when opening DAG datasets, through
+   generic octree/store adapters, or in the diagnostic `sf_index_browser`.
 7. Keep SF recursion, subtree traversal, and mesh policy in `sf_merger`.
    Change its subtree and cut call chains to propagate validation and
    `copy_from()` failures through `std::expected` to the application boundary.
 8. Add integration tests proving:
     - valid `Leaf`/`Virtual` SF merge behaviour is unchanged;
     - an SF input containing `Inner` fails validation before merge dispatch;
+    - invalid SF output writes `terrain.index` for diagnosis and returns
+      `sf::InvalidTopology` to the application boundary;
     - an unchanged SF subtree is hard-linked and a changed boundary node is
       newly written; and
     - an unchanged leaf in the SF cut path is hard-linked while a clipped leaf
@@ -882,8 +896,9 @@ mesh codec or second storage implementation remains under `octree`.
 
 Exit criterion: one-node copying works through `Codec::paths()`, SF consumers
 reject `Inner` with a typed error before processing, existing valid SF merge
-and cut behaviour is preserved, and neither a shared subtree copier nor a
-paired-tree walker has been introduced.
+and cut behaviour is preserved, invalid SF output remains inspectable with a
+written `terrain.index`, and neither a shared subtree copier nor a paired-tree
+walker has been introduced.
 
 ### Phase 5 — Cleanup and documentation
 
@@ -932,6 +947,10 @@ belong with their consumers: SF-builder output validation in
 `unittests_sfmerger`, and DAG-builder SF-input validation in
 `unittests_dagbuilder`. `sf_index_browser` remains unvalidated by design.
 
+Cache migration has compile coverage only. Existing cache application call
+sites must continue to build where the API remains meaningful, but no cache
+behaviour or compatibility test is required.
+
 During implementation:
 
 1. Build in `$source_dir/build/$config_name`.
@@ -963,7 +982,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `StrategyRegister.h` | explicit dimension-adapter lookup functions |
 | `strategy/Flat.h` | `octree/store_layout/Flat.h` |
 | `strategy/LevelAndCoordinateDirectories.h` | `octree/store_layout/LevelAndCoordinateDirectories.h` |
-| `octree/storage/cache/*` | `store/cache/*` |
+| `octree/storage/cache/*` | `store/cache/*` where useful; compile compatibility only |
 | `octree/storage/codec/Codec.h` | runtime `store/Codec.h` |
 | `octree/storage/codec/DefaultCodec.h` | runtime `store/codec/ZppBits.h` |
 | `octree/storage/codec/MeshCodec.h` | `mesh/codec/Terrain.h` and configured `mesh/codec/Gltf.h` |

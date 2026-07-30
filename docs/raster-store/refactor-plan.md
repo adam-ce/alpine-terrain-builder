@@ -766,82 +766,95 @@ changed.
 Exit criterion: 2D and 3D keys pass the same topology suite; existing 3D
 callers still build through aliases; no filesystem code has changed.
 
-### Phase 2 — Replace disk layout strategies
+### Phase 2 — Introduce path mappings and runtime codecs
+
+This phase introduces the extensionless layout and runtime codec pieces
+together. It does not cut production storage over to them yet. The existing
+storage, layout strategies, and static codecs remain temporarily as the
+working compatibility path until Phase 3 can replace the complete
+layout-plus-codec path construction in one step.
 
 1. Add `store::NodePath`, `store::PathMapping<Key>`, and
    `store::Layout<Key>`.
-2. Port the two existing 3D layouts to ordinary function pairs without
+2. Add the stateful `store::Codec<Payload>` interface with `paths()`, `read()`,
+   and `write()`, plus `CodecError`.
+3. Add the runtime `store::codec::ZppBits<T>`, preserving the existing `.bin`
+   path and serialized payload bytes.
+4. Consolidate the DAG serialization functions in
+   `src/dag_builder/serialization.h` without changing their serialized field
+   order, meshoptimizer encoding, or JPEG texture encoding.
+5. Add the terrain codec and one glTF codec configured for binary `.glb` or
+   JSON `.gltf`. Keep the current extension-dispatching `octree::MeshCodec`
+   only as temporary production compatibility glue until the Phase 3 cutover.
+6. Port the two existing 3D layouts to ordinary function pairs without
    changing stable IDs. The mappings return `level-index` and
    `level/x/y/z` without file endings.
-3. Replace the singleton strategy registry with explicit `from_id()` and
-   `all()` functions in the 3D adapter.
-4. Move the legacy preferred extension out of generic `Layout` and retain it
-   in the 3D format adapter.
-5. Port legacy layout discovery so it strips recognized 3D file endings before
-   calling `node_path_to_key()`.
-6. Switch node-path and layout-detection tests to the new implementation.
-7. Delete the old strategy base class, registration machinery, and concrete
-   strategy classes once no call site uses them.
+7. Add explicit `from_id()` and `all()` lookup functions in the 3D adapter.
+   Keep the singleton strategy registry only for the old production storage
+   path until Phase 3.
+8. Compose each new 3D mapping with each applicable runtime codec in tests and
+   prove that they resolve all Phase 0 fixtures to identical physical payload
+   paths.
+9. Add focused codec tests using single-file, multi-file, read/write, and
+   write-only test codecs. Test stable path ordering, unsupported operations,
+   directory creation, and conversion of domain errors to `CodecError`.
 
-Exit criterion: the legacy 3D adapter plus codecs resolve all Phase 0 fixtures
-to identical physical payload paths; generic `Layout` contains no extension;
-there is no layout inheritance, RTTI lookup, static registrar, or owning
-strategy pointer.
+Exit criterion: the extensionless mappings and runtime codecs together resolve
+all Phase 0 fixtures to their existing physical payload paths; generic
+`Layout` contains no extension; the new codec tests pass; existing production
+storage and all callers still build unchanged through the temporary legacy
+path.
 
 ### Phase 3 — Generalize storage and index lifecycle
 
-1. Add the stateful `store::Codec<Payload>` interface with `paths()`, `read()`,
-   and `write()`.
-2. Move the current generic `octree::ZppBitsCodec<T>` to the runtime
-   `store::codec::ZppBits<T>`, preserving its `.bin` paths and serialized
-   payload bytes.
-3. Consolidate the DAG serialization functions in
-   `src/dag_builder/serialization.h` without changing their serialized field
-   order, meshoptimizer encoding, or JPEG texture encoding.
-4. Split the current extension-dispatching `octree::MeshCodec` into:
-   - a terrain codec; and
-   - one glTF codec configured for binary `.glb` or JSON `.gltf`.
-5. Move copy error, raw storage, logical storage, and indexed storage into
+1. Cut the production path construction over to the Phase 2
+   `store::Layout<Key>` and runtime codecs. Move the legacy preferred extension
+   out of layout state and retain it as the 3D format adapter's codec selector.
+2. Port legacy layout discovery so it recognizes codec endings through the
+   supplied resolver, strips the accepted ending, and then calls
+   `node_path_to_key()`.
+3. Move copy error, raw storage, logical storage, and indexed storage into
    `store`. Port the existing cache API where useful for source compatibility,
    but do not require cache behaviour tests.
-6. Make `RawStorage<Traits, NodeData>` exclusively own a configured
+4. Make `RawStorage<Traits, NodeData>` exclusively own a configured
    `std::unique_ptr<Codec<NodeData>>`. `Storage` owns it transitively through
    raw storage; remove the codec template parameter from every storage type.
-7. Replace every embedded `octree::Id` with `Traits::Key`.
-8. Make every raw file operation obtain its complete file list through
+5. Replace every embedded `octree::Id` with `Traits::Key`.
+6. Make every raw file operation obtain its complete file list through
    `Codec::paths()`. `has()` requires every listed file, and `remove()` removes
    every listed file.
-9. Keep domain-specific mesh codecs outside the shared module under
+7. Keep domain-specific mesh codecs outside the shared module under
    `mesh::codec`.
-10. Add the function-pointer-based `IndexFormat<Traits>`, `IndexMetadata`, and
-    typed format/open errors. Split generic index maintenance from 3D index
-    serialization and legacy folder discovery.
-11. Keep the current 3D `terrain.index` DTO and open functions as compatibility
-    adapters over the shared storage. Retain its exact preferred extension as
-    `codec_selector`, resolve it through the payload-domain mesh or DAG
-    resolver, and retain the format metadata required by automatic saving.
-12. Add DAG storage convenience functions that supply
+8. Add the function-pointer-based `IndexFormat<Traits>`, `IndexMetadata`, and
+   typed format/open errors. Split generic index maintenance from 3D index
+   serialization and legacy folder discovery.
+9. Keep the current 3D `terrain.index` DTO and open functions as compatibility
+   adapters over the shared storage. Retain its exact preferred extension as
+   `codec_selector`, resolve it through the payload-domain mesh or DAG
+   resolver, and retain the format metadata required by automatic saving.
+10. Add DAG storage convenience functions that supply
     `dag::codec::from_extension`, and mesh storage convenience functions that
     select the configured terrain or glTF codec. Migrate `dag_builder`,
     `dag_convert_debug`, and mesh storage consumers without exposing codec
     objects at application call sites.
-13. Migrate the existing octree storage aliases and all other application
+11. Migrate the existing octree storage aliases and all other application
     callers.
-14. Preserve the current 3D destructor-save behaviour until all callers have
+12. Preserve the current 3D destructor-save behaviour until all callers have
     explicit index finalization.
-15. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
+13. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
     overwrite mode and repeat debug export. Replace process termination on a
     rejected overwrite with `AlreadyExists` in the storage-level expected
     error.
-16. Add resolver tests for `.terrain`, `.glb`, `.gltf`, and `.bin` open/read
+14. Add resolver tests for `.terrain`, `.glb`, `.gltf`, and `.bin` open/read
     dispatch, plus explicit failure for an unknown preferred extension.
-17. Instantiate the shared storage tests with `raster_store::StoreTraits`
+15. Instantiate the shared storage tests with `raster_store::StoreTraits`
     using a test-only path mapping and codec. This proves the storage templates
     contain no hidden `octree::Id` dependency without defining a stable RF
     layout, codec, or disk format.
+16. Delete the old strategy base class, strategy registry, concrete strategy
+    classes, static codec concept and codecs, and their temporary compatibility
+    glue once no call site uses them.
 
-Add focused codec tests using single-file, multi-file, read/write, and
-write-only test codecs before depending on the raster payload implementation.
 Test that a pre-refactor DAG fixture opens through the new resolver and that a
 new deterministic `.bin` payload matches the Phase 0 golden bytes and remains
 readable through the unchanged ZPP serialization functions. Test unknown
@@ -851,7 +864,8 @@ underlying open/codec errors through `std::expected`.
 Exit criterion: all existing applications build and all Phase 0 fixtures pass
 through the shared runtime codec and storage implementation. Existing DAG
 payload bytes and `.bin` paths remain compatible. No extension-dispatching
-mesh codec or second storage implementation remains under `octree`.
+mesh codec, layout inheritance, RTTI lookup, static registrar, owning strategy
+pointer, or second storage implementation remains under `octree`.
 
 ### Phase 4 — Harden node reuse and enforce SF topology
 

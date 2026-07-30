@@ -10,6 +10,8 @@
 
 #include "TextureSet.h"
 
+inline constexpr uint32_t MAX_TRIANGLES_PER_CLUSTER = 256;
+
 struct Cluster {
     uint32_t id = std::numeric_limits<uint32_t>::max();
     std::vector<uint32_t> vertex_indices; // indices into Clustering::positions
@@ -19,10 +21,10 @@ struct Cluster {
     uint32_t texture_id = 0; // index into Clustering::textures
     double absolute_error = 0.0; // absolute error of this cluster compared to original mesh
 
-    constexpr size_t vertex_count() const noexcept {
+    constexpr uint32_t vertex_count() const noexcept {
         return this->vertex_indices.size();
     }
-    constexpr size_t triangle_count() const noexcept {
+    constexpr uint32_t triangle_count() const noexcept {
         return this->local_triangles.size();
     }
     constexpr bool has_uvs() const noexcept {

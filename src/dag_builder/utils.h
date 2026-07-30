@@ -236,6 +236,21 @@ inline mesh::Simple clustering_to_mesh(const Clustering &clustering, const bool 
     return detail::manifold_clustering_to_mesh(manifold_clustering, debug_texture);
 }
 
+// like clustering_to_mesh but ignores textures.
+inline mesh::Simple clustering_to_textureless_mesh(const Clustering &clustering) {
+    mesh::Simple mesh;
+    mesh.positions = clustering.positions;
+    for (const Cluster &cluster : clustering.clusters) {
+        for (const glm::uvec3 &local_triangle : cluster.local_triangles) {
+            mesh.triangles.emplace_back(
+                cluster.vertex_indices[local_triangle.x],
+                cluster.vertex_indices[local_triangle.y],
+                cluster.vertex_indices[local_triangle.z]);
+        }
+    }
+    return mesh;
+}
+
 inline void trim_textures_inplace(Clustering &clustering) {
     // Group clusters by texture
     std::vector<std::vector<uint32_t>> clusters_per_texture(clustering.textures.size());

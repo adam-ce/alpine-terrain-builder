@@ -45,7 +45,7 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
     if (clusters_per_partition == 1) {
         std::vector<uint32_t> identity(cluster_count);
         std::iota(identity.begin(), identity.end(), 0);
-        return Partitioning{cluster_count, identity};
+        return Partitioning{cluster_count, clusters_per_partition, identity};
     }
 
     // meshopt only supports float positions
@@ -77,15 +77,16 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
 
     return Partitioning{
         partition_result.partition_count,
+        clusters_per_partition,
         std::move(partition_result.cluster_partitions)};
 }
 
-inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
-    return merge_clusters(clustering, partitioning, algorithm);
+inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const MergeOptions &merge_options = {}) {
+    return merge_clusters(clustering, partitioning, merge_options);
 }
 
-inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const uv::Algorithm algorithm = uv::DEFAULT_ALGORITHM) {
+inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const MergeOptions &merge_options = {}) {
     const Partitioning partitioning = create_partitioning(clustering, options);
-    return apply_partitioning(clustering, partitioning, algorithm);
+    return apply_partitioning(clustering, partitioning, merge_options);
 }
 

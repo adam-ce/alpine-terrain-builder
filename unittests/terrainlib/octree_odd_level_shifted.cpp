@@ -380,15 +380,18 @@ TEST_CASE("OddLevelShifted::get_node_bounds all level-1 nodes together tile the 
     CHECK(max_node.max.z == Catch::Approx(space.bounds().max.z));
 }
 
-TEST_CASE("OddLevelShifted::get_node_bounds_with_children non-leaf equals union of children bounds", "[octree::OddLevelShifted]") {
+TEST_CASE("OddLevelShifted::get_node_bounds_with_children non-leaf equals union of node and children bounds", "[octree::OddLevelShifted]") {
     const OddLevelShifted space = OddLevelShifted::earth();
 
     const Id id{2, {1, 1, 1}};
     const Bounds actual = space.get_node_bounds_with_children(id);
 
+    const Bounds node = space.get_node_bounds(id);
     const Bounds child_first = space.get_node_bounds(id.child(0).value());
     const Bounds child_last = space.get_node_bounds(id.child(7).value());
-    const Bounds expected(child_first.min, child_last.max);
+    const Bounds expected(
+        glm::min(node.min, glm::min(child_first.min, child_last.min)),
+        glm::max(node.max, glm::max(child_first.max, child_last.max)));
 
     CHECK(actual.min.x == Catch::Approx(expected.min.x));
     CHECK(actual.min.y == Catch::Approx(expected.min.y));
@@ -398,19 +401,21 @@ TEST_CASE("OddLevelShifted::get_node_bounds_with_children non-leaf equals union 
     CHECK(actual.max.z == Catch::Approx(expected.max.z));
 }
 
-TEST_CASE("OddLevelShifted::get_node_bounds_with_children even-level min extends and max shifts negatively", "[octree::OddLevelShifted]") {
+TEST_CASE("OddLevelShifted::get_node_bounds_with_children even-level min extends negatively and max keeps the node's own bound", "[octree::OddLevelShifted]") {
     const OddLevelShifted space = OddLevelShifted::earth();
 
     const Id id{2, {1, 1, 1}};
     const Bounds node = space.get_node_bounds(id);
     const Bounds with_children = space.get_node_bounds_with_children(id);
 
+    // Odd-level children are shifted negatively, so they pull min further out,
+    // but the node's own (unshifted) bounds already have the larger max here.
     CHECK(with_children.min.x < node.min.x);
     CHECK(with_children.min.y < node.min.y);
     CHECK(with_children.min.z < node.min.z);
-    CHECK(with_children.max.x < node.max.x);
-    CHECK(with_children.max.y < node.max.y);
-    CHECK(with_children.max.z < node.max.z);
+    CHECK(with_children.max.x == node.max.x);
+    CHECK(with_children.max.y == node.max.y);
+    CHECK(with_children.max.z == node.max.z);
 }
 
 TEST_CASE("OddLevelShifted::contains interior point returns true", "[octree::OddLevelShifted]") {

@@ -49,16 +49,33 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   `std::expected`; unsupported operations and other operational failures are
   reported as error values. Reading and writing must be reentrant (callable
   concurrently from different threads).
+- `store::RawStorage<Traits, NodeData>` exclusively owns the configured
+  `std::unique_ptr<store::Codec<NodeData>>`. `store::Storage` owns the raw
+  storage and therefore owns the codec transitively. Storage consumers do not
+  receive a codec template parameter and application call sites do not manage
+  codec objects.
 - This refactor does not add synchronization to storage, indexes, or caches
   and does not change their concurrency guarantees. Existing caller-side
   synchronization and concurrency behaviour are preserved; any concurrency
   bug fix is separate work.
 - Legacy index metadata selects a codec through an explicit, caller-supplied
-  resolver. The octree format adapter does not contain a global codec registry
-  or depend on mesh or DAG payload types.
+  resolver supplied by the payload-domain opening function. The octree format
+  adapter does not contain a global codec registry or depend on mesh or DAG
+  payload types. Application-level storage consumers do not call the resolver
+  or handle the resulting codec object.
+- Dimension-specific index persistence uses a small runtime
+  `store::IndexFormat<Traits>` value containing ordinary function pointers. It
+  is not an inheritance hierarchy and does not use global registration.
 - `copy_from()` hard-links every file when the input and output codecs return
   the same path list for a common dummy `NodePath`. Otherwise it decodes with
   the input codec and encodes with the output codec.
+- Public store operations reject invalid hierarchy keys through
+  `std::expected`; invalid keys are not represented by assertions or generic
+  booleans.
+- Preserve `StorageSettings::allow_overwrite`. It defaults to `false`;
+  rejected overwrites return `AlreadyExists` through `std::expected`, and
+  enabling it preserves the existing DAG-builder overwrite and debug-export
+  behaviour.
 - The `.png` written beside changed meshes by `sf_merger::NodeWriter` is an
   unmanaged debug artifact. It is not part of a logical node, is not returned
   by `Codec::paths()`, and is not indexed or copied by storage. Its existing
@@ -129,6 +146,7 @@ Before moving code, tests must lock down the following 3D behaviour:
 | DAG payload encoding | existing `dag::ClusterBatch` ZPP Bits serialization |
 | Equal codec path lists | hard-link every file, or report an explicit error |
 | Different codec path lists | decode with input codec and encode with output codec |
+| Overwrite setting | `StorageSettings::allow_overwrite`, default `false`; enabled writes replace existing payloads |
 
 Compatibility means that the refactored code can open datasets written before
 the refactor and produces datasets that the pre-refactor code can open. Exact
@@ -147,13 +165,18 @@ src/terrainlib/
 │   ├── NodeStatus.h
 │   ├── NodeStatusOrMissing.h
 │   ├── Traits.h
+│   ├── InvalidKey.h
 │   ├── Index.h
 │   ├── traverse.h
 │   ├── NodePath.h
 │   ├── PathMapping.h
 │   ├── Layout.h
+│   ├── IndexFormat.h
 │   ├── Codec.h
+│   ├── CodecError.h
+│   ├── OpenError.h
 │   ├── CopyError.h
+│   ├── StorageSettings.h
 │   ├── RawStorage.h
 │   ├── Storage.h
 │   ├── IndexedStorage.h
@@ -262,7 +285,9 @@ changing `octree::Id`.
   by the `uint32_t` x/y coordinates;
 - validate the maximum zoom without evaluating an overflowing
   `uint32_t{1} << 32`;
-- use `radix::tile::Id::Hasher`.
+- use `radix::tile::Id::Hasher`; and
+- return children in the deterministic order produced by
+  `radix::tile::Id::children()`.
 
 This traits adapter defines only hierarchy operations. It does not define
 persistent coordinates, a path layout, or an RF disk format.
@@ -270,6 +295,14 @@ persistent coordinates, a path layout, or an RF disk format.
 The shared code must obtain roots, parents, children, validation, and hashing
 through the traits. It must not use dimension checks or specialize behaviour
 on key types internally.
+
+Operations accepting a key validate it through `Traits::is_valid()`. Index
+lookup and mutation, traversal with an explicit root, and storage operations
+return an `std::expected` retaining an `InvalidKey<Key>` when validation fails.
+Keys produced internally by `Traits::root()`, `Traits::parent()`, and
+`Traits::children()` are trusted only after trait-specific tests establish that
+they preserve validity. The child order affects traversal order and is locked
+down by the 2D and 3D trait tests; it is not serialized as separate metadata.
 
 ### Sparse index and traversal
 
@@ -374,6 +407,10 @@ storage use. `CodecError` is a payload-neutral operational error that records
 the failed operation, an error category, and a diagnostic message. Concrete
 codecs convert their domain errors to it. Unsupported read or write operations
 may use the base implementation and return its `UnsupportedOperation` error.
+Codec writes preserve the current directory-creation behaviour: they create
+the parent directories required by their output paths before writing. The
+storage hard-link path continues to create its target parent directories before
+linking.
 
 `Codec::paths()` has the following contract:
 
@@ -435,23 +472,65 @@ store::IndexedStorage<Traits, NodeData>
 store::cache::Interface<Traits, NodeData>
 ```
 
+`RawStorage<Traits, NodeData>` owns the
+`std::unique_ptr<Codec<NodeData>>`. `Storage` owns `RawStorage`, and
+`IndexedStorage` owns or derives from `Storage`; no other layer shares codec
+ownership. Moving storage transfers ownership. Caches, layouts, index formats,
+resolvers, and application consumers never own the codec.
+
 Domain-specific mesh codecs remain under `mesh::codec`. The reusable ZPP Bits
 codec remains under `store::codec`. RF codecs are deferred.
 
 Index serialization is not a responsibility of `store::Index`. Opening and
-saving a dataset receives a dimension-specific format adapter which provides:
+saving a dataset receives the following small runtime values:
+
+```cpp
+template<typename Traits>
+struct store::IndexMetadata {
+    store::Index<Traits> index;
+    std::string layout_id;
+    std::string codec_selector;
+};
+
+template<typename Traits>
+struct store::IndexFormat {
+    std::string_view index_filename;
+
+    std::expected<IndexMetadata<Traits>, IndexFormatError>
+    (*read)(const std::filesystem::path& index_path);
+
+    std::expected<void, IndexFormatError>
+    (*write)(
+        const std::filesystem::path& index_path,
+        const IndexMetadata<Traits>& metadata);
+
+    std::optional<PathMapping<typename Traits::Key>>
+    (*mapping_from_id)(std::string_view id);
+
+    PathMapping<typename Traits::Key>
+    (*default_mapping)();
+};
+```
+
+The value provides:
 
 - the index filename;
 - index read/write conversion;
 - mapping lookup by stable ID;
-- the default mapping; and
-- legacy directory discovery where it is required.
+- the default mapping.
 
-This adapter may be a compile-time policy or a small value of function
-pointers. Choose the smaller implementation after the Phase 0 tests exist.
-It must not reintroduce a layout class hierarchy or global registration.
+Legacy directory discovery is an octree opening helper which composes the
+octree index format, the supplied payload-domain codec resolver, and the known
+octree mappings. It is not a generic `IndexFormat` operation. Neither the
+format value nor discovery may reintroduce a layout class hierarchy or global
+registration.
 
 For 3D, the adapter reads and writes the current `octree` index DTO unchanged.
+Its `codec_selector` is exactly the legacy `preferred_extension`, including
+the leading dot. Storage retains the selected `IndexFormat`, index path,
+layout ID, and codec selector as its index-persistence state, so explicit and
+destructor-triggered index saves can reproduce the same metadata.
+
 When opening indexed storage or discovering a legacy unindexed directory, it
 passes the legacy `preferred_extension` to a caller-supplied codec resolver.
 The resolver is an ordinary callable and returns
@@ -471,9 +550,28 @@ dag::codec::from_extension
 ```
 
 An unknown extension returns an explicit `UnsupportedCodec` error. Opening a
-new empty store may receive an already constructed codec instead of a resolver.
-Convenience functions in `src/dag_builder/storage.h` supply the DAG resolver so
-application call sites do not handle it directly.
+new empty store receives an explicit legacy codec selector plus an already
+constructed codec at the payload-domain opening boundary; the generic storage
+does not infer persistent metadata from `Codec::paths()`. Mesh and DAG
+convenience functions select or resolve the codec and pass ownership into raw
+storage, so application storage consumers do not handle codec objects.
+Convenience functions in `src/dag_builder/storage.h` supply the DAG resolver.
+
+Opening functions return their requested storage type through
+`std::expected<..., OpenError>`. `OpenError` is a typed sum which retains the
+failing path and the underlying error where applicable:
+
+- index I/O or malformed index metadata (`IndexFormatError`);
+- filesystem failure;
+- unknown layout ID;
+- unsupported codec selector or codec construction failure (`CodecError`); and
+- invalid hierarchy key (`InvalidKey<Key>`).
+
+Loading and saving likewise return storage-level expected errors which retain
+an invalid key, an underlying `CodecError`, and `AlreadyExists` for a rejected
+save. `CopyError` retains invalid-key, missing-source, overwrite, filesystem,
+and codec failures. Domain/application boundaries may add context, but must not
+discard these errors.
 
 Legacy unindexed-directory discovery remains in the 3D adapter: it recognizes
 candidate endings by asking the supplied resolver, removes an accepted ending
@@ -531,9 +629,12 @@ order, and filename endings.
 
 If linking several files fails partway through, return the error without a
 transactional rollback guarantee; target links already created by the call
-may remain. There is no silent copy fallback. An unsupported read or write
-needed for re-encoding is returned through `CopyError`, retaining the
-underlying `CodecError`.
+may remain. The copy operation stops immediately, leaves the target index
+unchanged for that logical node, and propagates the failure until the
+application aborts the overall operation. There is no journal, rollback,
+cleanup guarantee, or silent copy fallback. An unsupported read or write needed
+for re-encoding is returned through `CopyError`, retaining the underlying
+`CodecError`.
 
 Hard-link rules:
 
@@ -629,11 +730,8 @@ No production behaviour changes.
 5. Add storage tests for:
    - matching-extension hard links;
    - different-extension decode/re-encode;
-   - `.terrain`, `.glb`, `.gltf`, and `.bin` open/read dispatch through the
-     appropriate domain resolver; the `.bin` case does not exercise
-     `copy_from()`;
-   - explicit failure for an unknown preferred extension;
    - overwrite rejection;
+   - overwrite-enabled replacement;
    - indexed and unindexed opens; and
    - final index creation by directory scan.
 6. Record the pre-refactor public aliases used by `sf_builder`, `sf_merger`,
@@ -652,7 +750,9 @@ changed.
 3. Convert `IndexMap` into `store::Index<Traits>`.
 4. Convert traversal into `store::traverse`.
 5. Add `raster_store::StoreTraits` for `radix::tile::Id`.
-6. Run the same index-transition and DFS/BFS tests with both trait types.
+6. Run the same index-transition and DFS/BFS tests with both trait types,
+   including deterministic child order, invalid-key errors through
+   `std::expected`, maximum-depth children, and explicit traversal roots.
 7. Provide temporary `octree` aliases so downstream migration is separate
    from the algorithm extraction.
 
@@ -696,27 +796,38 @@ strategy pointer.
    - one glTF codec configured for binary `.glb` or JSON `.gltf`.
 5. Move copy error, raw storage, caches, logical storage, and indexed storage
    into `store`.
-6. Make storage own a configured `std::unique_ptr<Codec<Payload>>`; remove the
-   codec template parameter from storage.
+6. Make `RawStorage<Traits, NodeData>` exclusively own a configured
+   `std::unique_ptr<Codec<NodeData>>`. `Storage` owns it transitively through
+   raw storage; remove the codec template parameter from every storage type.
 7. Replace every embedded `octree::Id` with `Traits::Key`.
 8. Make every raw file operation obtain its complete file list through
    `Codec::paths()`. `has()` requires every listed file, and `remove()` removes
    every listed file.
 9. Keep domain-specific mesh codecs outside the shared module under
    `mesh::codec`.
-10. Split generic index maintenance from 3D index serialization and legacy
-   folder discovery.
+10. Add the function-pointer-based `IndexFormat<Traits>`, `IndexMetadata`, and
+    typed format/open errors. Split generic index maintenance from 3D index
+    serialization and legacy folder discovery.
 11. Keep the current 3D `terrain.index` DTO and open functions as compatibility
-    adapters over the shared storage. Resolve its preferred extension through
-    the caller-supplied mesh or DAG resolver.
+    adapters over the shared storage. Retain its exact preferred extension as
+    `codec_selector`, resolve it through the payload-domain mesh or DAG
+    resolver, and retain the format metadata required by automatic saving.
 12. Add DAG storage convenience functions that supply
-    `dag::codec::from_extension`, and migrate `dag_builder` and
-    `dag_convert_debug` to them.
+    `dag::codec::from_extension`, and mesh storage convenience functions that
+    select the configured terrain or glTF codec. Migrate `dag_builder`,
+    `dag_convert_debug`, and mesh storage consumers without exposing codec
+    objects at application call sites.
 13. Migrate the existing octree storage aliases and all other application
     callers.
 14. Preserve the current 3D destructor-save behaviour until all callers have
     explicit index finalization.
-15. Instantiate the shared storage tests with `raster_store::StoreTraits`
+15. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
+    overwrite mode and repeat debug export. Replace process termination on a
+    rejected overwrite with `AlreadyExists` in the storage-level expected
+    error.
+16. Add resolver tests for `.terrain`, `.glb`, `.gltf`, and `.bin` open/read
+    dispatch, plus explicit failure for an unknown preferred extension.
+17. Instantiate the shared storage tests with `raster_store::StoreTraits`
     using a test-only path mapping and codec. This proves the storage templates
     contain no hidden `octree::Id` dependency without defining a stable RF
     layout, codec, or disk format.
@@ -725,7 +836,9 @@ Add focused codec tests using single-file, multi-file, read/write, and
 write-only test codecs before depending on the raster payload implementation.
 Test that a pre-refactor DAG fixture opens through the new resolver and that a
 new deterministic `.bin` payload matches the Phase 0 golden bytes and remains
-readable through the unchanged ZPP serialization functions.
+readable through the unchanged ZPP serialization functions. Test unknown
+layout IDs, malformed index metadata, invalid hierarchy keys, and retained
+underlying open/codec errors through `std::expected`.
 
 Exit criterion: all existing applications build and all Phase 0 fixtures pass
 through the shared runtime codec and storage implementation. Existing DAG
@@ -747,7 +860,8 @@ mesh codec or second storage implementation remains under `octree`.
    - different path counts and endings;
    - error propagation after a partially failed multi-file hard link;
    - conversion between terrain and glTF;
-   - overwrite rejection; and
+   - overwrite rejection;
+   - overwrite-enabled replacement; and
    - missing-file, hard-link, decode, and encode error propagation.
 5. Add `sf::validate_index()`, returning `sf::InvalidTopology` with the
    offending key when it encounters `Inner`.
@@ -856,6 +970,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `octree/storage/RawStorage.h` | `store/RawStorage.h` |
 | `octree/storage/Storage.h` | `store/Storage.h` |
 | `octree/storage/IndexedStorage.h` | `store/IndexedStorage.h` |
+| `octree::StorageSettings::allow_overwrite` | `store::StorageSettings::allow_overwrite`, preserving default and enabled behaviour |
 | `octree/storage/helpers.*` | generic scan helpers plus 3D format adapter |
 | `octree/disk/IndexFile.h` | versioned 3D format adapter under `octree` |
 | DAG serializers in `dag_node.h` and `encoded.h` | `dag_builder/serialization.h` |
@@ -880,7 +995,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Invalid `Inner` nodes reach SF merge dispatch | Validate every SF input first and return the offending key in a typed error |
 | SF subtree copying is generalized before RF requirements exist | Keep it in `sf_merger`; reconsider extraction with `rf_merger` |
 | A paired-walker API is fixed before RF semantics are known | Defer its action algebra until `rf_merger` requirements are defined |
-| Multi-file hard linking fails partway through | Remove links created by the failed `copy_from()` before returning |
+| Multi-file hard linking fails partway through | Stop immediately, leave the node unindexed, propagate the error, and abort the overall operation; partial files may remain |
 | Incompatible codecs return the same path list | Treat path-list equality as a codec contract and test every concrete codec pairing |
 | Output-only codec is selected for required input | Return a clear `UnsupportedOperation` error |
 | Shared code accumulates mesh or provisional RF policy | Dependency tests/review against the source boundary |

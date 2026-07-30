@@ -20,11 +20,13 @@
 #include "../catch2_helpers.h"
 
 #include <catch2/catch_approx.hpp>
+#include <gdal_priv.h>
 
 #include "Dataset.h"
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/types.hpp"
+#include "init.h"
 #include "srs.h"
 
 using namespace radix;
@@ -104,6 +106,24 @@ TEST_CASE("datasets are as expected") {
         const auto webmercator_grid = ctb::GlobalMercator();
         CHECK(webmercator_grid.zoomForResolution(d_mgi.gridResolution(webmercator)) == 7);
     }
+}
+
+TEST_CASE("vector datasets use the layer spatial reference") {
+    initialize_gdal_once();
+    GDALDriver *driver = GetGDALDriverManager()->GetDriverByName("Memory");
+    REQUIRE(driver != nullptr);
+
+    GDALDataset *raw_dataset = driver->Create("", 0, 0, 0, GDT_Unknown, nullptr);
+    REQUIRE(raw_dataset != nullptr);
+
+    OGRSpatialReference expected_srs;
+    REQUIRE(expected_srs.importFromEPSG(31287) == OGRERR_NONE);
+    expected_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    REQUIRE(raw_dataset->CreateLayer("mask", &expected_srs, wkbPolygon, nullptr) != nullptr);
+
+    Dataset dataset(raw_dataset);
+    const OGRSpatialReference actual_srs = dataset.srs();
+    CHECK(actual_srs.IsSame(&expected_srs));
 }
 
 TEST_CASE("bbox width pixels") {

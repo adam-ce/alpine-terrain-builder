@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
-#include <compare>
 #include <cstdint>
 #include <limits>
 #include <numeric>
@@ -30,6 +29,8 @@
 #include "range_utils.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"
+#include "StrongDouble.h"
+#include "optional_utils.h"
 
 namespace detail {
 
@@ -63,18 +64,6 @@ std::vector<VertexInClustering> find_boundary_vertices(const std::span<const Clu
 
     return boundary_vertices;
 }
-
-struct StrongDouble {
-    double value;
-
-    std::strong_ordering operator<=>(const StrongDouble &other) const {
-        return std::strong_order(value, other.value);
-    }
-
-    bool operator==(const StrongDouble &other) const {
-        return std::strong_order(value, other.value) == 0;
-    }
-};
 
 struct CandidateEdge {
     uint32_t start_index;
@@ -248,7 +237,7 @@ Clustering rebuild_clustering(
             new_cluster.local_triangles = cluster.local_triangles;
             new_cluster.uvs = cluster.uvs;
             new_cluster.id = cluster.id;
-            new_cluster.texture_id = texture_id_map[cluster.texture_id];
+            new_cluster.texture_id = map(cluster.texture_id, [&](const auto &id) { return texture_id_map[id]; });
             new_cluster.absolute_error = cluster.absolute_error;
 
             new_cluster.vertex_indices.reserve(cluster.vertex_count());

@@ -42,6 +42,6 @@ inline void validate(const Clustering &clustering) {
     for (uint32_t cluster_index = 0; cluster_index < cluster_count; cluster_index++) {
         const Cluster &cluster = clustering.clusters[cluster_index];
         validate(cluster, clustering.positions);
-        ASSERT(cluster.texture_id < clustering.textures.size());
+        ASSERT(!cluster.has_texture() || cluster.texture_id.value() < clustering.textures.size());
     }
 }

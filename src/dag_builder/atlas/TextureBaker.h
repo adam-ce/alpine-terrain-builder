@@ -89,7 +89,8 @@ inline glm::uvec2 get_effective_texture_size(const TextureComposition &comp) {
     for (const auto &map : comp.maps) {
         area += glm::compMul(glm::dvec2(get_effective_texture_size(map)));
     }
-    return glm::uvec2(std::ceil(std::sqrt(area)));
+    const double side = std::max(std::ceil(std::sqrt(area)), 1.0);
+    return glm::uvec2(side);
 }
 } // namespace detail
 

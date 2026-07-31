@@ -25,6 +25,7 @@
 #include "mesh/split.h"
 #include "mesh/topology.h"
 #include "opencv_utils.h"
+#include "optional_utils.h"
 #include "range_utils.h"
 #include "uv/unwrap.h"
 #include "vector_utils.h"
@@ -99,7 +100,15 @@ inline bool check_consistent_uvs(const Clustering &clustering, const std::span<c
 }
 
 inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
-    if (cluster_indices.empty() || clustering.textures.empty()) {
+    if (cluster_indices.empty()) {
+        return false;
+    }
+
+    // Without a single source texture there is nothing to bake.
+    const bool any_texture = std::ranges::any_of(cluster_indices, [&](const uint32_t i) {
+        return clustering.clusters[i].has_texture();
+    });
+    if (!any_texture) {
         return false;
     }
 
@@ -131,10 +140,9 @@ inline Cluster merge_clusters_simple(
     }
 
     const uint32_t cluster_count = cluster_indices.size();
-    const bool has_uvs = clustering.clusters[cluster_indices[0]].has_uvs();
-    DEBUG_ASSERT(std::ranges::all_of(cluster_indices, [&](const uint32_t cluster_index) {
-        return clustering.clusters[cluster_index].has_uvs() == has_uvs;
-    }));
+    const bool has_uvs = std::ranges::any_of(cluster_indices, [&](const uint32_t i) {
+        return clustering.clusters[i].has_uvs();
+    });
 
     Cluster merged;
     for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
@@ -152,7 +160,9 @@ inline Cluster merge_clusters_simple(
                 merged_vertex_index = merged.vertex_indices.size();
                 merged.vertex_indices.push_back(global_vertex_index);
                 if (has_uvs) {
-                    merged.uvs.push_back(cluster.uvs[local_vertex_index]);
+                    // Clusters without uvs are padded to keep the merged uvs aligned with the vertices.
+                    const glm::dvec2 uv = cluster.has_uvs() ? cluster.uvs[local_vertex_index] : glm::dvec2(0);
+                    merged.uvs.push_back(uv);
                 }
             }
         }
@@ -478,6 +488,9 @@ inline UvMap unwrap_merged_cluster(
     std::vector<uint32_t> source_clusters;
     source_clusters.reserve(cluster_indices.size());
 
+    // Clusters without a texture get a single black texel.
+    const cv::Mat placeholder_texture = cv::Mat::zeros(1, 1, CV_8UC3);
+
     // Perform an uv unwrap for each component
     for (auto &[component_index, component] : enumerate(components)) {
         const std::vector<uint32_t> &local_to_merged = component_to_merged[component_index];
@@ -498,7 +511,8 @@ inline UvMap unwrap_merged_cluster(
             }
         }
 
-        if (source_clusters.size() == 1) {
+        const bool reuse_source_map = source_clusters.size() == 1 && clustering.clusters[cluster_indices[source_clusters[0]]].has_texture();
+        if (reuse_source_map) {
             // If one single cluster is relevant we dont need to perform a fresh unwrap
             const uint32_t linear_cluster_index = source_clusters[0];
             const uint32_t cluster_index = cluster_indices[linear_cluster_index];
@@ -508,8 +522,7 @@ inline UvMap unwrap_merged_cluster(
                 const uint32_t original_vertex_index = opt.value();
                 return clustering.clusters[cluster_index].uvs[original_vertex_index];
             });
-            const uint32_t texture_id = clustering.clusters[cluster_index].texture_id;
-            const cv::Mat texture = clustering.textures[texture_id];
+            const cv::Mat texture = clustering.get_cluster_texture(cluster_index).value();
             component_map_ids[component_index] = baker.add_mesh(TexturedMesh{component.triangles, TextureMap{uvs, texture}});
         } else {
             // If multiple clusters are relevant, we have to perform an unwrap.
@@ -529,9 +542,10 @@ inline UvMap unwrap_merged_cluster(
             comp.maps = transform_vector(source_clusters, [&](const uint32_t linear_cluster_index) {
                 const uint32_t cluster_index = cluster_indices[linear_cluster_index];
                 const Cluster& cluster = clustering.clusters[cluster_index];
-                const cv::Mat texture = clustering.textures[cluster.texture_id];
-                const std::vector<glm::dvec2> uvs = cluster.uvs;
-                return TextureMap{uvs, texture};
+                std::vector<glm::dvec2> uvs = cluster.uvs;
+                uvs.resize(cluster.vertex_count(), glm::dvec2(0)); // pad uvs if missing
+                const cv::Mat texture = clustering.get_cluster_texture(cluster_index).value_or(placeholder_texture);
+                return TextureMap{std::move(uvs), texture};
             });
             comp.triangles.reserve(component.triangles.size());
             for (const auto& target_triangle : component.triangles) {
@@ -663,7 +677,7 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
         const bool needs_unwrap = detail::check_merge_needs_unwrap(clustering, cluster_indices);
 
         Cluster merged_cluster;
-        Texture texture;
+        std::optional<Texture> texture;
         if (needs_unwrap) {
             // We need to perform a fresh uv unwrap and generate a new texture
             const auto result = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap, algorithm);
@@ -678,7 +692,7 @@ inline Clustering merge_clusters(const Clustering &clustering, const Partitionin
             texture = clustering.get_cluster_texture(cluster_indices[0]);
             reuse_count++;
         }
-        merged_cluster.texture_id = textures.add(texture);
+        merged_cluster.texture_id = map(texture, [&](const Texture &t) { return textures.add(t); });
 
         // Carry the largest child error into the merged cluster.
         double max_child_error = 0.0;

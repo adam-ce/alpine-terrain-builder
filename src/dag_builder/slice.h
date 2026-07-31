@@ -11,7 +11,9 @@ struct ClusteringAndMap {
     VertexMap remap;
 };
 
-inline bool selects_all_clusters_in_order(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
+
+namespace detail {
+inline bool is_identity(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
     if (cluster_indices.size() != clustering.cluster_count()) {
         return false;
     }
@@ -22,11 +24,12 @@ inline bool selects_all_clusters_in_order(const Clustering &clustering, const st
     }
     return true;
 }
+}
 
 inline ClusteringAndMap slice_clusters_with_map(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
     const uint32_t cluster_count = clustering.cluster_count();
     const uint32_t vertex_count = clustering.vertex_count();
-    if (selects_all_clusters_in_order(clustering, cluster_indices)) {
+    if (detail::is_identity(clustering, cluster_indices)) {
         return {clustering, VertexMap::identity(vertex_count)};
     }
 
@@ -53,12 +56,15 @@ inline ClusteringAndMap slice_clusters_with_map(const Clustering &clustering, co
             new_vertex_indices.push_back(new_vertex_index);
         }
 
-        uint32_t &new_texture_id = texture_remap[cluster.texture_id];
-        if (new_texture_id == invalid_remap) {
-            const cv::Mat &texture = clustering.textures[cluster.texture_id];
-            new_texture_id = new_clustering.textures.add(texture);
-        }
-
+        std::optional<uint32_t> new_texture_id = map(cluster.texture_id, [&](const uint32_t id) {
+            uint32_t &remapped = texture_remap[id];
+            if (remapped == invalid_remap) {
+                const cv::Mat &texture = clustering.textures[id];
+                remapped = new_clustering.textures.add(texture);
+            }
+            return remapped;
+        });
+        
         Cluster new_cluster{
             .id = cluster.id,
             .vertex_indices = new_vertex_indices,

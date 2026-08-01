@@ -21,17 +21,24 @@ if(NOT COMMAND alp_setup_cmake_project)
 endif()
 
 function(alp_setup_gdal)
-    set(oneValueArgs GDAL_VERSION PROJ_VERSION)
+    set(oneValueArgs GDAL_VERSION GEOS_VERSION PROJ_VERSION)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
 
-    if(NOT ARG_GDAL_VERSION OR NOT ARG_PROJ_VERSION)
-        message(FATAL_ERROR "alp_setup_gdal() needs: GDAL_VERSION <tag> PROJ_VERSION <tag>")
+    if(NOT ARG_GDAL_VERSION OR NOT ARG_GEOS_VERSION OR NOT ARG_PROJ_VERSION)
+        message(FATAL_ERROR "alp_setup_gdal() needs: GDAL_VERSION <tag> GEOS_VERSION <tag> PROJ_VERSION <tag>")
     endif()
 
     alp_setup_cmake_project(proj URL https://github.com/OSGeo/PROJ.git COMMITISH ${ARG_PROJ_VERSION} CMAKE_ARGUMENTS -DBUILD_TESTING=OFF -DBUILD_APPS=OFF)
     find_package(PROJ CONFIG REQUIRED)
 
-    set(_proj_install "${ALP_PROJ_INSTALL_DIR}")
+    alp_setup_cmake_project(geos
+        URL https://github.com/libgeos/geos.git
+        COMMITISH ${ARG_GEOS_VERSION}
+        CMAKE_ARGUMENTS
+            -DBUILD_SHARED_LIBS=OFF
+            -DBUILD_TESTING=OFF
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        )
 
     alp_setup_cmake_project(gdal
         URL https://github.com/OSGeo/gdal.git
@@ -49,6 +56,7 @@ function(alp_setup_gdal)
             -DBUILD_CSHARP_BINDINGS=OFF
             -DGDAL_USE_ICONV=OFF
             -DGDAL_USE_EXTERNAL_LIBS=OFF
+            -DGDAL_USE_GEOS=ON
             -DGDAL_USE_SQLITE3=ON
             "-DCMAKE_INSTALL_RPATH=\$ORIGIN/../../proj/lib"
         )

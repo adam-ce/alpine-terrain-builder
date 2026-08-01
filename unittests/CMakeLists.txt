@@ -116,6 +116,7 @@ endif()
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
         catch2_helpers.h
+        sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)

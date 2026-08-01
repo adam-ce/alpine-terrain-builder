@@ -41,7 +41,7 @@ void run(const cli::MergeArgs& args) {
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
-    octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = ".glb"});
+    octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = std::string(base_dataset.layout().extension_with_dot())});
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 

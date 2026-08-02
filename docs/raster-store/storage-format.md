@@ -63,6 +63,7 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
   - `ChecksumAlgorithm checksum_algorithm`, default `HandledByCompressionLib`, alternatively `None`;
   - `string checksum`, empty when the checksum is handled by the compression library;
   - `CompressionAlgorithm compression_algorithm`, default `ZstdBestCompressionWithChecksum`, alternatively `None`;
+  - `uint64 uncompressed_size`, the exact size of the uncompressed second level;
   - `Bytes compressed_data`, containing the second level.
  - The second level is a compressed byte vector. It is deserialised directly into the selected versioned payload class.
 - The magic is shared by all payload types. `class_name` distinguishes payload types. An incompatible future envelope layout requires a new magic.
@@ -82,8 +83,10 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 - we fail by returning an unexpected in these cases
 - Compression uses libzstd at its best compression level. Libzstd is imported through the project's CMake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. `ZstdBestCompressionWithChecksum` writes an embedded zstd frame checksum, which libzstd verifies while decompressing.
 - `compress_with_checksum` accepts a `vector<byte>` and returns the compressed bytes plus the external checksum string. `checked_decompress` accepts both and returns the decompressed bytes. Both use `std::expected` and dispatch with a switch.
+- `checked_decompress` accepts a maximum decompressed size, defaulting to 1 GiB. It uses a size reported by the compression format when available, otherwise it uses the maximum as its allocation bound and shrinks the result to the produced size.
+- Envelope deserialisation passes `uncompressed_size` as that maximum and requires the produced size to match it exactly. A mismatch is a decompression failure. A declared size above the caller's limit or the hard 1 GiB limit is a size-limit failure.
 - `None` compression must be paired with `None` checksum. `ZstdBestCompressionWithChecksum` must be paired with `HandledByCompressionLib`; its external checksum string must be empty because the checksum is embedded in the zstd frame.
-- Decompression rejects output larger than 1 GiB.
+- Decompression never allocates or produces output larger than 1 GiB.
 
 
 ## to be defined

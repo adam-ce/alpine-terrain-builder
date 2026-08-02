@@ -24,6 +24,7 @@ struct Envelope {
     ChecksumAlgorithm checksum_algorithm;
     std::string checksum;
     CompressionAlgorithm compression_algorithm;
+    std::uint64_t uncompressed_size;
     Bytes compressed_data;
 };
 

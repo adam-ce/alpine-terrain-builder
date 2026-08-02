@@ -124,17 +124,23 @@ std::expected<Bytes, Error> checked_decompress(
         return std::unexpected(Error{ErrorCode::ChecksumMismatch});
     }
 
-    const unsigned long long content_size =
+    const unsigned long long frame_content_size =
         ZSTD_getFrameContentSize(compressed_data.data(), compressed_data.size());
-    if (content_size == ZSTD_CONTENTSIZE_ERROR || content_size == ZSTD_CONTENTSIZE_UNKNOWN
-        || content_size > std::numeric_limits<std::size_t>::max()) {
+    if (frame_content_size == ZSTD_CONTENTSIZE_ERROR
+        || (frame_content_size != ZSTD_CONTENTSIZE_UNKNOWN
+            && frame_content_size > std::numeric_limits<std::size_t>::max())) {
         return std::unexpected(Error{ErrorCode::DecompressionFailed});
     }
-    if (content_size > effective_max_decompressed_size) {
+
+    const bool content_size_is_known = frame_content_size != ZSTD_CONTENTSIZE_UNKNOWN;
+    if (content_size_is_known && frame_content_size > effective_max_decompressed_size) {
         return std::unexpected(Error{ErrorCode::SizeLimitExceeded});
     }
 
-    Bytes uncompressed_data(static_cast<std::size_t>(content_size));
+    const std::size_t allocation_size = content_size_is_known
+        ? static_cast<std::size_t>(frame_content_size)
+        : effective_max_decompressed_size;
+    Bytes uncompressed_data(allocation_size);
     const std::size_t decompressed_size = ZSTD_decompress(
         uncompressed_data.data(),
         uncompressed_data.size(),
@@ -144,12 +150,17 @@ std::expected<Bytes, Error> checked_decompress(
         if (ZSTD_getErrorCode(decompressed_size) == ZSTD_error_checksum_wrong) {
             return std::unexpected(Error{ErrorCode::ChecksumMismatch});
         }
+        if (!content_size_is_known
+            && ZSTD_getErrorCode(decompressed_size) == ZSTD_error_dstSize_tooSmall) {
+            return std::unexpected(Error{ErrorCode::SizeLimitExceeded});
+        }
         return std::unexpected(Error{ErrorCode::DecompressionFailed});
     }
-    if (decompressed_size != uncompressed_data.size()) {
+    if (content_size_is_known && decompressed_size != uncompressed_data.size()) {
         return std::unexpected(Error{ErrorCode::DecompressionFailed});
     }
 
+    uncompressed_data.resize(decompressed_size);
     return uncompressed_data;
 }
 

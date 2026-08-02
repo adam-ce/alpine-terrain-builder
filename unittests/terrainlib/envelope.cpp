@@ -2,7 +2,11 @@
 
 #include "io/envelope.h"
 
+#include <zstd.h>
 #include <zpp_bits.h>
+
+#include <memory>
+#include <stdexcept>
 
 namespace {
 
@@ -75,12 +79,18 @@ static_assert(Schema::latest_version == 3);
 static_assert(std::same_as<Schema::latest_type, v3::Payload>);
 static_assert(std::same_as<Schema::payload_type<1>, v1::Payload>);
 
-io::envelope::Bytes encode_envelope(const io::envelope::Envelope &envelope)
+template <typename Value>
+io::envelope::Bytes encode_value(const Value &value)
 {
     io::envelope::Bytes bytes;
     zpp::bits::out output(bytes);
-    output(envelope).or_throw();
+    output(value).or_throw();
     return bytes;
+}
+
+io::envelope::Bytes encode_envelope(const io::envelope::Envelope &envelope)
+{
+    return encode_value(envelope);
 }
 
 io::envelope::Envelope decode_envelope(const io::envelope::Bytes &bytes)
@@ -89,6 +99,30 @@ io::envelope::Envelope decode_envelope(const io::envelope::Bytes &bytes)
     zpp::bits::in input(bytes);
     input(envelope).or_throw();
     return envelope;
+}
+
+io::envelope::Bytes compress_without_content_size(const io::envelope::Bytes &uncompressed_data)
+{
+    const std::unique_ptr<ZSTD_CCtx, decltype(&ZSTD_freeCCtx)> context{
+        ZSTD_createCCtx(), &ZSTD_freeCCtx};
+    if (!context
+        || ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_contentSizeFlag, 0))
+        || ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_checksumFlag, 1))) {
+        throw std::runtime_error{"could not configure zstd test context"};
+    }
+
+    io::envelope::Bytes compressed_data(ZSTD_compressBound(uncompressed_data.size()));
+    const std::size_t compressed_size = ZSTD_compress2(
+        context.get(),
+        compressed_data.data(),
+        compressed_data.size(),
+        uncompressed_data.data(),
+        uncompressed_data.size());
+    if (ZSTD_isError(compressed_size)) {
+        throw std::runtime_error{"could not create zstd test data"};
+    }
+    compressed_data.resize(compressed_size);
+    return compressed_data;
 }
 
 template <typename Result>
@@ -120,6 +154,7 @@ TEST_CASE("Envelope round trips the latest payload version")
     CHECK(envelope.checksum.empty());
     CHECK(envelope.compression_algorithm
           == io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum);
+    CHECK(envelope.uncompressed_size == encode_value(expected).size());
 
     const auto result = io::envelope::deserialize<Schema>(*bytes);
     REQUIRE(result.has_value());
@@ -179,6 +214,7 @@ TEST_CASE("Envelope supports uncompressed data without a checksum")
     CHECK(envelope.compression_algorithm == io::envelope::CompressionAlgorithm::None);
     CHECK(envelope.checksum_algorithm == io::envelope::ChecksumAlgorithm::None);
     CHECK(envelope.checksum.empty());
+    CHECK(envelope.uncompressed_size == envelope.compressed_data.size());
 
     const auto result = io::envelope::deserialize<Schema>(*bytes);
     REQUIRE(result.has_value());
@@ -204,6 +240,19 @@ TEST_CASE("Checked compression round trips and validates its checksum")
     REQUIRE(result.has_value());
     CHECK(*result == original);
 
+    const auto empty_compressed = io::envelope::compress_with_checksum(
+        {},
+        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+        io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
+    REQUIRE(empty_compressed.has_value());
+    const auto empty_result = io::envelope::checked_decompress(
+        empty_compressed->compressed_data,
+        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+        io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+        empty_compressed->checksum);
+    REQUIRE(empty_result.has_value());
+    CHECK(empty_result->empty());
+
     auto corrupted = compressed->compressed_data;
     corrupted.back() ^= std::byte{0x01};
     check_error(
@@ -217,6 +266,30 @@ TEST_CASE("Checked compression round trips and validates its checksum")
     check_error(
         io::envelope::checked_decompress(
             compressed->compressed_data,
+            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+            io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+            {},
+            original.size() - 1),
+        io::envelope::ErrorCode::SizeLimitExceeded);
+}
+
+TEST_CASE("Checked decompression uses its maximum when the format omits the content size")
+{
+    const io::envelope::Bytes original(4096, std::byte{0x37});
+    const auto compressed_data = compress_without_content_size(original);
+
+    const auto result = io::envelope::checked_decompress(
+        compressed_data,
+        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+        io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+        {},
+        original.size());
+    REQUIRE(result.has_value());
+    CHECK(*result == original);
+
+    check_error(
+        io::envelope::checked_decompress(
+            compressed_data,
             io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
             io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
             {},
@@ -285,6 +358,74 @@ TEST_CASE("Envelope rejects incompatible metadata")
         check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
                     io::envelope::ErrorCode::InvalidAlgorithmCombination);
     }
+
+    SECTION("uncompressed size is smaller than the payload")
+    {
+        auto envelope = decode_envelope(*serialized);
+        --envelope.uncompressed_size;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::DecompressionFailed);
+    }
+
+    SECTION("uncompressed size is larger than the payload")
+    {
+        auto envelope = decode_envelope(*serialized);
+        ++envelope.uncompressed_size;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::DecompressionFailed);
+    }
+
+    SECTION("zero uncompressed size does not mean unspecified")
+    {
+        auto envelope = decode_envelope(*serialized);
+        envelope.uncompressed_size = 0;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::DecompressionFailed);
+    }
+
+    SECTION("uncompressed size exceeds the hard limit")
+    {
+        auto envelope = decode_envelope(*serialized);
+        envelope.uncompressed_size = io::envelope::default_max_decompressed_size + 1;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::SizeLimitExceeded);
+    }
+
+    SECTION("uncompressed size exceeds a caller limit")
+    {
+        auto envelope = decode_envelope(*serialized);
+        check_error(
+            io::envelope::deserialize<Schema>(
+                encode_envelope(envelope),
+                static_cast<std::size_t>(envelope.uncompressed_size - 1)),
+            io::envelope::ErrorCode::SizeLimitExceeded);
+    }
+}
+
+TEST_CASE("Envelope validates the size of uncompressed data")
+{
+    const v3::Payload payload{.id = 2, .label = "plain", .enabled = true, .samples = {1}};
+    const auto serialized = io::envelope::serialize<Schema, 3>(
+        payload,
+        io::envelope::CompressionAlgorithm::None,
+        io::envelope::ChecksumAlgorithm::None);
+    REQUIRE(serialized.has_value());
+
+    SECTION("declared size is smaller")
+    {
+        auto envelope = decode_envelope(*serialized);
+        --envelope.uncompressed_size;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::DecompressionFailed);
+    }
+
+    SECTION("declared size is larger")
+    {
+        auto envelope = decode_envelope(*serialized);
+        ++envelope.uncompressed_size;
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::DecompressionFailed);
+    }
 }
 
 TEST_CASE("Envelope reports malformed serialized data")
@@ -305,6 +446,7 @@ TEST_CASE("Envelope reports malformed serialized data")
             .checksum_algorithm = io::envelope::ChecksumAlgorithm::None,
             .checksum = {},
             .compression_algorithm = io::envelope::CompressionAlgorithm::None,
+            .uncompressed_size = 1,
             .compressed_data = {std::byte{0x01}},
         };
         check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),

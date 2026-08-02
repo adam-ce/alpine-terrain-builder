@@ -2,6 +2,8 @@
 
 #include <zpp_bits.h>
 
+#include <limits>
+
 namespace io::envelope {
 namespace detail {
 
@@ -92,6 +94,7 @@ std::expected<Bytes, Error> serialize(
         .checksum_algorithm = checksum_algorithm,
         .checksum = std::move(compressed->checksum),
         .compression_algorithm = compression_algorithm,
+        .uncompressed_size = payload_bytes->size(),
         .compressed_data = std::move(compressed->compressed_data),
     };
     return detail::serialize_to_bytes(envelope);
@@ -116,14 +119,27 @@ std::expected<typename Schema::latest_type, Error> deserialize(
         return std::unexpected(Error{ErrorCode::UnsupportedClassVersion});
     }
 
+    const std::size_t effective_max_decompressed_size =
+        std::min(max_decompressed_size, default_max_decompressed_size);
+    if (envelope->uncompressed_size > std::numeric_limits<std::size_t>::max()
+        || envelope->uncompressed_size > effective_max_decompressed_size) {
+        return std::unexpected(Error{ErrorCode::SizeLimitExceeded});
+    }
+
     auto payload_bytes = checked_decompress(
         envelope->compressed_data,
         envelope->compression_algorithm,
         envelope->checksum_algorithm,
         envelope->checksum,
-        max_decompressed_size);
+        static_cast<std::size_t>(envelope->uncompressed_size));
     if (!payload_bytes) {
+        if (payload_bytes.error().code == ErrorCode::SizeLimitExceeded) {
+            return std::unexpected(Error{ErrorCode::DecompressionFailed});
+        }
         return std::unexpected(payload_bytes.error());
+    }
+    if (payload_bytes->size() != envelope->uncompressed_size) {
+        return std::unexpected(Error{ErrorCode::DecompressionFailed});
     }
 
     return detail::deserialize_version<Schema>(envelope->class_version, *payload_bytes);

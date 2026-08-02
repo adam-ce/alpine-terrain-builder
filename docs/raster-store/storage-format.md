@@ -50,35 +50,36 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 - should generate tiles of requested resolution and pixel type (vertex|area) on the fly
 - requests by url, e.g.: layer/vertex|area/resolution/z/x/y.ending
 - live in src/tile-server/*
+- the delivery tile format is not yet defined 
 
-### unclear
-- how to build tile-base from raster-fundamentalis
-- details of the tile server
-
-## serialization / deserialization and versioning
-- all files are serialised with zpp::bits in two levels
- - first level contains:
-  - an uint64 long file type specific random magic number, generated once at coding time, as an definitive file type identifier
+## serialization / deserialization envelope and versioning 
+-zpp::bits is a library that takes a cpp object and (de)serialises it (from)into a byte stream, 
+- we serialise objects with zpp::bits in two levels
+ - first level (the envelope) contains:
+  - a c++ class identifier (string like type)
+  - an uint64 long file type specific magic number, F5FBD3EF919428CA, as an definitive file format identifier
   - a version number (uint32)
   - an enum for the checksum, default to HandledByCompressionLib, other option None
-  - a string checksum for the payload, computed from the uncompressed data (default empty)
+  - a string checksum for the payload, computed from the uncompressed data (default empty, this is unused for now)
   - an enum for the compression algorithm, default to to ZStd_BestCompression, other option None.
   - a payload (byte vector), the second level
- - the second level is a compressed byte array. the compressed payload is deserialised directly into the respective versioned data classes (tile or source attribution table)
+ - the second level is a compressed byte vector. the compressed payload is deserialised directly into the respective versioned data classes
 - data structs are stored in versioned namespaces, e.g.:
   `raster_store::v1::Tile`
 - outside the versioned namespace, there is a using declaration for the newest version
-- outside the versioned namespace, there is serialization function, taking only the newest version
+- outside the versioned namespace, there is a using declaration for the serialization function, taking only the newest version
 - outside the versioned namespace, there is a deserialization function, taking a byte stream, and returning the newest version (convert to the newest version, if the payload encodes an older version)
 - conversion to newer versions is done by the constructor, e.g. the v2::Tile constructor shall take a v1::Tile, and convert it to v2. once we have a v3, it would take a v2. this way we would have a conversion trail from v1 to v3.
+- serialization/deserialization should be done in a templated function, receiving the class type, version, and name (string like type) as template parameters, and the object as function parameter. the functions above should be implemented in terms of the templated function, e.g. by try reading with V3, then V2, then v1. a more elegant design with a few more functions may be proposed, if it generalises nicely. I can imagine, that something with a variadic template (versioned classes) could work.
 - we have clear fails if
- - the magic or version is unsupported
+ - the classname or magic is wrong, or the version is unsupported
  - if the checksum check fails
  - if the compression algorithm is missing or unsupported.
  - deserialization fails
-- we fail by throwing in these cases
-- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. the context must be configured to compute and check a checksum. do compression and decompression in functions with an std::byte interface (and error handling). dispatch is done via a simple switch case.
-- checksum: assert the enum is either None or HandledByCompressionLib.
+- we fail by returning an unexpected in these cases
+- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. the context must be configured to compute and check a checksum.
+- an API for compression and decompression should be created. data should be passed as std:: vector<std::byte>, error handling via std expected, dispatch between compression algorithms is done via a simple switch case.
+- checksum: verify the enum is either None or HandledByCompressionLib.
 
 
 ## to be defined

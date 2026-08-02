@@ -7,6 +7,7 @@ add_library(terrainlib
     ctb/types.hpp
 
     io/bytes.cpp
+    io/compression.cpp
     io/utils.cpp
 
     mesh/igl/igl.cpp
@@ -70,6 +71,7 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    zstd::libzstd_static
     cgltf
     TBB::tbb
     opencv_core

@@ -20,6 +20,7 @@ add_executable(unittests_terrainlib
     terrainlib/cow.cpp
     terrainlib/dataset.cpp
     terrainlib/enumerate.cpp
+    terrainlib/envelope.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp

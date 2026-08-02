@@ -52,34 +52,38 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 - live in src/tile-server/*
 - the delivery tile format is not yet defined 
 
-## serialization / deserialization envelope and versioning 
--zpp::bits is a library that takes a cpp object and (de)serialises it (from)into a byte stream, 
-- we serialise objects with zpp::bits in two levels
- - first level (the envelope) contains:
-  - a c++ class identifier (string like type)
-  - an uint64 long file type specific magic number, F5FBD3EF919428CA, as an definitive file format identifier
-  - a version number (uint32)
-  - an enum for the checksum, default to HandledByCompressionLib, other option None
-  - a string checksum for the payload, computed from the uncompressed data (default empty, this is unused for now)
-  - an enum for the compression algorithm, default to to ZStd_BestCompression, other option None.
-  - a payload (byte vector), the second level
- - the second level is a compressed byte vector. the compressed payload is deserialised directly into the respective versioned data classes
+## serialization / deserialization envelope and versioning
+- `zpp::bits` serialises C++ objects to byte streams and deserialises them again.
+- The envelope is generic and is not specific to the raster store.
+- We serialise objects with `zpp::bits` in two levels.
+ - The first level is an aggregate with the following fields, in this order:
+  - `uint64 magic`, always `F5FBD3EF919428CA`, identifying this envelope format;
+  - `string class_name`, identifying the payload type;
+  - `uint32 class_version`, identifying the versioned payload type;
+  - `ChecksumAlgorithm checksum_algorithm`, default `HandledByCompressionLib`, alternatively `None`;
+  - `string checksum`, empty when the checksum is handled by the compression library;
+  - `CompressionAlgorithm compression_algorithm`, default `ZstdBestCompressionWithChecksum`, alternatively `None`;
+  - `Bytes compressed_data`, containing the second level.
+ - The second level is a compressed byte vector. It is deserialised directly into the selected versioned payload class.
+- The magic is shared by all payload types. `class_name` distinguishes payload types. An incompatible future envelope layout requires a new magic.
 - data structs are stored in versioned namespaces, e.g.:
   `raster_store::v1::Tile`
 - outside the versioned namespace, there is a using declaration for the newest version
-- outside the versioned namespace, there is a using declaration for the serialization function, taking only the newest version
+- outside the versioned namespace, there is a serialization wrapper function taking only the newest version
 - outside the versioned namespace, there is a deserialization function, taking a byte stream, and returning the newest version (convert to the newest version, if the payload encodes an older version)
-- conversion to newer versions is done by the constructor, e.g. the v2::Tile constructor shall take a v1::Tile, and convert it to v2. once we have a v3, it would take a v2. this way we would have a conversion trail from v1 to v3.
-- serialization/deserialization should be done in a templated function, receiving the class type, version, and name (string like type) as template parameters, and the object as function parameter. the functions above should be implemented in terms of the templated function, e.g. by try reading with V3, then V2, then v1. a more elegant design with a few more functions may be proposed, if it generalises nicely. I can imagine, that something with a variadic template (versioned classes) could work.
+- Newer versions provide a static `from_previous` function, e.g. `v2::Tile::from_previous(v1::Tile)`. Static conversion functions keep the payload types aggregates, allowing `zpp::bits` to serialise them without per-type serialisation declarations. A conversion trail upgrades v1 to v2 and then v3.
+- `Version<Number, VersionedPayloadType>` pairs version numbers with payload types. `PayloadSchema<ClassName, Versions...>` defines the class name, supported versions, latest type, and conversion trail.
+- The generic serialisation function receives the schema and version as template parameters. Deserialisation reads `class_version`, deserialises exactly that payload type, and follows the conversion trail to the latest type. It does not speculatively try other payload versions.
 - we have clear fails if
  - the classname or magic is wrong, or the version is unsupported
  - if the checksum check fails
  - if the compression algorithm is missing or unsupported.
  - deserialization fails
 - we fail by returning an unexpected in these cases
-- compression: use libzstd with best compression. libzstd must be imported via the projects cmake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. the context must be configured to compute and check a checksum.
-- an API for compression and decompression should be created. data should be passed as std:: vector<std::byte>, error handling via std expected, dispatch between compression algorithms is done via a simple switch case.
-- checksum: verify the enum is either None or HandledByCompressionLib.
+- Compression uses libzstd at its best compression level. Libzstd is imported through the project's CMake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. `ZstdBestCompressionWithChecksum` writes an embedded zstd frame checksum, which libzstd verifies while decompressing.
+- `compress_with_checksum` accepts a `vector<byte>` and returns the compressed bytes plus the external checksum string. `checked_decompress` accepts both and returns the decompressed bytes. Both use `std::expected` and dispatch with a switch.
+- `None` compression must be paired with `None` checksum. `ZstdBestCompressionWithChecksum` must be paired with `HandledByCompressionLib`; its external checksum string must be empty because the checksum is embedded in the zstd frame.
+- Decompression rejects output larger than 1 GiB.
 
 
 ## to be defined

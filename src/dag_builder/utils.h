@@ -145,15 +145,14 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
         total_triangles += cluster.local_triangles.size();
     }
 
-    // Clusters without uvs are padded, so the mesh uvs stay aligned with its positions.
-    const bool has_uvs = std::ranges::any_of(clustering.clusters, [](const Cluster &c) {
+    const bool any_has_uvs = std::ranges::any_of(clustering.clusters, [](const Cluster &c) {
         return c.has_uvs();
     });
 
     // Preallocate mesh buffers
     mesh::Simple mesh;
     mesh.positions.reserve(total_vertices);
-    if (has_uvs) {
+    if (any_has_uvs) {
         mesh.uvs.reserve(total_vertices);
     }
     mesh.triangles.reserve(total_triangles);
@@ -167,7 +166,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
         for (size_t i = 0; i < cluster.vertex_indices.size(); i++) {
             const uint32_t vertex_index = cluster.vertex_indices[i];
             mesh.positions.push_back(clustering.positions[vertex_index]);
-            if (has_uvs) {
+            if (any_has_uvs) {
                 const glm::dvec2 uv = cluster.has_uvs() ? cluster.uvs[i] : glm::dvec2(0);
                 mesh.uvs.push_back(uv);
             }
@@ -225,7 +224,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
             // remap the uvs to match the atlas
             uint32_t uv_offset = 0;
             for (const Cluster &cluster : clustering.clusters) {
-                if (has_uvs && cluster.has_texture()) {
+                if (any_has_uvs && cluster.has_texture()) {
                     std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
                     atlas::map_uvs(plan, cluster.texture_id.value(), cluster_uvs);
                 }

@@ -12,7 +12,9 @@ inline glm::uvec2 get_texture_size(const cv::Mat &texture) {
 }
 
 inline void rescale_texture(const cv::Mat &source, cv::Mat &destination, const glm::uvec2 new_size) {
-    cv::resize(source, destination, cv::Size(new_size.x, new_size.y), 0, 0);
+    const bool minifying = new_size.x <= source.cols && new_size.y <= source.rows;
+    const int interpolation = minifying ? cv::INTER_AREA : cv::INTER_CUBIC;
+    cv::resize(source, destination, cv::Size(new_size.x, new_size.y), 0, 0, interpolation);
 }
 
 inline cv::Mat rescale_texture(const cv::Mat &source, const glm::uvec2 new_size) {

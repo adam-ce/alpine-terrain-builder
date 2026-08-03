@@ -88,7 +88,10 @@ struct Packer::Impl {
 
         normalize_uvs(uvs.flat());
 
-        return Packing(uvs, this->atlas->utilization[0]);
+        const glm::dvec2 atlas_size(this->atlas->width, this->atlas->height);
+        const double aspect = atlas_size.y > 0 ? atlas_size.x / atlas_size.y : 1.0;
+
+        return Packing(uvs, this->atlas->utilization[0], aspect);
     }
 };
 

@@ -17,10 +17,11 @@
 
 #include "atlas/Packer.h"
 #include "atlas/pull_reproject_texture.h"
-#include "mesh/bounds.h"
+#include "mesh/geometry.h"
 #include "texture_sizing.h"
 #include "opencv_utils.h"
 #include "range_utils.h"
+#include "variant_utils.h"
 #include "TextureSet.h"
 
 using Texture = cv::Mat;
@@ -50,27 +51,56 @@ struct TextureComposition {
     std::vector<glm::dvec2> target_uvs;
 };
 
-namespace detail {
-inline glm::uvec2 get_effective_texture_size(const TextureMap &map) {
-    const radix::geometry::Aabb2d uv_bounds = calculate_bounds(map.uvs);
-    const glm::dvec2 size = get_texture_size(map.texture);
-    return glm::uvec2(glm::ceil(size * uv_bounds.size()));
+inline double compute_utilization(const TexturedMesh &mesh) {
+    return mesh::compute_surface_area(mesh.triangles, mesh.map.uvs);
 }
 
-inline double get_effective_pixel_area(const TextureComposition &comp) {
-    std::vector<radix::geometry::Aabb2d> bounds(comp.maps.size());
-    for (const MappedTriangle &triangle : comp.triangles) {
-        const std::vector<glm::dvec2> &uvs = comp.maps[triangle.source_map].uvs;
-        for (uint8_t k = 0; k < 3; k++) {
-            bounds[triangle.source_map].expand_by(uvs[triangle.source[k]]);
-        }
-    }
-
+inline double compute_utilization(const TextureComposition &comp) {
     double area = 0;
-    for (const auto &[map_index, map] : enumerate(comp.maps)) {
-        area += glm::compMul(glm::dvec2(get_texture_size(map.texture)) * bounds[map_index].size());
+    for (const MappedTriangle &triangle : comp.triangles) {
+        area += compute_triangle_area(triangle.target, comp.target_uvs);
     }
     return area;
+}
+
+inline double compute_source_texel_area(const TexturedMesh &mesh) {
+    return compute_utilization(mesh) * glm::compMul(glm::dvec2(get_texture_size(mesh.map.texture)));
+}
+
+inline double compute_source_texel_area(const TextureComposition &comp) {
+    const std::vector<double> texel_counts = transform_vector(comp.maps, [](const TextureMap &map) {
+        return glm::compMul(glm::dvec2(get_texture_size(map.texture)));
+    });
+
+    double area = 0;
+    for (const MappedTriangle &triangle : comp.triangles) {
+        const TextureMap &map = comp.maps[triangle.source_map];
+        area += compute_triangle_area(triangle.source, map.uvs) * texel_counts[triangle.source_map];
+    }
+    return area;
+}
+
+namespace detail {
+using Entry = std::variant<TexturedMesh, TextureComposition>;
+
+inline double compute_utilization(const Entry &entry) {
+    return match(entry,
+        [](const TexturedMesh &mesh) {
+            return ::compute_utilization(mesh);
+        },
+        [](const TextureComposition &comp) {
+            return ::compute_utilization(comp);
+        });
+}
+
+inline double compute_source_texel_area(const Entry &entry) {
+    return match(entry,
+        [](const TexturedMesh &mesh) {
+            return ::compute_source_texel_area(mesh);
+        },
+        [](const TextureComposition &comp) {
+            return ::compute_source_texel_area(comp);
+        });
 }
 } // namespace detail
 
@@ -120,7 +150,7 @@ public:
 private:
     friend class PackedAtlas;
 
-    using Entry = std::variant<TexturedMesh, TextureComposition>;
+    using Entry = detail::Entry;
 
     atlas::Packing compute_packing() const {
         if (this->_entries.size() == 1) {
@@ -131,7 +161,7 @@ private:
 
         std::vector<glm::uvec3> target_triangles;
         for (const Entry& entry : this->_entries) {
-            visit_entry(entry,
+            match(entry,
                 [&](const TexturedMesh& mesh) {
                     packer.add_uv_mesh(mesh.triangles, mesh.map.uvs, get_texture_size(mesh.map.texture));
                 },
@@ -141,7 +171,7 @@ private:
                     for (const MappedTriangle &triangle : comp.triangles) {
                         target_triangles.push_back(triangle.target);
                     }
-                    const uint32_t side = std::ceil(std::sqrt(detail::get_effective_pixel_area(comp)));
+                    const uint32_t side = std::ceil(std::sqrt(compute_source_texel_area(comp)));
                     packer.add_uv_mesh(
                         target_triangles,
                         comp.target_uvs,
@@ -154,42 +184,15 @@ private:
     }
 
     atlas::Packing pack_single(const Entry &entry) const {
-        return visit_entry<atlas::Packing>(entry,
+        return match(entry,
             [](const TexturedMesh &mesh) {
-                return atlas::Packing(mesh.map.uvs);
+                const glm::dvec2 texture_size = get_texture_size(mesh.map.texture);
+                const double aspect = texture_size.x / texture_size.y;
+                return atlas::Packing(mesh.map.uvs, compute_utilization(mesh), aspect);
             },
             [](const TextureComposition &comp) {
-                return atlas::Packing(comp.target_uvs);
+                return atlas::Packing(comp.target_uvs, compute_utilization(comp));
             });
-    }
-
-    static double effective_pixel_area(const Entry &entry) {
-        return visit_entry<double>(entry,
-            [](const TexturedMesh &mesh) {
-                return glm::compMul(glm::dvec2(detail::get_effective_texture_size(mesh.map)));
-            },
-            [](const TextureComposition &comp) {
-                return detail::get_effective_pixel_area(comp);
-            });
-    }
-
-    template <class R = void, class MeshFn, class CompFn>
-    static R visit_entry(
-        const Entry &entry,
-        MeshFn &&mesh_fn,
-        CompFn &&comp_fn) {
-        return std::visit(
-            [&](const auto &value) -> R {
-                using T = std::remove_cvref_t<decltype(value)>;
-
-                if constexpr (std::is_same_v<T, TexturedMesh>) {
-                    return std::invoke(mesh_fn, value);
-                } else {
-                    static_assert(std::is_same_v<T, TextureComposition>);
-                    return std::invoke(comp_fn, value);
-                }
-            },
-            entry);
     }
 
     std::vector<Entry> _entries;
@@ -207,10 +210,14 @@ public:
         return this->_packing.utilization();
     }
 
+    double aspect() const {
+        return this->_packing.aspect();
+    }
+
     // Triangles the source maps were measured against.
     uint32_t source_triangle_count() const {
         return sum(this->_baker._entries, [](const TextureBaker::Entry &entry) {
-            return TextureBaker::visit_entry<uint32_t>(entry,
+            return match(entry,
                 [](const TexturedMesh &mesh) {
                     return mesh.triangles.size();
                 },
@@ -221,18 +228,16 @@ public:
     }
 
     // Texels the source maps hold for the source regions.
-    double source_pixel_area() const {
-        double area = 0;
-        for (const TextureBaker::Entry &entry : this->_baker._entries) {
-            area += TextureBaker::effective_pixel_area(entry);
-        }
-        return area;
+    double source_texel_area() const {
+        return sum(this->_baker._entries, [](const TextureBaker::Entry &entry) {
+            return detail::compute_source_texel_area(entry);
+        });
     }
 
     Texture bake(const glm::uvec2 texture_size) const {
         const std::vector<TextureBaker::Entry> &entries = this->_baker._entries;
         if (entries.size() == 1) {
-            return TextureBaker::visit_entry<Texture>(entries.front(),
+            return match(entries.front(),
                 [&](const TexturedMesh &mesh) {
                     return rescale_texture(mesh.map.texture, texture_size);
                 },
@@ -283,7 +288,7 @@ private:
         for (uint32_t i = 0; i < this->_baker._entries.size(); i++) {
             const auto target_uvs = this->_packing.uvs_for_mesh(i);
 
-            TextureBaker::visit_entry(
+            match(
                 this->_baker._entries[i],
                 [&](const TexturedMesh &mesh) {
                     const uint32_t source_image_index = source_images.add(mesh.map.texture);

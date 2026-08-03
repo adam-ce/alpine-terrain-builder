@@ -33,10 +33,7 @@ struct Args {
     std::optional<float> target_ratio;
     std::optional<float> target_error;
 
-    TextureSizingKind texture_sizing_kind;
-    uint32_t texels_per_cluster;
-    uint32_t min_cluster_texture_size;
-    uint32_t max_cluster_texture_size;
+    BakeOptions bake_options;
 
     bool write_debug_meshes;
     bool parallelize;

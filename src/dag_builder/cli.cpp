@@ -126,10 +126,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
-        .texture_sizing_kind = TextureSizingKind::Constant,
-        .texels_per_cluster = 128,
-        .min_cluster_texture_size = 64,
-        .max_cluster_texture_size = 512,
+        .bake_options = {},
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
@@ -171,21 +168,24 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
         ->check(CLI::NonNegativeNumber);
 
-    app.add_option("--texture-sizing", args.texture_sizing_kind, "How merged cluster textures are sized")
+    TextureSizingKind texture_sizing_kind = TextureSizingKind::Constant;
+    ConstantQuality constant_quality;
+
+    app.add_option("--texture-sizing", texture_sizing_kind, "How merged cluster textures are sized")
         ->transform(CLI::CheckedTransformer(texture_sizing_kind_names, CLI::ignore_case))
-        ->default_val(args.texture_sizing_kind);
+        ->default_val(texture_sizing_kind);
 
     const CLI::Option *texels_per_cluster_option =
-        app.add_option("--texels-per-cluster", args.texels_per_cluster, "Texture side length of a full cluster")
-            ->default_val(args.texels_per_cluster)
+        app.add_option("--texels-per-cluster", constant_quality.texels_per_cluster, "Texture side length of a full cluster")
+            ->default_val(constant_quality.texels_per_cluster)
             ->check(CLI::PositiveNumber);
 
-    app.add_option("--min-cluster-texture-size", args.min_cluster_texture_size, "Smallest merged cluster texture")
-        ->default_val(args.min_cluster_texture_size)
+    app.add_option("--min-cluster-texture-size", args.bake_options.min_cluster_texture_size, "Smallest merged cluster texture")
+        ->default_val(args.bake_options.min_cluster_texture_size)
         ->check(CLI::PositiveNumber);
 
-    app.add_option("--max-cluster-texture-size", args.max_cluster_texture_size, "Largest merged cluster texture")
-        ->default_val(args.max_cluster_texture_size)
+    app.add_option("--max-cluster-texture-size", args.bake_options.max_cluster_texture_size, "Largest merged cluster texture")
+        ->default_val(args.bake_options.max_cluster_texture_size)
         ->check(CLI::PositiveNumber);
 
     bool resume = false;
@@ -215,8 +215,14 @@ Args cli::parse(int argc, const char *const *argv) {
         }
         args.continuation_mode = make_continuation_mode(resume, overwrite);
 
-        if (args.texture_sizing_kind != TextureSizingKind::Constant && texels_per_cluster_option->count() > 0) {
+        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_cluster_option->count() > 0) {
             throw CLI::ValidationError("--texels-per-cluster requires --texture-sizing constant");
+        }
+
+        if (texture_sizing_kind == TextureSizingKind::Constant) {
+            args.bake_options.mode = constant_quality;
+        } else {
+            args.bake_options.mode = RelativeQuality{};
         }
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));

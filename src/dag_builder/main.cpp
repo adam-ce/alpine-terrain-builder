@@ -21,16 +21,6 @@ int main(int argc, char **argv) {
         octree::IndexedDagStorage output_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.output_path);
         output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
-        BakeOptions texture_sizing{
-            .min_cluster_texture_size = args.min_cluster_texture_size,
-            .max_cluster_texture_size = args.max_cluster_texture_size,
-        };
-        if (args.texture_sizing_kind == cli::TextureSizingKind::Constant) {
-            texture_sizing.mode = ConstantQuality{args.texels_per_cluster};
-        } else {
-            texture_sizing.mode = RelativeQuality{};
-        }
-
         dag::BuildOptions options{
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
@@ -39,7 +29,7 @@ int main(int argc, char **argv) {
                 .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
                 .allow_texture_reuse = args.allow_texture_reuse,
             },
-            .bake_options = texture_sizing,
+            .bake_options = args.bake_options,
             .root_node = args.root_node,
             .include_mode = args.include_mode,
             .write_debug_meshes = args.write_debug_meshes,

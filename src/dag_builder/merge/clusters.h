@@ -455,8 +455,6 @@ inline std::vector<uint32_t> make_cluster_unwrappable(Cluster &cluster) {
 // Algorithm used to retry a UV unwrap when the requested algorithm fails.
 inline constexpr uv::Algorithm fallback_algorithm = uv::Algorithm::TutteBarycentricMapping;
 
-// Each component is packed using component-local vertex indices, so the flat buffer cannot be
-// assigned to the merged cluster directly.
 inline std::vector<glm::dvec2> gather_packed_uvs(
     const PackedAtlas &atlas,
     const std::span<const TextureMapId> component_texture_ids,
@@ -689,8 +687,7 @@ inline MergeResult merge_clusters_unbaked(const Clustering &clustering, const Pa
         Cluster merged_cluster;
         if (needs_unwrap) {
             // We need to perform a fresh uv unwrap
-            auto [cluster, atlas] = detail::merge_clusters_with_unwrap(
-                clustering, cluster_indices, vertex_remap, options.uv_unwrap_algorithm);
+            auto [cluster, atlas] = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap, options.uv_unwrap_algorithm);
 
             merged_cluster = std::move(cluster);
             unbaked.emplace(partition_index, std::move(atlas));

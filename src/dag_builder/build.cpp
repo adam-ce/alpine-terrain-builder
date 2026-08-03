@@ -82,26 +82,21 @@ LodResult build_lod(
     const RegionFilter &lock_filter) {
     const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
                                                                         .clusters_per_partition = options.clusters_per_partition});
-    // Construct new clusters and generate new textures.
-    Clustering clustering = apply_partitioning(clusters, partitioning, options.uv_unwrap_algorithm);
+    // Apply the partitioning, without manifesting textures.
+    MergeResult merged = merge_clusters_unbaked(clusters, partitioning, options.merge_options);
     // Create partition to cluster map
     std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
     for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {
         partition_to_clusters[partition_index].push_back(cluster_index);
     }
 
-    // Trim textures
-    trim_textures_inplace(clustering);
-
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, lock_filter);
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(merged.clustering, lock_filter);
 
     // Convert relative target error (a fraction of the node bounds) to absolute
-    std::optional<float> absolute_target_error;
-    if (options.relative_target_error) {
-        const double node_extent = glm::compMax(node_bounds.size());
-        absolute_target_error = static_cast<float>(options.relative_target_error.value() * node_extent);
-    }
+    const std::optional<float> absolute_target_error = map(options.relative_target_error, [&](const float relative_error) {
+        return static_cast<float>(relative_error * glm::compMax(node_bounds.size()));
+    });
     const SimplifyOptions simplify_options{
         .target_ratio = options.target_ratio,
         .absolute_target_error = absolute_target_error,
@@ -109,8 +104,14 @@ LodResult build_lod(
         .error_mode = ErrorMode::Add,
         .preserve_cluster_count = true
     };
-    clustering = simplify(clustering, simplify_options);
-    remove_unused_vertices_inplace(clustering);
+    merged.clustering = simplify(merged.clustering, simplify_options);
+    remove_unused_vertices_inplace(merged.clustering);
+
+    // Render the textures now that the surviving triangle counts are known.
+    Clustering clustering = bake_textures(std::move(merged), options.bake_options);
+
+    // Trim textures
+    trim_textures_inplace(clustering);
 
     // Split each cluster into parts again.
     auto result = clusterize(clustering);

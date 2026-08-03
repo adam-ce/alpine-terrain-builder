@@ -7,6 +7,10 @@ inline size_t mat_byte_size(const cv::Mat &mat) {
     return mat.total() * mat.elemSize();
 }
 
+inline glm::uvec2 get_texture_size(const cv::Mat &texture) {
+    return {texture.cols, texture.rows};
+}
+
 inline void rescale_texture(const cv::Mat &source, cv::Mat &destination, const glm::uvec2 new_size) {
     cv::resize(source, destination, cv::Size(new_size.x, new_size.y), 0, 0);
 }

@@ -5,6 +5,7 @@
 #include "cluster.h"
 #include "enumerate.h"
 #include "mesh/VertexMap.h"
+#include "optional_utils.h"
 
 struct ClusteringAndMap {
     Clustering clustering;

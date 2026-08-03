@@ -60,8 +60,8 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
   - `uint64 magic`, always `F5FBD3EF919428CA`, identifying this envelope format;
   - `string class_name`, identifying the payload type;
   - `uint32 class_version`, identifying the versioned payload type;
-  - `ChecksumAlgorithm checksum_algorithm`, default `HandledByCompressionLib`, alternatively `None`;
-  - `string checksum`, empty when the checksum is handled by the compression library;
+  - `ChecksumAlgorithm checksum_algorithm`, default `HandledByCompressionLib`, alternatively `Crc32c` or `None`;
+  - `string checksum`, empty when no external checksum is used, otherwise the CRC-32C value;
   - `CompressionAlgorithm compression_algorithm`, default `ZstdBestCompressionWithChecksum`, alternatively `None`;
   - `uint64 uncompressed_size`, the exact size of the uncompressed second level;
   - `Bytes compressed_data`, containing the second level.
@@ -83,9 +83,11 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 - we fail by returning an unexpected in these cases
 - Compression uses libzstd at its best compression level. Libzstd is imported through the project's CMake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. `ZstdBestCompressionWithChecksum` writes an embedded zstd frame checksum, which libzstd verifies while decompressing.
 - `compress_with_checksum` accepts a `vector<byte>` and returns the compressed bytes plus the external checksum string. `checked_decompress` accepts both and returns the decompressed bytes. Both use `std::expected` and dispatch with a switch.
+- `Crc32c` is an external CRC-32C (Castagnoli) checksum of the complete uncompressed serialised payload. It uses the reflected polynomial `82F63B78`, an initial value of `FFFFFFFF`, and a final XOR of `FFFFFFFF`. The checksum string contains exactly eight lowercase hexadecimal characters. The empty payload has checksum `00000000`; the ASCII test vector `123456789` has checksum `e3069283`. CRC-32C detects accidental corruption but is not cryptographic.
 - `checked_decompress` accepts a maximum decompressed size, defaulting to 1 GiB. It uses a size reported by the compression format when available, otherwise it uses the maximum as its allocation bound and shrinks the result to the produced size.
 - Envelope deserialisation passes `uncompressed_size` as that maximum and requires the produced size to match it exactly. A mismatch is a decompression failure. A declared size above the caller's limit or the hard 1 GiB limit is a size-limit failure.
-- `None` compression must be paired with `None` checksum. `ZstdBestCompressionWithChecksum` must be paired with `HandledByCompressionLib`; its external checksum string must be empty because the checksum is embedded in the zstd frame.
+- `None` compression may be paired with `None` or `Crc32c`. `ZstdBestCompressionWithChecksum` may be paired with `HandledByCompressionLib` or `Crc32c`; with `Crc32c`, both the embedded zstd checksum and the external CRC-32C are checked. `HandledByCompressionLib` is invalid with `None` compression, and `None` checksum is invalid with `ZstdBestCompressionWithChecksum`.
+- `None` and `HandledByCompressionLib` require an empty checksum string. `Crc32c` requires its canonical eight-character checksum. Deserialisation verifies it after bounded decompression and before parsing the payload with `zpp::bits`; envelope deserialisation also requires the resulting size to exactly match `uncompressed_size`.
 - Decompression never allocates or produces output larger than 1 GiB.
 
 

@@ -18,6 +18,7 @@ inline constexpr std::size_t default_max_decompressed_size = std::size_t{1} << 3
 enum class ChecksumAlgorithm : std::uint8_t {
     None,
     HandledByCompressionLib,
+    Crc32c,
 };
 
 enum class CompressionAlgorithm : std::uint8_t {

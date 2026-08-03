@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 
 namespace {
 
@@ -132,6 +133,16 @@ void check_error(const Result &result, const io::envelope::ErrorCode expected)
     CHECK(result.error().code == expected);
 }
 
+io::envelope::Bytes bytes_from_string(const std::string_view text)
+{
+    io::envelope::Bytes bytes;
+    bytes.reserve(text.size());
+    for (const char character : text) {
+        bytes.push_back(static_cast<std::byte>(static_cast<unsigned char>(character)));
+    }
+    return bytes;
+}
+
 } // namespace
 
 TEST_CASE("Envelope round trips the latest payload version")
@@ -219,6 +230,158 @@ TEST_CASE("Envelope supports uncompressed data without a checksum")
     const auto result = io::envelope::deserialize<Schema>(*bytes);
     REQUIRE(result.has_value());
     CHECK(*result == expected);
+}
+
+TEST_CASE("CRC-32C uses its canonical hexadecimal representation")
+{
+    SECTION("standard test vector")
+    {
+        const auto compressed = io::envelope::compress_with_checksum(
+            bytes_from_string("123456789"),
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(compressed.has_value());
+        CHECK(compressed->checksum == "e3069283");
+    }
+
+    SECTION("empty input")
+    {
+        const auto compressed = io::envelope::compress_with_checksum(
+            {},
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(compressed.has_value());
+        CHECK(compressed->checksum == "00000000");
+    }
+}
+
+TEST_CASE("CRC-32C protects independently compressed data")
+{
+    const auto original = bytes_from_string("payload protected by CRC-32C");
+
+    SECTION("without compression")
+    {
+        const auto compressed = io::envelope::compress_with_checksum(
+            original,
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(compressed.has_value());
+
+        const auto result = io::envelope::checked_decompress(
+            compressed->compressed_data,
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c,
+            compressed->checksum);
+        REQUIRE(result.has_value());
+        CHECK(*result == original);
+
+        auto corrupted = compressed->compressed_data;
+        corrupted.front() ^= std::byte{0x01};
+        check_error(
+            io::envelope::checked_decompress(
+                corrupted,
+                io::envelope::CompressionAlgorithm::None,
+                io::envelope::ChecksumAlgorithm::Crc32c,
+                compressed->checksum),
+            io::envelope::ErrorCode::ChecksumMismatch);
+    }
+
+    SECTION("with zstd compression")
+    {
+        const auto compressed = io::envelope::compress_with_checksum(
+            original,
+            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(compressed.has_value());
+        REQUIRE(compressed->checksum.size() == 8);
+
+        const auto result = io::envelope::checked_decompress(
+            compressed->compressed_data,
+            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+            io::envelope::ChecksumAlgorithm::Crc32c,
+            compressed->checksum);
+        REQUIRE(result.has_value());
+        CHECK(*result == original);
+
+        auto wrong_checksum = compressed->checksum;
+        wrong_checksum.front() = wrong_checksum.front() == '0' ? '1' : '0';
+        check_error(
+            io::envelope::checked_decompress(
+                compressed->compressed_data,
+                io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+                io::envelope::ChecksumAlgorithm::Crc32c,
+                wrong_checksum),
+            io::envelope::ErrorCode::ChecksumMismatch);
+    }
+
+    SECTION("malformed checksum")
+    {
+        check_error(
+            io::envelope::checked_decompress(
+                original,
+                io::envelope::CompressionAlgorithm::None,
+                io::envelope::ChecksumAlgorithm::Crc32c,
+                "E3069283"),
+            io::envelope::ErrorCode::ChecksumMismatch);
+        check_error(
+            io::envelope::checked_decompress(
+                original,
+                io::envelope::CompressionAlgorithm::None,
+                io::envelope::ChecksumAlgorithm::Crc32c,
+                {}),
+            io::envelope::ErrorCode::ChecksumMismatch);
+    }
+}
+
+TEST_CASE("Envelope round trips and upgrades payloads protected by CRC-32C")
+{
+    SECTION("latest version")
+    {
+        const v3::Payload expected{
+            .id = 12,
+            .label = "crc",
+            .enabled = true,
+            .samples = {3, 5, 8},
+        };
+        const auto bytes = io::envelope::serialize<Schema, 3>(
+            expected,
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(bytes.has_value());
+
+        const auto envelope = decode_envelope(*bytes);
+        CHECK(envelope.checksum_algorithm == io::envelope::ChecksumAlgorithm::Crc32c);
+        CHECK(envelope.checksum.size() == 8);
+        CHECK(envelope.compression_algorithm == io::envelope::CompressionAlgorithm::None);
+
+        const auto result = io::envelope::deserialize<Schema>(*bytes);
+        REQUIRE(result.has_value());
+        CHECK(*result == expected);
+
+        auto corrupted = envelope;
+        corrupted.compressed_data.front() ^= std::byte{0x01};
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(corrupted)),
+                    io::envelope::ErrorCode::ChecksumMismatch);
+    }
+
+    SECTION("older version")
+    {
+        const v1::Payload original{.id = 13, .name = "crc version one"};
+        const auto bytes = io::envelope::serialize<Schema, 1>(
+            original,
+            io::envelope::CompressionAlgorithm::None,
+            io::envelope::ChecksumAlgorithm::Crc32c);
+        REQUIRE(bytes.has_value());
+
+        const auto result = io::envelope::deserialize<Schema>(*bytes);
+        REQUIRE(result.has_value());
+        CHECK(*result == v3::Payload{
+                             .id = 13,
+                             .label = "crc version one",
+                             .enabled = true,
+                             .samples = {},
+                         });
+    }
 }
 
 TEST_CASE("Checked compression round trips and validates its checksum")
@@ -357,6 +520,24 @@ TEST_CASE("Envelope rejects incompatible metadata")
         envelope.checksum = "not used by zstd";
         check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
                     io::envelope::ErrorCode::InvalidAlgorithmCombination);
+    }
+
+    SECTION("malformed CRC-32C checksum")
+    {
+        auto envelope = decode_envelope(*serialized);
+        envelope.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
+        envelope.checksum = "1234";
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::ChecksumMismatch);
+    }
+
+    SECTION("incorrect CRC-32C checksum")
+    {
+        auto envelope = decode_envelope(*serialized);
+        envelope.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
+        envelope.checksum = "00000000";
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)),
+                    io::envelope::ErrorCode::ChecksumMismatch);
     }
 
     SECTION("uncompressed size is smaller than the payload")

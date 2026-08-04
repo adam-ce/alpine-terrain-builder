@@ -272,7 +272,7 @@ int run(std::span<char *> args) {
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
         ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
-        ->default_val(".glb");
+        ->default_val(".terrain");
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);

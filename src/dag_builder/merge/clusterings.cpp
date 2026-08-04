@@ -38,6 +38,23 @@ uint32_t to_flat_index(const OffsetTable &base_offsets, const VertexInClustering
     return base_offsets.offset(vertex.clustering_index, vertex.global_vertex_index);
 }
 
+std::vector<VertexInClustering> list_all_vertices(const std::span<const Clustering> clusterings, const OffsetTable &offsets) {
+    const size_t total_vertex_count = offsets.total_size();
+    std::vector<VertexInClustering> vertices;
+    vertices.reserve(total_vertex_count);
+
+    for (const auto &[clustering_index, clustering] : enumerate(clusterings)) {
+        for (const auto &[global_vertex_index, position] : enumerate(clustering.positions)) {
+            vertices.push_back(VertexInClustering{
+                .clustering_index = static_cast<uint32_t>(clustering_index),
+                .global_vertex_index = static_cast<uint32_t>(global_vertex_index)
+            });
+        }
+    }
+
+    return vertices;
+}
+
 std::vector<VertexInClustering> find_boundary_vertices(const std::span<const Clustering> clusterings, const OffsetTable &offsets) {
     const size_t total_vertex_count = offsets.total_size();
     std::vector<VertexInClustering> boundary_vertices;
@@ -56,8 +73,7 @@ std::vector<VertexInClustering> find_boundary_vertices(const std::span<const Clu
                 const uint32_t global_vertex_index = cluster.vertex_indices[local_vertex_index];
                 boundary_vertices.push_back(VertexInClustering{
                     .clustering_index = static_cast<uint32_t>(clustering_index),
-                    .global_vertex_index = global_vertex_index
-                });
+                    .global_vertex_index = global_vertex_index});
             }
         }
     }
@@ -110,24 +126,22 @@ spatial_lookup::Hashmap3d<VertexInClustering> build_spatial_map(
     return spatial_map;
 }
 
-template <bool WithSizes>
-std::vector<uint32_t> build_canonical_indices(UnionFind_<WithSizes> &union_find) {
-    const uint32_t total_vertex_count = union_find.size();
-    constexpr const uint32_t INVALID_INDEX = std::numeric_limits<uint32_t>::max();
-    std::vector<uint32_t> vertex_to_canonical(total_vertex_count, INVALID_INDEX);
-    uint32_t next_index = 0;
+spatial_lookup::Hashmap3d<VertexInClustering> build_spatial_map(
+    const std::span<const Clustering> clusterings,
+    const double epsilon) {
+    spatial_lookup::Hashmap3d<VertexInClustering> spatial_map(epsilon * 5);
 
-    for (uint32_t flat_index = 0; flat_index < total_vertex_count; flat_index++) {
-        const uint32_t repr_index = union_find.find(flat_index);
-        uint32_t &repr_canonical_vertex = vertex_to_canonical[repr_index];
-        if (repr_canonical_vertex == INVALID_INDEX) {
-            repr_canonical_vertex = next_index;
-            next_index++;
+    for (const auto &[clustering_index, clustering] : enumerate(clusterings)) {
+        for (const auto &[global_vertex_index, position] : enumerate(clustering.positions)) {
+            const VertexInClustering vertex{
+                .clustering_index = static_cast<uint32_t>(clustering_index),
+                .global_vertex_index = static_cast<uint32_t>(global_vertex_index)
+            };
+            spatial_map.insert(position, vertex);
         }
-        vertex_to_canonical[flat_index] = repr_canonical_vertex;
     }
 
-    return vertex_to_canonical;
+    return spatial_map;
 }
 
 std::vector<glm::dvec3> build_average_positions(
@@ -264,14 +278,19 @@ struct BestMatch {
     double distance_sq;
 };
 
-UnionFindWithSizes build_epsilon_neighbourhoods(
+bool can_weld(const MergeOptions &options, const VertexInClustering &a, const VertexInClustering &b) {
+    return options.allow_interior_merges || a.clustering_index != b.clustering_index;
+}
+
+UnionFind_<true, uint32_t, uint32_t> build_epsilon_neighbourhoods(
     const std::span<const Clustering> clusterings,
     const std::span<const VertexInClustering> boundary_vertices,
     const OffsetTable &base_offsets,
     const spatial_lookup::Hashmap3d<VertexInClustering> &spatial_map,
     const uint32_t total_vertex_count,
-    const double epsilon) {
-    UnionFindWithSizes union_find(total_vertex_count);
+    const double epsilon,
+    const MergeOptions &options) {
+    UnionFind_<true, uint32_t, uint32_t> union_find(total_vertex_count);
     std::vector<VertexInClustering> matches;
 
     for (const VertexInClustering &vertex : boundary_vertices) {
@@ -284,7 +303,7 @@ UnionFindWithSizes build_epsilon_neighbourhoods(
 
         for (const VertexInClustering &match : matches) {
             // Skip if from same source
-            if (match.clustering_index == vertex.clustering_index) {
+            if (!can_weld(options, vertex, match)) {
                 continue;
             }
 
@@ -309,7 +328,8 @@ std::vector<uint32_t> build_greedy_local_mapping(
     const OffsetTable &base_offsets,
     const spatial_lookup::Hashmap3d<VertexInClustering> &spatial_map,
     const uint32_t total_vertex_count,
-    const double epsilon) {
+    const double epsilon,
+    const MergeOptions &options) {
 
     constexpr uint32_t INVALID_INDEX = std::numeric_limits<uint32_t>::max();
     std::vector<uint32_t> vertex_to_canonical(total_vertex_count, INVALID_INDEX);
@@ -339,7 +359,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
 
         // Remove any matches that are in the same cluster as the current vertex
         std::erase_if(matches, [&](const VertexInClustering &match) {
-            return match.clustering_index == vertex.clustering_index;
+            return !detail::can_weld(options, vertex, match);
         });
 
         switch (matches.size()) {
@@ -405,20 +425,22 @@ std::vector<uint32_t> build_connected_component_mapping(
     const OffsetTable &base_offsets,
     const spatial_lookup::Hashmap3d<VertexInClustering> &spatial_map,
     const uint32_t total_vertex_count,
-    const double epsilon) {
-    UnionFindWithSizes neighbourhoods = detail::build_epsilon_neighbourhoods(clusterings, boundary_vertices, base_offsets, spatial_map, total_vertex_count, epsilon);
-    return detail::build_canonical_indices(neighbourhoods);
+    const double epsilon,
+    const MergeOptions &options) {
+    UnionFind_<true, uint32_t, uint32_t> neighbourhoods = detail::build_epsilon_neighbourhoods(clusterings, boundary_vertices, base_offsets, spatial_map, total_vertex_count, epsilon, options);
+    return neighbourhoods.get_set_labels();
 }
 
-// 
+// Merges vertices from different clusterings into the same output vertex if they are directly connected by epsilon-distance matches (thus never merges multiple from same clustering).
 std::vector<uint32_t> build_multipartite_nearest_mapping(
     const std::span<const Clustering> clusterings,
     const OffsetTable &base_offsets,
     const std::span<const VertexInClustering> boundary_vertices,
     const spatial_lookup::Hashmap3d<VertexInClustering> &spatial_map,
     const uint32_t total_vertex_count,
-    const double epsilon) {
-    UnionFindWithSizes neighbourhoods = detail::build_epsilon_neighbourhoods(clusterings, boundary_vertices, base_offsets, spatial_map, total_vertex_count, epsilon);
+    const double epsilon,
+    const MergeOptions &options) {
+    UnionFind_<true, uint32_t, uint32_t> neighbourhoods = detail::build_epsilon_neighbourhoods(clusterings, boundary_vertices, base_offsets, spatial_map, total_vertex_count, epsilon, options);
     const auto sets = neighbourhoods.get_sets_sparse();
 
     // Prepare output vector
@@ -552,11 +574,7 @@ std::vector<uint32_t> build_multipartite_nearest_mapping(
     return vertex_to_canonical;
 }
 
-Clustering merge_clusterings(
-    const std::span<const Clustering> clusterings,
-    const double epsilon,
-    MergeMode merge_mode,
-    const bool average_positions) {
+Clustering merge_clusterings(const std::span<const Clustering> clusterings, const double epsilon, MergeOptions options) {
 
     if (clusterings.empty()) {
         return {};
@@ -570,17 +588,22 @@ Clustering merge_clusterings(
 
     const uint32_t total_vertex_count = sum(clusterings, [](const auto &c) { return c.vertex_count(); });
     const OffsetTable base_offsets = detail::build_offset_table(clusterings);
-    const std::vector<VertexInClustering> boundary_vertices = detail::find_boundary_vertices(clusterings, base_offsets);
+    const std::vector<VertexInClustering> boundary_vertices = options.only_consider_boundary ? detail::find_boundary_vertices(clusterings, base_offsets) : detail::list_all_vertices(clusterings, base_offsets);
     const spatial_lookup::Hashmap3d<VertexInClustering> spatial_map = detail::build_spatial_map(clusterings, boundary_vertices, epsilon);
 
-    if (merge_mode == MergeMode::MultipartiteNearest && clusterings.size() > 64) {
+    if (options.mode == MergeMode::MultipartiteNearest && options.allow_interior_merges) {
+        LOG_WARN("MergeMode::MultipartiteNearest cannot weld within a clustering, falling back to MergeMode::ConnectedComponents");
+        options.mode = MergeMode::ConnectedComponents;
+    }
+
+    if (options.mode == MergeMode::MultipartiteNearest && clusterings.size() > 64) {
         LOG_WARN("Cannot merge {} clusterings with MergeMode::MultipartiteNearest (max 64 sources), falling back to MergeMode::GreedyLocal", clusterings.size());
-        merge_mode = MergeMode::GreedyLocal;
+        options.mode = MergeMode::GreedyLocal;
     }
 
     std::vector<uint32_t> vertex_to_canonical;
 
-    switch (merge_mode) {
+    switch (options.mode) {
     case MergeMode::GreedyLocal:
         vertex_to_canonical = build_greedy_local_mapping(
             clusterings,
@@ -588,7 +611,8 @@ Clustering merge_clusterings(
             base_offsets,
             spatial_map,
             total_vertex_count,
-            epsilon);
+            epsilon,
+            options);
         break;
 
     case MergeMode::ConnectedComponents:
@@ -598,7 +622,8 @@ Clustering merge_clusterings(
             base_offsets,
             spatial_map,
             total_vertex_count,
-            epsilon);
+            epsilon,
+            options);
         break;
 
     case MergeMode::MultipartiteNearest:
@@ -608,12 +633,12 @@ Clustering merge_clusterings(
             boundary_vertices,
             spatial_map,
             total_vertex_count,
-            epsilon);
+            epsilon,
+            options);
         break;
     }
 
     const size_t unique_count = max(vertex_to_canonical) + 1;
-
     const size_t shared_count = static_cast<size_t>(total_vertex_count) - unique_count;
 
     if (shared_count == 0) {
@@ -626,6 +651,6 @@ Clustering merge_clusterings(
         clusterings,
         base_offsets,
         vertex_to_canonical,
-        average_positions,
-        merge_mode == MergeMode::ConnectedComponents);
+        options.average_positions,
+        options.mode == MergeMode::ConnectedComponents || options.allow_interior_merges);
 }

@@ -3,6 +3,7 @@
 #include <CLI/CLI.hpp>
 #include <libassert/assert.hpp>
 
+#include <filesystem>
 #include <map>
 #include <string>
 
@@ -48,12 +49,18 @@ Args cli::parse(int argc, const char *const *argv) {
     }
 
     if (args.output_path.empty()) {
-        auto stem = args.input_path.stem();
-        auto ext = args.input_path.extension();
-        if (!ext.empty()) {
-            ext = ".glb";
+        auto input_path = args.input_path.lexically_normal();
+        if (std::filesystem::is_directory(input_path)) {
+            auto stem = input_path.filename().string();
+            args.output_path = input_path.parent_path() / fmt::format("{}-debug", stem);
+        } else {
+            auto stem = input_path.stem().string();
+            auto ext = input_path.extension().string();
+            if (!ext.empty()) {
+                ext = ".glb";
+            }
+            args.output_path = input_path.parent_path() / fmt::format("{}-debug{}", stem, ext);
         }
-        args.output_path = args.input_path.parent_path().append(fmt::format("{}-debug{}", stem, ext));
     }
 
     return args;

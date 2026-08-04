@@ -553,11 +553,12 @@ inline UvMap unwrap_merged_cluster(
             if (!result.has_value()) {
                 LOG_ERROR_AND_EXIT("Failed to unwrap using default: {}", result.error().description());
             }
-            std::vector<glm::dvec2> uvs = result.value();
+            uv::Map map = std::move(result).value();
 
             // Create comp to add to baker
             TextureComposition comp;
-            comp.target_uvs = std::move(uvs);
+            comp.target_uvs = std::move(map.uvs);
+            comp.target_aspect = map.aspect;
             comp.maps = transform_vector(source_clusters, [&](const uint32_t linear_cluster_index) {
                 const uint32_t cluster_index = cluster_indices[linear_cluster_index];
                 const Cluster& cluster = clustering.clusters[cluster_index];

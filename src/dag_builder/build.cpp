@@ -95,7 +95,7 @@ LodResult build_lod(
 
     // Convert relative target error (a fraction of the node bounds) to absolute
     const std::optional<float> absolute_target_error = map(options.relative_target_error, [&](const float relative_error) {
-        return static_cast<float>(relative_error * glm::compMax(node_bounds.size()));
+        return relative_error * glm::compMax(node_bounds.size());
     });
     const SimplifyOptions simplify_options{
         .target_ratio = options.target_ratio,

@@ -31,31 +31,48 @@ inline Clustering bake_textures(MergeResult merged, const BakeOptions &options) 
     Clustering clustering = std::move(merged.clustering);
     const std::vector<uint32_t> target_triangle_counts = detail::count_triangles_per_texture(clustering);
 
+    // Size every texture before rendering any, the budget is shared across the whole node.
+    std::vector<glm::uvec2> sizes;
+    sizes.reserve(merged.source_triangle_counts.size() + merged.unbaked.size());
+
     for (const auto [texture_id, source_triangle_count] : enumerate(merged.source_triangle_counts)) {
-        cv::Mat &texture = clustering.textures[texture_id];
-        const glm::dvec2 source_size(get_texture_size(texture));
+        const glm::dvec2 source_size = get_texture_size(clustering.textures[texture_id]);
         const double aspect = source_size.x / source_size.y;
-        const glm::uvec2 texture_size = compute_bake_texture_size(
+        sizes.push_back(compute_bake_texture_size(
             glm::compMul(source_size),
             source_triangle_count,
             target_triangle_counts[texture_id],
             1.0,
             aspect,
-            options);
-        texture = rescale_texture(texture, texture_size);
+            options));
     }
 
+    const uint32_t reused_count = sizes.size();
+    std::vector<uint32_t> baked_clusters;
+    baked_clusters.reserve(merged.unbaked.size());
+
     for (const auto &[cluster_index, atlas] : merged.unbaked) {
-        Cluster &cluster = clustering.clusters[cluster_index];
-        const glm::uvec2 texture_size = compute_bake_texture_size(
+        baked_clusters.push_back(cluster_index);
+        sizes.push_back(compute_bake_texture_size(
             atlas.source_texel_area(),
             atlas.source_triangle_count(),
-            cluster.triangle_count(),
+            clustering.clusters[cluster_index].triangle_count(),
             atlas.utilization(),
             atlas.aspect(),
-            options);
-        const uint32_t texture_id = clustering.textures.add(atlas.bake(texture_size));
-        cluster.texture_id = texture_id;
+            options));
+    }
+
+    detail::fit_node_budget(sizes, options.max_node_texels);
+
+    for (const uint32_t texture_id : range(reused_count)) {
+        cv::Mat &texture = clustering.textures[texture_id];
+        texture = rescale_texture(texture, sizes[texture_id]);
+    }
+
+    for (const auto [baked_index, cluster_index] : enumerate(baked_clusters)) {
+        const PackedAtlas &atlas = merged.unbaked.at(cluster_index);
+        const uint32_t texture_id = clustering.textures.add(atlas.bake(sizes[reused_count + baked_index]));
+        clustering.clusters[cluster_index].texture_id = texture_id;
     }
 
     return clustering;

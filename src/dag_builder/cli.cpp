@@ -176,16 +176,12 @@ Args cli::parse(int argc, const char *const *argv) {
         ->default_val(texture_sizing_kind);
 
     const CLI::Option *texels_per_cluster_option =
-        app.add_option("--texels-per-cluster", constant_quality.texels_per_cluster, "Texture side length of a full cluster")
-            ->default_val(constant_quality.texels_per_cluster)
+        app.add_option("--texels-per-cluster", constant_quality.target_cluster_texels, "Texel budget of a full cluster")
+            ->default_val(constant_quality.target_cluster_texels)
             ->check(CLI::PositiveNumber);
 
-    app.add_option("--min-cluster-texture-size", args.bake_options.min_cluster_texture_size, "Smallest merged cluster texture")
-        ->default_val(args.bake_options.min_cluster_texture_size)
-        ->check(CLI::PositiveNumber);
-
-    app.add_option("--max-cluster-texture-size", args.bake_options.max_cluster_texture_size, "Largest merged cluster texture")
-        ->default_val(args.bake_options.max_cluster_texture_size)
+    app.add_option("--max-node-texels", args.bake_options.max_node_texels, "Texel budget shared by all textures of a node")
+        ->default_val(args.bake_options.max_node_texels)
         ->check(CLI::PositiveNumber);
 
     bool resume = false;

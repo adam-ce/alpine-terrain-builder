@@ -64,8 +64,8 @@ using FloaterMeanValueCoordinatesParameterizerSquareBorder = FloaterMeanValueCoo
 using LSCMParameterizerFreeBorder = LSCMParameterizer<TwoVerticesBorderParameterizer>;
 using ARAPParameterizerFreeBorder = ARAPParameterizer<CircleBorderParameterizer>;
 
-using CgalUvMap = CGAL::Unique_hash_map<cgal::VertexDescriptor, cgal::Point2>;
-using CgalUvPropMap = boost::associative_property_map<CgalUvMap>;
+using CgalUvs = CGAL::Unique_hash_map<cgal::VertexDescriptor, cgal::Point2>;
+using CgalUvPropMap = boost::associative_property_map<CgalUvs>;
 
 inline cgal::Point2 max(const cgal::Point2 &a, const cgal::Point2 &b) {
     return cgal::Point2(std::max(a.x(), b.x()), std::max(a.y(), b.y()));
@@ -81,8 +81,7 @@ inline void check_uv(const glm::dvec2 &uv) {
 }
 
 template <typename UvMap>
-void normalize_uv_map(UvMap &map, size_t vertex_count) {
-    using FT = cgal::Kernel::FT;
+double normalize_uv_map(UvMap &map, size_t vertex_count) {
     using Vector_2 = cgal::Kernel::Vector_2;
 
     constexpr double inf = std::numeric_limits<double>::infinity();
@@ -97,15 +96,17 @@ void normalize_uv_map(UvMap &map, size_t vertex_count) {
     }
 
     const Vector_2 extent = hi - lo;
-    const FT longest_side = std::max(extent.x(), extent.y());
-    const FT scale = 1 / longest_side;
+    const Vector_2 scale(1 / extent.x(), 1 / extent.y());
 
     for (size_t i = 0; i < vertex_count; i++) {
         const auto v = cgal::VertexIndex(i);
         auto& uv = get(map, v);
-        uv = CGAL::ORIGIN + (uv - lo) * scale;
+        const Vector_2 offset = uv - lo;
+        uv = cgal::Point2(offset.x() * scale.x(), offset.y() * scale.y());
         check_uv(convert::to_glm_point(uv));
     }
+
+    return CGAL::to_double(extent.x() / extent.y());
 }
 
 template <typename UvMap>
@@ -122,11 +123,16 @@ void clamp_uv_map(UvMap &map, size_t vertex_count) {
     }
 }
 
-tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
+struct CgalMap {
+    CgalUvs uvs;
+    double aspect = 1.0;
+};
+
+tl::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm algorithm, Border border) {
     const cgal::HalfedgeDescriptor bhd = CGAL::Polygon_mesh_processing::longest_border(mesh).first;
     DEBUG_ASSERT(bhd != boost::graph_traits<cgal::Mesh>::null_halfedge());
 
-    CgalUvMap uv_uhm;
+    CgalUvs uv_uhm;
     CgalUvPropMap uv_map(uv_uhm);
 
     CGAL::Surface_mesh_parameterization::Error_code result;
@@ -175,14 +181,15 @@ tl::expected<CgalUvMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorit
     }
 
     const auto vertex_count = CGAL::num_vertices(mesh);
+    double aspect = 1.0;
     if (is_free_border(algorithm)) {
         rotate_uv_map_to_best_fit_box(uv_map, vertex_count);
-        normalize_uv_map(uv_map, vertex_count);
+        aspect = normalize_uv_map(uv_map, vertex_count);
     } else {
         clamp_uv_map(uv_map, vertex_count);
     }
 
-    return uv_uhm;
+    return CgalMap{std::move(uv_uhm), aspect};
 }
 
 template <typename UvMap>
@@ -213,8 +220,8 @@ tl::expected<Map, UnwrapError> unwrap(
     if (!result) {
         return tl::unexpected(result.error());
     }
-    const CgalUvMap cgal_uv_map = result.value();
-    const Map uv_map = decode_uv_map(cgal_uv_map, mesh.vertex_count());
-    return uv_map;
+    const CgalMap &cgal_map = result.value();
+    Uvs uvs = decode_uv_map(cgal_map.uvs, mesh.vertex_count());
+    return Map{std::move(uvs), cgal_map.aspect};
 }
 }

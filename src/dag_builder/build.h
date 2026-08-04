@@ -23,7 +23,7 @@ struct BuildOptions {
     uint32_t clusters_per_partition;
     std::optional<float> target_ratio;
     std::optional<float> relative_target_error;
-    MergeOptions merge_options;
+    MergePartitionOptions merge_options;
     BakeOptions bake_options;
     octree::Id root_node = octree::Id::root();
     IncludeMode include_mode = IncludeMode::CurrentOnly;

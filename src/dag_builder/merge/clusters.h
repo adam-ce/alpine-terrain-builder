@@ -653,7 +653,7 @@ struct MergeResult {
     std::vector<uint32_t> source_triangle_counts; // per texture in clustering.textures
 };
 
-inline MergeResult merge_clusters_unbaked(const Clustering &clustering, const Partitioning &partitioning, const MergeOptions &options = {}) {
+inline MergeResult merge_clusters_unbaked(const Clustering &clustering, const Partitioning &partitioning, const MergePartitionOptions &options = {}) {
     const uint32_t cluster_count = clustering.cluster_count();
     const size_t partition_count = partitioning.partition_count;
     const std::vector<uint32_t> &cluster_partitions = partitioning.cluster_partitions;

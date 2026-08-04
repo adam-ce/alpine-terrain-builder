@@ -82,11 +82,11 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
         std::move(partition_result.cluster_partitions)};
 }
 
-inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const MergeOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
+inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const MergePartitionOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
     return bake_textures(merge_clusters_unbaked(clustering, partitioning, merge_options), bake_options);
 }
 
-inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const MergeOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
+inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const MergePartitionOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
     const Partitioning partitioning = create_partitioning(clustering, options);
     return apply_partitioning(clustering, partitioning, merge_options, bake_options);
 }

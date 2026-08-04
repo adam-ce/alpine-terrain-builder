@@ -103,6 +103,7 @@ target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${C
 add_executable(unittests_dagbuilder
     catch2_helpers.h
     dag_builder/merge_clusterings.cpp
+    dag_builder/weld.cpp
     dag_builder/slice.cpp
     dag_builder/pull_reproject_texture.cpp
     dag_builder/fixed_point.cpp

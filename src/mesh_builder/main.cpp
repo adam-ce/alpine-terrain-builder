@@ -180,6 +180,7 @@ int run(std::span<char *> args) {
 
     CLI::App app{"mesh_builder"};
     app.allow_windows_style_options();
+    app.require_subcommand(1, 1);
     argv = app.ensure_utf8(argv);
 
     // === COMMON OPTIONS ===

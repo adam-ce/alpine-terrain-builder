@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <unordered_map>
@@ -113,6 +114,60 @@ TEMPLATE_TEST_CASE("SpatialLookup with duplicate points", "[SpatialLookup]",
 
     std::vector<int> found;
     const bool ok = map.find_all_near(p, 0.01f, found);
+
+    CHECK(ok);
+    CHECK_THAT(found, Catch::Matchers::UnorderedEquals<int>({42, 43}));
+}
+
+// Epsilon and vertex position of a level 14 node of the stephansdom dataset.
+constexpr double earth_centered_epsilon = 0.25718408203125;
+constexpr glm::dvec3 earth_centered_position(4085801.6236, 1199335.1025, 4732875.8476);
+
+// A cell is identified by its quantized corner, which the hash quantizes a second time.
+// At earth-centered magnitudes that round trip can land a whole cell lower, so the lookup
+// scans the neighbouring cell and never sees the point it started from.
+TEST_CASE("SpatialLookup finds a point at earth-centered magnitudes", "[SpatialLookup]") {
+    spatial_lookup::Hashmap3d<int> map(earth_centered_epsilon * 5);
+    map.insert(earth_centered_position, 42);
+
+    std::vector<int> found;
+    const bool ok = map.find_all_near(earth_centered_position, earth_centered_epsilon, found);
+
+    CHECK(ok);
+    CHECK_THAT(found, Catch::Matchers::UnorderedEquals<int>({42}));
+}
+
+TEST_CASE("SpatialLookup finds every stored point at earth-centered magnitudes", "[SpatialLookup]") {
+    constexpr uint32_t point_count = 1000;
+
+    spatial_lookup::Hashmap3d<uint32_t> map(earth_centered_epsilon * 5);
+    std::vector<glm::dvec3> positions;
+    for (uint32_t i = 0; i < point_count; i++) {
+        const glm::dvec3 position = earth_centered_position + glm::dvec3(i * 0.7, i * 1.3, i * 2.1);
+        positions.push_back(position);
+        map.insert(position, i);
+    }
+
+    uint32_t lost = 0;
+    std::vector<uint32_t> found;
+    for (uint32_t i = 0; i < point_count; i++) {
+        map.find_all_near(positions[i], earth_centered_epsilon, found);
+        if (std::ranges::find(found, i) == found.end()) {
+            lost++;
+        }
+    }
+
+    CHECK(lost == 0);
+}
+
+// Two points at the exact same spot must always end up in the same cell.
+TEST_CASE("SpatialLookup finds coincident points at earth-centered magnitudes", "[SpatialLookup]") {
+    spatial_lookup::Hashmap3d<int> map(earth_centered_epsilon * 5);
+    map.insert(earth_centered_position, 42);
+    map.insert(earth_centered_position, 43);
+
+    std::vector<int> found;
+    const bool ok = map.find_all_near(earth_centered_position, earth_centered_epsilon, found);
 
     CHECK(ok);
     CHECK_THAT(found, Catch::Matchers::UnorderedEquals<int>({42, 43}));

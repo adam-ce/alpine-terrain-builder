@@ -9,6 +9,7 @@
 #include <radix/geometry.h>
 
 #include "cluster.h"
+#include "enumerate.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
 

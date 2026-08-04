@@ -222,8 +222,8 @@ dag::ClusterBatch load_and_simplify_dag_nodes(
             continue;
         }
 
-        auto indices = find_clusters_matching(clustering, filter);
         // Find relevant clusters from this node.
+        auto indices = find_clusters_matching(clustering, filter);
         if (indices.empty()) {
             continue;
         }

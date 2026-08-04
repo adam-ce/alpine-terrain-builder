@@ -110,7 +110,7 @@ alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITI
 
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
 
-alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH v1.01)
+alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH 719cbbd557fe974f48b055568e2b149b2444bee9)
 
 alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
 add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)

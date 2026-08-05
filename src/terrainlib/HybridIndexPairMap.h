@@ -15,6 +15,7 @@
 #include <boost/range/join.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "hash_utils.h"
 
 template <typename Index, typename Value>
@@ -171,6 +172,7 @@ private:
 
     static void check_safe_index(const Index primary_key) {
         DEBUG_ASSERT(primary_key <= LAST_SAFE_INDEX);
+        ALP_UNUSED(primary_key);
     }
 
     struct Slot {
@@ -237,10 +239,11 @@ private:
             const std::vector<Value> &direct_values) {
             DEBUG_ASSERT(this->is_direct());
 
-            const auto [_, inserted] = overflow.emplace(
+            const bool inserted = overflow.emplace(
                 Key{primary_key, this->secondary_key},
-                this->direct_value(direct_values));
+                this->direct_value(direct_values)).second;
             DEBUG_ASSERT(inserted);
+            ALP_UNUSED(inserted);
             this->value = OVERFLOW_SLOT;
 
             DEBUG_ASSERT(this->is_overflow());

@@ -1,13 +1,92 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(alpine-terrain-builder)
-option(ALP_UNITTESTS "include unit test targets in the buildsystem" ON)
+project(alpine-terrain-builder LANGUAGES C CXX)
+
+# Executable targets
+option(ALP_BUILD_TILE_BUILDER "Build tile-builder" ON)
+option(ALP_BUILD_SF_MERGER "Build sf-merger" ON)
+option(ALP_BUILD_SF_BUILDER "Build sf-builder" ON)
+option(ALP_BUILD_TILE_DOWNLOADER "Build tile-downloader" ON)
+option(ALP_BUILD_MESH_CONVERT "Build mesh-convert" ON)
+option(ALP_BUILD_SF_INDEX_BROWSER "Build sf-index-browser" ON)
+option(ALP_BUILD_DAG_BUILDER "Build dag-builder" ON)
+option(ALP_BUILD_DAG_CONVERT_DEBUG "Build dag-convert-debug" ON)
+option(ALP_BUILD_SF_BROWSER "Build sf-browser" ON)
+option(ALP_BUILD_UNITTESTS "Build unit tests for enabled components" ON)
+
+# Project configuration
+option(ALP_ENABLE_THREAD_SANITIZER "Compile with ThreadSanitizer enabled" OFF)
+option(ALP_ENABLE_ADDRESS_SANITIZER "Compile with AddressSanitizer enabled" OFF)
+option(ALP_ENABLE_OVERVIEW_READING "Enable GDAL overview reading (broken with newer GDAL versions)" OFF)
+option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
+option(ALP_WARNINGS_AS_ERRORS "Treat first-party compiler warnings as errors" OFF)
+
+set(ALP_ENABLE_ASSERTS_DEFAULT OFF)
+if(CMAKE_BUILD_TYPE MATCHES "^(Debug|RelWithDebInfo)$")
+    set(ALP_ENABLE_ASSERTS_DEFAULT ON)
+endif()
+option(ALP_ENABLE_ASSERTS "Do not define NDEBUG, i.e., enable asserts" ${ALP_ENABLE_ASSERTS_DEFAULT})
+
+set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity translation unit")
+set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
+
+# Unit-test configuration
+option(ALP_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)
+option(ALP_UNITTESTS_DEBUG_IMAGES "Output debug height images for visual comparison" OFF)
+set(ALP_UNITTESTS_AUSTRIA_HIGHRES "" CACHE FILEPATH "Path to the high resolution Austrian terrain dataset")
+
+if(ALP_ENABLE_ADDRESS_SANITIZER AND ALP_ENABLE_THREAD_SANITIZER)
+    message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")
+endif()
+
+set(ALP_SANITIZER_FLAGS)
+if(ALP_ENABLE_ADDRESS_SANITIZER)
+    message(STATUS "AddressSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(ALP_SANITIZER_FLAGS -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -g)
+        add_compile_options(${ALP_SANITIZER_FLAGS})
+        add_link_options(${ALP_SANITIZER_FLAGS})
+    else()
+        message(WARNING "ALP_ENABLE_ADDRESS_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
+if(ALP_ENABLE_THREAD_SANITIZER)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        message(WARNING "ThreadSanitizer is not recommended with Release builds. Use Debug or RelWithDebInfo for accurate race detection.")
+    endif()
+    message(STATUS "ThreadSanitizer enabled")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(ALP_SANITIZER_FLAGS -fsanitize=thread -fno-omit-frame-pointer -fno-optimize-sibling-calls -g)
+        add_compile_options(${ALP_SANITIZER_FLAGS})
+        add_link_options(${ALP_SANITIZER_FLAGS})
+    else()
+        message(WARNING "ALP_ENABLE_THREAD_SANITIZER set but compiler is not GCC/Clang; ignoring")
+    endif()
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    message(STATUS "Using optimization level ${ALP_RELEASE_OPT_LEVEL}")
+    add_compile_options($<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang>:-O${ALP_RELEASE_OPT_LEVEL}>)
+endif()
+
+# Compiler launchers must be configured before targets are created.
+find_program(SCCACHE_PROGRAM sccache)
+find_program(CCACHE_PROGRAM ccache)
+if(SCCACHE_PROGRAM)
+    message(STATUS "Using sccache as compiler launcher: ${SCCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+elseif(CCACHE_PROGRAM)
+    message(STATUS "Using ccache as compiler launcher: ${CCACHE_PROGRAM}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
 
 include(cmake/AddRepo.cmake)
 include(cmake/SetupCMakeProject.cmake)
 
-
 add_subdirectory(src)
-if (ALP_UNITTESTS)
+if(ALP_BUILD_UNITTESTS)
     add_subdirectory(unittests)
 endif()

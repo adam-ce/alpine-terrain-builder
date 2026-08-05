@@ -65,7 +65,7 @@ std::vector<VertexInClustering> find_boundary_vertices(const std::span<const Clu
         for (const Cluster &cluster : clustering.clusters) {
             mesh::build_boundary_vertex_mask(cluster.local_triangles, cluster.vertex_count(), boundary_vertex_mask);
 
-            for (const auto [local_vertex_index, on_boundary] : enumerate(boundary_vertex_mask)) {
+            for (const auto &[local_vertex_index, on_boundary] : enumerate(boundary_vertex_mask)) {
                 if (!on_boundary) {
                     continue;
                 }

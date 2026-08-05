@@ -386,12 +386,9 @@ TEST_CASE("OddLevelShifted::get_node_bounds_with_children non-leaf equals union 
     const Id id{2, {1, 1, 1}};
     const Bounds actual = space.get_node_bounds_with_children(id);
 
-    const Bounds node = space.get_node_bounds(id);
-    const Bounds child_first = space.get_node_bounds(id.child(0).value());
-    const Bounds child_last = space.get_node_bounds(id.child(7).value());
-    const Bounds expected(
-        glm::min(node.min, glm::min(child_first.min, child_last.min)),
-        glm::max(node.max, glm::max(child_first.max, child_last.max)));
+    Bounds expected = space.get_node_bounds(id);
+    expected.expand_by(space.get_node_bounds(id.child(0).value()));
+    expected.expand_by(space.get_node_bounds(id.child(7).value()));
 
     CHECK(actual.min.x == Catch::Approx(expected.min.x));
     CHECK(actual.min.y == Catch::Approx(expected.min.y));
@@ -401,7 +398,7 @@ TEST_CASE("OddLevelShifted::get_node_bounds_with_children non-leaf equals union 
     CHECK(actual.max.z == Catch::Approx(expected.max.z));
 }
 
-TEST_CASE("OddLevelShifted::get_node_bounds_with_children even-level min extends negatively and max keeps the node's own bound", "[octree::OddLevelShifted]") {
+TEST_CASE("OddLevelShifted::get_node_bounds_with_children even-level includes node and children", "[octree::OddLevelShifted]") {
     const OddLevelShifted space = OddLevelShifted::earth();
 
     const Id id{2, {1, 1, 1}};

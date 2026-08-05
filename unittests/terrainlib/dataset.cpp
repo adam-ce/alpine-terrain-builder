@@ -44,8 +44,8 @@ void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &
 }
 
 TEST_CASE("datasets are as expected") {
-    auto d_mgi = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-    auto d_wgs84 = Dataset(ATB_TEST_DATA_DIR "/austria/at_wgs84.tif");
+    auto d_mgi = Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
+    auto d_wgs84 = Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
 
     OGRSpatialReference webmercator;
     webmercator.importFromEPSG(3857);
@@ -107,8 +107,8 @@ TEST_CASE("datasets are as expected") {
 }
 
 TEST_CASE("bbox width pixels") {
-    auto d_mgi = Dataset(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
-    auto d_wgs84 = Dataset(ATB_TEST_DATA_DIR "/austria/at_wgs84.tif");
+    auto d_mgi = Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
+    auto d_wgs84 = Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
 
     OGRSpatialReference webmercator;
     webmercator.importFromEPSG(3857);

@@ -56,7 +56,7 @@ struct fmt::formatter<octree::NodeStatus> {
     }
 
     template <typename FormatContext>
-    auto format(const octree::NodeStatus &status, FormatContext &ctx) {
+    auto format(const octree::NodeStatus &status, FormatContext &ctx) const {
         switch (status) {
         case octree::NodeStatus::Leaf:
             return fmt::format_to(ctx.out(), "Leaf");

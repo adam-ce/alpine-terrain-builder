@@ -18,6 +18,7 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "build_config.h"
 #include "unwrap.h"
 #include "fit.h"
 #include "mesh/compute_topology.h"
@@ -78,6 +79,7 @@ inline cgal::Point2 min(const cgal::Point2 &a, const cgal::Point2 &b) {
 inline void check_uv(const glm::dvec2 &uv) {
     DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
     DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
+    ALP_UNUSED(uv);
 }
 
 template <typename UvMap>
@@ -143,25 +145,25 @@ tl::expected<CgalMap, UnwrapError> parameterize_mesh(cgal::Mesh &mesh, Algorithm
     if (algorithm == Algorithm::TutteBarycentricMapping) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, TutteBarycentricMappingParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, TutteBarycentricMappingParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::DiscreteAuthalic) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteAuthalicParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteAuthalicParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::DiscreteConformalMap) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteConformalMapParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, DiscreteConformalMapParameterizerSquareBorder(), bhd, uv_map);
         }
     } else if (algorithm == Algorithm::FloaterMeanValueCoordinates) {
         if (border == Border::Circle) {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerCircularBorder(), bhd, uv_map);
-        } else if (border == Border::Square) {
+        } else {
             result = CGAL::Surface_mesh_parameterization::parameterize(mesh, FloaterMeanValueCoordinatesParameterizerSquareBorder(), bhd, uv_map);
         } 
     } else if (algorithm == Algorithm::LeastSquaresConformalMap) {

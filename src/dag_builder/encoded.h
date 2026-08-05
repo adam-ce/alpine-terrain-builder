@@ -18,48 +18,56 @@
 #include "mesh/io/texture.h"
 #include "meshopt.h"
 
-namespace zpp::bits {
-
 template <typename Archive>
 auto serialize(Archive &archive, const TextureSet &textures) {
     size_t size = textures.size();
     auto result = archive(size);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
-    }
-
-    for (const auto &texture : textures) {
-        const mesh::io::ImageAndExt item{texture, ".jpeg"};
-        result = archive(item);
-        if (failure(result)) {
+    } else {
+        if (zpp::bits::failure(result)) {
             return result;
         }
-    }
 
-    return result;
+        for (const auto &texture : textures) {
+            const mesh::io::ImageAndExt item{texture, ".jpeg"};
+            result = archive(item);
+            if (zpp::bits::failure(result)) {
+                return result;
+            }
+        }
+
+        return result;
+    }
 }
 template <typename Archive>
 auto serialize(Archive &archive, TextureSet &textures) {
     size_t size;
     auto result = archive(size);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
-    }
-
-    std::vector<cv::Mat> images;
-    images.reserve(size);
-    for (size_t i = 0; i < size; i++) {
-        mesh::io::ImageAndExt item;
-        result = archive(item);
-        if (failure(result)) {
+    } else {
+        if (zpp::bits::failure(result)) {
             return result;
         }
 
-        images.push_back(item.image);
-    }
-    textures = TextureSet(images);
+        std::vector<cv::Mat> images;
+        images.reserve(size);
+        for (size_t i = 0; i < size; i++) {
+            mesh::io::ImageAndExt item;
+            result = archive(item);
+            if (zpp::bits::failure(result)) {
+                return result;
+            }
 
-    return result;
+            images.push_back(item.image);
+        }
+        textures = TextureSet(images);
+
+        return result;
+    }
 }
 
 template <typename Archive>
@@ -104,15 +112,20 @@ auto serialize(Archive &archive, Cluster &cluster) {
         cluster.texture_id,
         cluster.absolute_error);
 
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
+        return result;
+    } else {
+        if (zpp::bits::failure(result)) {
+            return result;
+        }
+
+        meshopt::decode_index_buffer(cluster.local_triangles, triangle_count, encoded_triangles);
+        meshopt::decode_vertex_buffer(cluster.vertex_indices, vertex_count, encoded_vertex_indices);
+        meshopt::decode_vertex_buffer(cluster.uvs, uv_count, encoded_uvs);
+
         return result;
     }
-
-    meshopt::decode_index_buffer(cluster.local_triangles, triangle_count, encoded_triangles);
-    meshopt::decode_vertex_buffer(cluster.vertex_indices, vertex_count, encoded_vertex_indices);
-    meshopt::decode_vertex_buffer(cluster.uvs, uv_count, encoded_uvs);
-
-    return result;
 }
 
 template <typename Archive>
@@ -138,16 +151,19 @@ auto serialize(Archive &archive, Clustering &clustering) {
         clustering.clusters,
         clustering.textures);
 
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
+        return result;
+    } else {
+        if (zpp::bits::failure(result)) {
+            return result;
+        }
+
+        meshopt::decode_vertex_buffer(clustering.positions, vertex_count, encoded_positions);
+
         return result;
     }
-
-    meshopt::decode_vertex_buffer(clustering.positions, vertex_count, encoded_positions);
-
-    return result;
 }
-
-} // namespace zpp::bits
 
 inline tl::expected<void, ::io::Error>
 save_clustering(const Clustering &clustering,

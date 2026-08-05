@@ -49,7 +49,7 @@ private:
     std::string m_dataset_srs_wkt;
     std::string m_target_srs_wkt;
     bool m_requires_reprojection;
-    bool m_warn_on_missing_overviews;
+    [[maybe_unused]] bool m_warn_on_missing_overviews;
     unsigned m_band;
 };
 

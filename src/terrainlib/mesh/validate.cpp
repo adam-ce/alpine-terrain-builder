@@ -8,6 +8,7 @@
 #include <glm/gtx/hash.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "log.h"
 #include "mesh/cleanup.h"
 #include "mesh/connected_components.h"
@@ -20,38 +21,41 @@
 
 namespace mesh {
 namespace {
-inline constexpr double EPSILON = 1e-12;
+// inline constexpr double EPSILON = 1e-12;
 
 constexpr bool has_flag(const ValidationFlags set, const ValidationFlags flag) noexcept {
     return (set & flag) != ValidationFlags::None;
 }
 
-inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
-    std::unordered_map<glm::uvec3, uint32_t> counts;
-    counts.reserve(triangles.size());
-
-    for (const glm::uvec3 &triangle : triangles) {
-        const glm::uvec3 normalized = normalize_triangle(triangle, !ignore_orientation);
-        counts[normalized] += 1;
-    }
-
-    for (const auto &[_triangle, count] : counts) {
-        if (count > 1) {
-            return true;
-        }
-    }
-
-    return false;
-}
+// inline bool has_duplicate_faces(const std::span<const glm::uvec3> triangles, const bool ignore_orientation = true) {
+//     std::unordered_map<glm::uvec3, uint32_t> counts;
+//     counts.reserve(triangles.size());
+//
+//     for (const glm::uvec3 &triangle : triangles) {
+//         const glm::uvec3 normalized = normalize_triangle(triangle, !ignore_orientation);
+//         counts[normalized] += 1;
+//     }
+//
+//     for (const auto &[_triangle, count] : counts) {
+//         if (count > 1) {
+//             return true;
+//         }
+//     }
+//
+//     return false;
+// }
 
 template <glm::length_t n_dims, typename T>
 void validate_impl_basic(const mesh::View_<n_dims, T> &mesh) {
+#ifndef NDEBUG
     using Mesh = mesh::View_<n_dims, T>;
     using Triangle = typename Mesh::Triangle;
     using Uv = typename Mesh::Uv;
+#endif
 
     static_assert(n_dims == 2 || n_dims == 3, "Mesh must be 2D or 3D");
 
+#ifndef NDEBUG
     if (mesh.has_uvs()) {
         DEBUG_ASSERT(mesh.positions.size() == mesh.uvs.size());
     }
@@ -74,10 +78,14 @@ void validate_impl_basic(const mesh::View_<n_dims, T> &mesh) {
     for (const Triangle &triangle : mesh.triangles) {
         DEBUG_ASSERT(!is_degenerate(triangle));
     }
+#else
+    ALP_UNUSED(mesh);
+#endif
 }
 
 template <glm::length_t n_dims, typename T>
 void validate_impl_topology(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
+#ifndef NDEBUG
     if (has_flag(flags, ValidationFlags::SingleComponent)) {
         DEBUG_ASSERT(is_single_component(mesh));
     }
@@ -85,12 +93,17 @@ void validate_impl_topology(const mesh::View_<n_dims, T> &mesh, const Validation
     if (has_flag(flags, ValidationFlags::Manifold)) {
         DEBUG_ASSERT(is_manifold(mesh));
     }
+#else
+    ALP_UNUSED(mesh);
+    ALP_UNUSED(flags);
+#endif
 }
 
 template <glm::length_t n_dims, typename T>
 void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
     static_assert(n_dims >= 2, "Geometry checks require n_dims >= 2");
 
+#ifndef NDEBUG
     DEBUG_ASSERT(find_isolated_vertices(mesh).empty());
 
     /*
@@ -105,6 +118,9 @@ void validate_impl_geometry(const mesh::View_<n_dims, T> &mesh) {
         }
     }
     */
+#else
+    ALP_UNUSED(mesh);
+#endif
 }
 }
 

@@ -136,12 +136,14 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, 
         // Get global vertex
         const Cluster &first_cluster = clustering.clusters[membership[0].cluster_index];
         const uint32_t global_vertex_index = first_cluster.vertex_indices[membership[0].local_vertex_index];
+#ifndef NDEBUG
         for (uint32_t i = 1; i < num_clusters; i++) {
             const auto [cluster_index, local_vertex_index] = membership[i];
             const Cluster &cluster = clustering.clusters[cluster_index];
             const uint32_t other_global_vertex_index = cluster.vertex_indices[local_vertex_index];
             DEBUG_ASSERT(global_vertex_index == other_global_vertex_index);
         }
+#endif
 
         // Check if on the boundary
         if (!boundary_vertices.contains(global_vertex_index)) {

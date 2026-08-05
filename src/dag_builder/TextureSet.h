@@ -46,7 +46,7 @@ public:
         const auto it = std::find_if(
             this->_textures.begin(),
             this->_textures.end(),
-            [this, key](const Texture &t) {
+            [key](const Texture &t) {
                 return key == ImageKey(t);
             });
 

@@ -140,6 +140,7 @@ inline Cluster merge_clusters_simple(
         DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
         for (const uint32_t vertex_index : vertex_remap) {
             DEBUG_ASSERT(vertex_index == no_vertex_remap);
+            ALP_UNUSED(vertex_index);
         }
         DEBUG_ASSERT(check_consistent_uvs(clustering, cluster_indices));
     }
@@ -204,6 +205,7 @@ inline mesh::merging::VertexMapping construct_merge_mapping(
         DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
         for (const uint32_t vertex_index : vertex_remap) {
             DEBUG_ASSERT(vertex_index == no_vertex_remap);
+            ALP_UNUSED(vertex_index);
         }
     }
 

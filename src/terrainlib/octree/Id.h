@@ -346,7 +346,7 @@ struct fmt::formatter<octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>>
     }
 
     template <typename FormatContext>
-    auto format(const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id, FormatContext &ctx) {
+    auto format(const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id, FormatContext &ctx) const {
         auto out = fmt::format_to(ctx.out(), "Id(level={}, coords=(", id.level());
 
         const auto coords = id.coords();
@@ -401,7 +401,7 @@ struct hash<octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>> {
 } // namespace std
 
 #include <zpp_bits.h>
-namespace zpp::bits {
+namespace octree {
 namespace {
 constexpr zpp::bits::errc success() {
     return zpp::bits::errc(std::errc());
@@ -427,7 +427,7 @@ constexpr auto serialize(auto &archive, octree::Id_<Dimensions, MaxLevel, LevelT
             return result;
         }
 
-        auto maybe_id = octree::Id::try_make(level, index);
+        auto maybe_id = Id::try_make(level, index);
         if (!maybe_id) {
             return zpp::bits::errc(std::errc::bad_message);
         }

@@ -248,6 +248,7 @@ public:
     }
 
     template <typename F>
+    [[maybe_unused]]
     decltype(auto) visit(F &&f) {
         return std::visit(std::forward<F>(f), _v);
     }
@@ -692,6 +693,7 @@ glm::vec<n_dims, T> compute_barycentric(
     return Vec(u, v, w);
 }
 template <glm::length_t n_dims, typename T>
+[[maybe_unused]]
 glm::vec<n_dims, T> compute_barycentric(const glm::vec<n_dims, T> &point, const std::array<glm::vec<n_dims, T>, 3>& triangle) {
     return compute_barycentric(point, triangle[0], triangle[1], triangle[2]);
 }

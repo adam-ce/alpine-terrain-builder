@@ -577,7 +577,13 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
             }
 
             if (skip_triangle) {
-                break;
+                // Discarding this piece must not abandon the pieces an earlier split left queued
+                if (triangles_left_to_clip.empty()) {
+                    break;
+                }
+                current_triangle_and_vertices = triangles_left_to_clip.back();
+                triangles_left_to_clip.pop_back();
+                continue;
             }
 
             // If we reached here we have a clipped triangle that was not discarded

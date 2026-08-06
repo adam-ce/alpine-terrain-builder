@@ -1,3 +1,7 @@
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+
 # Dependencies used by the unconditional terrainlib umbrella target.
 find_package(ZLIB REQUIRED)
 
@@ -10,7 +14,7 @@ target_include_directories(Eigen3 SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
 find_package(Boost CONFIG REQUIRED)
 
-alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS -DTBB_TEST=OFF)
+alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)
 find_package(TBB REQUIRED)
 
 include(../cmake/SetupGDAL.cmake)
@@ -41,6 +45,7 @@ target_include_directories(tl_expected SYSTEM INTERFACE ${tl_expected_SOURCE_DIR
 
 set(SPDLOG_FMT_EXTERNAL ON CACHE BOOL "SPDLOG_FMT_EXTERNAL" FORCE)
 alp_add_git_repository(spdlog URL https://github.com/gabime/spdlog.git COMMITISH v1.17.0)
+add_compile_definitions(SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)
 
 alp_add_git_repository(zpp_bits URL https://github.com/eyalz800/zpp_bits.git COMMITISH v4.7.3 DO_NOT_ADD_SUBPROJECT)
 add_library(zpp_bits INTERFACE)
@@ -49,6 +54,8 @@ target_include_directories(zpp_bits SYSTEM INTERFACE ${zpp_bits_SOURCE_DIR})
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)
+
+alp_add_git_repository(wideinteger URL https://github.com/ckormanyos/wide-integer.git COMMITISH 719cbbd557fe974f48b055568e2b149b2444bee9)
 
 set(LIBIGL_COPYLEFT_CORE ON)
 set(LIBIGL_RESTRICTED_TRIANGLE ON)

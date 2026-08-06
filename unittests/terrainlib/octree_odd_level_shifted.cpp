@@ -405,12 +405,14 @@ TEST_CASE("OddLevelShifted::get_node_bounds_with_children even-level includes no
     const Bounds node = space.get_node_bounds(id);
     const Bounds with_children = space.get_node_bounds_with_children(id);
 
+    // Odd-level children are shifted negatively, so they pull min further out,
+    // but the node's own (unshifted) bounds already have the larger max here.
     CHECK(with_children.min.x < node.min.x);
     CHECK(with_children.min.y < node.min.y);
     CHECK(with_children.min.z < node.min.z);
-    CHECK(with_children.max.x == Catch::Approx(node.max.x));
-    CHECK(with_children.max.y == Catch::Approx(node.max.y));
-    CHECK(with_children.max.z == Catch::Approx(node.max.z));
+    CHECK(with_children.max.x == node.max.x);
+    CHECK(with_children.max.y == node.max.y);
+    CHECK(with_children.max.z == node.max.z);
 }
 
 TEST_CASE("OddLevelShifted::contains interior point returns true", "[octree::OddLevelShifted]") {

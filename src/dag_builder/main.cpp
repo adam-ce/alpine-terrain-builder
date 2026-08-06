@@ -25,7 +25,11 @@ int main(int argc, char **argv) {
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
             .relative_target_error = args.target_error,
-            .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
+            .merge_options = {
+                .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
+                .allow_texture_reuse = args.allow_texture_reuse,
+            },
+            .bake_options = args.bake_options,
             .root_node = args.root_node,
             .include_mode = args.include_mode,
             .write_debug_meshes = args.write_debug_meshes,
@@ -34,7 +38,7 @@ int main(int argc, char **argv) {
         };
         // If the user specified neither target, fall back to a default error.
         if (!args.target_ratio && !args.target_error) {
-            options.relative_target_error = 0.01f;
+            options.relative_target_error = 0.001f;
         }
 
         dag::build_levels(input_storage, output_storage, options, args.level_range);

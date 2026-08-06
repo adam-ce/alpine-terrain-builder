@@ -7,7 +7,7 @@
 #include "log.h"
 #include "mesh/io.h"
 #include "octree/storage/MeshStorage.h"
-#include "octree/storage/codec/DefaultCodec.h"
+#include "octree/storage/codec/ZppBitsCodec.h"
 #include "octree/storage/open.h"
 #include "ProgressIndicator.h"
 #include "storage.h"
@@ -15,7 +15,7 @@
 
 namespace {
 
-void export_node_file(const cli::Args &args) {
+void export_node(const cli::Args &args) {
     const auto load_result = octree::ZppBitsCodec<dag::ClusterBatch>::load_from_path(args.input_path);
     if (!load_result.has_value()) {
         LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error());
@@ -30,7 +30,7 @@ void export_node_file(const cli::Args &args) {
     }
 }
 
-void export_storage_folder(const cli::Args &args) {
+void export_storage(const cli::Args &args) {
     const octree::IndexedDagStorage input_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.input_path);
 
     octree::MeshStorage output_storage = octree::open_folder<mesh::Simple, octree::MeshCodec>(
@@ -87,9 +87,9 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     if (std::filesystem::is_directory(args.input_path)) {
-        export_storage_folder(args);
+        export_storage(args);
     } else {
-        export_node_file(args);
+        export_node(args);
     }
 
     return EXIT_SUCCESS;

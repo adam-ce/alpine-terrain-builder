@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <span>
 #include <vector>
+#include <cstdint>
 
 #include <CLI/CLI.hpp>
 #include <fmt/core.h>
@@ -31,7 +32,7 @@ OGRSpatialReference parse_srs(const std::string &user_input) {
     return result.value();
 }
 
-int srs_dimension(const OGRSpatialReference &srs) {
+int32_t srs_dimension(const OGRSpatialReference &srs) {
     if (srs.IsCompound())
         return 3;
     if (srs.IsGeographic() || srs.IsProjected())
@@ -47,7 +48,7 @@ radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
 }
 
 radix::geometry::Aabb3d parse_bounds_from_values(const std::vector<double> &data, const OGRSpatialReference &srs) {
-    const int dim = srs_dimension(srs);
+    const int32_t dim = srs_dimension(srs);
     const size_t expected = (dim == 3) ? 6 : 4;
 
     if (data.size() != expected) {
@@ -84,7 +85,7 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
         LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) or WGS84 (EPSG:4326) supported for --tile.");
     }
 
-    const unsigned int zoom_level = data[0];
+    const uint32_t zoom_level = data[0];
     const glm::uvec2 tile_coords(data[1], data[2]);
     const radix::tile::Id target_tile(zoom_level, tile_coords, scheme);
 
@@ -138,9 +139,9 @@ radix::geometry::Aabb3d parse_target_bounds(
 void log_dataset_overview(const Dataset &dataset) {
     const std::string name = dataset.name();
 
-    const unsigned int widthPx = dataset.widthInPixels();
-    const unsigned int heightPx = dataset.heightInPixels();
-    const unsigned int bands = dataset.n_bands();
+    const uint32_t widthPx = dataset.widthInPixels();
+    const uint32_t heightPx = dataset.heightInPixels();
+    const uint32_t bands = dataset.n_bands();
 
     const auto datasetSrs = dataset.srs();
     const auto bounds = dataset.bounds3d(true);
@@ -152,7 +153,7 @@ void log_dataset_overview(const Dataset &dataset) {
     const auto enclosingNode =
         earth.find_smallest_node_encompassing_bounds(boundsEcef).value();
 
-    const int scaleLevel = static_cast<int>(std::floor(std::log2(
+    const int32_t scaleLevel = static_cast<int32_t>(std::floor(std::log2(
         earth.bounds().size().x / glm::compMax(boundsEcef.size()))));
 
     LOG_INFO("Dataset");
@@ -179,6 +180,7 @@ int run(std::span<char *> args) {
 
     CLI::App app{"sf_builder"};
     app.allow_windows_style_options();
+    app.require_subcommand(1, 1);
     argv = app.ensure_utf8(argv);
 
     // === COMMON OPTIONS ===
@@ -270,7 +272,7 @@ int run(std::span<char *> args) {
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
         ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
-        ->default_val(".glb");
+        ->default_val(".terrain");
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);

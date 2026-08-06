@@ -44,6 +44,7 @@ namespace {
 using PixelBounds = radix::geometry::Aabb2i;
     
 template <typename T>
+[[maybe_unused]]
 glm::dvec2 apply_transform(std::array<double, 6> transform, const glm::tvec2<T> &v) {
     glm::dvec2 result;
     GDALApplyGeoTransform(transform.data(), v.x, v.y, &result.x, &result.y);

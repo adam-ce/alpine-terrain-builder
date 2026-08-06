@@ -7,8 +7,15 @@ inline size_t mat_byte_size(const cv::Mat &mat) {
     return mat.total() * mat.elemSize();
 }
 
+inline glm::uvec2 get_texture_size(const cv::Mat &texture) {
+    return {texture.cols, texture.rows};
+}
+
 inline void rescale_texture(const cv::Mat &source, cv::Mat &destination, const glm::uvec2 new_size) {
-    cv::resize(source, destination, cv::Size(new_size.x, new_size.y), 0, 0);
+    const glm::uvec2 source_size = get_texture_size(source);
+    const bool minifying = glm::all(glm::lessThanEqual(new_size, source_size));
+    const int interpolation = minifying ? cv::INTER_AREA : cv::INTER_CUBIC;
+    cv::resize(source, destination, cv::Size(new_size.x, new_size.y), 0, 0, interpolation);
 }
 
 inline cv::Mat rescale_texture(const cv::Mat &source, const glm::uvec2 new_size) {

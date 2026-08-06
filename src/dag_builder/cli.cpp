@@ -32,6 +32,11 @@ const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
     {"current-and-coarser", dag::IncludeMode::CurrentAndCoarser},
 };
 
+const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kind_names{
+    {"constant", cli::TextureSizingKind::Constant},
+    {"relative", cli::TextureSizingKind::Relative},
+};
+
 const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
     {"AsRigidAsPossible", uv::Algorithm::AsRigidAsPossible},
     {"arap", uv::Algorithm::AsRigidAsPossible},
@@ -98,6 +103,8 @@ ContinuationMode make_continuation_mode(const bool resume, const bool overwrite)
         return ContinuationMode::Resume;
     } else if (overwrite) {
         return ContinuationMode::Overwrite;
+    } else {
+        return ContinuationMode::Error;
     }
 
     // TODO(ORIGINAL AUTHOR): !!! THIS FALLBACK NEEDS AN AUTHORITATIVE BEHAVIOUR DECISION !!!
@@ -133,9 +140,11 @@ Args cli::parse(int argc, const char *const *argv) {
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
         .uv_unwrap_algorithm = {},
+        .allow_texture_reuse = true,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
+        .bake_options = {},
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
@@ -165,6 +174,8 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--uv-unwrap-algorithm", args.uv_unwrap_algorithm, "UV unwrap algorithm")
         ->transform(CLI::CheckedTransformer(uv_unwrap_algorithm_names, CLI::ignore_case));
 
+    app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
+
     app.add_option("--clusters-per-group", args.clusters_per_partition, "Target number of clusters per partition")
         ->default_val(args.clusters_per_partition)
         ->check(CLI::PositiveNumber);
@@ -175,10 +186,25 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
         ->check(CLI::NonNegativeNumber);
 
+    TextureSizingKind texture_sizing_kind = TextureSizingKind::Constant;
+    ConstantQuality constant_quality;
+
+    app.add_option("--texture-sizing", texture_sizing_kind, "How merged cluster textures are sized")
+        ->transform(CLI::CheckedTransformer(texture_sizing_kind_names, CLI::ignore_case))
+        ->default_val(texture_sizing_kind);
+
+    const CLI::Option *texels_per_cluster_option =
+        app.add_option("--texels-per-cluster", constant_quality.target_cluster_texels, "Texel budget of a full cluster")
+            ->default_val(constant_quality.target_cluster_texels)
+            ->check(CLI::PositiveNumber);
+
+    app.add_option("--max-node-texels", args.bake_options.max_node_texels, "Texel budget shared by all textures of a node")
+        ->default_val(args.bake_options.max_node_texels)
+        ->check(CLI::PositiveNumber);
+
     bool resume = false;
     bool overwrite = false;
-    app.add_flag("--resume", resume, "Resume building the dag from then data in output")
-        ->excludes("--overwrite");
+    app.add_flag("--resume", resume, "Resume building the dag from then data in output");
     app.add_flag("--overwrite", overwrite, "Overwrite data already present in output")
         ->excludes("--resume");
 
@@ -202,6 +228,16 @@ Args cli::parse(int argc, const char *const *argv) {
             args.root_node = make_octree_id(root_node_values);
         }
         args.continuation_mode = make_continuation_mode(resume, overwrite);
+
+        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_cluster_option->count() > 0) {
+            throw CLI::ValidationError("--texels-per-cluster requires --texture-sizing constant");
+        }
+
+        if (texture_sizing_kind == TextureSizingKind::Constant) {
+            args.bake_options.mode = constant_quality;
+        } else {
+            args.bake_options.mode = RelativeQuality{};
+        }
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));
     }

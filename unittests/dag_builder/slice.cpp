@@ -63,7 +63,8 @@ TEST_CASE("slice_clusters remaps texture ids", "[dag_builder][slice]") {
     REQUIRE(sliced.clusters.size() == 1);
     REQUIRE(sliced.textures.size() == 1);
 
-    const uint32_t new_texture_id = sliced.clusters[0].texture_id;
+    REQUIRE(sliced.clusters[0].has_texture());
+    const uint32_t new_texture_id = sliced.clusters[0].texture_id.value();
     REQUIRE(new_texture_id < sliced.textures.size());
     CHECK(sliced.textures[new_texture_id].data == clustering.textures[3].data);
 }

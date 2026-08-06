@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <unordered_set>
 #include <vector>
+#include <limits>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
@@ -10,6 +11,7 @@
 #include <radix/geometry.h>
 
 #include "TinyVector.h"
+#include "centroids.h"
 #include "cluster.h"
 #include "mesh/triangle_compare.h"
 #include "simplify.h"
@@ -17,8 +19,8 @@
 #include "VertexInCluster.h"
 
 
-// Signed distance from a point to an axis-aligned box: negative inside (distance to the
-// nearest face), positive outside (euclidean distance to the surface), zero on a face.
+namespace detail {
+// Signed distance from a point to an AABB: negative inside, positive outside, zero on a face.
 inline double signed_distance_to_bounds(const radix::geometry::Aabb3d &bounds, const glm::dvec3 &point) {
     const glm::dvec3 gaps = glm::max(bounds.min - point, point - bounds.max);
     const double outside = glm::length(glm::max(gaps, glm::dvec3(0.0)));
@@ -26,7 +28,53 @@ inline double signed_distance_to_bounds(const radix::geometry::Aabb3d &bounds, c
     return outside + inside;
 }
 
-inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, const radix::geometry::Aabb3d &node_bounds) {
+// Signed distance from a point to a set of filter AABBs.
+inline double signed_distance_to_filter(const RegionFilter &filter, const glm::dvec3 &point) {
+    ASSERT(filter.include.size() + filter.exclude.size() > 0);
+
+    constexpr double inf = std::numeric_limits<double>::infinity();
+    double distance = filter.include.empty() ? -inf : inf;
+
+    for (const auto& bounds : filter.include) {
+        const double d = signed_distance_to_bounds(bounds, point);
+        distance = std::min(distance, d);
+    }
+
+    for (const auto &bounds : filter.exclude) {
+        const double d = signed_distance_to_bounds(bounds, point);
+        distance = std::max(distance, -d);
+    }
+
+    return distance;
+}
+
+inline double compute_lock_margin(const radix::geometry::Aabb3d &bounds) {
+    return glm::compMax(bounds.size()) * 0.05;
+}
+inline double compute_lock_margin(const RegionFilter &filter) {
+    ASSERT(filter.include.size() + filter.exclude.size() > 0);
+
+    const auto compute_from_bounds = [](const auto &bounds) {
+        radix::geometry::Aabb3d reference_bounds = bounds.front();
+        for (size_t i = 1; i < bounds.size(); i++) {
+            reference_bounds.expand_by(bounds[i]);
+        }
+        return compute_lock_margin(reference_bounds);
+    };
+
+    if (!filter.include.empty()) {
+        return compute_from_bounds(filter.include);
+    }
+
+    if (!filter.exclude.empty()) {
+        return compute_from_bounds(filter.exclude);
+    }
+
+    UNREACHABLE();
+}
+}
+
+inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, const RegionFilter& filter) {
     // Lock every triangle where any vertex is either on the border and near the bounds or shared between clusters.
     const uint32_t cluster_count = clustering.cluster_count();
     const uint32_t vertex_count = clustering.vertex_count();
@@ -48,10 +96,10 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, 
 
     // Lock boundary vertices on or beyond a node face, as these are shared with
     // neighbouring nodes.
-    const double lock_margin = glm::compMax(node_bounds.size()) * 0.05;
+    const double lock_margin = detail::compute_lock_margin(filter);
     for (const uint32_t vertex_index : boundary_vertices) {
         const glm::dvec3 &position = clustering.positions[vertex_index];
-        if (signed_distance_to_bounds(node_bounds, position) >= -lock_margin) {
+        if (detail::signed_distance_to_filter(filter, position) >= -lock_margin) {
             vertices_to_lock.insert(vertex_index);
         }
     }
@@ -71,7 +119,7 @@ inline std::vector<uint8_t> find_vertices_to_lock(const Clustering &clustering, 
             continue;
         }
 
-        // Make sure the vertex is not just duplicated in a single cluster
+        // Make sure the vertex is not just duplicated in a single cluster. (These dont need locking since meshopt welds them internally.)
         const uint32_t first_cluster_index = membership[0].cluster_index;
         bool all_from_same = true;
         for (uint32_t i = 1; i < num_clusters; i++) {

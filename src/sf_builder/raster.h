@@ -1,8 +1,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
+#include <type_traits>
+#include <utility>
 #include <vector>
-#include <ranges>
+
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 

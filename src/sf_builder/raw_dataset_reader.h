@@ -1,5 +1,12 @@
 #pragma once
 
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <optional>
+#include <stdexcept>
+
+#include <cpl_error.h>
 #include <fmt/core.h>
 #include <gdal.h>
 #include <gdal_priv.h>
@@ -63,7 +70,7 @@ public:
         }
 
         // Read data from the heights band into heights_data
-        const int read_result = height_band->RasterIO(
+        const int32_t read_result = height_band->RasterIO(
             GF_Read, bounds.min.x, bounds.min.y, bounds.width(), bounds.height(),
             static_cast<void *>(height_data.data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
 
@@ -108,8 +115,8 @@ public:
         radix::geometry::Aabb2d pixel_bounds_exact = this->transform_srs_bounds_to_pixel_bounds_exact(bounds);
 
         const radix::geometry::Aabb2i pixel_bounds(
-            glm::ivec2(static_cast<int>(std::floor(pixel_bounds_exact.min.x)), static_cast<int>(std::floor(pixel_bounds_exact.min.y))),
-            glm::ivec2(static_cast<int>(std::ceil(pixel_bounds_exact.max.x)), static_cast<int>(std::ceil(pixel_bounds_exact.max.y))));
+            glm::ivec2(static_cast<int32_t>(std::floor(pixel_bounds_exact.min.x)), static_cast<int32_t>(std::floor(pixel_bounds_exact.min.y))),
+            glm::ivec2(static_cast<int32_t>(std::ceil(pixel_bounds_exact.max.x)), static_cast<int32_t>(std::ceil(pixel_bounds_exact.max.y))));
 
         return pixel_bounds;
     }

@@ -7,7 +7,6 @@
 
 #include <glm/glm.hpp>
 
-#include "number_utils.h"
 #include "SegmentedBuffer.h"
 
 namespace atlas {
@@ -21,10 +20,10 @@ struct UvMesh {
 class Packing {
 public:
     Packing() = default;
-    Packing(std::vector<glm::dvec2> uvs, const double effective_pixel_area, const float utilization = 1.0f)
-        : Packing(SegmentedBuffer<glm::dvec2>(std::move(uvs)), effective_pixel_area, utilization) {}
-    Packing(SegmentedBuffer<glm::dvec2> uvs, const double effective_pixel_area, const float utilization = 1.0f)
-        : _uvs(std::move(uvs)), _effective_pixel_area(effective_pixel_area), _utilization(utilization) {}
+    Packing(std::vector<glm::dvec2> uvs, const double utilization = 1.0, const double aspect = 1.0)
+        : Packing(SegmentedBuffer<glm::dvec2>(std::move(uvs)), utilization, aspect) {}
+    Packing(SegmentedBuffer<glm::dvec2> uvs, const double utilization = 1.0, const double aspect = 1.0)
+        : _uvs(std::move(uvs)), _utilization(utilization), _aspect(aspect) {}
 
     std::span<const glm::dvec2> uvs_for_mesh(const uint32_t mesh_index) const {
         return this->_uvs.segment(mesh_index);
@@ -37,22 +36,18 @@ public:
         return this->_uvs.backing();
     }
 
-    // Sum of effective input pixels (source-texture pixels actually covered by UVs) across all packed meshes.
-    double effective_pixel_area() const {
-        return this->_effective_pixel_area;
+    double utilization() const {
+        return this->_utilization;
     }
 
-    // Fraction of the packed atlas actually covered by charts. 1.0 for
-    // packings that were not produced by the chart packer (e.g. a single
-    // mesh's own UVs), since there is no wasted atlas space to account for.
-    float utilization() const {
-        return this->_utilization;
+    double aspect() const {
+        return this->_aspect;
     }
 
 private:
     SegmentedBuffer<glm::dvec2> _uvs;
-    double _effective_pixel_area = 0.0;
-    float _utilization = 1.0f;
+    double _utilization = 1.0;
+    double _aspect = 1.0;
 };
 
 class Packer {

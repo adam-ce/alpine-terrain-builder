@@ -22,17 +22,18 @@
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_tostring.hpp>
-#include <glm/gtx/string_cast.hpp>
+#include <glm/glm.hpp>
 #include <radix/geometry.h>
 #include <fmt/format.h>
 
+#include "fmt_impls.h"
 #include "type_utils.h"
 
 namespace Catch {
 template <glm::length_t N, typename T>
 struct StringMaker<glm::vec<N, T>> {
     static std::string convert(const glm::vec<N, T> &value) {
-        return glm::to_string(value);
+        return fmt::format("{}", value);
     }
 };
 

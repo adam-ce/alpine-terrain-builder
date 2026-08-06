@@ -6,6 +6,8 @@
 
 #include <radix/geometry.h>
 
+#include "int_math.h"
+
 namespace terrainbuilder {
 
 template <typename T>
@@ -42,45 +44,6 @@ public:
         return os;
     }
 };
-
-namespace {
-    template <typename T>
-    constexpr T saturating_add(T x, T y) noexcept {
-        static_assert(std::is_integral_v<T>, "saturating_add requires an integer type");
-
-        T result;
-        if (!__builtin_add_overflow(x, y, &result)) {
-            return result;
-        }
-
-        if constexpr (std::is_unsigned_v<T>) {
-            return std::numeric_limits<T>::max();
-        } else if (x < 0) {
-            return std::numeric_limits<T>::min();
-        } else {
-            return std::numeric_limits<T>::max();
-        }
-}
-
-// Saturating subtract for integers
-template <typename T>
-constexpr T saturating_sub(T x, T y) noexcept {
-    static_assert(std::is_integral_v<T>, "saturating_sub requires an integer type");
-
-    T result;
-    if (!__builtin_sub_overflow(x, y, &result)) {
-        return result;
-    }
-
-    if constexpr (std::is_unsigned_v<T>) {
-        return 0;
-    } else if (x < 0) {
-        return std::numeric_limits<T>::min();
-    } else {
-        return std::numeric_limits<T>::max();
-    }
-}
-}
 
 template <typename T1, typename T2>
 inline void add_border_to_aabb(radix::geometry::Aabb2<T1> &bounds, const Border<T2> &border) {

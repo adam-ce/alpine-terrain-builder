@@ -80,6 +80,7 @@ target_link_libraries(terrainlib PUBLIC
     libassert::assert
     magic_enum::magic_enum
     meshoptimizer
+    WideInteger
     igl::core
     igl_restricted::triangle
 )

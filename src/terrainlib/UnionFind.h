@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include <numeric>
 #include <unordered_map>
 #include <vector>
@@ -109,6 +110,13 @@ public:
         return this->get_sets_sparse_impl(*this);
     }
 
+    [[nodiscard]] std::vector<Index> get_set_labels() const {
+        return this->get_set_labels_impl(*this);
+    }
+    [[nodiscard]] std::vector<Index> get_set_labels() {
+        return this->get_set_labels_impl(*this);
+    }
+
 private:
     template <typename Self>
     static Index find_impl(Self &self, const Index item) noexcept {
@@ -193,6 +201,28 @@ private:
         }
 
         return sets;
+    }
+
+    template <typename Self>
+    static std::vector<Index> get_set_labels_impl(Self &self) {
+        const Size n = self.size();
+        constexpr Index NO_LABEL = std::numeric_limits<Index>::max();
+
+        std::vector<Index> labels(n, NO_LABEL);
+        Index next_label = 0;
+
+        for (Index item = 0; item < n; item++) {
+            Index &representative_label = labels[self.find(item)];
+            if (representative_label == NO_LABEL) {
+                representative_label = next_label;
+                next_label++;
+            }
+
+            labels[item] = representative_label;
+        }
+
+        DEBUG_ASSERT(next_label == self.set_count());
+        return labels;
     }
 
 private:

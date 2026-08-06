@@ -7,6 +7,8 @@
 
 #include <libassert/assert.hpp>
 
+#include "macros.h"
+
 template <std::integral T, std::unsigned_integral Exp>
 [[nodiscard]] constexpr T ipow(T base, Exp exp) noexcept {
     T result{1};
@@ -71,4 +73,168 @@ template <std::integral A, std::integral B>
         // Opposite signs -> truncation toward zero already gave the ceiling
         return q;
     }
+}
+
+namespace detail {
+template <std::integral T>
+[[nodiscard]] constexpr bool add_overflow_fallback(const T lhs, const T rhs, T &result) noexcept {
+    constexpr T minimum = std::numeric_limits<T>::min();
+    constexpr T maximum = std::numeric_limits<T>::max();
+
+    if constexpr (std::is_unsigned_v<T>) {
+        if (rhs > maximum - lhs) {
+            return true;
+        }
+    } else {
+        if (rhs > T{0} && lhs > maximum - rhs) {
+            return true;
+        }
+
+        if (rhs < T{0} && lhs < minimum - rhs) {
+            return true;
+        }
+    }
+
+    result = static_cast<T>(lhs + rhs);
+    return false;
+}
+
+template <std::integral T>
+[[nodiscard]] constexpr bool sub_overflow_fallback(const T lhs, const T rhs, T &result) noexcept {
+    constexpr T minimum = std::numeric_limits<T>::min();
+    constexpr T maximum = std::numeric_limits<T>::max();
+
+    if constexpr (std::is_unsigned_v<T>) {
+        if (lhs < rhs) {
+            return true;
+        }
+    } else {
+        if (rhs > T{0} && lhs < minimum + rhs) {
+            return true;
+        }
+
+        if (rhs < T{0} && lhs > maximum + rhs) {
+            return true;
+        }
+    }
+
+    result = static_cast<T>(lhs - rhs);
+    return false;
+}
+}
+
+template <std::integral T>
+[[nodiscard]] constexpr bool add_overflow(const T lhs, const T rhs, T &result) noexcept {
+#if HAS_BUILTIN(__builtin_add_overflow)
+    if (!std::is_constant_evaluated()) {
+        T temporary;
+
+        if (__builtin_add_overflow(lhs, rhs, &temporary)) {
+            return true;
+        }
+
+        result = temporary;
+        return false;
+    }
+#endif
+
+    return detail::add_overflow_fallback(lhs, rhs, result);
+}
+
+template <std::integral T>
+[[nodiscard]]
+constexpr bool sub_overflow(const T lhs, const T rhs, T &result) noexcept {
+#if HAS_BUILTIN(__builtin_sub_overflow)
+    if (!std::is_constant_evaluated()) {
+        T temporary;
+
+        if (__builtin_sub_overflow(lhs, rhs, &temporary)) {
+            return true;
+        }
+
+        result = temporary;
+        return false;
+    }
+#endif
+
+    return detail::sub_overflow_fallback(lhs, rhs, result);
+}
+
+template <std::integral T>
+[[nodiscard]] constexpr T saturating_add(const T lhs, const T rhs) noexcept {
+    T result;
+
+    if (!add_overflow(lhs, rhs, result)) {
+        return result;
+    }
+
+    if constexpr (std::is_unsigned_v<T>) {
+        return std::numeric_limits<T>::max();
+    } else {
+        return rhs > T{0} ? std::numeric_limits<T>::max() : std::numeric_limits<T>::min();
+    }
+}
+
+template <std::integral T>
+[[nodiscard]] constexpr T saturating_sub(const T lhs, const T rhs) noexcept {
+    T result;
+
+    if (!sub_overflow(lhs, rhs, result)) {
+        return result;
+    }
+
+    if constexpr (std::is_unsigned_v<T>) {
+        return T{0};
+    } else {
+        return rhs > T{0} ? std::numeric_limits<T>::min() : std::numeric_limits<T>::max();
+    }
+}
+
+inline constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint32_t{1} << 31));
+    return std::bit_ceil(n);
+}
+
+inline constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint64_t{1} << 63));
+    return std::bit_ceil(n);
+}
+
+inline constexpr uint32_t prev_power_of_two(uint32_t n) noexcept {
+    return std::bit_floor(n);
+}
+
+inline constexpr uint64_t prev_power_of_two(uint64_t n) noexcept {
+    return std::bit_floor(n);
+}
+
+inline constexpr uint32_t nearest_power_of_two(uint32_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint32_t{1} << 31));
+    const uint32_t lower = prev_power_of_two(n);
+    if (n == lower) {
+        return lower;
+    }
+    const uint32_t upper = lower * 2;
+    return uint64_t{n} * n < uint64_t{lower} * upper ? lower : upper;
+}
+
+#if defined(HAS_UINT128)
+inline constexpr uint64_t nearest_power_of_two(uint64_t n) noexcept {
+    DEBUG_ASSERT(n <= (uint64_t{1} << 63));
+
+    const uint64_t lower = prev_power_of_two(n);
+    if (n == lower) {
+        return lower;
+    }
+    const uint64_t upper = lower * 2;
+    return uint128_t{n} * n < uint128_t{lower} * upper ? lower : upper;
+}
+#endif
+
+inline constexpr bool is_power_of_two(uint32_t n) noexcept {
+    return std::has_single_bit(n);
+}
+
+inline constexpr bool is_power_of_two(uint64_t n) noexcept {
+    return std::has_single_bit(n);
 }

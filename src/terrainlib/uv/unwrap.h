@@ -45,8 +45,14 @@ private:
     int code;
 };
 
-using Map = std::vector<glm::dvec2>;
+using Uvs = std::vector<glm::dvec2>;
 using Texture = cv::Mat;
+
+// A uv map filling the unit square, with the aspect its texture should have.
+struct Map {
+    Uvs uvs;
+    double aspect = 1.0;
+};
 
 inline constexpr Algorithm DEFAULT_ALGORITHM = Algorithm::TutteBarycentricMapping;
 inline constexpr Border DEFAULT_BORDER = Border::Circle;

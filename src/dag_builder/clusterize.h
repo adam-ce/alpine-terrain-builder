@@ -24,8 +24,8 @@ struct ClusterOptions {
     static constexpr uint32_t MAX_TRIANGLE_LIMIT = UINT32_MAX;
 
     uint32_t max_vertices = MAX_VERTEX_LIMIT;
-    uint32_t min_triangles = 256;
-    uint32_t max_triangles = 256;
+    uint32_t min_triangles = MAX_TRIANGLES_PER_CLUSTER;
+    uint32_t max_triangles = MAX_TRIANGLES_PER_CLUSTER;
     float cone_weight = 0.5;
     float split_factor = 2.0;
 };
@@ -49,7 +49,6 @@ inline std::vector<Cluster> clusterize(
 
     for (const auto &meshlet : meshlet_result.meshlets) {
         Cluster cluster;
-        cluster.texture_id = 0;
         cluster.id = clusters.size();
 
         // Map meshlet vertices to global vertex indices
@@ -108,9 +107,10 @@ inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options 
 
     TextureSet textures;
     if (mesh.texture.has_value()) {
-        textures.add(mesh.texture.value());
-    } else {
-        textures.add(cv::Mat::zeros(1, 1, CV_8UC3));
+        const uint32_t texture_id = textures.add(mesh.texture.value());
+        for (Cluster &cluster : clusters) {
+            cluster.texture_id = texture_id;
+        }
     }
 
     return Clustering{

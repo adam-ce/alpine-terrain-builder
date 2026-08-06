@@ -38,13 +38,10 @@ inline void normalize_uvs(std::span<glm::dvec2> uvs) {
 
 struct Packer::Impl {
     std::unique_ptr<xatlas::Atlas, decltype(&xatlas::Destroy)> atlas;
-    double total_effective_pixel_area = 0.0;
 
     Impl() : atlas(xatlas::Create(), xatlas::Destroy) {}
 
     void add_uv_mesh(const UvMesh& mesh) {
-        this->total_effective_pixel_area += glm::compMul(glm::dvec2(mesh.texture_size));
-
         std::vector<glm::vec2> scaled_uvs = transform_vector(mesh.uvs, [&](const glm::dvec2 &uv) {
             const glm::dvec2 scaled = uv * glm::dvec2(mesh.texture_size);
             return glm::vec2(scaled);
@@ -91,7 +88,11 @@ struct Packer::Impl {
 
         normalize_uvs(uvs.flat());
 
-        return Packing(uvs, this->atlas->utilization[0]);
+        const glm::dvec2 atlas_size(this->atlas->width, this->atlas->height);
+        const double aspect = atlas_size.y > 0 ? atlas_size.x / atlas_size.y : 1.0;
+        const double utilization = this->atlas->utilization[0];
+
+        return Packing(uvs, utilization, aspect);
     }
 };
 

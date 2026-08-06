@@ -189,7 +189,7 @@ TEST_CASE(
     const Clustering merged = merge_clusterings(
         clusterings,
         0.01,
-        MergeOptions{.mode = merge_mode});
+        MergeOptions{.mode = merge_mode, .average_positions = true});
 
     REQUIRE(merged.clusters.size() == 2);
     REQUIRE(merged.vertex_count() == 5);

@@ -15,6 +15,7 @@
 #include "clusterize.h"
 #include "compact.h"
 #include "encoded.h"
+#include "geometry_utils.h"
 #include "int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"
@@ -374,13 +375,23 @@ std::vector<octree::Id> find_relevant_input_nodes(
     return result;
 }
 
-// Return the already-built DAG nodes that are children of the given target node.
-std::vector<octree::Id> find_relevant_dag_nodes(
+// Nodes one level finer that may hold data belonging to the given node.
+octree::IdRect find_relevant_dag_nodes(
+    const octree::Id &target_id,
+    const octree::OddLevelShifted &shifted_space) {
+    // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
+    const radix::geometry::Aabb3d padded_bounds = pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
+    const radix::geometry::Aabb3d search_bounds = radix::geometry::intersection(padded_bounds, shifted_space.bounds());
+    return shifted_space.get_intersecting_nodes_on_level(search_bounds, target_id.level() + 1);
+}
+
+// Nodes one level finer that may hold data belonging to the given node and are resident.
+std::vector<octree::Id> find_relevant_resident_dag_nodes(
     const octree::Id &target_id,
     const std::unordered_set<octree::Id> &prev_level_built,
     const octree::OddLevelShifted &shifted_space) {
     std::vector<octree::Id> result;
-    for (const octree::Id &child : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
+    for (const octree::Id &child : find_relevant_dag_nodes(target_id, shifted_space)) {
         if (prev_level_built.contains(child)) {
             result.push_back(child);
         }
@@ -428,7 +439,7 @@ LevelWorkplan build_level_workplan(
     std::unordered_map<octree::Id, std::vector<octree::Id>> inner_nodes;
     for (const octree::Id &target : target_set) {
         input_sources[target] = find_relevant_input_nodes(target, input_by_level, ctx.shifted_space, ctx.space, ctx.options.include_mode);
-        inner_nodes[target] = find_relevant_dag_nodes(target, prev_level_built, ctx.shifted_space);
+        inner_nodes[target] = find_relevant_resident_dag_nodes(target, prev_level_built, ctx.shifted_space);
     }
 
     return {

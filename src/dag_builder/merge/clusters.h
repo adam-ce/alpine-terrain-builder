@@ -374,7 +374,7 @@ inline std::vector<uint32_t> calculate_vertex_counts(const std::span<const uint3
     return vertex_counts;
 }
 
-std::vector<std::vector<uint32_t>> create_component_backwards_mapping(const mesh::ComponentsIndex &components_index, const std::vector<uint32_t>& forward) {
+inline std::vector<std::vector<uint32_t>> create_component_backwards_mapping(const mesh::ComponentsIndex &components_index, const std::vector<uint32_t>& forward) {
     const auto& [vertex_to_component, component_count] = components_index;
 
     // Allocate mapping storage

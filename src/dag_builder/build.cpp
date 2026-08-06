@@ -105,6 +105,7 @@ LodResult build_lod(
         .preserve_cluster_count = true
     };
     merged.clustering = simplify(merged.clustering, simplify_options);
+    remove_duplicate_triangles_inplace(merged.clustering);
     remove_unused_vertices_inplace(merged.clustering);
 
     // Render the textures now that the surviving triangle counts are known.

@@ -8,10 +8,12 @@
 
 #include "atlas/rect/atlas.h"
 #include "cluster.h"
+#include "mesh/cleanup.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
+#include "vector_utils.h"
 #include "enumerate.h"
 
 // Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
@@ -128,6 +130,25 @@ inline Clustering make_manifold(const Clustering &clustering) {
     Clustering manifold = clustering;
     make_manifold_inplace(manifold);
     return manifold;
+}
+
+inline void remove_duplicate_triangles_inplace(Clustering &clustering) {
+    std::vector<glm::uvec3> global_triangles;
+    for (Cluster &cluster : clustering.clusters) {
+        global_triangles.clear();
+        global_triangles.reserve(cluster.local_triangles.size());
+        for (const glm::uvec3 &triangle : cluster.local_triangles) {
+            global_triangles.emplace_back(
+                cluster.vertex_indices[triangle.x],
+                cluster.vertex_indices[triangle.y],
+                cluster.vertex_indices[triangle.z]);
+        }
+
+        const std::vector<uint32_t> duplicates = mesh::find_duplicate_triangles_consider_orientation(global_triangles);
+        for (const uint32_t index : duplicates | std::views::reverse) {
+            erase_by_index(cluster.local_triangles, index);
+        }
+    }
 }
 
 namespace detail {

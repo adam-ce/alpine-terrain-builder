@@ -97,10 +97,16 @@ inline std::vector<Cluster> clusterize(
 inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
     const auto positions_f = to_approximate_normalized(mesh.positions);
 
+    // Discard uvs if the mesh has no texture
+    std::span<const glm::dvec2> uvs;
+    if (mesh.texture.has_value()) {
+        uvs = mesh.uvs;
+    }
+
     std::vector<Cluster> clusters = clusterize(
         mesh.triangles,
         positions_f,
-        mesh.uvs,
+        uvs,
         options,
         {}
     );

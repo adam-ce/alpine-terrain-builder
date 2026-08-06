@@ -37,6 +37,7 @@ Clustering make_triangle_clustering(
     cluster.id = 0;
     cluster.vertex_indices = {0, 1, 2};
     cluster.local_triangles = {glm::uvec3(0, 1, 2)};
+    cluster.uvs = {glm::dvec2(0.0, 0.0), glm::dvec2(1.0, 0.0), glm::dvec2(0.0, 1.0)};
     cluster.texture_id = 0;
     clustering.clusters.push_back(std::move(cluster));
 
@@ -66,6 +67,13 @@ Clustering make_fan_clustering(
         glm::uvec3(4, 1, 2),
         glm::uvec3(4, 2, 3),
         glm::uvec3(4, 3, 0),
+    };
+    cluster.uvs = {
+        glm::dvec2(0.0, 0.0),
+        glm::dvec2(1.0, 0.0),
+        glm::dvec2(1.0, 1.0),
+        glm::dvec2(0.0, 1.0),
+        glm::dvec2(0.5, 0.5),
     };
     cluster.texture_id = 0;
     clustering.clusters.push_back(std::move(cluster));

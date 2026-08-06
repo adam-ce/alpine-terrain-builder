@@ -2,7 +2,7 @@
 
 #include <span>
 #include <functional>
-
+#include "geometry_utils.h"
 #include "mesh/SimpleMesh.h"
 #include "spatial_lookup/Grid.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
@@ -32,17 +32,10 @@ inline double estimate_merge_epsilon(const std::span<const std::reference_wrappe
 }
 
 namespace {
-radix::geometry::Aabb3d pad_bounds(const radix::geometry::Aabb3d &bounds, const double percentage) {
-    // Percentage-only padding collapses to zero for a zero-size (e.g. single-point) mesh,
-    // which would leave the grid's cell size zero. Enforce a minimum absolute padding too.
-    const glm::dvec3 bounds_padding = glm::max(bounds.size() * percentage, glm::dvec3(radix::geometry::epsilon<double>));
-    const radix::geometry::Aabb3d padded_bounds(bounds.min - bounds_padding, bounds.max + bounds_padding);
-    return padded_bounds;
-}
-
 template <typename T>
 spatial_lookup::Grid3d<T> _construct_grid_for_meshes(const radix::geometry::Aabb3d &bounds, const size_t vertex_count) {
-    const radix::geometry::Aabb3d padded_bounds = pad_bounds(bounds, 0.01);
+    // A zero-size (e.g. single-point) mesh would scale to nothing and leave the cell size zero.
+    const radix::geometry::Aabb3d padded_bounds = pad_bounds_relative(bounds, 0.01, radix::geometry::epsilon<double>);
 
     const double max_extends = glm::compMax(padded_bounds.size());
     const glm::dvec3 relative_extends = padded_bounds.size() / max_extends;

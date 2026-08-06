@@ -69,7 +69,7 @@ public:
         }
 
         LOG_TRACE("Clipping mask for {}", id);
-        const auto bounds = pad_bounds(this->_space.get_node_bounds(id), 1.1);
+        const auto bounds = pad_bounds_relative(this->_space.get_node_bounds(id), 0.05);
         MeshMask mask(mesh::clip_on_bounds_and_cap(ctx.mask.mesh, bounds));
 
         // Same when the current mask is empty

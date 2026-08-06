@@ -595,6 +595,11 @@ void build_levels(
             input_by_level,
             prev_level_built,
             ctx);
+
+        // Persist per level so a finished level can be read back before the whole run completes
+        if (const auto result = ctx.output_storage.save_or_create_index(); !result.has_value()) {
+            LOG_WARN("Could not save index after level {}: {}", level, result.error());
+        }
     }
 
     output_storage = std::move(ctx.output_storage).release();

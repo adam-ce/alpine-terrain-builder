@@ -6,6 +6,7 @@
 #include <vector>
 
 #include <gdal_priv.h>
+#include <glm/gtx/norm.hpp>
 
 #include "Dataset.h"
 #include "mesh/SimpleMesh.h"
@@ -212,11 +213,6 @@ void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, c
     }
 }
 
-template <typename Vec>
-auto length2(const Vec &v) -> decltype(glm::dot(v, v)) {
-    return glm::dot(v, v);
-}
-
 /*
 glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
     const double infinity = std::numeric_limits<double>::infinity();
@@ -224,7 +220,7 @@ glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
     double max_radius_sq = -infinity;
 
     for (const glm::dvec3 &position : mesh.positions) {
-        const double radius_sq = length2(position);
+        const double radius_sq = glm::length2(position);
         min_radius_sq = std::min(min_radius_sq, radius_sq);
         max_radius_sq = std::max(max_radius_sq, radius_sq);
     }

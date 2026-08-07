@@ -54,7 +54,7 @@ jobs:
             cmake_flags: -DALP_ENABLE_UNITY_BUILD=ON
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         submodules: true
 
@@ -102,7 +102,7 @@ jobs:
 
     - name: Restore installed CMake dependencies
       id: cmake_dependency_cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: |
           build/alp_external/boost
@@ -116,7 +116,7 @@ jobs:
 
     - name: Restore ccache
       id: ccache_cache
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v6
       with:
         path: ${{ env.CCACHE_DIR }}
         key: ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -145,7 +145,7 @@ jobs:
 
     - name: Save installed CMake dependencies
       if: steps.cmake_dependency_cache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: |
           build/alp_external/boost
@@ -164,14 +164,14 @@ jobs:
 
     - name: Save ccache
       if: always()
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v6
       with:
         path: ${{ env.CCACHE_DIR }}
         key: ${{ runner.os }}-ccache-${{ matrix.name }}-${{ matrix.sanitizer }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: Cache unit test data
       id: terrain_builder_unittest_data
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: unittests/data
         key: terrain-builder-unittest-data-v1

@@ -38,12 +38,14 @@ add_executable(unittests_terrainlib
     terrainlib/dataset.cpp
     terrainlib/enumerate.cpp
     terrainlib/fixed_vector.cpp
+    terrainlib/geometry_frames.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
+    terrainlib/stamp_set.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/mesh_boundary.cpp
@@ -102,6 +104,7 @@ target_compile_definitions(unittests_meshbuilder PUBLIC "ATB_TEST_DATA_DIR=\"${C
 
 add_executable(unittests_dagbuilder
     catch2_helpers.h
+    dag_builder/correspondence.cpp
     dag_builder/merge_clusterings.cpp
     dag_builder/weld.cpp
     dag_builder/slice.cpp

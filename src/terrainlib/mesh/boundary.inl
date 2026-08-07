@@ -5,6 +5,7 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/edges.h"
+#include "mesh/vertex_index_range.h"
 
 namespace mesh {
     
@@ -54,6 +55,7 @@ inline void build_boundary_vertex_mask(const std::span<const glm::uvec3> triangl
                                       std::vector<MaskT> &boundary,
                                       const MaskT on_boundary,
                                       const MaskT not_on_boundary) {
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
     std::unordered_set<glm::uvec2> boundary_edges = find_boundary_edges(triangles);
 
     boundary.assign(vertex_count, not_on_boundary);

@@ -77,4 +77,11 @@ uint32_t compute_vertex_count(const std::span<const glm::uvec3> triangles) {
     }
 }
 
+uint32_t vertex_buffer_size(const std::span<const glm::uvec3> triangles) {
+    if (triangles.empty()) {
+        return 0;
+    }
+    return find_max_vertex_index(triangles) + 1;
+}
+
 }

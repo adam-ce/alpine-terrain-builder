@@ -65,12 +65,12 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
 }
 
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles) {
-    return create_vertex_to_triangle_mapping(triangles, find_max_vertex_index(triangles));
+    return create_vertex_to_triangle_mapping(triangles, vertex_buffer_size(triangles));
 }
-std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
-    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
+std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
 
-    std::vector<std::vector<uint32_t>> vertex_to_triangles(max_vertex_index + 1);
+    std::vector<std::vector<uint32_t>> vertex_to_triangles(vertex_count);
 
     for (uint32_t triangle_index = 0; triangle_index < triangles.size(); triangle_index++) {
         const glm::uvec3 &triangle = triangles[triangle_index];
@@ -84,12 +84,12 @@ std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::
 }
 
 std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles) {
-    return count_vertex_adjacent_triangles(triangles, find_max_vertex_index(triangles));
+    return count_vertex_adjacent_triangles(triangles, vertex_buffer_size(triangles));
 }
-std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
-    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
+std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
 
-    std::vector<uint32_t> adjacent_triangle_count(max_vertex_index + 1, 0);
+    std::vector<uint32_t> adjacent_triangle_count(vertex_count, 0);
 
     for (const glm::uvec3 &triangle : triangles) {
         for (uint8_t k = 0; k < 3; k++) {
@@ -101,11 +101,10 @@ std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm:
 }
 
 std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles) {
-    return find_isolated_vertices(triangles, find_max_vertex_index(triangles));
+    return find_isolated_vertices(triangles, vertex_buffer_size(triangles));
 }
-std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
-    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
-    const uint32_t vertex_count = max_vertex_index + 1;
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
 
     std::vector<bool> connected;
     connected.resize(vertex_count, false);
@@ -126,11 +125,10 @@ std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> t
 }
 
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles) {
-    return build_vertex_adjacency(triangles, find_max_vertex_index(triangles));
+    return build_vertex_adjacency(triangles, vertex_buffer_size(triangles));
 }
-std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index) {
-    DEBUG_ASSERT(max_vertex_index >= find_max_vertex_index(triangles));
-    const uint32_t vertex_count = max_vertex_index + 1;
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count) {
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
     std::vector<std::vector<uint32_t>> adjacency(vertex_count);
 
     auto add_edge = [&](const uint32_t a, const uint32_t b) {

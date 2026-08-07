@@ -118,7 +118,7 @@ void duplicate_non_manifold_vertices(
     Duplicate &&duplicate_vertex) {
     bool changed;
     do {
-        DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+        DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
         changed = false;
         const std::vector<std::vector<uint32_t>> vertex_to_triangles = create_vertex_to_triangle_mapping(triangles, vertex_count);
 
@@ -227,7 +227,7 @@ void make_manifold(
     duplicate_non_manifold_edges(triangles, new_duplicate_vertex);
     duplicate_non_manifold_vertices(triangles, vertex_count, new_duplicate_vertex);
 
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
     DEBUG_ASSERT(is_manifold(triangles));
 }
 

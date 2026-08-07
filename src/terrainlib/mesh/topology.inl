@@ -57,20 +57,20 @@ std::unordered_map<glm::uvec2, std::vector<uint32_t>> create_edge_to_triangle_ma
 
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::Simple_<n_dims, T> &mesh) {
-    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count() - 1);
+    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
 }
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::View_<n_dims, T> &mesh) {
-    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count() - 1);
+    return create_vertex_to_triangle_mapping(mesh.triangles, mesh.vertex_count());
 }
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::Simple_<n_dims, T> &mesh) {
-    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count() - 1);
+    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
 }
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::View_<n_dims, T> &mesh) {
-    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count() - 1);
+    return count_vertex_adjacent_triangles(mesh.triangles, mesh.vertex_count());
 }
 
 inline constexpr glm::uvec2 other_vertices_in_triangle(const glm::uvec3 &triangle, const uint32_t vertex) {
@@ -116,20 +116,20 @@ inline constexpr void flip_triangle_orientation(glm::uvec3 &triangle) {
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh) {
-    return find_isolated_vertices(mesh.triangles, mesh.vertex_count() - 1);
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
 }
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::View_<n_dims, T> &mesh) {
-    return find_isolated_vertices(mesh.triangles, mesh.vertex_count() - 1);
+    return find_isolated_vertices(mesh.triangles, mesh.vertex_count());
 }
 
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::Simple_<n_dims, T> &mesh) {
-    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count() - 1);
+    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count());
 }
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::View_<n_dims, T> &mesh) {
-    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count() - 1);
+    return build_vertex_adjacency(mesh.triangles, mesh.vertex_count());
 }
 
 template <glm::length_t n_dims, typename T>

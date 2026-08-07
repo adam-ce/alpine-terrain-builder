@@ -29,8 +29,7 @@ struct ComponentsIndex {
 
 namespace detail {
 inline UnionFind build_union_find(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
-    DEBUG_ASSERT(vertex_count == find_max_vertex_index(triangles) + 1);
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
 
     UnionFind components(vertex_count);
     for (const glm::uvec3 &triangle : triangles) {
@@ -113,7 +112,7 @@ std::vector<mesh::Simple_<n_dims, T>> split_into_connected_components(const mesh
     return split_into_connected_components(mesh::View_<n_dims, T>(mesh));
 }
 inline std::vector<std::vector<glm::uvec3>> split_into_connected_components(const std::span<const glm::uvec3> triangles) {
-    const uint32_t vertex_count = compute_vertex_count(triangles);
+    const uint32_t vertex_count = vertex_buffer_size(triangles);
     const auto [vertex_to_component, component_count] = find_connected_components(triangles, vertex_count);
     std::vector<std::vector<glm::uvec3>> triangles_per_component;
     triangles_per_component.resize(component_count);
@@ -128,6 +127,7 @@ inline std::vector<std::vector<glm::uvec3>> split_into_connected_components(cons
 }
 
 namespace detail {
+// Requires packed indices, set_count counts unreferenced vertices as their own sets.
 inline size_t count_connected_components(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
     DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
     DEBUG_ASSERT(vertex_count == find_max_vertex_index(triangles) + 1);
@@ -140,7 +140,7 @@ inline size_t count_connected_components(const std::span<const glm::uvec3> trian
 }
 } // namespace detail
 inline size_t count_connected_components(const std::span<const glm::uvec3> triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count == compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
     const uint32_t max_vertex_index = find_max_vertex_index(triangles);
     if (vertex_count == max_vertex_index + 1) {
         return detail::count_connected_components(triangles, vertex_count);
@@ -160,11 +160,11 @@ size_t count_connected_components(const mesh::Simple_<n_dims, T> &mesh) {
 }
 
 inline bool is_single_component(const std::span<const glm::uvec3> &triangles, const size_t vertex_count) {
-    DEBUG_ASSERT(vertex_count >= compute_vertex_count(triangles));
+    DEBUG_ASSERT(vertex_count >= vertex_buffer_size(triangles));
     return count_connected_components(triangles, vertex_count) <= 1;
 }
 inline bool is_single_component(const std::span<const glm::uvec3> &triangles) {
-    return is_single_component(triangles, compute_vertex_count(triangles));
+    return is_single_component(triangles, vertex_buffer_size(triangles));
 }
 template <glm::length_t n_dims, typename T>
 bool is_single_component(const mesh::View_<n_dims, T> &mesh) {

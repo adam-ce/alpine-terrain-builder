@@ -50,28 +50,28 @@ std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh:
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const mesh::View_<n_dims, T> &mesh);
 std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles);
-std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index);
+std::vector<std::vector<uint32_t>> create_vertex_to_triangle_mapping(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count);
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::Simple_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> count_vertex_adjacent_triangles(const mesh::View_<n_dims, T> &mesh);
 std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles);
-std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index);
+std::vector<uint32_t> count_vertex_adjacent_triangles(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count);
 
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::Simple_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
 std::vector<uint32_t> find_isolated_vertices(const mesh::View_<n_dims, T> &mesh);
 std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles);
-std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index);
+std::vector<uint32_t> find_isolated_vertices(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count);
 
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::Simple_<n_dims, T> &mesh);
 template <glm::length_t n_dims, typename T>
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const mesh::View_<n_dims, T> &mesh);
 std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles);
-std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t max_vertex_index);
+std::vector<std::vector<uint32_t>> build_vertex_adjacency(const std::span<const glm::uvec3> triangles, const uint32_t vertex_count);
 
 template <glm::length_t n_dims, typename T>
 bool is_consistently_oriented(const mesh::Simple_<n_dims, T> &mesh);

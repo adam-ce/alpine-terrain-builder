@@ -190,25 +190,25 @@ template <std::integral T>
     }
 }
 
-inline constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
+[[nodiscard]] inline constexpr uint32_t next_power_of_two(uint32_t n) noexcept {
     DEBUG_ASSERT(n <= (uint32_t{1} << 31));
     return std::bit_ceil(n);
 }
 
-inline constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
+[[nodiscard]] inline constexpr uint64_t next_power_of_two(uint64_t n) noexcept {
     DEBUG_ASSERT(n <= (uint64_t{1} << 63));
     return std::bit_ceil(n);
 }
 
-inline constexpr uint32_t prev_power_of_two(uint32_t n) noexcept {
+[[nodiscard]] inline constexpr uint32_t prev_power_of_two(uint32_t n) noexcept {
     return std::bit_floor(n);
 }
 
-inline constexpr uint64_t prev_power_of_two(uint64_t n) noexcept {
+[[nodiscard]] inline constexpr uint64_t prev_power_of_two(uint64_t n) noexcept {
     return std::bit_floor(n);
 }
 
-inline constexpr uint32_t nearest_power_of_two(uint32_t n) noexcept {
+[[nodiscard]] inline constexpr uint32_t nearest_power_of_two(uint32_t n) noexcept {
     DEBUG_ASSERT(n <= (uint32_t{1} << 31));
     const uint32_t lower = prev_power_of_two(n);
     if (n == lower) {
@@ -219,7 +219,7 @@ inline constexpr uint32_t nearest_power_of_two(uint32_t n) noexcept {
 }
 
 #if defined(HAS_UINT128)
-inline constexpr uint64_t nearest_power_of_two(uint64_t n) noexcept {
+[[nodiscard]] inline constexpr uint64_t nearest_power_of_two(uint64_t n) noexcept {
     DEBUG_ASSERT(n <= (uint64_t{1} << 63));
 
     const uint64_t lower = prev_power_of_two(n);
@@ -231,10 +231,20 @@ inline constexpr uint64_t nearest_power_of_two(uint64_t n) noexcept {
 }
 #endif
 
-inline constexpr bool is_power_of_two(uint32_t n) noexcept {
+[[nodiscard]] inline constexpr bool is_power_of_two(uint32_t n) noexcept {
     return std::has_single_bit(n);
 }
 
-inline constexpr bool is_power_of_two(uint64_t n) noexcept {
+[[nodiscard]] inline constexpr bool is_power_of_two(uint64_t n) noexcept {
     return std::has_single_bit(n);
+}
+
+template <std::unsigned_integral T>
+[[nodiscard]] inline constexpr T align_down(T value, T alignment) noexcept {
+    return value - value % alignment;
+}
+
+template <std::unsigned_integral T>
+[[nodiscard]] inline constexpr T align_up(T value, T alignment) noexcept {
+    return value + (alignment - value % alignment) % alignment;
 }

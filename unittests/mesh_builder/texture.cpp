@@ -224,7 +224,7 @@ TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
         grid.srsBounds(root_tile, false),
         tile_provider,
         tiles_to_splatter,
-        cv::INTER_NEAREST_EXACT);
+        cv::INTER_NEAREST_EXACT).image;
 
     REQUIRE(assembled_texture.size() == cv::Size(1, 1));
     CHECK(assembled_texture.type() == CV_8UC3);
@@ -251,7 +251,7 @@ TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
         grid.srsBounds(root_tile, false),
         tile_provider,
         tiles_to_splatter,
-        cv::INTER_NEAREST_EXACT);
+        cv::INTER_NEAREST_EXACT).image;
 
     REQUIRE(assembled_texture.size() == cv::Size(2, 2));
     CHECK(assembled_texture.type() == CV_8UC3);
@@ -282,7 +282,7 @@ TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]
         grid.srsBounds(root_tile, false),
         tile_provider,
         tiles_to_splatter,
-        cv::INTER_NEAREST_EXACT);
+        cv::INTER_NEAREST_EXACT).image;
 
     REQUIRE(assembled_texture.size() == cv::Size(2, 2));
     CHECK(assembled_texture.type() == CV_8UC1);
@@ -291,4 +291,101 @@ TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]
     CHECK(assembled_texture.at<uint8_t>(1, 0) == uint8_t(2));
     CHECK(assembled_texture.at<uint8_t>(0, 1) == uint8_t(1));
     CHECK(assembled_texture.at<uint8_t>(1, 1) == uint8_t(1));
+}
+
+/// Bounds covering the given pixel range of a 256 pixel root tile, in bottom left origin.
+static radix::tile::SrsBounds bounds_of_root_tile_pixels(
+    const radix::tile::SrsBounds &root_tile_bounds,
+    const glm::uvec2 pixel_min,
+    const glm::uvec2 pixel_max) {
+    return radix::tile::SrsBounds(
+        root_tile_bounds.min + root_tile_bounds.size() * (glm::dvec2(pixel_min) / 256.0),
+        root_tile_bounds.min + root_tile_bounds.size() * (glm::dvec2(pixel_max) / 256.0));
+}
+
+TEST_CASE("target image region without padding or alignment", "[terrainbuilder]") {
+    const radix::tile::SrsBounds root_tile_bounds(glm::dvec2(0, 0), glm::dvec2(256, 256));
+    const radix::tile::SrsBounds target_bounds = bounds_of_root_tile_pixels(root_tile_bounds, glm::uvec2(100, 70), glm::uvec2(150, 160));
+
+    const terrainbuilder::TargetImageRegion region = terrainbuilder::calculate_target_image_region(
+        target_bounds, root_tile_bounds, glm::uvec2(256), 0, glm::uvec2(0), 1);
+
+    // Requested region, mapped to top left origin.
+    CHECK(region.full.min == glm::uvec2(100, 96));
+    CHECK(region.full.max == glm::uvec2(150, 186));
+    CHECK(region.content.min == glm::uvec2(0, 0));
+    CHECK(region.content.max == region.full.size());
+}
+
+TEST_CASE("target image region applies padding and alignment", "[terrainbuilder]") {
+    const radix::tile::SrsBounds root_tile_bounds(glm::dvec2(0, 0), glm::dvec2(256, 256));
+    const radix::tile::SrsBounds target_bounds = bounds_of_root_tile_pixels(root_tile_bounds, glm::uvec2(100, 70), glm::uvec2(150, 160));
+
+    const terrainbuilder::TargetImageRegion region = terrainbuilder::calculate_target_image_region(
+        target_bounds, root_tile_bounds, glm::uvec2(256), 0, glm::uvec2(2), 16);
+
+    // Requested (100, 96) to (150, 186), padded by 2 and grown to multiples of 16.
+    CHECK(region.full.min == glm::uvec2(96, 80));
+    CHECK(region.full.max == glm::uvec2(160, 192));
+    CHECK(region.content.min == glm::uvec2(4, 16));
+    CHECK(region.content.max == glm::uvec2(54, 106));
+}
+
+TEST_CASE("target image region is clamped to the root tile image", "[terrainbuilder]") {
+    const radix::tile::SrsBounds root_tile_bounds(glm::dvec2(0, 0), glm::dvec2(256, 256));
+    const radix::tile::SrsBounds target_bounds = bounds_of_root_tile_pixels(root_tile_bounds, glm::uvec2(0, 0), glm::uvec2(256, 256));
+
+    const terrainbuilder::TargetImageRegion region = terrainbuilder::calculate_target_image_region(
+        target_bounds, root_tile_bounds, glm::uvec2(256), 0, glm::uvec2(2), 16);
+
+    CHECK(region.full.min == glm::uvec2(0, 0));
+    CHECK(region.full.max == glm::uvec2(256, 256));
+    CHECK(region.content.min == glm::uvec2(0, 0));
+    CHECK(region.content.max == glm::uvec2(256, 256));
+}
+
+TEST_CASE("texture assembler reports the content region", "[terrainbuilder]") {
+    // Row gradient, so every row of the assembled image can be traced back to its source row.
+    cv::Mat tile_image(256, 256, CV_8UC1);
+    for (uint32_t row = 0; row < 256; row++) {
+        tile_image.row(row).setTo(uint8_t(row));
+    }
+
+    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const StaticTileProvider tile_provider({{root_tile, tile_image}});
+    const std::vector<radix::tile::Id> tiles_to_splatter = {root_tile};
+
+    const ctb::Grid grid = ctb::GlobalMercator();
+    const radix::tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
+    const radix::tile::SrsBounds target_bounds = bounds_of_root_tile_pixels(root_tile_bounds, glm::uvec2(100, 70), glm::uvec2(150, 160));
+
+    const terrainbuilder::AssembledTexture assembled = terrainbuilder::splatter_tiles_to_texture(
+        root_tile,
+        grid,
+        target_bounds,
+        tile_provider,
+        tiles_to_splatter,
+        cv::INTER_NEAREST_EXACT);
+
+    // Region (96, 80) to (160, 192), with the content region flipped along with the image.
+    REQUIRE(assembled.image.size() == cv::Size(64, 112));
+    CHECK(assembled.content.min == glm::uvec2(4, 6));
+    CHECK(assembled.content.max == glm::uvec2(54, 96));
+
+    // The content rows are the southernmost and northernmost requested rows of the source tile.
+    CHECK(assembled.image.at<uint8_t>(assembled.content.min.y, assembled.content.min.x) == uint8_t(185));
+    CHECK(assembled.image.at<uint8_t>(assembled.content.max.y - 1, assembled.content.min.x) == uint8_t(96));
+}
+
+TEST_CASE("assembled texture remaps uvs into the padded image", "[terrainbuilder]") {
+    const terrainbuilder::AssembledTexture assembled{
+        .image = cv::Mat::zeros(100, 100, CV_8UC1),
+        .content = radix::geometry::Aabb2ui(glm::uvec2(10, 20), glm::uvec2(60, 70))};
+
+    std::vector<glm::dvec2> uvs = {glm::dvec2(0, 0), glm::dvec2(1, 1), glm::dvec2(0.5, 0.5)};
+    assembled.remap_uvs(uvs);
+
+    CHECK(uvs[0] == glm::dvec2(0.1, 0.2));
+    CHECK(uvs[1] == glm::dvec2(0.6, 0.7));
+    CHECK(uvs[2] == glm::dvec2(0.35, 0.45));
 }

@@ -8,6 +8,7 @@
 
 #include "atlas/rect/atlas.h"
 #include "cluster.h"
+#include "geometry_utils.h"
 #include "mesh/cleanup.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"
@@ -15,58 +16,6 @@
 #include "range_utils.h"
 #include "vector_utils.h"
 #include "enumerate.h"
-
-// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
-// Outputs are written as float coordinates.
-// Optionally outputs the computed AABB if out_bounds is provided.
-template <glm::length_t n_dims>
-void to_approximate_normalized(
-    std::span<const glm::vec<n_dims, double>> positions,
-    std::vector<glm::vec<n_dims, float>> &approx,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    // compute bounds
-    const radix::geometry::Aabb<n_dims, double> bounds = radix::geometry::find_bounds(positions);
-    const glm::vec<n_dims, double> center = bounds.centre();
-    const glm::vec<n_dims, double> extents = bounds.size() / 2.0;
-    const double max_extents = glm::compMax(extents);
-
-    if (out_bounds) {
-        *out_bounds = bounds;
-    }
-
-    // normalize based on aabb
-    approx.clear();
-    approx.reserve(positions.size());
-    for (const auto &p : positions) {
-        const glm::vec<n_dims, double> rel = (p - center) / max_extents;
-        approx.push_back(glm::vec<n_dims, float>(rel));
-    }
-}
-template <glm::length_t n_dims>
-void to_approximate_normalized(
-    const std::vector<glm::vec<n_dims, double>> &positions,
-    std::vector<glm::vec<n_dims, float>> &approx,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    return to_approximate_normalized(std::span(positions), approx, out_bounds);
-}
-
-// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
-// Outputs are written as float coordinates.
-// Optionally outputs the computed AABB if out_bounds is provided.
-template <glm::length_t n_dims>
-std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
-    std::span<const glm::vec<n_dims, double>> positions,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    std::vector<glm::vec<n_dims, float>> approx;
-    to_approximate_normalized(positions, approx, out_bounds);
-    return approx;
-}
-template <glm::length_t n_dims>
-std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
-    const std::vector<glm::vec<n_dims, double>> &positions,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    return to_approximate_normalized(std::span(positions), out_bounds);
-}
 
 inline void collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions, std::vector<glm::dvec3> &out_positions) {
     out_positions.clear();

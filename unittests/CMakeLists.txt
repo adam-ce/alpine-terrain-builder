@@ -76,6 +76,7 @@ add_executable(unittests_terrainlib
     terrainlib/string_utils.cpp
     terrainlib/tiny_vector.cpp
     terrainlib/union_find.cpp
+    terrainlib/uv_atlas.cpp
 )
 target_link_libraries(unittests_terrainlib PUBLIC terrainlib Catch2::Catch2WithMain)
 

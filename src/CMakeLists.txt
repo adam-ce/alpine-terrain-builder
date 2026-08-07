@@ -218,6 +218,7 @@ add_library(terrainlib
     terrainlib/polygon/triangulate.cpp 
     terrainlib/polygon/utils.cpp 
 
+    terrainlib/uv/atlas.cpp
     terrainlib/uv/unwrap.cpp
 
     terrainlib/Dataset.cpp
@@ -228,7 +229,7 @@ add_library(terrainlib
 target_include_directories(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib)
 target_precompile_headers(terrainlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/terrainlib/pch.h)
 target_link_libraries(terrainlib PUBLIC 
-    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle WideInteger)
+    radix ZLIB::ZLIB CGAL::CGAL Eigen3 GDAL::GDAL spdlog fmt zpp_bits cgltf TBB::tbb tl_expected opencv_core opencv_imgproc opencv_imgcodecs libassert::assert magic_enum::magic_enum meshoptimizer igl::core igl_restricted::triangle WideInteger xatlas)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC DATB_ENABLE_OVERVIEW_READING)

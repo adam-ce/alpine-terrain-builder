@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <span>
+#include <vector>
 
 #include <glm/glm.hpp>
+#include <glm/gtx/component_wise.hpp>
 #include <radix/geometry.h>
 
 // Grow bounds by the same distance on every side.
@@ -20,6 +23,58 @@ radix::geometry::Aabb<n_dims, T> pad_bounds_relative(const radix::geometry::Aabb
     using Vec = glm::vec<n_dims, T>;
     const Vec padding = glm::max(bounds.size() * fraction, Vec(min_padding));
     return radix::geometry::Aabb<n_dims, T>(bounds.min - padding, bounds.max + padding);
+}
+
+// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
+// Outputs are written as float coordinates.
+// Optionally outputs the computed AABB if out_bounds is provided.
+template <glm::length_t n_dims>
+void to_approximate_normalized(
+    std::span<const glm::vec<n_dims, double>> positions,
+    std::vector<glm::vec<n_dims, float>> &approx,
+    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
+    // compute bounds
+    const radix::geometry::Aabb<n_dims, double> bounds = radix::geometry::find_bounds(positions);
+    const glm::vec<n_dims, double> center = bounds.centre();
+    const glm::vec<n_dims, double> extents = bounds.size() / 2.0;
+    const double max_extents = glm::compMax(extents);
+
+    if (out_bounds) {
+        *out_bounds = bounds;
+    }
+
+    // normalize based on aabb
+    approx.clear();
+    approx.reserve(positions.size());
+    for (const auto &p : positions) {
+        const glm::vec<n_dims, double> rel = (p - center) / max_extents;
+        approx.push_back(glm::vec<n_dims, float>(rel));
+    }
+}
+template <glm::length_t n_dims>
+void to_approximate_normalized(
+    const std::vector<glm::vec<n_dims, double>> &positions,
+    std::vector<glm::vec<n_dims, float>> &approx,
+    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
+    return to_approximate_normalized(std::span(positions), approx, out_bounds);
+}
+
+// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
+// Outputs are written as float coordinates.
+// Optionally outputs the computed AABB if out_bounds is provided.
+template <glm::length_t n_dims>
+std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
+    std::span<const glm::vec<n_dims, double>> positions,
+    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
+    std::vector<glm::vec<n_dims, float>> approx;
+    to_approximate_normalized(positions, approx, out_bounds);
+    return approx;
+}
+template <glm::length_t n_dims>
+std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
+    const std::vector<glm::vec<n_dims, double>> &positions,
+    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
+    return to_approximate_normalized(std::span(positions), out_bounds);
 }
 
 // Positive when b turns counter-clockwise from a, and the signed area of the parallelogram they span.

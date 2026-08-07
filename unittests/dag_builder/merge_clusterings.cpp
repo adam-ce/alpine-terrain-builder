@@ -145,7 +145,7 @@ TEST_CASE(
 }
 
 TEST_CASE(
-    "merge_clusterings throws std::invalid_argument for non-positive or non-finite epsilon",
+    "merge_clusterings throws std::invalid_argument for negative or non-finite epsilon",
     "[dag_builder][merge]") {
     const std::vector<Clustering> clusterings = {
         make_triangle_clustering(
@@ -158,7 +158,6 @@ TEST_CASE(
             glm::dvec3(105.0, 10.0, 0.0)),
     };
 
-    CHECK_THROWS_AS(merge_clusterings(clusterings, 0.0), std::invalid_argument);
     CHECK_THROWS_AS(merge_clusterings(clusterings, -1.0), std::invalid_argument);
     CHECK_THROWS_AS(
         merge_clusterings(clusterings, std::numeric_limits<double>::quiet_NaN()),
@@ -213,6 +212,36 @@ TEST_CASE(
     check_position_near(
         position_for_local_vertex(merged, 1, 1),
         glm::dvec3(110.0, 0.0, 0.0));
+}
+
+TEST_CASE(
+    "merge_clusterings welds boundary vertices within zero epsilon and remaps both clusters",
+    "[dag_builder][merge]") {
+    const MergeMode merge_mode = MergeMode::ExactHashBased;
+
+    const Clustering a = make_triangle_clustering(
+        glm::dvec3(0.0, 0.0, 0.0),
+        glm::dvec3(10.0, 0.0, 0.0),
+        glm::dvec3(5.0, 10.0, 0.0));
+    const Clustering b = make_triangle_clustering(
+        glm::dvec3(0.001, 0.0, 0.0),
+        glm::dvec3(110.0, 0.0, 0.0),
+        glm::dvec3(5.0, 10.0, 0.0));
+
+    const std::vector<Clustering> clusterings = {a, b};
+    const Clustering merged = merge_clusterings(
+        clusterings,
+        0.0,
+        MergeOptions{.mode = merge_mode});
+
+    REQUIRE(merged.clusters.size() == 2);
+    REQUIRE(merged.vertex_count() == 5);
+    check_triangle_cluster_topology(merged.clusters[0]);
+    check_triangle_cluster_topology(merged.clusters[1]);
+
+    const std::size_t welded_index_a = global_vertex_index(merged, 0, 2);
+    const std::size_t welded_index_b = global_vertex_index(merged, 1, 2);
+    CHECK(welded_index_a == welded_index_b);
 }
 
 TEST_CASE(
@@ -510,6 +539,20 @@ TEST_CASE(
     REQUIRE(merged.clusters.size() == 3);
     CHECK(merged.vertex_count() == 9);
     CHECK(global_vertex_index(merged, 0, 0) != global_vertex_index(merged, 1, 0));
+}
+
+TEST_CASE(
+    "merge_clusterings welds coincident vertices of one clustering in exact mode",
+    "[dag_builder][merge]") {
+    const std::vector<Clustering> clusterings = {make_cracked_clustering(), make_distant_clustering()};
+    const Clustering merged = merge_clusterings(
+        clusterings,
+        0.0,
+        MergeOptions{.mode = MergeMode::ExactHashBased});
+
+    REQUIRE(merged.clusters.size() == 3);
+    CHECK(merged.vertex_count() == 8);
+    CHECK(global_vertex_index(merged, 0, 0) == global_vertex_index(merged, 1, 0));
 }
 
 TEST_CASE(

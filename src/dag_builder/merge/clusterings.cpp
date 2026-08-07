@@ -19,6 +19,7 @@
 #include "SegmentedBuffer.h"
 #include "VertexInClustering.h"
 #include "UnionFind.h"
+#include "VecHash.h"
 #include "build_config.h"
 #include "cluster.h"
 #include "compact.h"
@@ -33,6 +34,7 @@
 #include "optional_utils.h"
 
 namespace detail {
+constexpr uint32_t INVALID_INDEX = std::numeric_limits<uint32_t>::max();
 
 uint32_t to_flat_index(const OffsetTable &base_offsets, const VertexInClustering &vertex) {
     return base_offsets.offset(vertex.clustering_index, vertex.global_vertex_index);
@@ -97,8 +99,8 @@ struct CandidateEdge {
 };
 
 void validate_epsilon(const double epsilon) {
-    if (!(epsilon > 0.0) || !std::isfinite(epsilon)) {
-        throw std::invalid_argument("merge_clusterings: epsilon must be finite and positive");
+    if (!(epsilon >= 0.0) || !std::isfinite(epsilon)) {
+        throw std::invalid_argument("merge_clusterings: epsilon must be finite and positive (or zero)");
     }
 }
 
@@ -142,6 +144,24 @@ spatial_lookup::Hashmap3d<VertexInClustering> build_spatial_map(
     }
 
     return spatial_map;
+}
+
+std::unordered_map<glm::dvec3, uint32_t, DVec3Hash> build_exact_spatial_map(
+    const std::span<const Clustering> clusterings,
+    const std::span<const VertexInClustering> vertices) {
+    std::unordered_map<glm::dvec3, uint32_t, DVec3Hash> position_to_canonical;
+    uint32_t next_index = 0;
+
+    for (const VertexInClustering &vertex : vertices) {
+        const glm::dvec3 &position = clusterings[vertex.clustering_index].positions[vertex.global_vertex_index];
+        auto it = position_to_canonical.find(position);
+        if (it != position_to_canonical.end()) {
+            continue;
+        }
+        position_to_canonical[position] = next_index++;
+    }
+
+    return position_to_canonical;
 }
 
 std::vector<glm::dvec3> build_average_positions(
@@ -319,6 +339,16 @@ UnionFind_<true, uint32_t, uint32_t> build_epsilon_neighbourhoods(
 
     return union_find;
 }
+
+// Assign new canonical index for missing indices (non-boundary).
+void assign_remaining_canonical_indices(std::vector<uint32_t> &vertex_to_canonical, uint32_t &next_canonical_index) {
+    for (uint32_t &canonical_index : vertex_to_canonical) {
+        if (canonical_index == INVALID_INDEX) {
+            canonical_index = next_canonical_index;
+            next_canonical_index++;
+        }
+    }
+}
 } // namespace detail
 
 // Greedily matches vertices within epsilon ball as long as they belong to a different clustering.
@@ -331,8 +361,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
     const double epsilon,
     const MergeOptions &options) {
 
-    constexpr uint32_t INVALID_INDEX = std::numeric_limits<uint32_t>::max();
-    std::vector<uint32_t> vertex_to_canonical(total_vertex_count, INVALID_INDEX);
+    std::vector<uint32_t> vertex_to_canonical(total_vertex_count, detail::INVALID_INDEX);
     uint32_t next_index = 0;
 
     // Preallocate for next loop
@@ -344,7 +373,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
         const uint32_t flat_index = detail::to_flat_index(base_offsets, vertex);
 
         uint32_t &canonical_index = vertex_to_canonical[flat_index];
-        if (canonical_index != INVALID_INDEX) {
+        if (canonical_index != detail::INVALID_INDEX) {
             // Already mapped
             continue;
         }
@@ -371,7 +400,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
             // Found a single other vertex nearby -> assign same canonical index
             const VertexInClustering &other_vertex = matches[0];
             const uint32_t other_flat_index = detail::to_flat_index(base_offsets, other_vertex);
-            if (vertex_to_canonical[other_flat_index] == INVALID_INDEX) {
+            if (vertex_to_canonical[other_flat_index] == detail::INVALID_INDEX) {
                 vertex_to_canonical[other_flat_index] = canonical_index;
             }
             break;
@@ -383,7 +412,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
 
             for (const VertexInClustering &match : matches) {
                 const uint32_t match_flat_index = detail::to_flat_index(base_offsets, match);
-                if (vertex_to_canonical[match_flat_index] != INVALID_INDEX) {
+                if (vertex_to_canonical[match_flat_index] != detail::INVALID_INDEX) {
                     continue;
                 }
 
@@ -408,12 +437,7 @@ std::vector<uint32_t> build_greedy_local_mapping(
         }
     }
 
-    // Assign new canonical index for non boundary vertices
-    for (uint32_t &canonical_index : vertex_to_canonical) {
-        if (canonical_index == INVALID_INDEX) {
-            canonical_index = next_index++;
-        }
-    }
+    detail::assign_remaining_canonical_indices(vertex_to_canonical, next_index);
 
     return vertex_to_canonical;
 }
@@ -434,8 +458,8 @@ std::vector<uint32_t> build_connected_component_mapping(
 // Merges vertices from different clusterings into the same output vertex if they are directly connected by epsilon-distance matches (thus never merges multiple from same clustering).
 std::vector<uint32_t> build_multipartite_nearest_mapping(
     const std::span<const Clustering> clusterings,
-    const OffsetTable &base_offsets,
     const std::span<const VertexInClustering> boundary_vertices,
+    const OffsetTable &base_offsets,
     const spatial_lookup::Hashmap3d<VertexInClustering> &spatial_map,
     const uint32_t total_vertex_count,
     const double epsilon,
@@ -444,8 +468,7 @@ std::vector<uint32_t> build_multipartite_nearest_mapping(
     const auto sets = neighbourhoods.get_sets_sparse();
 
     // Prepare output vector
-    constexpr const uint32_t INVALID_INDEX = std::numeric_limits<uint32_t>::max();
-    std::vector<uint32_t> vertex_to_canonical(total_vertex_count, INVALID_INDEX);
+    std::vector<uint32_t> vertex_to_canonical(total_vertex_count, detail::INVALID_INDEX);
     uint32_t next_canonical_index = 0;
 
     // Preallocate structures used in the loop
@@ -563,19 +586,34 @@ std::vector<uint32_t> build_multipartite_nearest_mapping(
         }
     }
 
-    // Assign new canonical index for non-boundary vertices
-    for (uint32_t &canonical_index : vertex_to_canonical) {
-        if (canonical_index == INVALID_INDEX) {
-            canonical_index = next_canonical_index;
-            next_canonical_index++;
-        }
-    }
+    detail::assign_remaining_canonical_indices(vertex_to_canonical, next_canonical_index);
 
     return vertex_to_canonical;
 }
 
-Clustering merge_clusterings(const std::span<const Clustering> clusterings, const double epsilon, MergeOptions options) {
+std::vector<uint32_t> build_exact_hash_mapping(
+    const std::span<const Clustering> clusterings,
+    const std::span<const VertexInClustering> vertices,
+    const OffsetTable &base_offsets,
+    const uint32_t total_vertex_count) {
+    const auto position_to_canonical = detail::build_exact_spatial_map(clusterings, vertices);
 
+    std::vector<uint32_t> flat_to_canonical;
+    flat_to_canonical.resize(total_vertex_count, detail::INVALID_INDEX);
+    for (const auto & vertex : vertices) {
+        const glm::dvec3 &position = clusterings[vertex.clustering_index].positions[vertex.global_vertex_index];
+        const uint32_t canonical_index = position_to_canonical.at(position);
+        const uint32_t flat_index = detail::to_flat_index(base_offsets, vertex);
+        flat_to_canonical[flat_index] = canonical_index;
+    }
+
+    uint32_t next_canonical_index = static_cast<uint32_t>(position_to_canonical.size());
+    detail::assign_remaining_canonical_indices(flat_to_canonical, next_canonical_index);
+
+    return flat_to_canonical;
+}
+
+Clustering merge_clusterings(const std::span<const Clustering> clusterings, const double epsilon, MergeOptions options) {
     if (clusterings.empty()) {
         return {};
     }
@@ -589,20 +627,38 @@ Clustering merge_clusterings(const std::span<const Clustering> clusterings, cons
     const uint32_t total_vertex_count = sum(clusterings, [](const auto &c) { return c.vertex_count(); });
     const OffsetTable base_offsets = detail::build_offset_table(clusterings);
     const std::vector<VertexInClustering> boundary_vertices = options.only_consider_boundary ? detail::find_boundary_vertices(clusterings, base_offsets) : detail::list_all_vertices(clusterings, base_offsets);
-    const spatial_lookup::Hashmap3d<VertexInClustering> spatial_map = detail::build_spatial_map(clusterings, boundary_vertices, epsilon);
 
+    // Check for invalid inputs and fallback to a safe or faster mode if necessary
     if (options.mode == MergeMode::MultipartiteNearest && options.allow_interior_merges) {
-        LOG_WARN("MergeMode::MultipartiteNearest cannot weld within a clustering, falling back to MergeMode::ConnectedComponents");
+        LOG_WARN("MultipartiteNearest cannot weld within a clustering, falling back to ConnectedComponents");
         options.mode = MergeMode::ConnectedComponents;
     }
-
     if (options.mode == MergeMode::MultipartiteNearest && clusterings.size() > 64) {
-        LOG_WARN("Cannot merge {} clusterings with MergeMode::MultipartiteNearest (max 64 sources), falling back to MergeMode::GreedyLocal", clusterings.size());
+        LOG_WARN("Cannot merge {} clusterings with MultipartiteNearest (max 64 sources), falling back to GreedyLocal", clusterings.size());
         options.mode = MergeMode::GreedyLocal;
     }
+    if (options.mode != MergeMode::ExactHashBased && epsilon == 0.0) {
+        LOG_WARN("Cannot merge clusterings with epsilon 0.0, falling back to ExactHashBased");
+        options.mode = MergeMode::ExactHashBased;
+    }
+    if (options.mode == MergeMode::ExactHashBased && epsilon != 0.0) {
+        LOG_WARN("ExactHashBased ignores epsilon, falling back to GreedyLocal");
+        options.mode = MergeMode::GreedyLocal;
+    }
+    if (options.mode == MergeMode::ExactHashBased) {
+        options.average_positions = false;
+    }
 
+    // Construct spatial map for fast epsilon-neighbourhood queries
+    const spatial_lookup::Hashmap3d<VertexInClustering> spatial_map = [&]() {
+        if (options.mode == MergeMode::ExactHashBased) {
+            return spatial_lookup::Hashmap3d<VertexInClustering>(0.0);
+        }
+        return detail::build_spatial_map(clusterings, boundary_vertices, epsilon);
+    }();
+
+    // Build mapping from each vertex to its canonical representative
     std::vector<uint32_t> vertex_to_canonical;
-
     switch (options.mode) {
     case MergeMode::GreedyLocal:
         vertex_to_canonical = build_greedy_local_mapping(
@@ -629,12 +685,20 @@ Clustering merge_clusterings(const std::span<const Clustering> clusterings, cons
     case MergeMode::MultipartiteNearest:
         vertex_to_canonical = build_multipartite_nearest_mapping(
             clusterings,
-            base_offsets,
             boundary_vertices,
+            base_offsets,
             spatial_map,
             total_vertex_count,
             epsilon,
             options);
+        break;
+
+    case MergeMode::ExactHashBased:
+        vertex_to_canonical = build_exact_hash_mapping(
+            clusterings,
+            boundary_vertices,
+            base_offsets,
+            total_vertex_count);
         break;
     }
 

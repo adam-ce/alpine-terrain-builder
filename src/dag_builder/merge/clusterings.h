@@ -8,6 +8,7 @@ enum class MergeMode {
     GreedyLocal,
     ConnectedComponents,
     MultipartiteNearest,
+    ExactHashBased,
 };
 
 struct MergeOptions {

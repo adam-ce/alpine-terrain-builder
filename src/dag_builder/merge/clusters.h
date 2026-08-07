@@ -724,6 +724,7 @@ inline MergeResult merge_clusters_unbaked(const Clustering &clustering, const Pa
         std::move(partitioned_clusters),
         textures};
     LOG_DEBUG("Merged {} partitions ({} unwrapped, {} reused)", unwrap_count + reuse_count, unwrap_count, reuse_count);
+    
     validate(new_clustering);
     return MergeResult{std::move(new_clustering), std::move(unbaked), std::move(source_triangle_counts)};
 }

@@ -215,6 +215,7 @@ add_library(terrainlib
     terrainlib/octree/Space.cpp
     terrainlib/octree/OddLevelShifted.cpp
 
+    terrainlib/polygon/clip.cpp
     terrainlib/polygon/triangulate.cpp 
     terrainlib/polygon/utils.cpp 
 

@@ -36,7 +36,7 @@ AtlasHandle pack_charts(
 
     xatlas::PackOptions pack_options;
     pack_options.padding = options.padding;
-    pack_options.resolution = options.resolution;
+    pack_options.resolution = options.approximate_resolution;
     xatlas::PackCharts(atlas.get(), pack_options);
 
     return atlas;
@@ -64,18 +64,17 @@ Atlas build_atlas(
     DEBUG_ASSERT(mesh.indexCount == triangles.size() * 3);
 
     const glm::uvec2 atlas_size(packed->width, packed->height);
-    const glm::uvec2 padded_size = atlas_size + 2 * options.padding;
     const std::span<const xatlas::Vertex> vertices(mesh.vertexArray, mesh.vertexCount);
 
     Atlas atlas;
-    atlas.size = padded_size;
+    atlas.size = atlas_size;
     atlas.chart_count = mesh.chartCount;
 
     atlas.uvs.reserve(vertices.size());
     atlas.vertex_map.reserve(vertices.size());
     for (const xatlas::Vertex &vertex : vertices) {
-        const glm::dvec2 texel = glm::dvec2(vertex.uv[0], vertex.uv[1]) + glm::dvec2(options.padding);
-        atlas.uvs.push_back(texel / glm::dvec2(padded_size));
+        const glm::dvec2 texel(vertex.uv[0], vertex.uv[1]);
+        atlas.uvs.push_back(texel / glm::dvec2(atlas_size));
         atlas.vertex_map.push_back(vertex.xref);
     }
 

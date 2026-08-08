@@ -185,18 +185,16 @@ TEST_CASE("build_atlas reports degenerate triangles instead of dropping them", "
     CHECK(uv_area(atlas, 3) > 0.0);
 }
 
-TEST_CASE("build_atlas insets charts by the padding", "[terrainlib][uv][atlas]") {
+TEST_CASE("build_atlas normalises the uvs against the packed size", "[terrainlib][uv][atlas]") {
     const mesh::Simple mesh = make_cube();
-    const uint32_t padding = 4;
 
-    const uv::Atlas atlas = uv::build_atlas(mesh, uv::AtlasOptions{.padding = padding});
+    const uv::Atlas atlas = uv::build_atlas(mesh);
 
-    const glm::dvec2 inset = glm::dvec2(padding) / glm::dvec2(atlas.size);
     for (const glm::dvec2 &uv : atlas.uvs) {
-        REQUIRE(uv.x >= inset.x);
-        REQUIRE(uv.y >= inset.y);
-        REQUIRE(uv.x <= 1.0 - inset.x);
-        REQUIRE(uv.y <= 1.0 - inset.y);
+        REQUIRE(uv.x >= 0.0);
+        REQUIRE(uv.y >= 0.0);
+        REQUIRE(uv.x <= 1.0);
+        REQUIRE(uv.y <= 1.0);
     }
 }
 

@@ -87,6 +87,10 @@ Atlas build_atlas(
             atlas.unmapped_triangles.push_back(triangle_index);
         }
     }
+    if (!atlas.unmapped_triangles.empty()) {
+        // Area is judged against a float epsilon, so these can be well formed in double.
+        LOG_WARN("xatlas refused to chart {} of {} triangles", atlas.unmapped_triangles.size(), atlas.triangles.size());
+    }
 
     return atlas;
 }

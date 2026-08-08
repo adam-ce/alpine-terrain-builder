@@ -49,23 +49,23 @@ struct PendingVertex {
 };
 
 // The surface before simplification, with the two adjacencies the walk and the filter read.
-struct SourceMesh {
+struct VertexGraph {
     std::span<const glm::uvec3> triangles;
     std::span<const glm::dvec3> positions;
     std::vector<std::vector<uint32_t>> vertex_adjacency;
     std::vector<std::vector<uint32_t>> vertex_to_triangles;
-
-    static SourceMesh create(
-        const std::span<const glm::uvec3> triangles,
-        const std::span<const glm::dvec3> positions) {
-        return SourceMesh{
-            .triangles = triangles,
-            .positions = positions,
-            .vertex_adjacency = mesh::build_vertex_adjacency(triangles, positions.size()),
-            .vertex_to_triangles = mesh::create_vertex_to_triangle_mapping(triangles, positions.size()),
-        };
-    }
 };
+
+inline VertexGraph build_vertex_graph(
+    const std::span<const glm::uvec3> triangles,
+    const std::span<const glm::dvec3> positions) {
+    return VertexGraph{
+        .triangles = triangles,
+        .positions = positions,
+        .vertex_adjacency = mesh::build_vertex_adjacency(triangles, positions.size()),
+        .vertex_to_triangles = mesh::create_vertex_to_triangle_mapping(triangles, positions.size()),
+    };
+}
 
 // An output triangle laid onto its own plane, the region source geometry is measured against.
 struct OutputTriangle {
@@ -73,28 +73,29 @@ struct OutputTriangle {
     PlaneFrame frame;
     radix::geometry::Triangle<2, double> outline;
     double longest_edge = 0.0;
-
-    static std::optional<OutputTriangle> create(const glm::uvec3 &triangle, const std::span<const glm::dvec3> positions) {
-        const radix::geometry::Triangle<3, double> output_corners = corners(triangle, positions);
-        const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(output_corners);
-        if (!frame) {
-            return std::nullopt;
-        }
-        return OutputTriangle{
-            .vertices = triangle,
-            .frame = *frame,
-            .outline = frame->flatten(output_corners),
-            .longest_edge = longest_edge_of(output_corners),
-        };
-    }
 };
+
+// Empty for a degenerate output triangle, which spans no plane to measure against.
+inline std::optional<OutputTriangle> flatten_output_triangle(const glm::uvec3 &triangle, const std::span<const glm::dvec3> positions) {
+    const radix::geometry::Triangle<3, double> output_corners = corners(triangle, positions);
+    const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(output_corners);
+    if (!frame) {
+        return std::nullopt;
+    }
+    return OutputTriangle{
+        .vertices = triangle,
+        .frame = *frame,
+        .outline = frame->flatten(output_corners),
+        .longest_edge = longest_edge_of(output_corners),
+    };
+}
 
 using PendingQueue = std::priority_queue<PendingVertex, std::vector<PendingVertex>, std::greater<>>;
 
 // Walks outward from the output triangle's corners, and finds the connected vertices near it.
 inline void collect_relevant_vertices(
     const OutputTriangle &output,
-    const SourceMesh &source,
+    const VertexGraph &source,
     const CorrespondenceOptions &options,
     std::vector<uint32_t> &reached,
     StampSet &visited,
@@ -140,7 +141,7 @@ inline void collect_relevant_vertices(
 // Appends the triangles touching the found vertices that face the output triangle and cover part of it.
 inline void collect_covering_triangles(
     const OutputTriangle &output,
-    const SourceMesh &source,
+    const VertexGraph &source,
     const CorrespondenceOptions &options,
     const std::span<const uint32_t> reached,
     StampSet &visited,
@@ -174,7 +175,7 @@ inline Correspondence find_source_triangles(
     const std::span<const glm::uvec3> output_triangles,
     const std::span<const glm::dvec3> positions,
     const CorrespondenceOptions options = {}) {
-    const detail::SourceMesh source = detail::SourceMesh::create(source_triangles, positions);
+    const detail::VertexGraph source = detail::build_vertex_graph(source_triangles, positions);
 
     StampSet visited_vertices(positions.size());
     StampSet visited_triangles(source_triangles.size());
@@ -186,7 +187,7 @@ inline Correspondence find_source_triangles(
     for (const glm::uvec3 &triangle : output_triangles) {
         correspondence.start_new_segment();
 
-        const std::optional<detail::OutputTriangle> output = detail::OutputTriangle::create(triangle, positions);
+        const std::optional<detail::OutputTriangle> output = detail::flatten_output_triangle(triangle, positions);
         if (!output) {
             continue;
         }

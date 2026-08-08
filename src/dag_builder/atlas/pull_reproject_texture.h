@@ -17,6 +17,7 @@
 #include "mesh/WindingOrder.h"
 #include "opencv_utils.h"
 #include "texture/dilate_colors.h"
+#include "range_utils.h"
 #include "Vector2D.h"
 
 struct ReprojectionOptions {
@@ -31,7 +32,7 @@ struct ReprojectionTriangle {
     std::array<glm::dvec2, 3> target_uvs;
 };
 
-namespace {
+namespace detail {
 
 using FixedCoord = fixed::Q<16>;
 using FixedPoint = fp::Vec2<FixedCoord>;
@@ -45,11 +46,11 @@ struct PreparedTriangle {
     FixedScalar target_area2{};
 };
 
-glm::dvec2 clamp_uv(const glm::dvec2 &uv) {
+inline glm::dvec2 clamp_uv(const glm::dvec2 &uv) {
     return glm::clamp(uv, glm::dvec2(0.0), glm::dvec2(1.0));
 }
 
-FixedPoint sample_cell_center(const glm::uvec2 sample) {
+inline FixedPoint sample_cell_center(const glm::uvec2 sample) {
     // Fixed-point encoding of sample + 0.5; exactly representable, so no rounding happens.
     const FixedCoord::repr_t half = FixedCoord::scale / 2;
     return FixedPoint{{
@@ -57,7 +58,7 @@ FixedPoint sample_cell_center(const glm::uvec2 sample) {
         FixedCoord::from_integer(FixedCoord::repr_t{sample.y}).value + half}};
 }
 
-radix::geometry::Aabb2ui clamp_bounds(
+inline radix::geometry::Aabb2ui clamp_bounds(
     const radix::geometry::Aabb2ui &bounds,
     const radix::geometry::Aabb2ui &clamp_to) {
     return radix::geometry::Aabb2ui(
@@ -65,7 +66,7 @@ radix::geometry::Aabb2ui clamp_bounds(
         glm::clamp(bounds.max, clamp_to.min, clamp_to.max));
 }
 
-radix::geometry::Aabb2ui get_pixel_bounds(
+inline radix::geometry::Aabb2ui get_pixel_bounds(
     const FixedTriangle &triangle,
     const glm::uvec2 grid_size) {
     const FixedPoint lo = fp::min(triangle[0], triangle[1], triangle[2]);
@@ -99,7 +100,7 @@ struct EdgeFunction {
     }
 };
 
-void rasterize_triangle(
+inline void rasterize_triangle(
     const FixedTriangle &triangle,
     const int32_t triangle_id,
     const glm::uvec2 grid_size,
@@ -120,12 +121,12 @@ void rasterize_triangle(
                 triangle_index_map(sample_y, sample_x) = triangle_id;
             }
 
-            for (uint32_t k = 0; k < 3; k++) {
+            for (const uint8_t k : range<uint8_t>(3)) {
                 row[k] += edges[k].step_x;
             }
         }
 
-        for (uint32_t k = 0; k < 3; k++) {
+        for (const uint8_t k : range<uint8_t>(3)) {
             edges[k].value += edges[k].step_y;
         }
     }
@@ -133,7 +134,7 @@ void rasterize_triangle(
 
 // Source coordinates are in source-pixel space.
 // Target coordinates are in supersample-grid space.
-std::vector<PreparedTriangle> prepare_triangles(
+inline std::vector<PreparedTriangle> prepare_triangles(
     const std::span<const cv::Mat> source_images,
     const std::span<const ReprojectionTriangle> triangles,
     const glm::uvec2 output_size,
@@ -150,7 +151,7 @@ std::vector<PreparedTriangle> prepare_triangles(
         PreparedTriangle prepared_triangle;
         prepared_triangle.source_image = &source_image;
 
-        for (uint8_t k = 0; k < 3; k++) {
+        for (const uint8_t k : range<uint8_t>(3)) {
             const glm::dvec2 source_uv = clamp_uv(triangle.source_uvs[k]);
             const glm::dvec2 target_uv = clamp_uv(triangle.target_uvs[k]);
 
@@ -182,7 +183,7 @@ std::vector<PreparedTriangle> prepare_triangles(
     return prepared;
 }
 
-Vector2D<int32_t> build_triangle_index_map(const std::span<const PreparedTriangle> triangles, const glm::uvec2 grid_size) {
+inline Vector2D<int32_t> build_triangle_index_map(const std::span<const PreparedTriangle> triangles, const glm::uvec2 grid_size) {
     Vector2D<int32_t> triangle_index_map(grid_size.y, grid_size.x, -1);
 
     for (uint32_t triangle_index = 0; triangle_index < triangles.size(); triangle_index++) {
@@ -196,7 +197,7 @@ Vector2D<int32_t> build_triangle_index_map(const std::span<const PreparedTriangl
     return triangle_index_map;
 }
 
-glm::dvec2 target_to_source(const PreparedTriangle &triangle, const FixedPoint target_sample) {
+inline glm::dvec2 target_to_source(const PreparedTriangle &triangle, const FixedPoint target_sample) {
     // Barycentric weights from oriented sub-triangle areas.
     const FixedScalar w0 = (triangle.target_samples[1] - target_sample).cross(triangle.target_samples[2] - target_sample) / triangle.target_area2;
     const FixedScalar w1 = (triangle.target_samples[2] - target_sample).cross(triangle.target_samples[0] - target_sample) / triangle.target_area2;
@@ -211,12 +212,12 @@ glm::dvec2 target_to_source(const PreparedTriangle &triangle, const FixedPoint t
 }
 
 // Clamp-to-edge: out-of-bounds coordinates reuse the nearest border pixel.
-cv::Vec3f source_texel(const cv::Mat &image, const glm::ivec2 pos) {
+inline cv::Vec3f source_texel(const cv::Mat &image, const glm::ivec2 pos) {
     const glm::ivec2 clamped = glm::clamp(pos, glm::ivec2(0), glm::ivec2(image.cols - 1, image.rows - 1));
     return cv::Vec3f(image.at<cv::Vec3b>(clamped.y, clamped.x));
 }
 
-cv::Vec3f sample_source_linear(
+inline cv::Vec3f sample_source_linear(
     const cv::Mat &image,
     const glm::dvec2 &point) {
     const glm::ivec2 p0 = glm::ivec2(glm::floor(point));
@@ -233,13 +234,13 @@ cv::Vec3f sample_source_linear(
            c11 * static_cast<float>(t.x * t.y);
 }
 
-cv::Vec3f sample_source_nearest(
+inline cv::Vec3f sample_source_nearest(
     const cv::Mat &image,
     const glm::dvec2 &point) {
     return source_texel(image, glm::ivec2(glm::round(point)));
 }
 
-cv::Vec3f sample_source(
+inline cv::Vec3f sample_source(
     const cv::Mat &image,
     const glm::dvec2 &point,
     const int interpolation) {
@@ -255,7 +256,7 @@ cv::Vec3f sample_source(
     }
 }
 
-} // namespace
+} // namespace detail
 
 class TextureReprojector {
 public:
@@ -269,12 +270,12 @@ public:
     }
 
     cv::Mat render(const std::span<const cv::Mat> source_images, const std::span<const ReprojectionTriangle> triangles) {
-        const std::vector<PreparedTriangle> prepared_triangles =
-            prepare_triangles(source_images, triangles, this->_output_size, this->_options.sample_scale);
+        const std::vector<detail::PreparedTriangle> prepared_triangles =
+            detail::prepare_triangles(source_images, triangles, this->_output_size, this->_options.sample_scale);
 
         const glm::uvec2 grid_size = this->_output_size * this->_options.sample_scale;
         const Vector2D<int32_t> triangle_index_map =
-            build_triangle_index_map(prepared_triangles, grid_size);
+            detail::build_triangle_index_map(prepared_triangles, grid_size);
 
         cv::Mat output(this->_output_size.y, this->_output_size.x, this->_output_type, cv::Scalar::all(0));
         texture::Mask coverage(this->_output_size);
@@ -289,7 +290,7 @@ private:
     void render_by_depth(
         cv::Mat &output,
         texture::Mask &coverage,
-        const std::vector<PreparedTriangle> &prepared_triangles,
+        const std::vector<detail::PreparedTriangle> &prepared_triangles,
         const Vector2D<int32_t> &triangle_index_map) {
         visit_by_depth(CV_MAT_DEPTH(this->_output_type), [&]<typename Channel>() {
             this->render_into<Channel>(output, coverage, prepared_triangles, triangle_index_map);
@@ -300,7 +301,7 @@ private:
     void render_into(
         cv::Mat &output,
         texture::Mask &coverage,
-        const std::vector<PreparedTriangle> &prepared_triangles,
+        const std::vector<detail::PreparedTriangle> &prepared_triangles,
         const Vector2D<int32_t> &triangle_index_map) {
         for (uint32_t y = 0; y < this->_output_size.y; y++) {
             for (uint32_t x = 0; x < this->_output_size.x; x++) {
@@ -318,12 +319,12 @@ private:
                             continue;
                         }
 
-                        const PreparedTriangle &triangle = prepared_triangles[triangle_id];
-                        const FixedPoint target_sample = sample_cell_center(sample);
-                        const glm::dvec2 source_sample = target_to_source(triangle, target_sample);
+                        const detail::PreparedTriangle &triangle = prepared_triangles[triangle_id];
+                        const detail::FixedPoint target_sample = detail::sample_cell_center(sample);
+                        const glm::dvec2 source_sample = detail::target_to_source(triangle, target_sample);
 
                         // Offset by 0.5 to convert from pixel-center to OpenCV texel-index space.
-                        color += sample_source(
+                        color += detail::sample_source(
                             *triangle.source_image,
                             source_sample - glm::dvec2(0.5),
                             this->_options.interpolation);

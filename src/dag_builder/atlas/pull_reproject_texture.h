@@ -15,11 +15,14 @@
 
 #include "fixed_point.h"
 #include "mesh/WindingOrder.h"
+#include "opencv_utils.h"
+#include "texture/dilate_colors.h"
 #include "Vector2D.h"
 
 struct ReprojectionOptions {
     uint32_t sample_scale = 2;
     int interpolation = cv::INTER_LINEAR;
+    uint32_t gutter = 0;
 };
 
 struct ReprojectionTriangle {
@@ -274,48 +277,29 @@ public:
             build_triangle_index_map(prepared_triangles, grid_size);
 
         cv::Mat output(this->_output_size.y, this->_output_size.x, this->_output_type, cv::Scalar::all(0));
-        this->render_by_depth(output, prepared_triangles, triangle_index_map);
+        texture::Mask coverage(this->_output_size);
+        this->render_by_depth(output, coverage, prepared_triangles, triangle_index_map);
+
+        texture::dilate_colors_inplace(output, coverage, this->_options.gutter);
         return output;
     }
 
 private:
-    // Resolve the destination channel type once so the per-pixel write is a
-    // compile-time cv::saturate_cast, matching convertTo's rounding without its
-    // per-pixel dispatch or a full-image float accumulator.
+    // Dynamcic dispatch to avoid slow indirect call in per pixel loop.
     void render_by_depth(
         cv::Mat &output,
+        texture::Mask &coverage,
         const std::vector<PreparedTriangle> &prepared_triangles,
         const Vector2D<int32_t> &triangle_index_map) {
-        switch (CV_MAT_DEPTH(this->_output_type)) {
-            case CV_8U:
-                this->render_into<uchar>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_8S:
-                this->render_into<schar>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_16U:
-                this->render_into<ushort>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_16S:
-                this->render_into<short>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_32S:
-                this->render_into<int>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_32F:
-                this->render_into<float>(output, prepared_triangles, triangle_index_map);
-                break;
-            case CV_64F:
-                this->render_into<double>(output, prepared_triangles, triangle_index_map);
-                break;
-            default:
-                throw std::invalid_argument("TextureReprojector: unsupported output depth");
-        }
+        visit_by_depth(CV_MAT_DEPTH(this->_output_type), [&]<typename Channel>() {
+            this->render_into<Channel>(output, coverage, prepared_triangles, triangle_index_map);
+        });
     }
 
     template <typename Channel>
     void render_into(
         cv::Mat &output,
+        texture::Mask &coverage,
         const std::vector<PreparedTriangle> &prepared_triangles,
         const Vector2D<int32_t> &triangle_index_map) {
         for (uint32_t y = 0; y < this->_output_size.y; y++) {
@@ -355,6 +339,7 @@ private:
                         cv::saturate_cast<Channel>(averaged[0]),
                         cv::saturate_cast<Channel>(averaged[1]),
                         cv::saturate_cast<Channel>(averaged[2]));
+                    coverage.set(x, y);
                 }
             }
         }

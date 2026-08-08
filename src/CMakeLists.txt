@@ -219,6 +219,8 @@ add_library(terrainlib
     terrainlib/polygon/triangulate.cpp 
     terrainlib/polygon/utils.cpp 
 
+    terrainlib/texture/dilate_colors.cpp
+
     terrainlib/uv/atlas.cpp
     terrainlib/uv/unwrap.cpp
 

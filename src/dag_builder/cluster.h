@@ -9,6 +9,7 @@
 #include <opencv2/core.hpp>
 
 #include "TextureSet.h"
+#include "range_utils.h"
 
 inline constexpr uint32_t MAX_TRIANGLES_PER_CLUSTER = 256;
 
@@ -33,6 +34,12 @@ struct Cluster {
     constexpr bool has_texture() const noexcept {
         return this->texture_id.has_value();
     }
+    glm::uvec3 global_triangle(const glm::uvec3 &local_triangle) const {
+        return {
+            this->vertex_indices[local_triangle.x],
+            this->vertex_indices[local_triangle.y],
+            this->vertex_indices[local_triangle.z]};
+    }
 };
 
 struct Clustering {
@@ -48,6 +55,11 @@ struct Clustering {
     }
     constexpr bool is_empty() const noexcept {
         return this->vertex_count() == 0 || this->cluster_count() == 0;
+    }
+    std::vector<glm::dvec3> get_cluster_positions(const uint32_t cluster_index) const {
+        return transform_vector(this->clusters[cluster_index].vertex_indices, [&](const uint32_t global) {
+            return this->positions[global];
+        });
     }
     std::optional<cv::Mat> get_cluster_texture(const uint32_t cluster_index) const noexcept {
         const Cluster &cluster = this->clusters[cluster_index];

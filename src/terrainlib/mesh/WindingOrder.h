@@ -47,3 +47,12 @@ std::array<Vertex, 3> swap_orientation(std::array<Vertex, 3> triangle) {
     std::swap(triangle[1], triangle[2]);
     return triangle;
 }
+
+// The triangle wound counter-clockwise. A degenerate one is returned as it is.
+template <typename T>
+std::array<glm::vec<2, T>, 3> as_counter_clockwise(std::array<glm::vec<2, T>, 3> triangle) {
+    if (get_winding_order(triangle[0], triangle[1], triangle[2]) == WindingOrder::Clockwise) {
+        return swap_orientation(triangle);
+    }
+    return triangle;
+}

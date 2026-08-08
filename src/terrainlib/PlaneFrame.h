@@ -1,12 +1,14 @@
 #pragma once
 
 #include <optional>
+#include <span>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>
 #include <radix/geometry.h>
 
 #include "CoordFrame.h"
+#include "geometry_utils.h"
 
 // A plane carrying an in-plane coordinate system, so geometry can be laid out on it.
 template <typename T = double>
@@ -30,6 +32,10 @@ struct PlaneFrame_ : CoordFrame_<T> {
         return frame;
     }
 
+    static std::optional<PlaneFrame_> from_triangle(const glm::uvec3 &triangle, const std::span<const glm::vec<3, T>> positions) {
+        return from_triangle(corners(triangle, positions));
+    }
+
     // Signed distance from the plane, positive on the side the normal points to.
     T distance_to(const glm::vec<3, T> &position) const {
         return this->to_local(position).z;
@@ -47,6 +53,10 @@ struct PlaneFrame_ : CoordFrame_<T> {
             this->project(triangle[1]),
             this->project(triangle[2]),
         };
+    }
+
+    radix::geometry::Triangle<2, T> flatten(const glm::uvec3 &triangle, const std::span<const glm::vec<3, T>> positions) const {
+        return this->flatten(corners(triangle, positions));
     }
 };
 

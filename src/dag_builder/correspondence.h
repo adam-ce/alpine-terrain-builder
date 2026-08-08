@@ -33,10 +33,6 @@ using Correspondence = SegmentedBuffer<uint32_t, uint32_t, uint32_t>;
 
 namespace detail {
 
-inline radix::geometry::Triangle<3, double> corners_of(const glm::uvec3 &triangle, const std::span<const glm::dvec3> positions) {
-    return {positions[triangle.x], positions[triangle.y], positions[triangle.z]};
-}
-
 inline double longest_edge_of(const radix::geometry::Triangle<3, double> &corners) {
     return std::sqrt(std::max({
         glm::distance2(corners[0], corners[1]),
@@ -79,16 +75,16 @@ struct OutputTriangle {
     double longest_edge = 0.0;
 
     static std::optional<OutputTriangle> create(const glm::uvec3 &triangle, const std::span<const glm::dvec3> positions) {
-        const radix::geometry::Triangle<3, double> corners = corners_of(triangle, positions);
-        const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(corners);
+        const radix::geometry::Triangle<3, double> output_corners = corners(triangle, positions);
+        const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(output_corners);
         if (!frame) {
             return std::nullopt;
         }
         return OutputTriangle{
             .vertices = triangle,
             .frame = *frame,
-            .outline = frame->flatten(corners),
-            .longest_edge = longest_edge_of(corners),
+            .outline = frame->flatten(output_corners),
+            .longest_edge = longest_edge_of(output_corners),
         };
     }
 };
@@ -157,12 +153,12 @@ inline void collect_covering_triangles(
                 continue;
             }
 
-            const radix::geometry::Triangle<3, double> corners = corners_of(source.triangles[triangle_index], source.positions);
-            if (glm::dot(radix::geometry::normal(corners), output.frame.normal) <= options.min_normal_dot) {
+            const radix::geometry::Triangle<3, double> source_corners = corners(source.triangles[triangle_index], source.positions);
+            if (glm::dot(radix::geometry::normal(source_corners), output.frame.normal) <= options.min_normal_dot) {
                 // Another layer of the surface, and another output triangle's concern.
                 continue;
             }
-            if (triangles_overlap(output.outline, output.frame.flatten(corners))) {
+            if (triangles_overlap(output.outline, output.frame.flatten(source_corners))) {
                 correspondence.push_to_last_segment(triangle_index);
             }
         }

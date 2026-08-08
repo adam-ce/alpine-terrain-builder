@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <limits>
 #include <span>
@@ -8,6 +9,7 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
+#include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
 // Grow bounds by the same distance on every side.
@@ -77,10 +79,68 @@ std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
     return to_approximate_normalized(std::span(positions), out_bounds);
 }
 
+template <glm::length_t n_dims, typename T>
+radix::geometry::Triangle<n_dims, T> corners(const glm::uvec3 &triangle, const std::span<const glm::vec<n_dims, T>> positions) {
+    return {positions[triangle.x], positions[triangle.y], positions[triangle.z]};
+}
+
 // Positive when b turns counter-clockwise from a, and the signed area of the parallelogram they span.
 template <typename T>
 T cross_2d(const glm::vec<2, T> &a, const glm::vec<2, T> &b) {
     return a.x * b.y - a.y * b.x;
+}
+
+// Positive when p lies left of the directed edge a to b, and zero when the three are collinear.
+template <typename T>
+T orient(const glm::vec<2, T> &a, const glm::vec<2, T> &b, const glm::vec<2, T> &p) {
+    return cross_2d(b - a, p - a);
+}
+
+// Corner weights of the point, summing to one. Meaningless for a degenerate triangle.
+template <glm::length_t n_dims, typename T>
+glm::vec<3, T> compute_barycentric(
+    const glm::vec<n_dims, T> &point,
+    const glm::vec<n_dims, T> &a,
+    const glm::vec<n_dims, T> &b,
+    const glm::vec<n_dims, T> &c) {
+    if constexpr (n_dims == 2) {
+        const T denom = orient(a, b, c);
+        const T first = orient(b, c, point) / denom;
+        const T second = orient(c, a, point) / denom;
+        return {first, second, T(1) - first - second};
+    } else {
+        using Vec = glm::vec<n_dims, T>;
+
+        const Vec v0 = b - a;
+        const Vec v1 = c - a;
+        const Vec v2 = point - a;
+
+        const T d00 = glm::dot(v0, v0);
+        const T d01 = glm::dot(v0, v1);
+        const T d11 = glm::dot(v1, v1);
+        const T d20 = glm::dot(v2, v0);
+        const T d21 = glm::dot(v2, v1);
+
+        const T denom = d00 * d11 - d01 * d01;
+        ASSERT(denom != 0);
+        const T inv_denom = 1 / denom;
+
+        const T v = (d11 * d20 - d01 * d21) * inv_denom;
+        const T w = (d00 * d21 - d01 * d20) * inv_denom;
+        const T u = 1 - v - w;
+
+        return Vec(u, v, w);
+    }
+}
+
+template <glm::length_t n_dims, typename T>
+glm::vec<3, T> compute_barycentric(const glm::vec<n_dims, T> &point, const radix::geometry::Triangle<n_dims, T> &triangle) {
+    return compute_barycentric(point, triangle[0], triangle[1], triangle[2]);
+}
+
+template <typename V, typename T>
+V interpolate(const std::array<V, 3> &values, const glm::vec<3, T> &weights) {
+    return weights[0] * values[0] + weights[1] * values[1] + weights[2] * values[2];
 }
 
 template <glm::length_t n_dims, typename T>

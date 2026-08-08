@@ -38,16 +38,21 @@ inline BakeSource collect_bake_source(const Clustering &clustering, const std::s
     source.triangles.reserve(triangle_count);
     source.uv_triangles.reserve(triangle_count);
 
+    // Clusters with no texture or uvs get a placeholder black.
+    const cv::Mat placeholder_image = cv::Mat::zeros(1, 1, CV_8UC3);
+
     for (const uint32_t cluster_index : cluster_indices) {
         const Cluster &cluster = clustering.clusters[cluster_index];
-        // A cluster with no texture or no uvs has no colour to contribute.
-        if (!cluster.has_texture() || !cluster.has_uvs()) {
-            continue;
-        }
+        const bool is_textured = cluster.has_texture() && cluster.has_uvs();
 
         const uint32_t map_index = source.uv_maps.size();
-        source.uv_maps.push_back(cluster.uvs);
-        source.images.push_back(clustering.textures[cluster.texture_id.value()]);
+        if (is_textured) {
+            source.uv_maps.push_back(cluster.uvs);
+            source.images.push_back(clustering.textures[cluster.texture_id.value()]);
+        } else {
+            source.uv_maps.emplace_back(cluster.vertex_count(), glm::dvec2(0));
+            source.images.push_back(placeholder_image);
+        }
 
         for (const glm::uvec3 &local : cluster.local_triangles) {
             source.triangles.push_back(cluster.global_triangle(local));

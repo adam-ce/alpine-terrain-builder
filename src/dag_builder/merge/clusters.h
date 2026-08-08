@@ -38,118 +38,29 @@
 
 
 namespace detail {
-inline bool check_all_same_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
-    const uint32_t cluster_count = cluster_indices.size();
-    if (cluster_count <= 1) {
-        return true;
-    }
-
-    const Cluster &first_cluster = clustering.clusters[cluster_indices[0]];
-    for (uint32_t i = 1; i < cluster_count; i++) {
-        const Cluster &cluster = clustering.clusters[cluster_indices[i]];
-        if (cluster.has_uvs() != first_cluster.has_uvs()) {
-            return false;
-        }
-        if (cluster.texture_id != first_cluster.texture_id) {
-            return false;
-        }
-    }
-    return true;
-}
-
-inline bool check_consistent_uvs(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
-    const uint32_t uv_count = sum(cluster_indices | std::views::transform([&](const uint32_t i) {
-        return clustering.clusters[i].uvs.size();
-    }));
-
-    struct VertexEntry {
-        uint32_t global_index;
-        glm::dvec2 uv;
-    };
-
-    // Buffer for vertex entries
-    std::vector<VertexEntry> buffer;
-    buffer.reserve(uv_count);
-
-    // Collect all cluster vertices
-    for (const uint32_t cluster_index : cluster_indices) {
-        const Cluster &cluster = clustering.clusters[cluster_index];
-        if (!cluster.has_uvs()) {
-            continue;
-        }
-
-        const uint32_t vertex_count = cluster.vertex_count();
-        for (uint32_t i = 0; i < vertex_count; i++) {
-            buffer.push_back({cluster.vertex_indices[i], cluster.uvs[i]});
-        }
-    }
-    DEBUG_ASSERT(buffer.size() == uv_count);
-
-    // Sort vertices by global index
-    std::sort(buffer.begin(), buffer.end(), [](const VertexEntry &a, const VertexEntry &b) {
-        return a.global_index < b.global_index;
-    });
-
-    // Check for inconsistent uvs.
-    for (uint32_t i = 1; i < uv_count; i++) {
-        if (buffer[i].global_index == buffer[i - 1].global_index) {
-            if (buffer[i].uv != buffer[i - 1].uv) {
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
-inline bool check_merge_needs_unwrap(const Clustering &clustering, const std::span<const uint32_t> cluster_indices, const bool allow_texture_reuse) {
-    if (cluster_indices.empty()) {
-        return false;
-    }
-
-    // Without a single source texture there is nothing to bake.
-    const bool any_texture = std::ranges::any_of(cluster_indices, [&](const uint32_t i) {
-        return clustering.clusters[i].has_texture();
-    });
-    if (!any_texture) {
-        return false;
-    }
-
-    if (!allow_texture_reuse) {
-        return true;
-    }
-
-    if (!check_all_same_texture(clustering, cluster_indices)) {
-        return true;
-    }
-
-    if (!check_consistent_uvs(clustering, cluster_indices)) {
-        return true;
-    }
-
-    return false;
-}
+constexpr uint32_t no_vertex_remap = -1;
 
 using VertexId = mesh::merging::VertexId;
 
-inline Cluster merge_clusters_simple(
+// The scratch buffer comes in fully reset, and every merge has to leave it that way again.
+inline void check_clean_vertex_remap(const std::span<uint32_t> vertex_remap, const uint32_t vertex_count) {
+    if constexpr (IS_DEBUG_BUILD) {
+        DEBUG_ASSERT(vertex_remap.size() == vertex_count);
+        for (const uint32_t vertex_index : vertex_remap) {
+            DEBUG_ASSERT(vertex_index == no_vertex_remap);
+        }
+    }
+}
+
+// Build one partition's cluster: concatenate the triangles, deduplicate the vertices, carry the error.
+inline Cluster build_partition_cluster(
     const Clustering &clustering,
     const std::span<const uint32_t> cluster_indices,
     const std::span<uint32_t> vertex_remap /* scratch buffer */
 ) {
-    constexpr uint32_t no_vertex_remap = -1;
-    if constexpr (IS_DEBUG_BUILD) {
-        DEBUG_ASSERT(vertex_remap.size() == clustering.vertex_count());
-        for (const uint32_t vertex_index : vertex_remap) {
-            DEBUG_ASSERT(vertex_index == no_vertex_remap);
-        }
-        DEBUG_ASSERT(check_consistent_uvs(clustering, cluster_indices));
-    }
+    check_clean_vertex_remap(vertex_remap, clustering.vertex_count());
 
     const uint32_t cluster_count = cluster_indices.size();
-    const bool has_uvs = std::ranges::any_of(cluster_indices, [&](const uint32_t i) {
-        return clustering.clusters[i].has_uvs();
-    });
 
     Cluster merged;
     for (uint32_t linear_cluster_index = 0; linear_cluster_index < cluster_count; linear_cluster_index++) {
@@ -166,11 +77,6 @@ inline Cluster merge_clusters_simple(
                 // This vertex was not yet remapped -> assign new merged index.
                 merged_vertex_index = merged.vertex_indices.size();
                 merged.vertex_indices.push_back(global_vertex_index);
-                if (has_uvs) {
-                    // Clusters without uvs are padded to keep the merged uvs aligned with the vertices.
-                    const glm::dvec2 uv = cluster.has_uvs() ? cluster.uvs[local_vertex_index] : glm::dvec2(0);
-                    merged.uvs.push_back(uv);
-                }
             }
         }
 
@@ -192,8 +98,14 @@ inline Cluster merge_clusters_simple(
         vertex_remap[vertex_index] = no_vertex_remap;
     }
 
+    // Carry the largest child error into the merged cluster.
+    merged.absolute_error = max(cluster_indices, [&](const uint32_t i) {
+        return clustering.clusters[i].absolute_error;
+    });
+
     return merged;
 }
+
 
 inline mesh::merging::VertexMapping construct_merge_mapping(
     const Clustering &clustering,
@@ -648,83 +560,21 @@ inline UnwrappedCluster merge_clusters_with_unwrap(
 }
 }
 
-// A merged clustering whose freshly unwrapped textures are packed but not rendered yet.
-struct MergeResult {
-    Clustering clustering;
-    std::unordered_map<uint32_t, PackedAtlas> unbaked; // merged cluster index -> packed texture
-    std::vector<uint32_t> source_triangle_counts; // per texture in clustering.textures
-};
+// Concatenate the clusters of each partition into one, carrying geometry only.
+[[nodiscard]]
+inline Clustering merge_clusters(const Clustering &clustering, const Partitioning &partitioning) {
+    const PartitionToClusters partition_to_clusters = invert_partitioning(partitioning);
 
-inline MergeResult merge_clusters_unbaked(const Clustering &clustering, const Partitioning &partitioning, const MergePartitionOptions &options = {}) {
-    const uint32_t cluster_count = clustering.cluster_count();
-    const size_t partition_count = partitioning.partition_count;
-    const std::vector<uint32_t> &cluster_partitions = partitioning.cluster_partitions;
+    // Shared buffer across all the partitions.
+    std::vector<uint32_t> vertex_remap(clustering.vertex_count(), detail::no_vertex_remap);
 
-    // Prepare vertex remap buffer for merging
-    const uint32_t no_vertex_remap = -1;
-    std::vector<uint32_t> vertex_remap(clustering.vertex_count(), no_vertex_remap);
-
-    TextureSet textures;
-    std::unordered_map<uint32_t, PackedAtlas> unbaked;
-    std::vector<uint32_t> source_triangle_counts;
-    std::vector<Cluster> partitioned_clusters;
-    partitioned_clusters.reserve(partition_count);
-
-    std::vector<uint32_t> cluster_indices;
-    uint32_t unwrap_count = 0;
-    uint32_t reuse_count = 0;
-    for (uint32_t partition_index = 0; partition_index < partition_count; partition_index++) {
-        // Collect cluster indices for this partition
-        cluster_indices.clear();
-        for (uint32_t i = 0; i < cluster_count; i++) {
-            if (cluster_partitions[i] == partition_index) {
-                cluster_indices.push_back(i);
-            }
-        }
-        // Empty partitions would break the cluster index == partition index mapping relied on by build_lod.
+    std::vector<Cluster> merged_clusters = transform_vector(partition_to_clusters.segments(), [&](const std::span<const uint32_t> cluster_indices) {
         ASSERT(!cluster_indices.empty());
+        return detail::build_partition_cluster(clustering, cluster_indices, vertex_remap);
+    });
 
-        // Check if we need to perform a fresh uv unwrap due to different textures or inconsistent uvs
-        const bool needs_unwrap = detail::check_merge_needs_unwrap(clustering, cluster_indices, options.allow_texture_reuse);
-
-        Cluster merged_cluster;
-        if (needs_unwrap) {
-            // We need to perform a fresh uv unwrap
-            auto [cluster, atlas] = detail::merge_clusters_with_unwrap(clustering, cluster_indices, vertex_remap, options.uv_unwrap_algorithm);
-
-            merged_cluster = std::move(cluster);
-            unbaked.emplace(partition_index, std::move(atlas));
-            unwrap_count++;
-        } else {
-            // We can perform a simple merge by just concatinating the triangles and deduplicating vertices.
-            merged_cluster = detail::merge_clusters_simple(clustering, cluster_indices, vertex_remap);
-
-            // Get texture from any source cluster
-            if (const auto texture = clustering.get_cluster_texture(cluster_indices[0])) {
-                const uint32_t texture_id = textures.add(texture.value());
-                merged_cluster.texture_id = texture_id;
-                source_triangle_counts.resize(textures.size(), 0);
-                source_triangle_counts[texture_id] += merged_cluster.triangle_count();
-            }
-            reuse_count++;
-        }
-
-        // Carry the largest child error into the merged cluster.
-        double max_child_error = 0.0;
-        for (const uint32_t cluster_index : cluster_indices) {
-            max_child_error = std::max(max_child_error, clustering.clusters[cluster_index].absolute_error);
-        }
-        merged_cluster.absolute_error = max_child_error;
-
-        partitioned_clusters.push_back(std::move(merged_cluster));
-    }
-
-    Clustering new_clustering {
-        clustering.positions,
-        std::move(partitioned_clusters),
-        textures};
-    LOG_DEBUG("Merged {} partitions ({} unwrapped, {} reused)", unwrap_count + reuse_count, unwrap_count, reuse_count);
-    
-    validate(new_clustering);
-    return MergeResult{std::move(new_clustering), std::move(unbaked), std::move(source_triangle_counts)};
+    Clustering merged{.positions = clustering.positions, .clusters = std::move(merged_clusters)};
+    LOG_DEBUG("Merged {} clusters into {} partitions", clustering.cluster_count(), partitioning.partition_count);
+    validate(merged);
+    return merged;
 }

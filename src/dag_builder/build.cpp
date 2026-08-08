@@ -72,7 +72,7 @@ std::optional<Clustering> load_and_clusterize_mesh(
 struct LodResult {
     Clustering clustering;
     std::vector<uint32_t> group_assignment; // per cluster group index
-    std::vector<std::vector<uint32_t>> group_children; // per group child indices
+    PartitionToClusters group_children; // per group child indices
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build group structure.
@@ -83,16 +83,12 @@ LodResult build_lod(
     const RegionFilter &lock_filter) {
     const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
                                                                         .clusters_per_partition = options.clusters_per_partition});
-    // Apply the partitioning, without manifesting textures.
-    MergeResult merged = merge_clusters_unbaked(clusters, partitioning, options.merge_options);
-    // Create partition to cluster map
-    std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
-    for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {
-        partition_to_clusters[partition_index].push_back(cluster_index);
-    }
+    // Apply the partitioning on geometry only.
+    Clustering clustering = merge_clusters(clusters, partitioning);
+    PartitionToClusters partition_to_clusters = invert_partitioning(partitioning);
 
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(merged.clustering, lock_filter);
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, lock_filter);
 
     // Convert relative target error (a fraction of the node bounds) to absolute
     const std::optional<float> absolute_target_error = map(options.relative_target_error, [&](const float relative_error) {
@@ -105,15 +101,14 @@ LodResult build_lod(
         .error_mode = ErrorMode::Add,
         .preserve_cluster_count = true
     };
-    merged.clustering = simplify(merged.clustering, simplify_options);
-    remove_duplicate_triangles_inplace(merged.clustering);
-    remove_unused_vertices_inplace(merged.clustering);
+    clustering = simplify(clustering, simplify_options);
+    remove_duplicate_triangles_inplace(clustering);
 
-    // Render the textures now that the surviving triangle counts are known.
-    Clustering clustering = bake_textures(std::move(merged), options.bake_options);
+    // Unwrap the surviving geometry and render its texture.
+    clustering = texture_clusters(std::move(clustering), clusters, partition_to_clusters, options.texture_options);
 
-    // Trim textures
-    trim_textures_inplace(clustering);
+    // Compact the vertex buffer
+    remove_unused_vertices_inplace(clustering);
 
     // Split each cluster into parts again.
     auto result = clusterize(clustering);
@@ -162,17 +157,17 @@ struct BuildContext {
 // Assemble a node's metadata from a build_lod result.
 dag::NodeMetadata build_node_metadata(
     std::vector<uint32_t> group_assignment,
-    const std::vector<std::vector<uint32_t>> &group_children,
+    const PartitionToClusters &group_children,
     const Clustering &merged,
     const Clustering &simplified,
     const std::vector<dag::Id> &cluster_sources,
     const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
     dag::NodeMetadata metadata;
     metadata.group_assignment = std::move(group_assignment);
-    metadata.groups.resize(group_children.size());
+    metadata.groups.resize(group_children.segment_count());
 
     // map child indices to dag ids
-    for (const auto &[group_index, local_indices] : enumerate(group_children)) {
+    for (const auto [group_index, local_indices] : enumerate(group_children.segments())) {
         metadata.groups[group_index].children = transform_vector(local_indices, [&](const uint32_t merged_index) {
             return cluster_sources[merged.clusters[merged_index].id];
         });

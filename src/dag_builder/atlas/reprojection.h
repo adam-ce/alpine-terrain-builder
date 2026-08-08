@@ -10,26 +10,13 @@
 #include <radix/geometry.h>
 
 #include "PlaneFrame.h"
+#include "atlas/BakeSource.h"
 #include "atlas/pull_reproject_texture.h"
 #include "correspondence.h"
+#include "enumerate.h"
 #include "geometry_utils.h"
 #include "polygon/clip.h"
 #include "range_utils.h"
-#include "uv/atlas.h"
-
-// A source triangle's uv corners and the map they address, mirroring MappedTriangle.
-struct SourceMapping {
-    uint32_t map_index = 0;
-    glm::uvec3 uvs; // indices into uv_maps[map_index]
-};
-
-// The surface before simplification, in the uv spaces the bake reads back through.
-struct SourceSurface {
-    std::span<const glm::uvec3> triangles;
-    std::span<const glm::dvec3> positions;
-    std::span<const SourceMapping> mapping; // per triangle
-    std::span<const std::vector<glm::dvec2>> uv_maps;
-};
 
 namespace detail {
 
@@ -56,35 +43,26 @@ struct Fragment {
 
 // Empty for a degenerate output triangle, which spans no plane to measure against.
 inline std::optional<FlatTarget> flatten_target(
-    const uv::Atlas &atlas,
-    const uint32_t triangle_index,
+    const glm::uvec3 &triangle,
+    const std::span<const glm::dvec2> uvs,
     const std::span<const glm::dvec3> positions) {
-    const glm::uvec3 triangle = atlas.triangles[triangle_index];
-
-    glm::uvec3 vertices{};
-    std::array<glm::dvec2, 3> uvs{};
-    for (const uint8_t corner : range<uint8_t>(3)) {
-        vertices[corner] = atlas.vertex_map[triangle[corner]];
-        uvs[corner] = atlas.uvs[triangle[corner]];
-    }
-
-    const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(vertices, positions);
+    const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(triangle, positions);
     if (!frame) {
         return std::nullopt;
     }
     return FlatTarget{
         .frame = *frame,
-        .projected = frame->flatten(vertices, positions),
-        .uvs = uvs,
+        .projected = frame->flatten(triangle, positions),
+        .uvs = {uvs[triangle.x], uvs[triangle.y], uvs[triangle.z]},
     };
 }
 
 inline FlatSource flatten_source(
-    const SourceSurface &source,
+    const BakeSource &source,
     const uint32_t triangle_index,
     const PlaneFrame &frame) {
     const glm::uvec3 triangle = source.triangles[triangle_index];
-    const SourceMapping &mapping = source.mapping[triangle_index];
+    const UvRef &mapping = source.uv_triangles[triangle_index];
     const std::vector<glm::dvec2> &map_uvs = source.uv_maps[mapping.map_index];
 
     FlatSource flat;
@@ -127,25 +105,24 @@ inline void clip_against_source(
 
 } // namespace detail
 
-// Prepare the triangles for the bake based on the correspondances and atlas.
+// Prepare the triangles for the bake based on the correspondances and the target uv layout.
 [[nodiscard]]
 inline std::vector<ReprojectionTriangle> build_reprojection_triangles(
-    const uv::Atlas &atlas,
+    const std::span<const glm::uvec3> triangles,
+    const std::span<const glm::dvec2> uvs,
+    const std::span<const glm::dvec3> positions,
     const Correspondence &correspondence,
-    const SourceSurface &source,
-    const std::span<const glm::dvec3> output_positions) {
-    DEBUG_ASSERT(correspondence.segment_count() == atlas.triangles.size());
+    const BakeSource &source) {
+    DEBUG_ASSERT(correspondence.segment_count() == triangles.size());
 
     std::vector<ReprojectionTriangle> reprojection;
+    // At least one fragment per output triangle, more where sources overlap it.
+    reprojection.reserve(triangles.size());
     std::vector<detail::Fragment> fragments;
     std::vector<polygon::Triangle2d> overlap;
 
-    for (const uint32_t triangle_index : range<uint32_t>(atlas.triangles.size())) {
-        if (std::ranges::binary_search(atlas.unmapped_triangles, triangle_index)) {
-            continue;
-        }
-        const std::optional<detail::FlatTarget> target =
-            detail::flatten_target(atlas, triangle_index, output_positions);
+    for (const auto [triangle_index, triangle] : enumerate(triangles)) {
+        const std::optional<detail::FlatTarget> target = detail::flatten_target(triangle, uvs, positions);
         if (!target) {
             continue;
         }

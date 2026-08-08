@@ -10,38 +10,26 @@
 
 namespace {
 
-// A surface and the atlas minted on it, held together so the fixtures read as one thing.
+// A source surface and the target layout baked onto it, held together so the fixtures read as one thing.
 struct Bake {
     std::vector<glm::dvec3> positions;
     std::vector<glm::uvec3> triangles;
-    std::vector<SourceMapping> mapping;
+    std::vector<UvRef> uv_triangles;
     std::vector<std::vector<glm::dvec2>> uv_maps;
 
-    uv::Atlas atlas;
+    std::vector<glm::uvec3> target_triangles;
+    std::vector<glm::dvec2> target_uvs; // per position
     Correspondence correspondence;
 
-    SourceSurface source() const {
-        return SourceSurface{this->triangles, this->positions, this->mapping, this->uv_maps};
+    BakeSource source() const {
+        return BakeSource{this->positions, this->triangles, this->uv_triangles, this->uv_maps, {}};
     }
 
     std::vector<ReprojectionTriangle> run() const {
-        return build_reprojection_triangles(this->atlas, this->correspondence, this->source(), this->positions);
+        return build_reprojection_triangles(
+            this->target_triangles, this->target_uvs, this->positions, this->correspondence, this->source());
     }
 };
-
-// An atlas laying the given triangles out over the whole unit square, without duplication.
-uv::Atlas make_atlas(std::vector<glm::uvec3> triangles, const std::vector<glm::dvec2> &uvs) {
-    uv::Atlas atlas;
-    atlas.triangles = std::move(triangles);
-    atlas.uvs = uvs;
-    atlas.vertex_map = std::vector<uint32_t>(uvs.size());
-    for (const uint32_t vertex : range<uint32_t>(uvs.size())) {
-        atlas.vertex_map[vertex] = vertex;
-    }
-    atlas.size = glm::uvec2(64);
-    atlas.chart_count = 1;
-    return atlas;
-}
 
 Correspondence make_correspondence(const std::vector<std::vector<uint32_t>> &per_output) {
     Correspondence correspondence;
@@ -57,9 +45,10 @@ Bake make_identity() {
     bake.positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
     bake.triangles = {{0, 1, 2}};
     bake.uv_maps = {{{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}}};
-    bake.mapping = {SourceMapping{.map_index = 0, .uvs = {0, 1, 2}}};
+    bake.uv_triangles = {UvRef{.map_index = 0, .uvs = {0, 1, 2}}};
 
-    bake.atlas = make_atlas({{0, 1, 2}}, {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}});
+    bake.target_triangles = {{0, 1, 2}};
+    bake.target_uvs = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}};
     bake.correspondence = make_correspondence({{0}});
     return bake;
 }
@@ -74,12 +63,13 @@ Bake make_two_sources() {
         {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}, {0.5, 0.5}},
         {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}, {0.5, 0.5}},
     };
-    bake.mapping = {
-        SourceMapping{.map_index = 0, .uvs = {0, 1, 3}},
-        SourceMapping{.map_index = 1, .uvs = {0, 3, 2}},
+    bake.uv_triangles = {
+        UvRef{.map_index = 0, .uvs = {0, 1, 3}},
+        UvRef{.map_index = 1, .uvs = {0, 3, 2}},
     };
 
-    bake.atlas = make_atlas({{0, 1, 2}}, {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}, {0.5, 0.5}});
+    bake.target_triangles = {{0, 1, 2}};
+    bake.target_uvs = {{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}, {0.5, 0.5}};
     bake.correspondence = make_correspondence({{0, 1}});
     return bake;
 }
@@ -129,20 +119,13 @@ TEST_CASE("build_reprojection splits an output triangle between its sources", "[
     CHECK(from_first < reprojection.size());
 }
 
-TEST_CASE("build_reprojection emits nothing for an unmapped triangle", "[dagbuilder][reprojection]") {
-    Bake bake = make_identity();
-    bake.atlas.unmapped_triangles = {0};
-
-    CHECK(bake.run().empty());
-}
-
 TEST_CASE("build_reprojection ignores a source that misses the output triangle", "[dagbuilder][reprojection]") {
     Bake bake = make_identity();
     // A second source triangle well outside the output triangle, still listed as a candidate.
     bake.positions.insert(bake.positions.end(), {{5, 5, 0}, {6, 5, 0}, {5, 6, 0}});
     bake.triangles.push_back({3, 4, 5});
     bake.uv_maps.push_back({{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}});
-    bake.mapping.push_back(SourceMapping{.map_index = 1, .uvs = {0, 1, 2}});
+    bake.uv_triangles.push_back(UvRef{.map_index = 1, .uvs = {0, 1, 2}});
     bake.correspondence = make_correspondence({{0, 1}});
 
     const std::vector<ReprojectionTriangle> reprojection = bake.run();
@@ -157,7 +140,7 @@ TEST_CASE("build_reprojection orders overlapping sources nearest last", "[dagbui
     bake.positions.insert(bake.positions.end(), {{0, 0, 2}, {1, 0, 2}, {0, 1, 2}});
     bake.triangles.push_back({3, 4, 5});
     bake.uv_maps.push_back({{0.0, 0.0}, {1.0, 0.0}, {0.0, 1.0}});
-    bake.mapping.push_back(SourceMapping{.map_index = 1, .uvs = {0, 1, 2}});
+    bake.uv_triangles.push_back(UvRef{.map_index = 1, .uvs = {0, 1, 2}});
     bake.correspondence = make_correspondence({{1, 0}});
 
     const std::vector<ReprojectionTriangle> reprojection = bake.run();

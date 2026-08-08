@@ -126,7 +126,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
-        .bake_options = {},
+        .sizing_options = {},
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
@@ -180,8 +180,8 @@ Args cli::parse(int argc, const char *const *argv) {
             ->default_val(constant_quality.target_cluster_texels)
             ->check(CLI::PositiveNumber);
 
-    app.add_option("--max-node-texels", args.bake_options.max_node_texels, "Texel budget shared by all textures of a node")
-        ->default_val(args.bake_options.max_node_texels)
+    app.add_option("--max-node-texels", args.sizing_options.max_node_texels, "Texel budget shared by all textures of a node")
+        ->default_val(args.sizing_options.max_node_texels)
         ->check(CLI::PositiveNumber);
 
     bool resume = false;
@@ -216,9 +216,9 @@ Args cli::parse(int argc, const char *const *argv) {
         }
 
         if (texture_sizing_kind == TextureSizingKind::Constant) {
-            args.bake_options.mode = constant_quality;
+            args.sizing_options.mode = constant_quality;
         } else {
-            args.bake_options.mode = RelativeQuality{};
+            args.sizing_options.mode = RelativeQuality{};
         }
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));

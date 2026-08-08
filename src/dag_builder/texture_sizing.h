@@ -21,7 +21,7 @@ struct ConstantQuality {
 // Dynamic texel budget relative to input textures.
 struct RelativeQuality {};
 
-struct BakeOptions {
+struct TextureSizingOptions {
     std::variant<ConstantQuality, RelativeQuality> mode = ConstantQuality{};
     uint32_t max_node_texels = 4096 * 4096;
 };
@@ -35,7 +35,7 @@ inline glm::uvec2 compute_size_from_area(const double area, const double aspect)
 
 // Texels a merged cluster gets per triangle.
 inline double texel_density(
-    const BakeOptions &options,
+    const TextureSizingOptions &options,
     const uint32_t source_triangle_count,
     const double source_pixel_area) {
     const double source_density = source_pixel_area / source_triangle_count;
@@ -73,7 +73,7 @@ inline glm::uvec2 compute_bake_texture_size(
     const uint32_t target_triangle_count,
     const double utilization,
     const double aspect,
-    const BakeOptions &options) {
+    const TextureSizingOptions &options) {
     if (source_triangle_count == 0 || target_triangle_count == 0) {
         return glm::uvec2(1);
     }

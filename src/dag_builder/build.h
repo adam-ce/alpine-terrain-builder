@@ -7,7 +7,6 @@
 #include "Range.h"
 #include "build_config.h"
 #include "merge_options.h"
-#include "texture_sizing.h"
 #include "texturing.h"
 #include "octree/storage/MeshStorage.h"
 #include "storage.h"
@@ -25,7 +24,6 @@ struct BuildOptions {
     std::optional<float> target_ratio;
     std::optional<float> relative_target_error;
     MergePartitionOptions merge_options = {};
-    BakeOptions bake_options = {};
     TextureOptions texture_options = {};
     octree::Id root_node = octree::Id::root();
     IncludeMode include_mode = IncludeMode::CurrentOnly;

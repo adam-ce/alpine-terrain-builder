@@ -16,6 +16,7 @@
 #include "log.h"
 #include "Partitioning.h"
 #include "range_utils.h"
+#include "texture_sizing.h"
 #include "utils.h"
 #include "uv/atlas.h"
 
@@ -126,6 +127,7 @@ inline void inherit_source_texture(
 struct TextureOptions {
     uv::AtlasOptions atlas = {};
     BakeTextureOptions bake = {};
+    TextureSizingOptions sizing = {};
     // Inherit a child texture when every source cluster shares it and their uvs agree.
     bool allow_texture_reuse = true;
 };

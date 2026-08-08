@@ -25,8 +25,8 @@ int main(int argc, char **argv) {
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
             .relative_target_error = args.target_error,
-            .bake_options = args.bake_options,
             .texture_options = {
+                .sizing = args.sizing_options,
                 .allow_texture_reuse = args.allow_texture_reuse,
             },
             .root_node = args.root_node,

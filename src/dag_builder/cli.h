@@ -33,7 +33,7 @@ struct Args {
     std::optional<float> target_ratio;
     std::optional<float> target_error;
 
-    BakeOptions bake_options;
+    TextureSizingOptions sizing_options;
 
     bool write_debug_meshes;
     bool parallelize;

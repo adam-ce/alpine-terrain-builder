@@ -22,7 +22,7 @@ struct AtlasOptions {
 struct Atlas {
     std::vector<glm::uvec3> triangles; // one per input triangle, in input order
     std::vector<glm::dvec2> uvs; // per duplicated vertex, in [0, 1]
-    std::vector<uint32_t> vertex_sources; // duplicated vertex -> input vertex
+    std::vector<uint32_t> vertex_map; // duplicated vertex -> input vertex
     std::vector<uint32_t> unmapped_triangles; // degenerate or nan, left with no uv area
     glm::uvec2 size{0}; // packed texel size, what padding is relative to
     uint32_t chart_count = 0;

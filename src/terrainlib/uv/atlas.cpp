@@ -72,11 +72,11 @@ Atlas build_atlas(
     atlas.chart_count = mesh.chartCount;
 
     atlas.uvs.reserve(vertices.size());
-    atlas.vertex_sources.reserve(vertices.size());
+    atlas.vertex_map.reserve(vertices.size());
     for (const xatlas::Vertex &vertex : vertices) {
         const glm::dvec2 texel = glm::dvec2(vertex.uv[0], vertex.uv[1]) + glm::dvec2(options.padding);
         atlas.uvs.push_back(texel / glm::dvec2(padded_size));
-        atlas.vertex_sources.push_back(vertex.xref);
+        atlas.vertex_map.push_back(vertex.xref);
     }
 
     const std::span<const glm::uvec3> indices = unflatten<3>(std::span<const uint32_t>(mesh.indexArray, mesh.indexCount));

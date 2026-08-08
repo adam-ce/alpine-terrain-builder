@@ -87,9 +87,9 @@ double uv_area(const uv::Atlas &atlas, const uint32_t triangle_index) {
 glm::uvec3 source_triangle(const uv::Atlas &atlas, const uint32_t triangle_index) {
     const glm::uvec3 triangle = atlas.triangles[triangle_index];
     return {
-        atlas.vertex_sources[triangle.x],
-        atlas.vertex_sources[triangle.y],
-        atlas.vertex_sources[triangle.z],
+        atlas.vertex_map[triangle.x],
+        atlas.vertex_map[triangle.y],
+        atlas.vertex_map[triangle.z],
     };
 }
 
@@ -97,14 +97,14 @@ glm::uvec3 source_triangle(const uv::Atlas &atlas, const uint32_t triangle_index
 void check_fully_mapped(const uv::Atlas &atlas, const mesh::Simple &mesh) {
     CHECK(atlas.unmapped_triangles.empty());
     REQUIRE(atlas.triangles.size() == mesh.face_count());
-    REQUIRE(atlas.uvs.size() == atlas.vertex_sources.size());
+    REQUIRE(atlas.uvs.size() == atlas.vertex_map.size());
 
     for (const auto [vertex, uv] : enumerate(atlas.uvs)) {
         REQUIRE(uv.x >= 0.0);
         REQUIRE(uv.y >= 0.0);
         REQUIRE(uv.x <= 1.0);
         REQUIRE(uv.y <= 1.0);
-        REQUIRE(atlas.vertex_sources[vertex] < mesh.vertex_count());
+        REQUIRE(atlas.vertex_map[vertex] < mesh.vertex_count());
     }
     for (const uint32_t triangle_index : range(atlas.triangles.size())) {
         REQUIRE(uv_area(atlas, triangle_index) > 0.0);

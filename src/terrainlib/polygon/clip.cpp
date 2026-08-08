@@ -55,7 +55,7 @@ void clip_triangle(const Triangle2d &subject, const Triangle2d &clip, std::vecto
 
     // Clip against each edge half space of the bounds
     Corners clipped;
-    for (const uint8_t corner : range(uint8_t{3})) {
+    for (const uint8_t corner : range<uint8_t>(3)) {
         clip_to_half_space(corners, Edge2d{bounds[corner], bounds[(corner + 1) % 3]}, clipped);
         std::swap(corners, clipped);
     }

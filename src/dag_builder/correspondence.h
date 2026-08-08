@@ -106,7 +106,7 @@ inline void collect_relevant_vertices(
     reached.clear();
 
     // The corners are seeded rather than measured, so rounding cannot cost them a step.
-    for (const uint8_t corner : range(uint8_t{3})) {
+    for (const uint8_t corner : range<uint8_t>(3)) {
         pending.push(PendingVertex{.steps_outside = 0, .vertex = output.vertices[corner]});
     }
 

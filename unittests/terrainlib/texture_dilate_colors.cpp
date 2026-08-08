@@ -49,8 +49,8 @@ TEST_CASE("dilate_colors grows the covered region by one ring per round", "[terr
     texture::dilate_colors_inplace(input.image, input.coverage, 1);
 
     // The eight neighbours take the centre's color, and nothing beyond them is touched.
-    for (const uint32_t y : range(uint32_t{5})) {
-        for (const uint32_t x : range(uint32_t{5})) {
+    for (const uint32_t y : range<uint32_t>(5)) {
+        for (const uint32_t x : range<uint32_t>(5)) {
             const glm::ivec2 offset = glm::ivec2(x, y) - glm::ivec2(2);
             const bool in_ring = glm::all(glm::lessThanEqual(glm::abs(offset), glm::ivec2(1)));
             REQUIRE(input.coverage.get(x, y) == in_ring);
@@ -65,8 +65,8 @@ TEST_CASE("dilate_colors reaches the whole image given enough rounds", "[terrain
 
     texture::dilate_colors_inplace(input.image, input.coverage, 2);
 
-    for (const uint32_t y : range(uint32_t{5})) {
-        for (const uint32_t x : range(uint32_t{5})) {
+    for (const uint32_t y : range<uint32_t>(5)) {
+        for (const uint32_t x : range<uint32_t>(5)) {
             REQUIRE(input.coverage.get(x, y));
             REQUIRE(input.image.at<uint8_t>(y, x) == 100);
         }
@@ -96,8 +96,8 @@ TEST_CASE("dilate_colors has nothing to spread when nothing is covered", "[terra
 
 TEST_CASE("dilate_colors leaves a fully covered image alone", "[terrainlib][texture_dilate_colors]") {
     Input input = make_input(glm::uvec2(3));
-    for (const uint32_t y : range(uint32_t{3})) {
-        for (const uint32_t x : range(uint32_t{3})) {
+    for (const uint32_t y : range<uint32_t>(3)) {
+        for (const uint32_t x : range<uint32_t>(3)) {
             cover<uint8_t>(input, glm::uvec2(x, y), uint8_t(10 * (3 * y + x)));
         }
     }

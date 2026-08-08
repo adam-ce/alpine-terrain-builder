@@ -263,8 +263,8 @@ TEST_CASE("TextureReprojector extends the covered region by the requested gutter
     TextureReprojector with_gutter(glm::uvec2(3, 3), CV_8UC3, ReprojectionOptions{1, cv::INTER_NEAREST, 1});
     const cv::Mat filled = with_gutter.render(std::span(&source, 1), triangles);
 
-    for (const uint32_t y : range(uint32_t{3})) {
-        for (const uint32_t x : range(uint32_t{3})) {
+    for (const uint32_t y : range<uint32_t>(3)) {
+        for (const uint32_t x : range<uint32_t>(3)) {
             REQUIRE(filled.at<cv::Vec3b>(y, x) == cv::Vec3b(10, 20, 30));
         }
     }

@@ -63,7 +63,7 @@ inline std::optional<FlatTarget> flatten_target(
 
     glm::uvec3 vertices{};
     std::array<glm::dvec2, 3> uvs{};
-    for (const uint8_t corner : range(uint8_t{3})) {
+    for (const uint8_t corner : range<uint8_t>(3)) {
         vertices[corner] = atlas.vertex_map[triangle[corner]];
         uvs[corner] = atlas.uvs[triangle[corner]];
     }
@@ -89,7 +89,7 @@ inline FlatSource flatten_source(
 
     FlatSource flat;
     flat.map_index = mapping.map_index;
-    for (const uint8_t corner : range(uint8_t{3})) {
+    for (const uint8_t corner : range<uint8_t>(3)) {
         const glm::dvec3 position = source.positions[triangle[corner]];
         flat.projected[corner] = frame.project(position);
         flat.heights[corner] = frame.distance_to(position);
@@ -110,7 +110,7 @@ inline void clip_against_source(
     for (const polygon::Triangle2d &part : overlap) {
         Fragment fragment;
         fragment.triangle.source_image_index = source.map_index;
-        for (const uint8_t corner : range(uint8_t{3})) {
+        for (const uint8_t corner : range<uint8_t>(3)) {
             const glm::dvec3 source_weights = compute_barycentric(part[corner], source.projected);
             const glm::dvec3 target_weights = compute_barycentric(part[corner], target.projected);
             fragment.triangle.source_uvs[corner] = interpolate(source.uvs, source_weights);
@@ -140,7 +140,7 @@ inline std::vector<ReprojectionTriangle> build_reprojection_triangles(
     std::vector<detail::Fragment> fragments;
     std::vector<polygon::Triangle2d> overlap;
 
-    for (const uint32_t triangle_index : range(uint32_t(atlas.triangles.size()))) {
+    for (const uint32_t triangle_index : range<uint32_t>(atlas.triangles.size())) {
         if (std::ranges::binary_search(atlas.unmapped_triangles, triangle_index)) {
             continue;
         }

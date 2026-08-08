@@ -127,7 +127,7 @@ TEST_CASE("find_source_triangles assigns every source triangle to a covering out
 
     REQUIRE(correspondence.segment_count() == 2);
 
-    for (const uint32_t source_triangle : range(uint32_t(grid.source_triangles.size()))) {
+    for (const uint32_t source_triangle : range<uint32_t>(grid.source_triangles.size())) {
         REQUIRE((contains_source(correspondence, 0, source_triangle) || contains_source(correspondence, 1, source_triangle)));
     }
 }

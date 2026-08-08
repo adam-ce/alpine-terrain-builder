@@ -35,7 +35,7 @@ uv::Atlas make_atlas(std::vector<glm::uvec3> triangles, const std::vector<glm::d
     atlas.triangles = std::move(triangles);
     atlas.uvs = uvs;
     atlas.vertex_map = std::vector<uint32_t>(uvs.size());
-    for (const uint32_t vertex : range(uint32_t(uvs.size()))) {
+    for (const uint32_t vertex : range<uint32_t>(uvs.size())) {
         atlas.vertex_map[vertex] = vertex;
     }
     atlas.size = glm::uvec2(64);
@@ -106,7 +106,7 @@ TEST_CASE("build_reprojection maps a coplanar source onto itself", "[dagbuilder]
     REQUIRE(reprojection.size() == 1);
     CHECK(reprojection[0].source_image_index == 0);
     // Source and target uv spaces coincide here, so the mapping has to be the identity.
-    for (const uint8_t corner : range(uint8_t{3})) {
+    for (const uint8_t corner : range<uint8_t>(3)) {
         CHECK(reprojection[0].source_uvs[corner].x == Catch::Approx(reprojection[0].target_uvs[corner].x));
         CHECK(reprojection[0].source_uvs[corner].y == Catch::Approx(reprojection[0].target_uvs[corner].y));
     }

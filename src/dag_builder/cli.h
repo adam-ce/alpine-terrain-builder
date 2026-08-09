@@ -26,6 +26,7 @@ struct Args {
     octree::Id root_node;
     AnyRange<uint32_t> level_range;
 
+    ChartingMode charting;
     uint32_t clusters_per_partition;
     std::optional<float> target_ratio;
     std::optional<float> target_error;

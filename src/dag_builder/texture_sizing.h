@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <vector>
 #include <variant>
 #include <vector>
 
@@ -90,39 +91,39 @@ inline glm::uvec2 compute_size_from_area(const double area, const double aspect)
 }
 
 // Minimum utilization value so a collapsed unwrap cannot demand an unbounded texture.
-inline constexpr double MIN_TEXTURE_COVERAGE = 0.1;
+inline constexpr double MIN_TEXTURE_UTILIZATION = 0.1;
 
 // What the clusters of one output texture demand it to carry.
 struct TextureDemand {
     double texels = 0; // texels they want on the surface
-    double coverage = 0; // fraction of the texture their uvs reach
+    double utilization = 0; // fraction of the texture their uvs reach
 };
 
 // Compute size of a texture to hold the demanded texels.
 [[nodiscard]]
 inline glm::uvec2 compute_target_size(const TextureDemand &demand, const double aspect) {
-    const double area = demand.texels / std::max(demand.coverage, MIN_TEXTURE_COVERAGE);
+    const double area = demand.texels / std::max(demand.utilization, MIN_TEXTURE_UTILIZATION);
     return compute_size_from_area(area, aspect);
 }
 
-// The size a cluster's texture will be baked at.
-struct PlannedTexture {
-    uint32_t cluster_index = 0;
+// One bake the node will run: the clusters it covers, at the size they were budgeted.
+struct BakePlan {
+    std::vector<uint32_t> clusters;
     glm::uvec2 size{1};
 };
 
 // Scale every planned size down until they fit the node's texel budget together.
-inline void rescale_to_fit_budget(const std::span<PlannedTexture> plans, const uint32_t max_node_texels) {
-    const double requested_texels = sum(plans, [](const PlannedTexture &planned) {
-        return glm::compMul(glm::dvec2(planned.size));
+inline void rescale_to_fit_budget(const std::span<BakePlan> plans, const uint32_t max_node_texels) {
+    const double requested_texels = sum(plans, [](const BakePlan &plan) {
+        return glm::compMul(glm::dvec2(plan.size));
     });
     if (requested_texels <= max_node_texels) {
         return;
     }
 
     const double scale = std::sqrt(max_node_texels / requested_texels);
-    for (PlannedTexture &planned : plans) {
-        const glm::dvec2 scaled = glm::dvec2(planned.size) * scale;
-        planned.size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
+    for (BakePlan &plan : plans) {
+        const glm::dvec2 scaled = glm::dvec2(plan.size) * scale;
+        plan.size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
     }
 }

@@ -31,6 +31,11 @@ const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
     {"current-and-coarser", dag::IncludeMode::CurrentAndCoarser},
 };
 
+const std::unordered_map<std::string, ChartingMode> charting_mode_names{
+    {"per-cluster", ChartingMode::PerCluster},
+    {"per-node", ChartingMode::PerNode},
+};
+
 const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kind_names{
     {"constant", cli::TextureSizingKind::Constant},
     {"relative", cli::TextureSizingKind::Relative},
@@ -103,6 +108,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .output_path = {},
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
+        .charting = ChartingMode::PerCluster,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
@@ -134,6 +140,10 @@ Args cli::parse(int argc, const char *const *argv) {
         ->expected(1, 2)
         ->check(CLI::NonNegativeNumber);
 
+
+    app.add_option("--charting", args.charting, "How the clusters of a node are unwrapped")
+        ->transform(CLI::CheckedTransformer(charting_mode_names, CLI::ignore_case))
+        ->default_val(args.charting);
 
     app.add_option("--clusters-per-group", args.clusters_per_partition, "Target number of clusters per partition")
         ->default_val(args.clusters_per_partition)

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cmath>
 #include <concepts>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <type_traits>
@@ -43,6 +45,12 @@ template <std::integral T>
 template <std::integral T>
 [[nodiscard]] constexpr bool is_odd(T value) noexcept {
     return !is_even(value);
+}
+
+// Smallest integer not below the given real value.
+template <std::integral T = uint32_t, std::floating_point F>
+[[nodiscard]] T int_ceil(F value) {
+    return static_cast<T>(std::ceil(value));
 }
 
 template <std::integral A, std::integral B>

@@ -72,7 +72,7 @@ Texture plan_and_create(const std::span<const Texture> textures, const Planner &
 }
 
 namespace {
-void check_uv(const glm::uvec2 &uv) {
+void check_uv(const glm::dvec2 &uv) {
     DEBUG_ASSERT(uv.x >= 0.0 && uv.x <= 1.0);
     DEBUG_ASSERT(uv.y >= 0.0 && uv.y <= 1.0);
 }

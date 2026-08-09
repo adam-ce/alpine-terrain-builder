@@ -7,7 +7,7 @@
 #include <glm/gtx/norm.hpp>
 #include <radix/geometry.h>
 
-#include "CoordFrame.h"
+#include "geometry/CoordFrame.h"
 #include "geometry/geometry.h"
 
 // A plane carrying an in-plane coordinate system, so geometry can be laid out on it.

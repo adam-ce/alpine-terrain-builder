@@ -9,7 +9,7 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include "PlaneFrame.h"
+#include "geometry/PlaneFrame.h"
 #include "atlas/BakeSource.h"
 #include "atlas/pull_reproject_texture.h"
 #include "correspondence.h"

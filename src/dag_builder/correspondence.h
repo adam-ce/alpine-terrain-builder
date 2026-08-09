@@ -12,7 +12,7 @@
 #include <glm/gtx/norm.hpp>
 #include <radix/geometry.h>
 
-#include "PlaneFrame.h"
+#include "geometry/PlaneFrame.h"
 #include "SegmentedBuffer.h"
 #include "StampSet.h"
 #include "geometry/geometry.h"

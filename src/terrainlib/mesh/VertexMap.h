@@ -11,7 +11,7 @@
 
 #include "enumerate.h"
 #include "mesh/connectivity/vertex_index_range.h"
-#include "OffsetVector.h"
+#include "containers/OffsetVector.h"
 
 class VertexMap {
 public:

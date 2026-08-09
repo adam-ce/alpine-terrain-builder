@@ -8,7 +8,7 @@
 
 #include <libassert/assert.hpp>
 
-#include "SegmentedBuffer.h"
+#include "containers/SegmentedBuffer.h"
 
 
 template <bool TrackSizes = false, typename IndexT = size_t, typename SizeT = size_t>

@@ -3,7 +3,7 @@
 #include <glm/common.hpp>
 #include <radix/geometry.h>
 
-#include "Cow.h"
+#include "containers/Cow.h"
 #include "geometry/geometry.h"
 #include "mask.h"
 #include "mesh/SimpleMesh.h"

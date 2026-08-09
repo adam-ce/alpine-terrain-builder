@@ -16,7 +16,7 @@
 #include <radix/geometry.h>
 
 #include "build_config.h"
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "log.h"
 #include "mesh/convert.h"
 #include "mesh/connectivity/boundary.h"

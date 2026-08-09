@@ -10,7 +10,7 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
-#include "TinyVector.h"
+#include "containers/TinyVector.h"
 #include "centroids.h"
 #include "cluster.h"
 #include "mesh/connectivity/triangle_compare.h"

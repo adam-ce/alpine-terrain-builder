@@ -8,7 +8,7 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "SegmentedBuffer.h"
+#include "containers/SegmentedBuffer.h"
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"
 #include "type_utils.h"

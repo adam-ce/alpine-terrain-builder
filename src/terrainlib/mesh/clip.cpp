@@ -25,7 +25,7 @@
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
 #include "mesh/validate.h"
-#include "FixedVector.h"
+#include "containers/FixedVector.h"
 #include "vector_utils.h"
 
 namespace mesh {

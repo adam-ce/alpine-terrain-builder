@@ -1,5 +1,5 @@
 #include "../catch2_helpers.h"
-#include "HybridVector.h"
+#include "containers/HybridVector.h"
 #include <memory>
 
 TEST_CASE("HybridVector basic stack behavior") {

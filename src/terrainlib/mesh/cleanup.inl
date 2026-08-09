@@ -17,7 +17,7 @@
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/connectivity/triangle_compare.h"
 #include "vector_utils.h"
-#include "HybridVector.h"
+#include "containers/HybridVector.h"
 
 namespace mesh {
 

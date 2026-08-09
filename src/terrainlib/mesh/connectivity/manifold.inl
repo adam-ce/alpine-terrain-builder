@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "build_config.h"
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
 #include "mesh/normalize.h"

@@ -12,7 +12,7 @@
 #include <glm/gtx/hash.hpp>
 #include <glm/gtx/vector_angle.hpp>
 
-#include "FixedVector.h"
+#include "containers/FixedVector.h"
 #include "log.h"
 #include "mesh/connectivity/connected_components.h"
 #include "mesh/holes.h"

@@ -3,7 +3,7 @@
 
 #include "../catch2_helpers.h"
 
-#include "StampSet.h"
+#include "containers/StampSet.h"
 
 TEST_CASE("StampSet starts empty", "[terrainlib][stampset]") {
     const StampSet set(4);

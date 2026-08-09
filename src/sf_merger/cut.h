@@ -12,7 +12,7 @@
 #include "octree/Space.h"
 #include "octree/traverse.h"
 #include "utils.h"
-#include "Cow.h"
+#include "containers/Cow.h"
 
 struct Context {
     const octree::IndexedStorage& input;

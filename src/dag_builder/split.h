@@ -7,8 +7,8 @@
 #include <libassert/assert.hpp>
 #include <metis.h>
 
-#include "Size.h"
-#include "Buffer.h"
+#include "containers/Size.h"
+#include "containers/Buffer.h"
 #include "clusterize.h"
 #include "log.h"
 #include "meshopt.h"

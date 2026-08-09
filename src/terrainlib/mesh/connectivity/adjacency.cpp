@@ -9,8 +9,8 @@
 #include <libassert/assert.hpp>
 
 #include "build_config.h"
-#include "FixedVector.h"
-#include "HybridVector.h"
+#include "containers/FixedVector.h"
+#include "containers/HybridVector.h"
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/connectivity/edges.h"
 #include "mesh/connectivity/manifold.h"

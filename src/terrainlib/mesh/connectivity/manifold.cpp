@@ -6,7 +6,7 @@
 
 #include <glm/glm.hpp>
 
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/connectivity/manifold.h"
 #include "mesh/connectivity/adjacency.h"

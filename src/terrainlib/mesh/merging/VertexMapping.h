@@ -10,8 +10,8 @@
 #include <libassert/assert.hpp>
 
 #include "build_config.h"
-#include "SegmentedBuffer.h"
-#include "HybridIndexPairMap.h"
+#include "containers/SegmentedBuffer.h"
+#include "containers/HybridIndexPairMap.h"
 #include "mesh/merging/VertexId.h"
 #include "log.h"
 

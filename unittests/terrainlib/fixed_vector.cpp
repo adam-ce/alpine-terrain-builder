@@ -1,5 +1,5 @@
 #include "../catch2_helpers.h"
-#include "FixedVector.h"
+#include "containers/FixedVector.h"
 
 TEST_CASE("FixedVector default construction") {
     FixedVector<int, 5> vec;

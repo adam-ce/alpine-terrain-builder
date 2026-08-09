@@ -7,8 +7,8 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "FixedVector.h"
-#include "HybridVector.h"
+#include "containers/FixedVector.h"
+#include "containers/HybridVector.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 

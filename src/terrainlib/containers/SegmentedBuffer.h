@@ -9,7 +9,7 @@
 
 #include <libassert/assert.hpp>
 
-#include "OffsetTable.h"
+#include "containers/OffsetTable.h"
 
 // Contiguous buffer partitioned into segments using an OffsetTable for range-based indexing.
 template <typename TValue, typename TValueIndex = size_t, typename TSegmentIndex = TValueIndex>

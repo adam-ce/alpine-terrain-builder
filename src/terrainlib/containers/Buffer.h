@@ -6,7 +6,7 @@
 
 #include <libassert/assert.hpp>
 
-#include "Size.h"
+#include "containers/Size.h"
 
 template <typename T, Size S>
 class BufferStorage;

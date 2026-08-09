@@ -18,7 +18,7 @@
 #include "opencv_utils.h"
 #include "texture/dilate_colors.h"
 #include "range_utils.h"
-#include "Vector2D.h"
+#include "containers/Vector2D.h"
 
 struct ReprojectionOptions {
     uint32_t sample_scale = 2;

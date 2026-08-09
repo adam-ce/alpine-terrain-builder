@@ -9,7 +9,7 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/split.h"

@@ -10,7 +10,7 @@
 #include "Range.h"
 #include "build_config.h"
 #include "glm_utils.h"
-#include "OffsetVector.h"
+#include "containers/OffsetVector.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/VertexMap.h"
 #include "mesh/View.h"

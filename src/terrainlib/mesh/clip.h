@@ -3,7 +3,7 @@
 #include <radix/geometry.h>
 
 #include "mesh/SimpleMesh.h"
-#include "Cow.h"
+#include "containers/Cow.h"
 
 namespace mesh {
 

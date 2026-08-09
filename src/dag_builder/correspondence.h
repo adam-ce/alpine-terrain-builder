@@ -13,8 +13,8 @@
 #include <radix/geometry.h>
 
 #include "geometry/PlaneFrame.h"
-#include "SegmentedBuffer.h"
-#include "StampSet.h"
+#include "containers/SegmentedBuffer.h"
+#include "containers/StampSet.h"
 #include "geometry/geometry.h"
 #include "mesh/connectivity/adjacency.h"
 #include "range_utils.h"

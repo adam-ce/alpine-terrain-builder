@@ -15,10 +15,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/norm.hpp>
 
-#include "OffsetTable.h"
-#include "SegmentedBuffer.h"
+#include "containers/OffsetTable.h"
+#include "containers/SegmentedBuffer.h"
 #include "VertexInClustering.h"
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "VecHash.h"
 #include "build_config.h"
 #include "cluster.h"

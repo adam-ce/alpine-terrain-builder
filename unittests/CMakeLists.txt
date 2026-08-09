@@ -115,6 +115,7 @@ add_executable(unittests_dagbuilder
     dag_builder/slice.cpp
     dag_builder/pull_reproject_texture.cpp
     dag_builder/fixed_point.cpp
+    dag_builder/texture_sizing.cpp
 )
 target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
 

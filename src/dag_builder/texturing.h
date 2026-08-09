@@ -54,9 +54,17 @@ inline Clustering texture_clusters(
             continue;
         }
 
-        const glm::uvec2 size = atlas.size;
+        // The texture is sized for the detail the sources carried, not for the atlas the
+        // packer happened to produce.
+        const double source_density = compute_source_texel_density(source, cluster_indices);
+        const double demanded_texels =
+            compute_target_texel_density(options.sizing, source_density) * cluster.triangle_count();
+        const double aspect = atlas.aspect();
 
         cluster = apply_atlas(cluster, std::move(atlas));
+
+        const TextureDemand demand{.texels = demanded_texels, .coverage = compute_utilization(cluster)};
+        const glm::uvec2 size = compute_target_size(demand, aspect);
         const BakeSource bake_source = collect_bake_source(source, cluster_indices);
         cluster.texture_id = merged.textures.add(
             bake_cluster_texture(cluster, merged.positions, bake_source, size, options.bake));

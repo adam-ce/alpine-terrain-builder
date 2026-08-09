@@ -16,9 +16,10 @@ namespace uv {
 struct AtlasOptions {
     // Texels the packer keeps between charts, for a bake to dilate into.
     uint32_t padding = 2;
-    // Texel size the chart scale is fitted to. The packed atlas lands near this, not on it.
-    uint32_t approximate_resolution = 1024;
 };
+
+// Texel size the chart scale is fitted to. The packed atlas lands near this, not on it.
+inline constexpr uint32_t DEFAULT_PACKING_RESOLUTION = 1024;
 
 // A uv layout minted on the mesh, with the vertex duplication its chart seams force.
 struct Atlas {
@@ -44,14 +45,15 @@ struct Atlas {
 Atlas build_atlas(
     std::span<const glm::uvec3> triangles,
     std::span<const glm::dvec3> positions,
+    uint32_t packing_resolution = DEFAULT_PACKING_RESOLUTION,
     AtlasOptions options = {});
 
-inline Atlas build_atlas(const mesh::View &mesh, const AtlasOptions options = {}) {
-    return build_atlas(mesh.triangles, mesh.positions, options);
+inline Atlas build_atlas(const mesh::View &mesh, const uint32_t packing_resolution = DEFAULT_PACKING_RESOLUTION, const AtlasOptions options = {}) {
+    return build_atlas(mesh.triangles, mesh.positions, packing_resolution, options);
 }
 
-inline Atlas build_atlas(const mesh::Simple &mesh, const AtlasOptions options = {}) {
-    return build_atlas(mesh.triangles, mesh.positions, options);
+inline Atlas build_atlas(const mesh::Simple &mesh, const uint32_t packing_resolution = DEFAULT_PACKING_RESOLUTION, const AtlasOptions options = {}) {
+    return build_atlas(mesh.triangles, mesh.positions, packing_resolution, options);
 }
 
 } // namespace uv

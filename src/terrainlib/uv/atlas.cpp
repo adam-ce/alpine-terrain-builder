@@ -16,6 +16,7 @@ using AtlasHandle = std::unique_ptr<xatlas::Atlas, decltype(&xatlas::Destroy)>;
 AtlasHandle pack_charts(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
+    const uint32_t packing_resolution,
     const AtlasOptions &options) {
     // xatlas works in floats, and judges degeneracy against an absolute epsilon.
     const std::vector<glm::vec3> normalized = to_approximate_normalized(positions);
@@ -36,7 +37,7 @@ AtlasHandle pack_charts(
 
     xatlas::PackOptions pack_options;
     pack_options.padding = options.padding;
-    pack_options.resolution = options.approximate_resolution;
+    pack_options.resolution = packing_resolution;
     xatlas::PackCharts(atlas.get(), pack_options);
 
     return atlas;
@@ -46,12 +47,13 @@ AtlasHandle pack_charts(
 Atlas build_atlas(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
+    const uint32_t packing_resolution,
     const AtlasOptions options) {
     if (triangles.empty()) {
         return {};
     }
 
-    const AtlasHandle packed = pack_charts(triangles, positions, options);
+    const AtlasHandle packed = pack_charts(triangles, positions, packing_resolution, options);
     if (packed->width == 0 || packed->height == 0) {
         // Nothing was charted, so there is no atlas to address.
         LOG_WARN("Unwrap produced no charts for {} triangles", triangles.size());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -18,6 +19,15 @@
 #include "texture_sizing.h"
 #include "utils.h"
 #include "uv/atlas.h"
+
+// Charts are packed for roughly this much of their atlas.
+inline constexpr double ESTIMATED_ATLAS_COVERAGE = 0.75;
+
+// Resolution to pack an atlas at, so its gutter lands near the scale the bake uses.
+[[nodiscard]]
+inline uint32_t compute_unwrap_resolution(const double demand) {
+    return std::max(int_ceil(std::sqrt(demand / ESTIMATED_ATLAS_COVERAGE)), 1u);
+}
 
 // Whether any of the clusters carries a texture.
 inline bool any_source_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
@@ -43,31 +53,35 @@ inline Clustering texture_clusters(
 
     for (const auto [index, cluster] : enumerate(merged.clusters)) {
         const std::span<const uint32_t> cluster_indices = partition_to_clusters.segment(index);
+
+        // skip clusters having no texture
         if (!any_source_texture(source, cluster_indices)) {
             continue;
         }
+
+        // Perform unwrap at approximately the final resolution
+        const double source_density = compute_source_texel_density(source, cluster_indices);
+        const double demanded_texels = compute_target_texel_density(options.sizing, source_density) * cluster.triangle_count();
         const std::vector<glm::dvec3> positions = merged.get_cluster_positions(index);
-        uv::Atlas atlas = uv::build_atlas(cluster.local_triangles, positions, options.atlas);
-        // Only when xatlas charted nothing at all, so every triangle was degenerate against its epsilon.
+        uv::Atlas atlas = uv::build_atlas(cluster.local_triangles, positions, compute_unwrap_resolution(demanded_texels), options.atlas);
         if (atlas.uvs.empty()) {
             LOG_WARN("Cluster {} could not be unwrapped, leaving it untextured", index);
             continue;
         }
-
-        // The texture is sized for the detail the sources carried, not for the atlas the
-        // packer happened to produce.
-        const double source_density = compute_source_texel_density(source, cluster_indices);
-        const double demanded_texels =
-            compute_target_texel_density(options.sizing, source_density) * cluster.triangle_count();
         const double aspect = atlas.aspect();
 
+        // Apply new uvs and duplicated seam vertices
         cluster = apply_atlas(cluster, std::move(atlas));
 
-        const TextureDemand demand{.texels = demanded_texels, .coverage = compute_utilization(cluster)};
+        // Resize according to utilization and bake final texture
+        const TextureDemand demand{
+            .texels = demanded_texels,
+            .coverage = compute_utilization(cluster)
+        };
         const glm::uvec2 size = compute_target_size(demand, aspect);
         const BakeSource bake_source = collect_bake_source(source, cluster_indices);
-        cluster.texture_id = merged.textures.add(
-            bake_cluster_texture(cluster, merged.positions, bake_source, size, options.bake));
+        const cv::Mat baked = bake_cluster_texture(cluster, merged.positions, bake_source, size, options.bake);
+        cluster.texture_id = merged.textures.add(baked);
     }
 
     trim_textures_inplace(merged);

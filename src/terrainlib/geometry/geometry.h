@@ -89,16 +89,22 @@ radix::geometry::Triangle<n_dims, T> corners(const glm::uvec3 &triangle, const s
     return {positions[triangle.x], positions[triangle.y], positions[triangle.z]};
 }
 
-// Positive when b turns counter-clockwise from a, and the signed area of the parallelogram they span.
-template <typename T>
-T cross_2d(const glm::vec<2, T> &a, const glm::vec<2, T> &b) {
-    return a.x * b.y - a.y * b.x;
+// Scalar z-component in 2D, full cross product vector in 3D.
+template <glm::length_t n_dims, typename T>
+auto cross(const glm::vec<n_dims, T> &a, const glm::vec<n_dims, T> &b) {
+    if constexpr (n_dims == 2) {
+        return a.x * b.y - a.y * b.x;
+    } else if constexpr (n_dims == 3) {
+        return glm::cross(a, b);
+    } else {
+        static_assert(n_dims == 2 || n_dims == 3, "cross is only defined for 2D and 3D vectors");
+    }
 }
 
 // Positive when p lies left of the directed edge a to b, and zero when the three are collinear.
 template <typename T>
 T orient(const glm::vec<2, T> &a, const glm::vec<2, T> &b, const glm::vec<2, T> &p) {
-    return cross_2d(b - a, p - a);
+    return cross(b - a, p - a);
 }
 
 // Corner weights of the point, summing to one. Meaningless for a degenerate triangle.
@@ -164,12 +170,12 @@ T distance_to_segment(const glm::vec<n_dims, T> &point, const radix::geometry::E
 // Zero inside the triangle, growing outside it. Accepts either winding.
 template <typename T>
 T distance_to_triangle(const glm::vec<2, T> &point, const radix::geometry::Triangle<2, T> &triangle) {
-    const T orientation = cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0]);
+    const T orientation = cross(triangle[1] - triangle[0], triangle[2] - triangle[0]);
 
     bool inside = orientation != T(0);
     for (uint8_t corner = 0; inside && corner < 3; corner++) {
         const glm::vec<2, T> edge = triangle[(corner + 1) % 3] - triangle[corner];
-        inside = cross_2d(edge, point - triangle[corner]) * orientation >= T(0);
+        inside = cross(edge, point - triangle[corner]) * orientation >= T(0);
     }
     if (inside) {
         return T(0);

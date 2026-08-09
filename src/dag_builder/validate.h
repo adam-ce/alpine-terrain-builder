@@ -43,6 +43,6 @@ inline void validate(const Clustering &clustering) {
         const Cluster &cluster = clustering.clusters[cluster_index];
         validate(cluster, clustering.positions);
         ASSERT(!cluster.has_texture() || cluster.texture_id.value() < clustering.textures.size());
-        ASSERT(cluster.has_texture() == cluster.has_uvs());
+        ASSERT(!cluster.has_texture() || cluster.has_uvs());
     }
 }

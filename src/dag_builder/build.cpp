@@ -16,7 +16,7 @@
 #include "compact.h"
 #include "encoded.h"
 #include "geometry/geometry.h"
-#include "int_math.h"
+#include "numeric/int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"

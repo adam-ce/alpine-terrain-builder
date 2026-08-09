@@ -30,7 +30,7 @@
 #include "range_utils.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"
-#include "StrongDouble.h"
+#include "numeric/StrongDouble.h"
 #include "optional_utils.h"
 
 namespace detail {

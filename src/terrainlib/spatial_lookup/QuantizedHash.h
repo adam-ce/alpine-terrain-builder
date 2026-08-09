@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "VecHash.h"
-#include "quantize.h"
+#include "numeric/quantize.h"
 
 namespace spatial_lookup {
 namespace detail {

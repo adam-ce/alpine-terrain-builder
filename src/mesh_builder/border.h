@@ -6,7 +6,7 @@
 
 #include <radix/geometry.h>
 
-#include "int_math.h"
+#include "numeric/int_math.h"
 
 namespace terrainbuilder {
 

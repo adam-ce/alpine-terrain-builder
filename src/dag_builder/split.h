@@ -12,7 +12,7 @@
 #include "clusterize.h"
 #include "log.h"
 #include "meshopt.h"
-#include "number_types.h"
+#include "numeric/number_types.h"
 #include "utils.h"
 #include "validate.h"
 

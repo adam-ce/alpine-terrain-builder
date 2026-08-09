@@ -11,8 +11,8 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "int_math.h"
-#include "number_types.h"
+#include "numeric/int_math.h"
+#include "numeric/number_types.h"
 
 namespace octree {
 

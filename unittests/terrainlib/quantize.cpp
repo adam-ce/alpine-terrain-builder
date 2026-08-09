@@ -2,7 +2,7 @@
 #include <glm/glm.hpp>
 
 #include "../catch2_helpers.h"
-#include "quantize.h"
+#include "numeric/quantize.h"
 
 TEST_CASE("quantize_floor scalar", "[quantize]") {
     CHECK(quantize_floor(3, 2) == 2);

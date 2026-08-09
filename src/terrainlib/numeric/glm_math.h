@@ -1,6 +1,6 @@
 #pragma once
 
-#include "int_math.h"
+#include "numeric/int_math.h"
 
 template <glm::length_t N, std::integral T>
 [[nodiscard]] constexpr glm::vec<N, T> saturating_add(const glm::vec<N, T>& lhs, const glm::vec<N, T>& rhs) noexcept {

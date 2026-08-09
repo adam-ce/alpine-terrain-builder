@@ -57,8 +57,8 @@ using float64_t = double;
 
 
 // -------------- integer_for_width --------------
-#include "int_math.h"
-#include "wide_integer.h"
+#include "numeric/int_math.h"
+#include "numeric/wide_integer.h"
 
 template <std::size_t Bits>
 inline constexpr std::size_t storage_bits_v = next_power_of_two(Bits < 8 ? 8 : Bits);

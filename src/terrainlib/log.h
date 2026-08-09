@@ -5,7 +5,7 @@
 #define FMT_HEADER_ONLY
 #endif
 #include "fmt_impls.h"
-#include "int_math.h"
+#include "numeric/int_math.h"
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 

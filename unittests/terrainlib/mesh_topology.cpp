@@ -6,11 +6,11 @@
 #include <fmt/core.h>
 
 #include "../catch2_helpers.h"
-#include "mesh/topology/adjacency.h"
-#include "mesh/topology/topology.h"
-#include "mesh/topology/edges.h"
-#include "mesh/topology/triangle_compare.h"
-#include "mesh/topology/vertex_index_range.h"
+#include "mesh/connectivity/adjacency.h"
+#include "mesh/connectivity/topology.h"
+#include "mesh/connectivity/edges.h"
+#include "mesh/connectivity/triangle_compare.h"
+#include "mesh/connectivity/vertex_index_range.h"
 #include "mesh/normalize.h"
 
 namespace {

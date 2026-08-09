@@ -7,7 +7,7 @@
 #include "../opencv_helpers.h"
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology/boundary.h"
+#include "mesh/connectivity/boundary.h"
 
 TEST_CASE("mesh::find_boundary_edges") {
     SECTION("empty for empty mesh") {

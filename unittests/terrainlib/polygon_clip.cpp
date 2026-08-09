@@ -23,7 +23,7 @@ std::vector<Triangle2d> clip(const Triangle2d &subject, const Triangle2d &clip_t
 }
 
 double area_of(const Triangle2d &triangle) {
-    return std::abs(geometry::cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
+    return std::abs(geometry::cross(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
 }
 
 double total_area(const std::vector<Triangle2d> &triangles) {

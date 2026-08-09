@@ -38,7 +38,7 @@
 #include "mesh/cgal.h"
 #include "mesh/cleanup.h"
 #include "mesh/geometry.h"
-#include "mesh/topology/connected_components.h"
+#include "mesh/connectivity/connected_components.h"
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "srs.h"

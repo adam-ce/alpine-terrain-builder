@@ -15,7 +15,7 @@
 #include "mesh/io.h"
 #include "mesh/bounds.h"
 #include "mesh/validate.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "mesh/geometry.h"
 #include "octree/Space.h"
 #include "octree/Id.h"

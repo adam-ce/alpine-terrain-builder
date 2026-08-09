@@ -3,7 +3,7 @@
 
 #include "../catch2_helpers.h"
 
-#include "PlaneFrame.h"
+#include "geometry/PlaneFrame.h"
 #include "geometry/geometry.h"
 
 namespace {
@@ -90,7 +90,7 @@ TEST_CASE("PlaneFrame::flatten lays a triangle out counter-clockwise", "[terrain
     REQUIRE(frame.has_value());
 
     const radix::geometry::Triangle<2, double> flat = frame->flatten(triangle);
-    CHECK(geometry::cross_2d(flat[1] - flat[0], flat[2] - flat[0]) > 0.0);
+    CHECK(geometry::cross(flat[1] - flat[0], flat[2] - flat[0]) > 0.0);
     // Flattening preserves lengths, since the frame is orthonormal and the triangle lies in its plane.
     CHECK(std::abs(glm::distance(flat[0], flat[1]) - glm::distance(triangle[0], triangle[1])) < tolerance);
     CHECK(std::abs(glm::distance(flat[1], flat[2]) - glm::distance(triangle[1], triangle[2])) < tolerance);

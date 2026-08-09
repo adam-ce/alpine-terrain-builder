@@ -80,7 +80,7 @@ radix::geometry::Triangle<2, double> uv_triangle(const uv::Atlas &atlas, const u
 
 double uv_area(const uv::Atlas &atlas, const uint32_t triangle_index) {
     const radix::geometry::Triangle<2, double> corners = uv_triangle(atlas, triangle_index);
-    return std::abs(geometry::cross_2d(corners[1] - corners[0], corners[2] - corners[0])) / 2.0;
+    return std::abs(geometry::cross(corners[1] - corners[0], corners[2] - corners[0])) / 2.0;
 }
 
 // The source vertices of a laid out triangle, which survive duplication.

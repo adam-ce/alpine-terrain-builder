@@ -32,6 +32,12 @@
 #include "log.h"
 #include "srs.h"
 
+void GDALDatasetDeleter::operator()(GDALDataset *dataset) const {
+    if (dataset) {
+        GDALClose(dataset);
+    }
+}
+
 static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigned int flags) {
     initialize_gdal_once();
     const std::string path_str = path.string();

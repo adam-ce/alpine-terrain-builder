@@ -13,13 +13,20 @@ namespace uv {
 namespace {
 using AtlasHandle = std::unique_ptr<xatlas::Atlas, decltype(&xatlas::Destroy)>;
 
+// Normalizing puts a small but real triangle close to the absolute epsilon xatlas judges
+// degeneracy against, so the mesh is scaled up to move it clear.
+constexpr float DEGENERACY_HEADROOM = 100.0f;
+
 AtlasHandle pack_charts(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
     const uint32_t packing_resolution,
     const AtlasOptions &options) {
     // xatlas works in floats, and judges degeneracy against an absolute epsilon.
-    const std::vector<glm::vec3> normalized = to_approximate_normalized(positions);
+    std::vector<glm::vec3> normalized = to_approximate_normalized(positions);
+    for (glm::vec3 &position : normalized) {
+        position *= DEGENERACY_HEADROOM;
+    }
 
     xatlas::MeshDecl declaration;
     declaration.vertexCount = normalized.size();

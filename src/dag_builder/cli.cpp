@@ -152,9 +152,9 @@ Args cli::parse(int argc, const char *const *argv) {
         ->transform(CLI::CheckedTransformer(texture_sizing_kind_names, CLI::ignore_case))
         ->default_val(texture_sizing_kind);
 
-    const CLI::Option *texels_per_cluster_option =
-        app.add_option("--texels-per-cluster", constant_quality.target_cluster_texels, "Texel budget of a full cluster")
-            ->default_val(constant_quality.target_cluster_texels)
+    const CLI::Option *texels_per_triangle_option =
+        app.add_option("--texels-per-triangle", constant_quality.target_texels_per_triangle, "Texel budget of a triangle")
+            ->default_val(constant_quality.target_texels_per_triangle)
             ->check(CLI::PositiveNumber);
 
     app.add_option("--max-node-texels", args.sizing_options.max_node_texels, "Texel budget shared by all textures of a node")
@@ -192,8 +192,8 @@ Args cli::parse(int argc, const char *const *argv) {
         }
         args.continuation_mode = make_continuation_mode(resume, overwrite);
 
-        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_cluster_option->count() > 0) {
-            throw CLI::ValidationError("--texels-per-cluster requires --texture-sizing constant");
+        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_triangle_option->count() > 0) {
+            throw CLI::ValidationError("--texels-per-triangle requires --texture-sizing constant");
         }
 
         if (texture_sizing_kind == TextureSizingKind::Constant) {

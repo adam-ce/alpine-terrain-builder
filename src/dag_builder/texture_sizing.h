@@ -17,9 +17,9 @@
 #include "range_utils.h"
 #include "variant_utils.h"
 
-// Fixed texel budget per cluster.
+// Fixed texel budget per triangle.
 struct ConstantQuality {
-    uint32_t target_cluster_texels = 128 * 128;
+    double target_texels_per_triangle = 64;
 };
 
 // Dynamic texel budget relative to input textures.
@@ -75,8 +75,7 @@ inline double compute_source_texel_density(const Clustering &source, const std::
 inline double compute_target_texel_density(const TextureSizingOptions &options, const double source_texel_density) {
     return match(options.mode,
         [&](const ConstantQuality &mode) {
-            const double target_cluster_texels = mode.target_cluster_texels;
-            return std::min(target_cluster_texels / MAX_TRIANGLES_PER_CLUSTER, source_texel_density);
+            return std::min(mode.target_texels_per_triangle, source_texel_density);
         },
         [&](const RelativeQuality &) {
             return source_texel_density;

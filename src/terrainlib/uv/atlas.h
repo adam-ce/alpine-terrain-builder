@@ -6,8 +6,10 @@
 
 #include <glm/glm.hpp>
 
+#include "mesh/geometry.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
+#include "range_utils.h"
 
 namespace uv {
 
@@ -26,6 +28,16 @@ struct Atlas {
     std::vector<uint32_t> unmapped_triangles; // degenerate or nan, left with no uv area
     glm::uvec2 size{0}; // packed texel size, what the uvs are relative to
     uint32_t chart_count = 0;
+
+    // Fraction of the packed atlas the charts cover. The uvs are normalised, so it is just their area.
+    [[nodiscard]] double utilization() const {
+        return sum(this->triangles, [&](const glm::uvec3 &triangle) {
+            return compute_triangle_area(triangle, this->uvs);
+        });
+    }
+    [[nodiscard]] double aspect() const {
+        return double(this->size.x) / this->size.y;
+    }
 };
 
 // Cuts the mesh into charts and packs them into one atlas. Takes any triangle soup, manifold or not.

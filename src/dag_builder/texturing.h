@@ -121,6 +121,5 @@ inline Clustering texture_clusters(
     // Render at new size
     bake_node_textures(merged, source, partition_to_clusters, plans, options.bake);
 
-    trim_textures_inplace(merged);
     return merged;
 }

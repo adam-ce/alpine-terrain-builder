@@ -10,7 +10,6 @@
 #include "build.h"
 #include "octree/Id.h"
 #include "Range.h"
-#include "uv/unwrap.h"
 
 namespace cli {
 
@@ -27,7 +26,6 @@ struct Args {
     octree::Id root_node;
     AnyRange<uint32_t> level_range;
 
-    uv::Algorithm uv_unwrap_algorithm;
     bool allow_texture_reuse;
     uint32_t clusters_per_partition;
     std::optional<float> target_ratio;

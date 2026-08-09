@@ -11,26 +11,10 @@
 
 #include <glm/glm.hpp>
 
-#include "OffsetTable.h"
 #include "cluster.h"
 #include "enumerate.h"
-#include "glm_utils.h"
-#include "mesh/boundary.h"
-#include "mesh/connected_components.h"
-#include "mesh/igl/cut_to_disk.h"
-#include "mesh/igl/orient.h"
-#include "mesh/manifold.h"
-#include "mesh/merging/VertexMapping.h"
-#include "mesh/split.h"
-#include "mesh/texture_trim.h"
-#include "mesh/topology.h"
 #include "meshopt.h"
-#include "opencv_utils.h"
 #include "range_utils.h"
-#include "uv/unwrap.h"
-#include "vector_utils.h"
-#include "atlas/Packer.h"
-#include "mesh/igl/manifold.h"
 #include "merge/clusters.h"
 #include "Partitioning.h"
 

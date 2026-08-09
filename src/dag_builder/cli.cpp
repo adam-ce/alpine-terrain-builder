@@ -36,25 +36,6 @@ const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kin
     {"relative", cli::TextureSizingKind::Relative},
 };
 
-const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
-    {"AsRigidAsPossible", uv::Algorithm::AsRigidAsPossible},
-    {"arap", uv::Algorithm::AsRigidAsPossible},
-
-    {"DiscreteAuthalic", uv::Algorithm::DiscreteAuthalic},
-    {"da", uv::Algorithm::DiscreteAuthalic},
-
-    {"DiscreteConformalMap", uv::Algorithm::DiscreteConformalMap},
-    {"dcm", uv::Algorithm::DiscreteConformalMap},
-
-    {"FloaterMeanValueCoordinates", uv::Algorithm::FloaterMeanValueCoordinates},
-    {"fmvc", uv::Algorithm::FloaterMeanValueCoordinates},
-
-    {"LeastSquaresConformalMap", uv::Algorithm::LeastSquaresConformalMap},
-    {"lscm", uv::Algorithm::LeastSquaresConformalMap},
-
-    {"TutteBarycentricMapping", uv::Algorithm::TutteBarycentricMapping},
-    {"tutte", uv::Algorithm::TutteBarycentricMapping}};
-
 AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
     switch (input.size()) {
         case 0:
@@ -121,7 +102,6 @@ Args cli::parse(int argc, const char *const *argv) {
         .output_path = {},
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
-        .uv_unwrap_algorithm = {},
         .allow_texture_reuse = true,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
@@ -152,9 +132,6 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--levels", level_range_values, "Inclusive level range to generate: <level> or <min> <max>")
         ->expected(1, 2)
         ->check(CLI::NonNegativeNumber);
-
-    app.add_option("--uv-unwrap-algorithm", args.uv_unwrap_algorithm, "UV unwrap algorithm")
-        ->transform(CLI::CheckedTransformer(uv_unwrap_algorithm_names, CLI::ignore_case));
 
     app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
 

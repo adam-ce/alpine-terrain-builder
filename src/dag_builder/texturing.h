@@ -42,14 +42,14 @@ struct TextureOptions {
     TextureSizingOptions sizing = {};
 };
 
-// Unwrap and bake a texture for every merged cluster whose sources had one.
+// Unwrap every cluster whose sources carry a texture, and record the size it asks for.
 [[nodiscard]]
-inline Clustering texture_clusters(
-    Clustering merged,
+inline std::vector<PlannedTexture> plan_node_textures(
+    Clustering &merged,
     const Clustering &source,
     const PartitionToClusters &partition_to_clusters,
     const TextureOptions &options) {
-    DEBUG_ASSERT(merged.cluster_count() == partition_to_clusters.segment_count());
+    std::vector<PlannedTexture> plans;
 
     for (const auto [index, cluster] : enumerate(merged.clusters)) {
         const std::span<const uint32_t> cluster_indices = partition_to_clusters.segment(index);
@@ -73,16 +73,53 @@ inline Clustering texture_clusters(
         // Apply new uvs and duplicated seam vertices
         cluster = apply_atlas(cluster, std::move(atlas));
 
-        // Resize according to utilization and bake final texture
+        // Record the size it asks for, before the node budget has its say
         const TextureDemand demand{
             .texels = demanded_texels,
             .coverage = compute_utilization(cluster)
         };
-        const glm::uvec2 size = compute_target_size(demand, aspect);
+        plans.push_back(PlannedTexture{
+            .cluster_index = index,
+            .size = compute_target_size(demand, aspect)
+        });
+    }
+
+    return plans;
+}
+
+// Bake every planned texture at the size the node budget left it.
+inline void bake_node_textures(
+    Clustering &merged,
+    const Clustering &source,
+    const PartitionToClusters &partition_to_clusters,
+    const std::span<const PlannedTexture> plans,
+    const BakeTextureOptions &options) {
+    for (const PlannedTexture &planned : plans) {
+        const std::span<const uint32_t> cluster_indices = partition_to_clusters.segment(planned.cluster_index);
+        Cluster &cluster = merged.clusters[planned.cluster_index];
         const BakeSource bake_source = collect_bake_source(source, cluster_indices);
-        const cv::Mat baked = bake_cluster_texture(cluster, merged.positions, bake_source, size, options.bake);
+        const cv::Mat baked = bake_cluster_texture(cluster, merged.positions, bake_source, planned.size, options);
         cluster.texture_id = merged.textures.add(baked);
     }
+}
+
+// Unwrap and bake a texture for every merged cluster whose sources had one.
+[[nodiscard]]
+inline Clustering texture_clusters(
+    Clustering merged,
+    const Clustering &source,
+    const PartitionToClusters &partition_to_clusters,
+    const TextureOptions &options) {
+    DEBUG_ASSERT(merged.cluster_count() == partition_to_clusters.segment_count());
+
+    // Compute the requested texture sizes
+    std::vector<PlannedTexture> plans = plan_node_textures(merged, source, partition_to_clusters, options);
+
+    // Fit to node-wide texture budget
+    rescale_to_fit_budget(plans, options.sizing.max_node_texels);
+
+    // Render at new size
+    bake_node_textures(merged, source, partition_to_clusters, plans, options.bake);
 
     trim_textures_inplace(merged);
     return merged;

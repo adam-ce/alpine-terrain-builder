@@ -106,19 +106,24 @@ inline glm::uvec2 compute_target_size(const TextureDemand &demand, const double 
     return compute_size_from_area(area, aspect);
 }
 
-namespace detail {
-inline void fit_node_budget(const std::span<glm::uvec2> sizes, const uint32_t max_node_texels) {
-    const double requested_texels = sum(sizes, [](const glm::uvec2& size) {
-        return glm::compMul(glm::dvec2(size));
+// The size a cluster's texture will be baked at.
+struct PlannedTexture {
+    uint32_t cluster_index = 0;
+    glm::uvec2 size{1};
+};
+
+// Scale every planned size down until they fit the node's texel budget together.
+inline void rescale_to_fit_budget(const std::span<PlannedTexture> plans, const uint32_t max_node_texels) {
+    const double requested_texels = sum(plans, [](const PlannedTexture &planned) {
+        return glm::compMul(glm::dvec2(planned.size));
     });
     if (requested_texels <= max_node_texels) {
         return;
     }
 
     const double scale = std::sqrt(max_node_texels / requested_texels);
-    for (glm::uvec2 &size : sizes) {
-        const glm::dvec2 scaled = glm::dvec2(size) * scale;
-        size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
+    for (PlannedTexture &planned : plans) {
+        const glm::dvec2 scaled = glm::dvec2(planned.size) * scale;
+        planned.size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
     }
-}
 }

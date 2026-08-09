@@ -11,8 +11,8 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/cleanup.h"
 #include "mesh/normalize.h"
-#include "mesh/topology.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/adjacency.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace mesh {
 

@@ -14,7 +14,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/split.h"
 #include "mesh/reindex.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace {
 using VertexIndex = uint32_t;

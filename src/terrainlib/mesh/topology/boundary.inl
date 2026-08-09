@@ -4,8 +4,8 @@
 #include <glm/glm.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/edges.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/edges.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace mesh {
     

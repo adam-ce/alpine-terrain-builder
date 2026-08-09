@@ -8,9 +8,9 @@
 
 #include "UnionFind.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/manifold.h"
-#include "mesh/topology.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/manifold.h"
+#include "mesh/topology/adjacency.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace mesh {
     

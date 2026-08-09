@@ -22,7 +22,7 @@
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 #include "mesh/normalize.h"
 #include "mesh/validate.h"
 #include "FixedVector.h"

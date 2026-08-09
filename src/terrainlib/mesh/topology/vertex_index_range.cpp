@@ -9,7 +9,7 @@
 
 #include "Range.h"
 #include "glm_utils.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace mesh  {
 

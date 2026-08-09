@@ -6,7 +6,7 @@
 
 #include "../catch2_helpers.h"
 #include "mesh/TriangleSoup.h"
-#include "mesh/connected_components.h"
+#include "mesh/topology/connected_components.h"
 #include "mesh/igl/cut.h"
 #include "mesh/igl/cut_to_disk.h"
 

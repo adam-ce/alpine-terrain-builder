@@ -5,9 +5,9 @@
 #include <igl/bfs_orient.h>
 
 #include "mesh/igl/convert.h"
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 
-#include "mesh/manifold.h"
+#include "mesh/topology/manifold.h"
 #include "mesh/igl/manifold.h"
 
 namespace mesh {

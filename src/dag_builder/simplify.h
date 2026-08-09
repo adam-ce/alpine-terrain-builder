@@ -17,7 +17,7 @@
 #include "meshopt.h"
 #include "utils.h"
 #include "mesh/validate.h"
-#include "mesh/boundary.h"
+#include "mesh/topology/boundary.h"
 #include "validate.h"
 #include "range_utils.h"
 

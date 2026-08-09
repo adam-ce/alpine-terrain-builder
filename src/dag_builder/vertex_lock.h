@@ -13,7 +13,7 @@
 #include "TinyVector.h"
 #include "centroids.h"
 #include "cluster.h"
-#include "mesh/triangle_compare.h"
+#include "mesh/topology/triangle_compare.h"
 #include "simplify.h"
 #include "utils.h"
 #include "VertexInCluster.h"

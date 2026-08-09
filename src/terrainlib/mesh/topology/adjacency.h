@@ -81,4 +81,4 @@ bool is_consistently_oriented(const std::span<const glm::uvec3> triangles);
 
 }
 
-#include "topology.inl"
+#include "adjacency.inl"

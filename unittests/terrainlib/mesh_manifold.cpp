@@ -6,7 +6,7 @@
 
 #include "../catch2_helpers.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/manifold.h"
+#include "mesh/topology/manifold.h"
 
 namespace {
 

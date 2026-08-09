@@ -8,7 +8,7 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 #include "mesh/bfs.h"
 
 namespace mesh {

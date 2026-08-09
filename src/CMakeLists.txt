@@ -196,19 +196,19 @@ add_library(terrainlib
 
     terrainlib/mesh/bfs.cpp
     terrainlib/mesh/boolean.cpp
-    terrainlib/mesh/boundary.cpp
+    terrainlib/mesh/topology/boundary.cpp
     terrainlib/mesh/cleanup.cpp
     terrainlib/mesh/clip.cpp
-    terrainlib/mesh/compute_topology.cpp
+    terrainlib/mesh/topology/topology.cpp
     terrainlib/mesh/convert.cpp
     terrainlib/mesh/geometry.cpp
     terrainlib/mesh/holes.cpp
     terrainlib/mesh/io.cpp
-    terrainlib/mesh/manifold.cpp
+    terrainlib/mesh/topology/manifold.cpp
     terrainlib/mesh/texture_trim.cpp
-    terrainlib/mesh/topology.cpp
+    terrainlib/mesh/topology/adjacency.cpp
     terrainlib/mesh/validate.cpp
-    terrainlib/mesh/vertex_index_range.cpp
+    terrainlib/mesh/topology/vertex_index_range.cpp
 
     terrainlib/octree/storage/helpers.cpp
     terrainlib/octree/IndexMap.cpp

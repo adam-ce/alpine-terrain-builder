@@ -5,7 +5,7 @@
 #include <glm/common.hpp>
 
 #include "../catch2_helpers.h"
-#include "mesh/compute_topology.h"
+#include "mesh/topology/topology.h"
 #include "mesh/igl/cut_to_disk.h"
 #include "mesh/validate.h"
 

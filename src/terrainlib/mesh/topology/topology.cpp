@@ -5,13 +5,13 @@
 #include <glm/common.hpp>
 #include <libassert/assert.hpp>
 
-#include "mesh/connected_components.h"
-#include "mesh/boundary.h"
-#include "mesh/compute_topology.h"
-#include "mesh/manifold.h"
+#include "mesh/topology/connected_components.h"
+#include "mesh/topology/boundary.h"
+#include "mesh/topology/topology.h"
+#include "mesh/topology/manifold.h"
 #include "mesh/reindex.h"
-#include "mesh/vertex_index_range.h"
-#include "mesh/edges.h"
+#include "mesh/topology/vertex_index_range.h"
+#include "mesh/topology/edges.h"
 #include "vector_utils.h"
 
 namespace mesh {

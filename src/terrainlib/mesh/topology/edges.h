@@ -6,7 +6,7 @@
 
 #include <glm/common.hpp>
 
-#include "TriangleContainer.h"
+#include "mesh/TriangleContainer.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 

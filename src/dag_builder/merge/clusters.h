@@ -11,7 +11,7 @@
 #include "cluster.h"
 #include "enumerate.h"
 #include "log.h"
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 #include "range_utils.h"
 #include "validate.h"
 #include "Partitioning.h"

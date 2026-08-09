@@ -5,7 +5,7 @@
 #include "../catch2_helpers.h"
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/connected_components.h"
+#include "mesh/topology/connected_components.h"
 
 TEST_CASE("find_connected_components on empty mesh") {
     SimpleMesh mesh;

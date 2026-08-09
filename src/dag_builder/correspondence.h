@@ -16,7 +16,7 @@
 #include "SegmentedBuffer.h"
 #include "StampSet.h"
 #include "geometry/geometry.h"
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 #include "range_utils.h"
 
 struct CorrespondenceOptions {

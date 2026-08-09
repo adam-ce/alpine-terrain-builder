@@ -15,7 +15,7 @@
 #include "compact.h"
 #include "enumerate.h"
 #include "log.h"
-#include "mesh/topology.h"
+#include "mesh/topology/adjacency.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"
 

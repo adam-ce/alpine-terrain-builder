@@ -8,7 +8,7 @@
 
 #include "mesh/igl/convert.h"
 #include "mesh/igl/cut.h"
-#include "mesh/vertex_index_range.h"
+#include "mesh/topology/vertex_index_range.h"
 
 namespace mesh {
 

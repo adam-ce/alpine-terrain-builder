@@ -20,7 +20,7 @@
 #include "mesh/validate.h"
 #include "unwrap.h"
 #include "fit.h"
-#include "mesh/compute_topology.h"
+#include "mesh/topology/topology.h"
 
 namespace uv {
 

@@ -6,6 +6,7 @@
 #include <glm/geometric.hpp>
 #include <glm/glm.hpp>
 
+#include "geometry_utils.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 
@@ -61,6 +62,26 @@ T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::span<cons
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>>& positions) {
     return compute_squared_triangle_area<n_dims, T>(triangle, std::span(positions));
+}
+
+template <typename T>
+T compute_signed_triangle_area(const glm::vec<2, T> &v0, const glm::vec<2, T> &v1, const glm::vec<2, T> &v2) {
+    return orient(v0, v1, v2) / T(2);
+}
+template <typename T>
+T compute_signed_triangle_area(const std::array<glm::vec<2, T>, 3> &triangle) {
+    return compute_signed_triangle_area<T>(triangle[0], triangle[1], triangle[2]);
+}
+template <typename T>
+T compute_signed_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::vec<2, T>> positions) {
+    const glm::vec<2, T> &v0 = positions[triangle.x];
+    const glm::vec<2, T> &v1 = positions[triangle.y];
+    const glm::vec<2, T> &v2 = positions[triangle.z];
+    return compute_signed_triangle_area<T>(v0, v1, v2);
+}
+template <typename T>
+T compute_signed_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<2, T>> &positions) {
+    return compute_signed_triangle_area<T>(triangle, std::span<const glm::vec<2, T>>(positions));
 }
 
 template <glm::length_t n_dims, typename T>

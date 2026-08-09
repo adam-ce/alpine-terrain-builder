@@ -47,6 +47,16 @@ T compute_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::v
 template <glm::length_t n_dims, typename T>
 T compute_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<n_dims, T>>& positions);
 
+// Negative where the triangle winds the other way.
+template <typename T>
+T compute_signed_triangle_area(const glm::vec<2, T> &v0, const glm::vec<2, T> &v1, const glm::vec<2, T> &v2);
+template <typename T>
+T compute_signed_triangle_area(const std::array<glm::vec<2, T>, 3> &triangle);
+template <typename T>
+T compute_signed_triangle_area(const glm::uvec3 &triangle, const std::span<const glm::vec<2, T>> positions);
+template <typename T>
+T compute_signed_triangle_area(const glm::uvec3 &triangle, const std::vector<glm::vec<2, T>> &positions);
+
 template <glm::length_t n_dims, typename T>
 T compute_squared_triangle_area(const glm::vec<n_dims, T> &v0, const glm::vec<n_dims, T> &v1, const glm::vec<n_dims, T> &v2);
 template <glm::length_t n_dims, typename T>

@@ -103,7 +103,6 @@ Args cli::parse(int argc, const char *const *argv) {
         .output_path = {},
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
-        .allow_texture_reuse = true,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
@@ -134,8 +133,6 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--levels", level_range_values, "Inclusive level range to generate: <level> or <min> <max>")
         ->expected(1, 2)
         ->check(CLI::NonNegativeNumber);
-
-    app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
 
 
     app.add_option("--clusters-per-group", args.clusters_per_partition, "Target number of clusters per partition")

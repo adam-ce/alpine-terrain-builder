@@ -26,7 +26,6 @@ struct Args {
     octree::Id root_node;
     AnyRange<uint32_t> level_range;
 
-    bool allow_texture_reuse;
     uint32_t clusters_per_partition;
     std::optional<float> target_ratio;
     std::optional<float> target_error;

@@ -29,7 +29,6 @@ int main(int argc, char **argv) {
                 .atlas = {.padding = args.texture_gutter},
                 .bake = {.reprojection = {.gutter = args.texture_gutter}},
                 .sizing = args.sizing_options,
-                .allow_texture_reuse = args.allow_texture_reuse,
             },
             .root_node = args.root_node,
             .include_mode = args.include_mode,

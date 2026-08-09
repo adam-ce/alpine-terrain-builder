@@ -99,9 +99,12 @@ inline void inherit_shared_textures(
     const PartitionToClusters &partition_to_clusters) {
     DEBUG_ASSERT(merged.cluster_count() == partition_to_clusters.segment_count());
 
+    uint32_t inherited = 0;
     for (const auto [cluster_index, cluster] : enumerate(merged.clusters)) {
-        inherit_shared_texture(merged.clusters[cluster_index], merged.textures, source, partition_to_clusters.segment(cluster_index));
+        if (inherit_shared_texture(merged.clusters[cluster_index], merged.textures, source, partition_to_clusters.segment(cluster_index))) {
+            inherited++;
+        }
     }
 
-    LOG_DEBUG("Carried a source texture into {} of {} merged clusters", std::ranges::count_if(merged.clusters, &Cluster::has_texture), merged.cluster_count());
+    LOG_DEBUG("Carried a source texture into {} of {} merged clusters", inherited, merged.cluster_count());
 }

@@ -169,7 +169,9 @@ inline std::vector<PreparedTriangle> prepare_triangles(
             continue;
         }
 
-        // Fix incorrect winding order.
+        // Fix incorrect winding order. xatlas does not enforce consistent uv winding, so
+        // roughly half of an atlas' charts arrive mirrored. Swapping both corner sets keeps
+        // the uv to source mapping intact.
         if (prepared_triangle.target_area2 < FixedScalar::zero()) {
             prepared_triangle.target_samples = swap_orientation(prepared_triangle.target_samples);
             prepared_triangle.source_pixels = swap_orientation(prepared_triangle.source_pixels);

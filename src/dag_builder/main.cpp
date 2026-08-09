@@ -30,6 +30,7 @@ int main(int argc, char **argv) {
                 .bake = {.reprojection = {.gutter = args.texture_gutter}},
                 .sizing = args.sizing_options,
                 .charting = args.charting,
+                .allow_texture_reuse = args.allow_texture_reuse,
             },
             .root_node = args.root_node,
             .include_mode = args.include_mode,

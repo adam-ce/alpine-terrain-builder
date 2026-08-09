@@ -35,46 +35,46 @@ BakePlan make_plan(const glm::uvec2 size) {
 } // namespace
 
 TEST_CASE("rescale_to_fit_budget leaves sizes alone below the budget", "[dag_builder][texture_sizing]") {
-    std::vector<BakePlan> plans{make_plan({100, 100}), make_plan({200, 200})};
+    std::vector<BakePlan> textures{make_plan({100, 100}), make_plan({200, 200})};
 
-    rescale_to_fit_budget(plans, 100000);
+    rescale_to_fit_budget(textures, 100000);
 
-    CHECK(plans[0].size == glm::uvec2(100, 100));
-    CHECK(plans[1].size == glm::uvec2(200, 200));
+    CHECK(textures[0].size == glm::uvec2(100, 100));
+    CHECK(textures[1].size == glm::uvec2(200, 200));
 }
 
 TEST_CASE("rescale_to_fit_budget scales every size by the same factor", "[dag_builder][texture_sizing]") {
-    std::vector<BakePlan> plans{make_plan({100, 100}), make_plan({200, 200})};
+    std::vector<BakePlan> textures{make_plan({100, 100}), make_plan({200, 200})};
 
     // Half the area of the requested 50000 texels, so every side scales by 0.5.
-    rescale_to_fit_budget(plans, 12500);
+    rescale_to_fit_budget(textures, 12500);
 
-    CHECK(plans[0].size == glm::uvec2(50, 50));
-    CHECK(plans[1].size == glm::uvec2(100, 100));
+    CHECK(textures[0].size == glm::uvec2(50, 50));
+    CHECK(textures[1].size == glm::uvec2(100, 100));
 }
 
 TEST_CASE("rescale_to_fit_budget keeps the aspect of a non square size", "[dag_builder][texture_sizing]") {
-    std::vector<BakePlan> plans{make_plan({400, 100})};
+    std::vector<BakePlan> textures{make_plan({400, 100})};
 
-    rescale_to_fit_budget(plans, 10000);
+    rescale_to_fit_budget(textures, 10000);
 
-    CHECK(plans[0].size == glm::uvec2(200, 50));
+    CHECK(textures[0].size == glm::uvec2(200, 50));
 }
 
 TEST_CASE("rescale_to_fit_budget floors sizes at one texel", "[dag_builder][texture_sizing]") {
-    std::vector<BakePlan> plans{make_plan({64, 64})};
+    std::vector<BakePlan> textures{make_plan({64, 64})};
 
-    rescale_to_fit_budget(plans, 1);
+    rescale_to_fit_budget(textures, 1);
 
-    CHECK(plans[0].size == glm::uvec2(1, 1));
+    CHECK(textures[0].size == glm::uvec2(1, 1));
 }
 
 // Rounding up after the uniform scale can leave the total above the budget. This is
 // accepted: max_node_texels is a soft cap, not a guarantee.
 TEST_CASE("rescale_to_fit_budget can overshoot the budget on many small sizes", "[dag_builder][texture_sizing]") {
-    std::vector<BakePlan> plans(10, make_plan({3, 3}));
+    std::vector<BakePlan> textures(10, make_plan({3, 3}));
 
-    rescale_to_fit_budget(plans, 45);
+    rescale_to_fit_budget(textures, 45);
 
-    CHECK(plans[0].size == glm::uvec2(3, 3));
+    CHECK(textures[0].size == glm::uvec2(3, 3));
 }

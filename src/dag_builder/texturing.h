@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -12,10 +13,12 @@
 #include "atlas/BakeSource.h"
 #include "atlas/bake_cluster_texture.h"
 #include "cluster.h"
+#include "compact.h"
 #include "enumerate.h"
 #include "log.h"
 #include "Partitioning.h"
 #include "range_utils.h"
+#include "texture_reuse.h"
 #include "texture_sizing.h"
 #include "utils.h"
 #include "uv/atlas.h"
@@ -46,6 +49,7 @@ struct TextureOptions {
     BakeTextureOptions bake = {};
     TextureSizingOptions sizing = {};
     ChartingMode charting = ChartingMode::PerCluster;
+    bool allow_texture_reuse = true;
 };
 
 // Texels each cluster should carry, from how densely its sources were textured.
@@ -65,26 +69,34 @@ inline std::vector<double> compute_cluster_texel_demands(
     return demands;
 }
 
-// The clusters that can be textured at all, being the ones whose sources carry one.
+// The clusters needing an unwrap: those whose sources carry a texture, but which the merge
+// could not carry one into.
 [[nodiscard]]
-inline std::vector<uint32_t> find_clusters_to_texture(
+inline std::vector<uint32_t> find_clusters_to_unwrap(
     const Clustering &merged,
     const Clustering &source,
     const PartitionToClusters &partition_to_clusters) {
-    std::vector<uint32_t> to_texture;
+    std::vector<uint32_t> to_unwrap;
 
     for (const auto [index, cluster] : enumerate(merged.clusters)) {
-        if (any_source_texture(source, partition_to_clusters.segment(index))) {
-            to_texture.push_back(index);
+        if (cluster.has_texture() || !any_source_texture(source, partition_to_clusters.segment(index))) {
+            continue;
         }
+        to_unwrap.push_back(index);
     }
 
-    return to_texture;
+    return to_unwrap;
 }
 
-// Plan the bake of one texture, sized for the clusters that will share it.
+// Width over height of a texture.
 [[nodiscard]]
-inline BakePlan plan_bake(
+inline double compute_aspect(const glm::uvec2 size) {
+    return double(size.x) / size.y;
+}
+
+// Size one texture for the clusters that will share it.
+[[nodiscard]]
+inline BakePlan size_texture(
     const Clustering &merged,
     const std::span<const double> demands,
     std::vector<uint32_t> clusters,
@@ -103,16 +115,54 @@ inline BakePlan plan_bake(
     };
 }
 
+// Collect the clusters that kept a carried-in texture, one entry per texture.
+[[nodiscard]]
+inline std::vector<BakePlan> size_inherited_textures(
+    const Clustering &merged,
+    const std::span<const double> demands) {
+    constexpr uint32_t no_entry = std::numeric_limits<uint32_t>::max();
+    std::vector<uint32_t> entry_of_texture(merged.textures.size(), no_entry);
+    std::vector<std::vector<uint32_t>> clusters_per_texture;
+    std::vector<uint32_t> texture_ids;
+
+    for (const auto [index, cluster] : enumerate(merged.clusters)) {
+        if (!cluster.has_texture()) {
+            continue;
+        }
+        const uint32_t texture_id = cluster.texture_id.value();
+        uint32_t &entry = entry_of_texture[texture_id];
+        if (entry == no_entry) {
+            entry = clusters_per_texture.size();
+            clusters_per_texture.emplace_back();
+            texture_ids.push_back(texture_id);
+        }
+        clusters_per_texture[entry].push_back(index);
+    }
+
+    std::vector<BakePlan> plans;
+    plans.reserve(texture_ids.size());
+    for (const auto [entry, texture_id] : enumerate(texture_ids)) {
+        const glm::uvec2 current_size = get_texture_size(merged.textures[texture_id]);
+        BakePlan plan = size_texture(merged, demands, std::move(clusters_per_texture[entry]), compute_aspect(current_size));
+        plan.inherited_id = texture_id;
+        // Upscaling adds no detail, so never plan more than the texture already holds.
+        plan.size = glm::min(plan.size, current_size);
+        plans.push_back(std::move(plan));
+    }
+
+    return plans;
+}
+
 // Chart each cluster on its own, so every chart boundary is also a cluster boundary.
 [[nodiscard]]
 inline std::vector<BakePlan> unwrap_clusters_separately(
     Clustering &merged,
-    const std::span<const uint32_t> to_texture,
+    const std::span<const uint32_t> to_unwrap,
     const std::span<const double> demands,
     const uv::AtlasOptions &options) {
     std::vector<BakePlan> plans;
 
-    for (const uint32_t index : to_texture) {
+    for (const uint32_t index : to_unwrap) {
         const Cluster &cluster = merged.clusters[index];
 
         // Perform unwrap at approximately the final resolution
@@ -128,7 +178,7 @@ inline std::vector<BakePlan> unwrap_clusters_separately(
         // Apply new uvs and duplicated seam vertices
         merged.clusters[index] = apply_atlas(cluster, std::move(atlas));
 
-        plans.push_back(plan_bake(merged, demands, {index}, aspect));
+        plans.push_back(size_texture(merged, demands, {index}, aspect));
     }
 
     return plans;
@@ -138,11 +188,11 @@ inline std::vector<BakePlan> unwrap_clusters_separately(
 [[nodiscard]]
 inline std::vector<BakePlan> unwrap_clusters_together(
     Clustering &merged,
-    const std::span<const uint32_t> to_texture,
+    const std::span<const uint32_t> to_unwrap,
     const std::span<const double> demands,
     const uv::AtlasOptions &options) {
     std::vector<glm::uvec3> triangles;
-    for (const uint32_t index : to_texture) {
+    for (const uint32_t index : to_unwrap) {
         const Cluster &cluster = merged.clusters[index];
         for (const glm::uvec3 &local : cluster.local_triangles) {
             triangles.push_back(cluster.global_triangle(local));
@@ -150,22 +200,22 @@ inline std::vector<BakePlan> unwrap_clusters_together(
     }
 
     // Perform unwrap at approximately the final resolution
-    const double demanded_texels = sum(to_texture, [&](const uint32_t index) {
+    const double demanded_texels = sum(to_unwrap, [&](const uint32_t index) {
         return demands[index];
     });
     const uv::Atlas atlas = uv::build_atlas(triangles, merged.positions, compute_unwrap_resolution(demanded_texels), options);
     if (atlas.uvs.empty()) {
-        LOG_WARN("Node of {} clusters could not be unwrapped, leaving it untextured", to_texture.size());
+        LOG_WARN("Node of {} clusters could not be unwrapped, leaving it untextured", to_unwrap.size());
         return {};
     }
 
     // Apply new uvs and duplicated seam vertices
-    apply_node_atlas(merged, to_texture, atlas);
+    apply_node_atlas(merged, to_unwrap, atlas);
 
-    std::vector<uint32_t> clusters(to_texture.begin(), to_texture.end());
+    std::vector<uint32_t> clusters(to_unwrap.begin(), to_unwrap.end());
 
     std::vector<BakePlan> plans;
-    plans.push_back(plan_bake(merged, demands, std::move(clusters), atlas.aspect()));
+    plans.push_back(size_texture(merged, demands, std::move(clusters), atlas.aspect()));
     return plans;
 }
 
@@ -173,20 +223,33 @@ inline std::vector<BakePlan> unwrap_clusters_together(
 [[nodiscard]]
 inline std::vector<BakePlan> unwrap_clusters(
     Clustering &merged,
-    const std::span<const uint32_t> to_texture,
+    const std::span<const uint32_t> to_unwrap,
     const std::span<const double> demands,
     const TextureOptions &options) {
-    if (to_texture.empty()) {
+    if (to_unwrap.empty()) {
         return {};
     }
 
     switch (options.charting) {
     case ChartingMode::PerCluster:
-        return unwrap_clusters_separately(merged, to_texture, demands, options.atlas);
+        return unwrap_clusters_separately(merged, to_unwrap, demands, options.atlas);
     case ChartingMode::PerNode:
-        return unwrap_clusters_together(merged, to_texture, demands, options.atlas);
+        return unwrap_clusters_together(merged, to_unwrap, demands, options.atlas);
     default:
         UNREACHABLE();
+    }
+}
+
+// Resize every carried-in texture to what its clusters were budgeted.
+inline void rescale_inherited_textures(Clustering &merged, const std::span<const BakePlan> textures) {
+    for (const BakePlan &plan : textures) {
+        if (!plan.inherited_id.has_value()) {
+            continue;
+        }
+        cv::Mat &texture = merged.textures[plan.inherited_id.value()];
+        if (get_texture_size(texture) != plan.size) {
+            texture = rescale_texture(texture, plan.size);
+        }
     }
 }
 
@@ -198,6 +261,10 @@ inline void bake_node_textures(
     const std::span<const BakePlan> plans,
     const BakeTextureOptions &options) {
     for (const BakePlan &plan : plans) {
+        if (plan.inherited_id.has_value()) {
+            continue;
+        }
+
         std::vector<uint32_t> source_clusters;
         for (const uint32_t index : plan.clusters) {
             const std::span<const uint32_t> segment = partition_to_clusters.segment(index);
@@ -223,15 +290,25 @@ inline Clustering texture_clusters(
     const TextureOptions &options) {
     DEBUG_ASSERT(merged.cluster_count() == partition_to_clusters.segment_count());
 
+    // Carry over the source texture wherever the merged clusters can keep addressing it
+    if (options.allow_texture_reuse) {
+        inherit_shared_textures(merged, source, partition_to_clusters);
+    }
+
     const std::vector<double> demands = compute_cluster_texel_demands(merged, source, partition_to_clusters, options.sizing);
-    const std::vector<uint32_t> to_texture = find_clusters_to_texture(merged, source, partition_to_clusters);
+    const std::vector<uint32_t> to_unwrap = find_clusters_to_unwrap(merged, source, partition_to_clusters);
 
-    // No texture is baked until every cluster in the node has asked for a size
-    std::vector<BakePlan> plans = unwrap_clusters(merged, to_texture, demands, options);
-    rescale_to_fit_budget(plans, options.sizing.max_node_texels);
+    // No texture is resized or baked until every cluster in the node has asked for a size
+    std::vector<BakePlan> textures = size_inherited_textures(merged, demands);
+    for (BakePlan &unwrapped : unwrap_clusters(merged, to_unwrap, demands, options)) {
+        textures.push_back(std::move(unwrapped));
+    }
+    rescale_to_fit_budget(textures, options.sizing.max_node_texels);
 
-    // Render at new size
-    bake_node_textures(merged, source, partition_to_clusters, plans, options.bake);
+    // Realize at new size
+    rescale_inherited_textures(merged, textures);
+    bake_node_textures(merged, source, partition_to_clusters, textures, options.bake);
 
+    remove_unused_textures_inplace(merged);
     return merged;
 }

@@ -108,6 +108,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .output_path = {},
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
+        .allow_texture_reuse = true,
         .charting = ChartingMode::PerCluster,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
@@ -140,6 +141,8 @@ Args cli::parse(int argc, const char *const *argv) {
         ->expected(1, 2)
         ->check(CLI::NonNegativeNumber);
 
+
+    app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
 
     app.add_option("--charting", args.charting, "How the clusters of a node are unwrapped")
         ->transform(CLI::CheckedTransformer(charting_mode_names, CLI::ignore_case))

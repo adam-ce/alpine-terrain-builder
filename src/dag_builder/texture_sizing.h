@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <optional>
 #include <span>
-#include <vector>
 #include <variant>
 #include <vector>
 
@@ -106,8 +105,9 @@ inline glm::uvec2 compute_target_size(const TextureDemand &demand, const double 
     return compute_size_from_area(area, aspect);
 }
 
-// One bake the node will run: the clusters it covers, at the size they were budgeted.
+// One of the node's textures, with the size it will be rescaled or baked to.
 struct BakePlan {
+    std::optional<uint32_t> inherited_id; // set when the merge carried the texture in
     std::vector<uint32_t> clusters;
     glm::uvec2 size{1};
 };

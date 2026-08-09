@@ -10,7 +10,7 @@
 #include <libassert/assert.hpp>
 
 #include "enumerate.h"
-#include "mesh/topology/vertex_index_range.h"
+#include "mesh/connectivity/vertex_index_range.h"
 #include "OffsetVector.h"
 
 class VertexMap {

@@ -11,7 +11,7 @@
 #include "geometry/geometry.h"
 #include "mesh/cleanup.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
 #include "vector_utils.h"

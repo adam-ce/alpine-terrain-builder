@@ -10,10 +10,10 @@
 
 #include "log.h"
 #include "mesh/cleanup.h"
-#include "mesh/topology/connected_components.h"
+#include "mesh/connectivity/connected_components.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "mesh/validate.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"

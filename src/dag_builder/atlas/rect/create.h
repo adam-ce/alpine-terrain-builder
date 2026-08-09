@@ -9,7 +9,7 @@
 
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "atlas/rect/atlas.h"
 #include "mesh/geometry.h"
 #include "mesh/bounds.h"

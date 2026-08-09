@@ -10,10 +10,10 @@
 
 #include "mesh/igl/convert.h"
 #include "mesh/igl/cut_to_disk.h"
-#include "mesh/topology/boundary.h"
+#include "mesh/connectivity/boundary.h"
 #include "mesh/bfs.h"
-#include "mesh/topology/topology.h"
-#include "mesh/topology/connected_components.h"
+#include "mesh/connectivity/topology.h"
+#include "mesh/connectivity/connected_components.h"
 #include "mesh/reindex.h"
 #include "vector_utils.h"
 

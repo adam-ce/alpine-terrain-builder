@@ -11,10 +11,10 @@
 #include "build_config.h"
 #include "FixedVector.h"
 #include "HybridVector.h"
-#include "mesh/topology/adjacency.h"
-#include "mesh/topology/edges.h"
-#include "mesh/topology/manifold.h"
-#include "mesh/topology/vertex_index_range.h"
+#include "mesh/connectivity/adjacency.h"
+#include "mesh/connectivity/edges.h"
+#include "mesh/connectivity/manifold.h"
+#include "mesh/connectivity/vertex_index_range.h"
 #include "vector_utils.h"
 
 namespace mesh {

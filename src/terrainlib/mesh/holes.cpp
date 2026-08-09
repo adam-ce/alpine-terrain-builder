@@ -14,10 +14,10 @@
 
 #include "FixedVector.h"
 #include "log.h"
-#include "mesh/topology/connected_components.h"
+#include "mesh/connectivity/connected_components.h"
 #include "mesh/holes.h"
-#include "mesh/topology/boundary.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/boundary.h"
+#include "mesh/connectivity/manifold.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
 #include "vector_utils.h"

@@ -9,7 +9,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology/triangle_compare.h"
+#include "mesh/connectivity/triangle_compare.h"
 
 namespace mesh {
 

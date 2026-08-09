@@ -14,8 +14,8 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/geometry.h"
 #include "mesh/normalize.h"
-#include "mesh/topology/adjacency.h"
-#include "mesh/topology/triangle_compare.h"
+#include "mesh/connectivity/adjacency.h"
+#include "mesh/connectivity/triangle_compare.h"
 #include "vector_utils.h"
 #include "HybridVector.h"
 

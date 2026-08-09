@@ -9,10 +9,10 @@
 #include "mesh/View.h"
 #include "mesh/igl/cut.h"
 #include "enumerate.h"
-#include "mesh/topology/vertex_index_range.h"
-#include "mesh/topology/topology.h"
+#include "mesh/connectivity/vertex_index_range.h"
+#include "mesh/connectivity/topology.h"
 
-#include "mesh/topology/connected_components.h"
+#include "mesh/connectivity/connected_components.h"
 
 namespace mesh {
 

@@ -6,9 +6,9 @@
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
-#include "mesh/topology/boundary.h"
-#include "mesh/topology/edges.h"
-#include "mesh/topology/manifold.h"
+#include "mesh/connectivity/boundary.h"
+#include "mesh/connectivity/edges.h"
+#include "mesh/connectivity/manifold.h"
 #include "vector_utils.h"
 
 namespace mesh {

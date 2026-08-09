@@ -10,7 +10,7 @@
 
 #include "mesh/cleanup.h"
 #include "mesh/normalize.h"
-#include "mesh/topology/adjacency.h"
+#include "mesh/connectivity/adjacency.h"
 
 namespace mesh {
 

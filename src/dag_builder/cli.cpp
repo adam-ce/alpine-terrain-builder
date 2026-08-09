@@ -36,6 +36,7 @@ const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kin
     {"relative", cli::TextureSizingKind::Relative},
 };
 
+
 AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
     switch (input.size()) {
         case 0:
@@ -107,6 +108,7 @@ Args cli::parse(int argc, const char *const *argv) {
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
         .sizing_options = {},
+        .texture_gutter = 2,
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
@@ -135,6 +137,7 @@ Args cli::parse(int argc, const char *const *argv) {
 
     app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
 
+
     app.add_option("--clusters-per-group", args.clusters_per_partition, "Target number of clusters per partition")
         ->default_val(args.clusters_per_partition)
         ->check(CLI::PositiveNumber);
@@ -160,6 +163,10 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--max-node-texels", args.sizing_options.max_node_texels, "Texel budget shared by all textures of a node")
         ->default_val(args.sizing_options.max_node_texels)
         ->check(CLI::PositiveNumber);
+
+    app.add_option("--texture-gutter", args.texture_gutter, "Texels kept between charts.")
+        ->default_val(args.texture_gutter)
+        ->check(CLI::NonNegativeNumber);
 
     bool resume = false;
     bool overwrite = false;

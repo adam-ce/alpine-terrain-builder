@@ -26,6 +26,8 @@ int main(int argc, char **argv) {
             .target_ratio = args.target_ratio,
             .relative_target_error = args.target_error,
             .texture_options = {
+                .atlas = {.padding = args.texture_gutter},
+                .bake = {.reprojection = {.gutter = args.texture_gutter}},
                 .sizing = args.sizing_options,
                 .allow_texture_reuse = args.allow_texture_reuse,
             },

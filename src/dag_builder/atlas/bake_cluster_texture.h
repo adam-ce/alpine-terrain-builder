@@ -24,8 +24,8 @@ inline Cluster apply_atlas(const Cluster &cluster, uv::Atlas atlas) {
 }
 
 struct BakeTextureOptions {
-    CorrespondenceOptions correspondence;
-    ReprojectionOptions reprojection;
+    CorrespondenceOptions correspondence = {};
+    ReprojectionOptions reprojection = {};
 };
 
 // Render the cluster's texture by pulling every texel back through the source surface.

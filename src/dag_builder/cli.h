@@ -32,6 +32,7 @@ struct Args {
     std::optional<float> target_error;
 
     TextureSizingOptions sizing_options;
+    uint32_t texture_gutter;
 
     bool write_debug_meshes;
     bool parallelize;

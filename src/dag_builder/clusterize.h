@@ -95,7 +95,7 @@ inline std::vector<Cluster> clusterize(
 }
 
 inline Clustering clusterize(mesh::Simple3d mesh, const ClusterOptions &options = {}) {
-    const auto positions_f = to_approximate_normalized(mesh.positions);
+    const auto positions_f = geometry::to_approximate_normalized(mesh.positions);
 
     // Discard uvs if the mesh has no texture
     std::span<const glm::dvec2> uvs;
@@ -130,7 +130,7 @@ inline std::vector<Cluster> clusterize(
     const std::span<const glm::dvec3> positions,
     const ClusterOptions &options = {}) {
     const std::vector<glm::dvec3> positions_d = collect_cluster_positions(cluster, positions);
-    const std::vector<glm::vec3> positions_f = to_approximate_normalized(positions_d);
+    const std::vector<glm::vec3> positions_f = geometry::to_approximate_normalized(positions_d);
 
     return clusterize(
         cluster.local_triangles,
@@ -168,7 +168,7 @@ inline ClusteringAndBackwardMapping clusterize(const Clustering &input, const Cl
 
         // Materialize cluster positions as floats
         collect_cluster_positions(cluster, input.positions, positions_d);
-        to_approximate_normalized(positions_d, positions_f);
+        geometry::to_approximate_normalized(positions_d, positions_f);
 
         // Perform clustering on current cluster
         std::vector<Cluster> sub_clusters = clusterize(

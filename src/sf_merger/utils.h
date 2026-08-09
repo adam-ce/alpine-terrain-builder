@@ -4,7 +4,7 @@
 #include <radix/geometry.h>
 
 #include "Cow.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "mask.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/clip.h"

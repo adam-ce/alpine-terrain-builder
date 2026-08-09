@@ -33,7 +33,7 @@ struct Atlas {
     // Fraction of the packed atlas the charts cover. The uvs are normalised, so it is just their area.
     [[nodiscard]] double utilization() const {
         return sum(this->triangles, [&](const glm::uvec3 &triangle) {
-            return compute_triangle_area(triangle, this->uvs);
+            return geometry::compute_triangle_area(triangle, this->uvs);
         });
     }
     [[nodiscard]] double aspect() const {

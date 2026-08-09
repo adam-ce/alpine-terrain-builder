@@ -207,7 +207,7 @@ TEST_CASE("single triangle around bounds") {
         CHECK(bounds2d.contains_inclusive(glm::dvec2(b)));
         CHECK(bounds2d.contains_inclusive(glm::dvec2(c)));
 
-        total_area += compute_triangle_area(a, b, c);
+        total_area += geometry::compute_triangle_area(a, b, c);
     }
 
     // The clipped region is exactly a 2x2 square.
@@ -267,7 +267,7 @@ TEST_CASE("single triangle split by one plane and partly discarded by the next")
         CHECK(bounds.contains_inclusive(b));
         CHECK(bounds.contains_inclusive(c));
 
-        total_area += compute_triangle_area(a, b, c);
+        total_area += geometry::compute_triangle_area(a, b, c);
     }
 
     // The clipped region is the triangle (0, 0), (4, 0), (0, 0.8).

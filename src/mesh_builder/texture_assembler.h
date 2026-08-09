@@ -16,7 +16,7 @@
 
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "glm_math.h"
 #include "int_math.h"
 #include "srs.h"
@@ -485,7 +485,7 @@ struct AssembledTexture {
     // The padding reaches past the requested bounds, so select tiles for slightly grown bounds.
     const radix::tile::SrsBounds selection_bounds = min_padding == glm::uvec2(0)
         ? encompassing_bounds
-        : radix::tile::SrsBounds(pad_bounds_relative(encompassing_bounds, TextureSelectionGrowth));
+        : radix::tile::SrsBounds(geometry::pad_bounds_relative(encompassing_bounds, TextureSelectionGrowth));
 
     // Find relevant tiles in bounds
     const std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(

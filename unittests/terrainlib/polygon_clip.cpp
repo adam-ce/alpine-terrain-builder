@@ -5,7 +5,7 @@
 
 #include "../catch2_helpers.h"
 
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "polygon/clip.h"
 
 namespace {
@@ -23,7 +23,7 @@ std::vector<Triangle2d> clip(const Triangle2d &subject, const Triangle2d &clip_t
 }
 
 double area_of(const Triangle2d &triangle) {
-    return std::abs(cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
+    return std::abs(geometry::cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
 }
 
 double total_area(const std::vector<Triangle2d> &triangles) {
@@ -107,12 +107,12 @@ TEST_CASE("clip_triangle covers the overlap without counting it twice", "[terrai
     // The fan tiles the overlap, so sampling it must hit exactly one piece per point.
     for (const Triangle2d &piece : pieces) {
         const glm::dvec2 centre = (piece[0] + piece[1] + piece[2]) / 3.0;
-        REQUIRE(distance_to_triangle(centre, subject) == 0.0);
-        REQUIRE(distance_to_triangle(centre, clip_triangle) == 0.0);
+        REQUIRE(geometry::distance_to_triangle(centre, subject) == 0.0);
+        REQUIRE(geometry::distance_to_triangle(centre, clip_triangle) == 0.0);
 
         uint32_t containing = 0;
         for (const Triangle2d &other : pieces) {
-            containing += distance_to_triangle(centre, other) == 0.0 ? 1 : 0;
+            containing += geometry::distance_to_triangle(centre, other) == 0.0 ? 1 : 0;
         }
         REQUIRE(containing == 1);
     }

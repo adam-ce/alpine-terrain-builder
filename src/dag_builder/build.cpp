@@ -15,7 +15,7 @@
 #include "clusterize.h"
 #include "compact.h"
 #include "encoded.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"
@@ -377,7 +377,7 @@ octree::IdRect find_relevant_dag_nodes(
     const octree::Id &target_id,
     const octree::OddLevelShifted &shifted_space) {
     // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
-    const radix::geometry::Aabb3d padded_bounds = pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
+    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
     const radix::geometry::Aabb3d search_bounds = radix::geometry::intersection(padded_bounds, shifted_space.bounds());
     return shifted_space.get_intersecting_nodes_on_level(search_bounds, target_id.level() + 1);
 }

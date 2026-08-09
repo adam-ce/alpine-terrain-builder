@@ -2,7 +2,7 @@
 
 #include <span>
 #include <functional>
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "mesh/SimpleMesh.h"
 #include "spatial_lookup/Grid.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
@@ -35,7 +35,7 @@ namespace {
 template <typename T>
 spatial_lookup::Grid3d<T> _construct_grid_for_meshes(const radix::geometry::Aabb3d &bounds, const size_t vertex_count) {
     // A zero-size (e.g. single-point) mesh would scale to nothing and leave the cell size zero.
-    const radix::geometry::Aabb3d padded_bounds = pad_bounds_relative(bounds, 0.01, radix::geometry::epsilon<double>);
+    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(bounds, 0.01, radix::geometry::epsilon<double>);
 
     const double max_extends = glm::compMax(padded_bounds.size());
     const glm::dvec3 relative_extends = padded_bounds.size() / max_extends;

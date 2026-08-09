@@ -75,7 +75,7 @@ Bake make_two_sources() {
 }
 
 double area_of(const std::array<glm::dvec2, 3> &triangle) {
-    return std::abs(cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
+    return std::abs(geometry::cross_2d(triangle[1] - triangle[0], triangle[2] - triangle[0])) / 2.0;
 }
 
 double covered_area(const std::vector<ReprojectionTriangle> &triangles) {

@@ -4,7 +4,7 @@
 
 #include "atlas.h"
 #include "enumerate.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "glm_utils.h"
 #include "log.h"
 
@@ -23,7 +23,7 @@ AtlasHandle pack_charts(
     const uint32_t packing_resolution,
     const AtlasOptions &options) {
     // xatlas works in floats, and judges degeneracy against an absolute epsilon.
-    std::vector<glm::vec3> normalized = to_approximate_normalized(positions);
+    std::vector<glm::vec3> normalized = geometry::to_approximate_normalized(positions);
     for (glm::vec3 &position : normalized) {
         position *= DEGENERACY_HEADROOM;
     }

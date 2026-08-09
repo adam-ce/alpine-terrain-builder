@@ -35,7 +35,7 @@ struct TextureSizingOptions {
 [[nodiscard]]
 inline double compute_utilization(const Cluster &cluster) {
     return sum(cluster.local_triangles, [&](const glm::uvec3 &triangle) {
-        return compute_triangle_area(triangle, cluster.uvs);
+        return geometry::compute_triangle_area(triangle, cluster.uvs);
     });
 }
 

@@ -15,7 +15,7 @@
 #include "PlaneFrame.h"
 #include "SegmentedBuffer.h"
 #include "StampSet.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "mesh/topology.h"
 #include "range_utils.h"
 
@@ -77,7 +77,7 @@ struct OutputTriangle {
 
 // Empty for a degenerate output triangle, which spans no plane to measure against.
 inline std::optional<OutputTriangle> flatten_output_triangle(const glm::uvec3 &triangle, const std::span<const glm::dvec3> positions) {
-    const radix::geometry::Triangle<3, double> output_corners = corners(triangle, positions);
+    const radix::geometry::Triangle<3, double> output_corners = geometry::corners(triangle, positions);
     const std::optional<PlaneFrame> frame = PlaneFrame::from_triangle(output_corners);
     if (!frame) {
         return std::nullopt;
@@ -124,7 +124,7 @@ inline void collect_relevant_vertices(
                 continue;
             }
 
-            const double offset = distance_to_triangle(output.frame.project(source.positions[neighbour]), output.outline);
+            const double offset = geometry::distance_to_triangle(output.frame.project(source.positions[neighbour]), output.outline);
             if (offset > allowed_excursion) {
                 continue;
             }
@@ -154,12 +154,12 @@ inline void collect_covering_triangles(
                 continue;
             }
 
-            const radix::geometry::Triangle<3, double> source_corners = corners(source.triangles[triangle_index], source.positions);
+            const radix::geometry::Triangle<3, double> source_corners = geometry::corners(source.triangles[triangle_index], source.positions);
             if (glm::dot(radix::geometry::normal(source_corners), output.frame.normal) <= options.min_normal_dot) {
                 // Another layer of the surface, and another output triangle's concern.
                 continue;
             }
-            if (triangles_overlap(output.outline, output.frame.flatten(source_corners))) {
+            if (geometry::triangles_overlap(output.outline, output.frame.flatten(source_corners))) {
                 correspondence.push_to_last_segment(triangle_index);
             }
         }

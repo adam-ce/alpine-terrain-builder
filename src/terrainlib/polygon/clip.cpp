@@ -2,7 +2,6 @@
 #include <utility>
 
 #include "FixedVector.h"
-#include "geometry_utils.h"
 #include "mesh/geometry.h"
 #include "mesh/WindingOrder.h"
 #include "polygon/clip.h"
@@ -24,10 +23,10 @@ void clip_to_half_space(const Corners &corners, const Edge2d &edge, Corners &out
     }
 
     glm::dvec2 previous = corners.back();
-    double previous_side = orient(edge[0], edge[1], previous); // sign == side
+    double previous_side = geometry::orient(edge[0], edge[1], previous); // sign == side
 
     for (const glm::dvec2 &current : corners) {
-        const double current_side = orient(edge[0], edge[1], current); // sign == side
+        const double current_side = geometry::orient(edge[0], edge[1], current); // sign == side
 
         // Only a strict crossing needs a new corner; one lying on the edge is already its own.
         const bool crosses = (previous_side > 0.0 && current_side < 0.0) ||
@@ -63,7 +62,7 @@ void clip_triangle(const Triangle2d &subject, const Triangle2d &clip, std::vecto
     // Corners on a clip edge are kept by both sides, so the fan can hold collinear runs.
     for (uint32_t corner = 2; corner < corners.size(); corner++) {
         const Triangle2d piece = {corners[0], corners[corner - 1], corners[corner]};
-        if (!is_empty_triangle(piece)) {
+        if (!geometry::is_empty_triangle(piece)) {
             out.push_back(piece);
         }
     }

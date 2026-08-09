@@ -8,7 +8,7 @@
 
 #include "atlas/rect/atlas.h"
 #include "cluster.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "mesh/cleanup.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/manifold.h"

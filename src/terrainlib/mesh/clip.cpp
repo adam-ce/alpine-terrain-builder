@@ -16,7 +16,6 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
-#include "geometry_utils.h"
 #include "hash_utils.h"
 #include "log.h"
 #include "mesh/cgal.h"
@@ -496,7 +495,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const std::array<glm::dvec3, 3> new_vertices = {inside_vertex, intersection1.point, intersection2.point};
                     const std::array<glm::dvec2, 3> new_uvs = {inside_uv, intersection1_uv, intersection2_uv};
 
-                    if (is_empty_triangle(new_vertices)) {
+                    if (geometry::is_empty_triangle(new_vertices)) {
                         skip_triangle = true;
                         break;
                     }
@@ -554,8 +553,8 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
 
                     // Set the first triangle as the current one
                     // Push the second triangle to the list of triangles left to clip
-                    const bool empty1 = is_empty_triangle(new_triangle1.positions);
-                    const bool empty2 = is_empty_triangle(new_triangle2.positions);
+                    const bool empty1 = geometry::is_empty_triangle(new_triangle1.positions);
+                    const bool empty2 = geometry::is_empty_triangle(new_triangle2.positions);
                     if (empty2) {
                         if (empty1) {
                             skip_triangle = true;
@@ -756,7 +755,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
                 const double t = glm::distance(new_position, intersection.source.position) / edge_length;
                 return glm::mix(intersection.source.uv, intersection.target.uv, t);
             } else {
-                const glm::dvec3 barycentric = compute_barycentric(
+                const glm::dvec3 barycentric = geometry::compute_barycentric(
                     new_position,
                     intersection.vertices[0].position,
                     intersection.vertices[1].position,

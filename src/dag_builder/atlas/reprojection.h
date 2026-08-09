@@ -14,7 +14,7 @@
 #include "atlas/pull_reproject_texture.h"
 #include "correspondence.h"
 #include "enumerate.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 #include "polygon/clip.h"
 #include "range_utils.h"
 
@@ -89,15 +89,15 @@ inline void clip_against_source(
         Fragment fragment;
         fragment.triangle.source_image_index = source.map_index;
         for (const uint8_t corner : range<uint8_t>(3)) {
-            const glm::dvec3 source_weights = compute_barycentric(part[corner], source.projected);
-            const glm::dvec3 target_weights = compute_barycentric(part[corner], target.projected);
-            fragment.triangle.source_uvs[corner] = interpolate(source.uvs, source_weights);
-            fragment.triangle.target_uvs[corner] = interpolate(target.uvs, target_weights);
+            const glm::dvec3 source_weights = geometry::compute_barycentric(part[corner], source.projected);
+            const glm::dvec3 target_weights = geometry::compute_barycentric(part[corner], target.projected);
+            fragment.triangle.source_uvs[corner] = geometry::interpolate(source.uvs, source_weights);
+            fragment.triangle.target_uvs[corner] = geometry::interpolate(target.uvs, target_weights);
         }
 
         // TODO: Sort is centroid based and will be wrong for intersecting parts
         const glm::dvec2 centre = (part[0] + part[1] + part[2]) / 3.0;
-        fragment.height = std::abs(glm::dot(compute_barycentric(centre, source.projected), source.heights));
+        fragment.height = std::abs(glm::dot(geometry::compute_barycentric(centre, source.projected), source.heights));
 
         fragments.push_back(fragment);
     }

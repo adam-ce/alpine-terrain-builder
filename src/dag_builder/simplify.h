@@ -158,7 +158,7 @@ inline Clustering simplify(
         radix::geometry::Aabb3d bounds;
         cluster_positions_f.clear();
         cluster_positions_f.reserve(original_vertex_count);
-        to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
+        geometry::to_approximate_normalized(cluster_positions, cluster_positions_f, &bounds);
         const float max_extents = glm::compMax(bounds.size()) / 2.0f;
         if (max_extents == 0.0f) {
             // Empty or degenerate cluster
@@ -172,7 +172,7 @@ inline Clustering simplify(
 
         // Prepare vertex attributes (uv)
         cluster_uvs_f.clear();
-        to_approximate_normalized(original_cluster.uvs, cluster_uvs_f);
+        geometry::to_approximate_normalized(original_cluster.uvs, cluster_uvs_f);
         std::span<const float> vertex_attributes = {};
         size_t vertex_attribute_stride = 0;
         std::vector<float> vertex_attribute_weights = {};

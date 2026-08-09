@@ -8,7 +8,7 @@
 #include <radix/geometry.h>
 
 #include "CoordFrame.h"
-#include "geometry_utils.h"
+#include "geometry/geometry.h"
 
 // A plane carrying an in-plane coordinate system, so geometry can be laid out on it.
 template <typename T = double>
@@ -33,7 +33,7 @@ struct PlaneFrame_ : CoordFrame_<T> {
     }
 
     static std::optional<PlaneFrame_> from_triangle(const glm::uvec3 &triangle, const std::span<const glm::vec<3, T>> positions) {
-        return from_triangle(corners(triangle, positions));
+        return from_triangle(geometry::corners(triangle, positions));
     }
 
     // Signed distance from the plane, positive on the side the normal points to.
@@ -56,7 +56,7 @@ struct PlaneFrame_ : CoordFrame_<T> {
     }
 
     radix::geometry::Triangle<2, T> flatten(const glm::uvec3 &triangle, const std::span<const glm::vec<3, T>> positions) const {
-        return this->flatten(corners(triangle, positions));
+        return this->flatten(geometry::corners(triangle, positions));
     }
 };
 

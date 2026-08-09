@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 
 #include "cluster.h"
+#include "geometry/geometry.h"
 #include "enumerate.h"
 #include "meshopt.h"
 #include "range_utils.h"
@@ -33,7 +34,7 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
     }
 
     // meshopt only supports float positions
-    const std::vector<glm::vec3> positions_f = to_approximate_normalized(clustering.positions);
+    const std::vector<glm::vec3> positions_f = geometry::to_approximate_normalized(clustering.positions);
 
     // Prepare vertex counts per cluster and total vertex count
     std::vector<uint32_t> cluster_vertex_counts(cluster_count);

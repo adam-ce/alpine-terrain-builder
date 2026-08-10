@@ -36,10 +36,15 @@ const std::unordered_map<std::string, ChartingMode> charting_mode_names{
     {"per-node", ChartingMode::PerNode},
 };
 
-const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kind_names{
-    {"constant", cli::TextureSizingKind::Constant},
-    {"relative", cli::TextureSizingKind::Relative},
-};
+// Use RelativeQuality texture budgeting mode.
+const std::string relative_texels_per_triangle = "relative";
+
+std::variant<ConstantQuality, RelativeQuality> make_texture_sizing_mode(const std::string &texels_per_triangle) {
+    if (texels_per_triangle == relative_texels_per_triangle) {
+        return RelativeQuality{};
+    }
+    return ConstantQuality{std::stod(texels_per_triangle)};
+}
 
 
 AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
@@ -158,17 +163,11 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
         ->check(CLI::NonNegativeNumber);
 
-    TextureSizingKind texture_sizing_kind = TextureSizingKind::Constant;
-    ConstantQuality constant_quality;
+    std::string texels_per_triangle = std::to_string(ConstantQuality{}.target_texels_per_triangle);
 
-    app.add_option("--texture-sizing", texture_sizing_kind, "How merged cluster textures are sized")
-        ->transform(CLI::CheckedTransformer(texture_sizing_kind_names, CLI::ignore_case))
-        ->default_val(texture_sizing_kind);
-
-    const CLI::Option *texels_per_triangle_option =
-        app.add_option("--texels-per-triangle", constant_quality.target_texels_per_triangle, "Texel budget of a triangle")
-            ->default_val(constant_quality.target_texels_per_triangle)
-            ->check(CLI::PositiveNumber);
+    app.add_option("--texels-per-triangle", texels_per_triangle, "Texel budget of a triangle, or relative to follow the source textures")
+        ->default_str("64")
+        ->check(CLI::PositiveNumber | CLI::IsMember({relative_texels_per_triangle}));
 
     app.add_option("--max-node-texels", args.sizing_options.max_node_texels, "Texel budget shared by all textures of a node")
         ->default_val(args.sizing_options.max_node_texels)
@@ -205,15 +204,7 @@ Args cli::parse(int argc, const char *const *argv) {
         }
         args.continuation_mode = make_continuation_mode(resume, overwrite);
 
-        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_triangle_option->count() > 0) {
-            throw CLI::ValidationError("--texels-per-triangle requires --texture-sizing constant");
-        }
-
-        if (texture_sizing_kind == TextureSizingKind::Constant) {
-            args.sizing_options.mode = constant_quality;
-        } else {
-            args.sizing_options.mode = RelativeQuality{};
-        }
+        args.sizing_options.mode = make_texture_sizing_mode(texels_per_triangle);
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));
     }

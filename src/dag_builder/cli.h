@@ -13,11 +13,6 @@
 
 namespace cli {
 
-enum class TextureSizingKind {
-    Constant,
-    Relative,
-};
-
 struct Args {
     spdlog::level::level_enum log_level;
 

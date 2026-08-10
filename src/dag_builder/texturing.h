@@ -155,7 +155,7 @@ inline std::vector<BakePlan> size_inherited_textures(
 
 // Chart each cluster on its own, so every chart boundary is also a cluster boundary.
 [[nodiscard]]
-inline std::vector<BakePlan> unwrap_clusters_separately(
+inline std::vector<BakePlan> unwrap_per_cluster(
     Clustering &merged,
     const std::span<const uint32_t> to_unwrap,
     const std::span<const double> demands,
@@ -186,7 +186,7 @@ inline std::vector<BakePlan> unwrap_clusters_separately(
 
 // Chart every cluster as one surface, so charts may span cluster boundaries.
 [[nodiscard]]
-inline std::vector<BakePlan> unwrap_clusters_together(
+inline std::vector<BakePlan> unwrap_per_node(
     Clustering &merged,
     const std::span<const uint32_t> to_unwrap,
     const std::span<const double> demands,
@@ -232,9 +232,9 @@ inline std::vector<BakePlan> unwrap_clusters(
 
     switch (options.charting) {
     case ChartingMode::PerCluster:
-        return unwrap_clusters_separately(merged, to_unwrap, demands, options.atlas);
+        return unwrap_per_cluster(merged, to_unwrap, demands, options.atlas);
     case ChartingMode::PerNode:
-        return unwrap_clusters_together(merged, to_unwrap, demands, options.atlas);
+        return unwrap_per_node(merged, to_unwrap, demands, options.atlas);
     default:
         UNREACHABLE();
     }

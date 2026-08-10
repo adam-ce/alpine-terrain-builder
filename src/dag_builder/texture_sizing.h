@@ -27,7 +27,7 @@ struct RelativeQuality {};
 
 struct TextureSizingOptions {
     std::variant<ConstantQuality, RelativeQuality> mode = ConstantQuality{};
-    uint32_t max_node_texels = 4096 * 4096;
+    uint32_t max_node_texels = 8192 * 8192;
 };
 
 

@@ -231,3 +231,62 @@ TEST_CASE("SegmentedBuffer multiple segments with different sizes and last_segme
     CHECK(last[1] == 31);
     CHECK(last[2] == 32);
 }
+
+// A caller starting a segment per item must get one segment per item, even where an item
+// contributes nothing. The leading placeholder segment used to swallow the second start.
+TEST_CASE("SegmentedBuffer keeps empty segments") {
+    SegmentedBuffer<int> buf;
+
+    buf.start_new_segment(); // first item, contributes nothing
+    buf.start_new_segment(); // second item
+    buf.push_to_last_segment(10);
+    buf.start_new_segment(); // third item, contributes nothing
+    buf.start_new_segment(); // fourth item
+    buf.push_to_last_segment(20);
+
+    REQUIRE(buf.segment_count() == 4);
+    CHECK(buf.segment_size(0) == 0);
+    CHECK(buf.segment_size(1) == 1);
+    CHECK(buf.segment_size(2) == 0);
+    CHECK(buf.segment_size(3) == 1);
+    CHECK(buf.total_size() == 2);
+}
+
+TEST_CASE("SegmentedBuffer keeps empty segments after reset") {
+    SegmentedBuffer<int> buf;
+    buf.start_new_segment();
+    buf.push_to_last_segment(1);
+    buf.reset();
+
+    buf.start_new_segment();
+    buf.start_new_segment();
+
+    REQUIRE(buf.segment_count() == 2);
+    CHECK(buf.segment_size(0) == 0);
+    CHECK(buf.segment_size(1) == 0);
+}
+
+// init and the vector constructor install real segments, so a later start_new_segment
+// must append rather than adopt one of them.
+TEST_CASE("SegmentedBuffer start_new_segment after init appends") {
+    SB buf;
+    const std::vector<size_t> sizes{2, 3};
+    buf.init(sizes);
+
+    buf.start_new_segment();
+    buf.push_to_last_segment(9);
+
+    REQUIRE(buf.segment_count() == 3);
+    CHECK(buf.segment_size(2) == 1);
+}
+
+TEST_CASE("SegmentedBuffer start_new_segment after the vector constructor appends") {
+    SB buf(std::vector<int>{1, 2, 3});
+
+    buf.start_new_segment();
+    buf.push_to_last_segment(9);
+
+    REQUIRE(buf.segment_count() == 2);
+    CHECK(buf.segment_size(0) == 3);
+    CHECK(buf.segment_size(1) == 1);
+}

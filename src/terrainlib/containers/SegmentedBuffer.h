@@ -25,6 +25,7 @@ public:
     }
     SegmentedBuffer(std::vector<value_type> segment) : _data(std::move(segment)) {
         this->_offsets.append_length(this->_data.size());
+        this->_is_first_segment_implicit = false;
     }
 
     // Resets the buffer to its default state.
@@ -33,6 +34,7 @@ public:
         this->_data.clear();
 
         this->_offsets.append_length(0);
+        this->_is_first_segment_implicit = true;
     }
 
     // Initializes the buffer with pre-defined segment sizes and pre-allocates backing storage.
@@ -47,6 +49,7 @@ public:
 
         this->_offsets.append_lengths(segment_sizes);
         this->_data.resize(this->_offsets.total_size(), value);
+        this->_is_first_segment_implicit = false;
     }
 
     // Reserve size in the global backing storage.
@@ -56,6 +59,7 @@ public:
 
     // Resize the last segment.
     void resize_last_segment(const index_type size, const value_type &value = {}) {
+        this->_is_first_segment_implicit = false;
         if (size == 0) {
             return;
         }
@@ -87,6 +91,7 @@ public:
 
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(const value_type &value) {
+        this->_is_first_segment_implicit = false;
         const segment_index last_segment = this->segment_count() - 1;
         const offset_range range = this->_offsets.segment_range(last_segment);
 
@@ -96,6 +101,7 @@ public:
 
     // Appends an item to the end of the last segment in the data buffer.
     void push_to_last_segment(value_type &&value) {
+        this->_is_first_segment_implicit = false;
         const segment_index last_segment = this->segment_count() - 1;
         const offset_range range = this->_offsets.segment_range(last_segment);
 
@@ -105,7 +111,8 @@ public:
 
     // Finalizes the current segment and starts a new one at the current buffer position.
     void start_new_segment() {
-        if (this->segment_count() == 1 && this->segment_size(0) == 0) {
+        if (this->_is_first_segment_implicit) {
+            this->_is_first_segment_implicit = false;
             return;
         }
 
@@ -220,4 +227,9 @@ private:
 
     // The contiguous backing storage for all segments.
     std::vector<value_type> _data;
+
+    // Whether the first segment is the one reset creates rather than one a caller asked for.
+    // Starting or writing a segment makes it the caller's, so a caller starting one segment
+    // per item still ends up with one segment per item.
+    bool _is_first_segment_implicit = true;
 };

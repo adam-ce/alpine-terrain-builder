@@ -10,6 +10,7 @@
 
 #include "TextureSet.h"
 #include "range_utils.h"
+#include "build_config.h"
 
 inline constexpr uint32_t MAX_TRIANGLES_PER_CLUSTER = 256;
 
@@ -31,7 +32,7 @@ struct Cluster {
     constexpr bool has_uvs() const noexcept {
         return !this->uvs.empty();
     }
-    constexpr bool has_texture() const noexcept {
+    constexpr bool is_textured() const noexcept {
         return this->texture_id.has_value();
     }
     glm::uvec3 global_triangle(const glm::uvec3 &local_triangle) const {
@@ -63,7 +64,7 @@ struct Clustering {
     }
     std::optional<cv::Mat> get_cluster_texture(const uint32_t cluster_index) const noexcept {
         const Cluster &cluster = this->clusters[cluster_index];
-        if (!cluster.has_texture()) {
+        if (!cluster.is_textured()) {
             return std::nullopt;
         }
         return this->textures[cluster.texture_id.value()];

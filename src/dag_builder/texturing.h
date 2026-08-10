@@ -35,7 +35,7 @@ inline uint32_t compute_unwrap_resolution(const double demand) {
 // Whether any of the clusters carries a texture.
 inline bool any_source_texture(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
     return std::ranges::any_of(cluster_indices, [&](const uint32_t i) {
-        return clustering.clusters[i].has_texture();
+        return clustering.clusters[i].is_textured();
     });
 }
 
@@ -79,7 +79,7 @@ inline std::vector<uint32_t> find_clusters_to_unwrap(
     std::vector<uint32_t> to_unwrap;
 
     for (const auto [index, cluster] : enumerate(merged.clusters)) {
-        if (cluster.has_texture() || !any_source_texture(source, partition_to_clusters.segment(index))) {
+        if (cluster.is_textured() || !any_source_texture(source, partition_to_clusters.segment(index))) {
             continue;
         }
         to_unwrap.push_back(index);
@@ -126,7 +126,7 @@ inline std::vector<BakePlan> size_inherited_textures(
     std::vector<uint32_t> texture_ids;
 
     for (const auto [index, cluster] : enumerate(merged.clusters)) {
-        if (!cluster.has_texture()) {
+        if (!cluster.is_textured()) {
             continue;
         }
         const uint32_t texture_id = cluster.texture_id.value();

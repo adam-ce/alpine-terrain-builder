@@ -43,7 +43,7 @@ inline BakeSource collect_bake_source(const Clustering &clustering, const std::s
 
     for (const uint32_t cluster_index : cluster_indices) {
         const Cluster &cluster = clustering.clusters[cluster_index];
-        const bool is_textured = cluster.has_texture() && cluster.has_uvs();
+        const bool is_textured = cluster.is_textured();
 
         const uint32_t map_index = source.uv_maps.size();
         if (is_textured) {

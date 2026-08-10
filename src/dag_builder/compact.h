@@ -98,7 +98,7 @@ inline void remove_unused_textures_inplace(Clustering &clustering) {
 
     TextureSet textures;
     for (Cluster &cluster : clustering.clusters) {
-        if (!cluster.has_texture()) {
+        if (!cluster.is_textured()) {
             continue;
         }
         const uint32_t texture_id = cluster.texture_id.value();

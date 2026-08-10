@@ -67,8 +67,8 @@ TEST_CASE("inherit_shared_texture refuses a texture whose uvs disagree at the se
 
     inherit_shared_texture(merged, textures, source, both_clusters);
 
-    CHECK_FALSE(merged.has_texture());
-    CHECK_FALSE(merged.has_uvs());
+    CHECK_FALSE(merged.is_textured());
+    CHECK(merged.uvs.empty());
 }
 
 TEST_CASE("inherit_shared_texture refuses when the sources carry different textures", "[dag_builder][texture_reuse]") {
@@ -80,7 +80,7 @@ TEST_CASE("inherit_shared_texture refuses when the sources carry different textu
 
     inherit_shared_texture(merged, textures, source, both_clusters);
 
-    CHECK_FALSE(merged.has_texture());
+    CHECK_FALSE(merged.is_textured());
 }
 
 TEST_CASE("inherit_shared_texture leaves untextured sources alone", "[dag_builder][texture_reuse]") {
@@ -90,6 +90,6 @@ TEST_CASE("inherit_shared_texture leaves untextured sources alone", "[dag_builde
 
     inherit_shared_texture(merged, textures, source, both_clusters);
 
-    CHECK_FALSE(merged.has_texture());
-    CHECK_FALSE(merged.has_uvs());
+    CHECK_FALSE(merged.is_textured());
+    CHECK(merged.uvs.empty());
 }

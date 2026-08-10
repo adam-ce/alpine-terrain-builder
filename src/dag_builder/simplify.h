@@ -176,7 +176,7 @@ inline Clustering simplify(
         std::span<const float> vertex_attributes = {};
         size_t vertex_attribute_stride = 0;
         std::vector<float> vertex_attribute_weights = {};
-        if (options.uv_weight != 0.0f && original_cluster.has_uvs()) {
+        if (options.uv_weight != 0.0f && original_cluster.is_textured()) {
             vertex_attributes = flatten(cluster_uvs_f);
             vertex_attribute_stride = sizeof(glm::vec2);
             vertex_attribute_weights = {options.uv_weight};
@@ -251,7 +251,7 @@ inline Clustering simplify(
         }
 
         std::vector<glm::dvec2> uvs;
-        if (!original_cluster.uvs.empty()) {
+        if (original_cluster.has_uvs()) {
             uvs.resize(new_vertex_count);
             // Add original vertex UVs
             for (uint32_t original_index = 0; original_index < original_vertex_count; original_index++) {

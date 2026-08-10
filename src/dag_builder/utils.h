@@ -116,7 +116,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
     }
 
     const bool any_has_uvs = std::ranges::any_of(clustering.clusters, [](const Cluster &c) {
-        return c.has_uvs();
+        return c.is_textured();
     });
 
     // Preallocate mesh buffers
@@ -194,7 +194,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
             // remap the uvs to match the atlas
             uint32_t uv_offset = 0;
             for (const Cluster &cluster : clustering.clusters) {
-                if (any_has_uvs && cluster.has_texture()) {
+                if (any_has_uvs && cluster.is_textured()) {
                     std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
                     atlas::map_uvs(plan, cluster.texture_id.value(), cluster_uvs);
                 }
@@ -234,7 +234,7 @@ inline void trim_textures_inplace(Clustering &clustering) {
     // Group clusters by texture
     std::vector<std::vector<uint32_t>> clusters_per_texture(clustering.textures.size());
     for (const auto& [i, cluster] : enumerate(clustering.clusters)) {
-        if (cluster.has_texture()) {
+        if (cluster.is_textured()) {
             clusters_per_texture[cluster.texture_id.value()].push_back(i);
         }
     }

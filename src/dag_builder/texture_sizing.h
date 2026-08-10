@@ -43,7 +43,7 @@ inline double compute_utilization(const Cluster &cluster) {
 [[nodiscard]]
 inline double compute_texel_area(const Clustering &clustering, const uint32_t cluster_index) {
     const Cluster &cluster = clustering.clusters[cluster_index];
-    if (!cluster.has_texture()) {
+    if (!cluster.is_textured()) {
         return 0;
     }
     const glm::dvec2 texture_size = get_texture_size(clustering.textures[cluster.texture_id.value()]);
@@ -57,7 +57,7 @@ inline double compute_source_texel_density(const Clustering &source, const std::
     uint32_t triangle_count = 0;
     for (const uint32_t cluster_index : cluster_indices) {
         const Cluster &cluster = source.clusters[cluster_index];
-        if (!cluster.has_texture() || !cluster.has_uvs()) {
+        if (!cluster.is_textured()) {
             continue;
         }
         texel_area += compute_texel_area(source, cluster_index);

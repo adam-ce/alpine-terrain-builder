@@ -27,6 +27,8 @@ inline void check_clean_vertex_remap(const std::span<uint32_t> vertex_remap, con
         for (const uint32_t vertex_index : vertex_remap) {
             DEBUG_ASSERT(vertex_index == no_vertex_remap);
         }
+    } else {
+        ALP_UNUSED(vertex_map, vertex_count);
     }
 }
 

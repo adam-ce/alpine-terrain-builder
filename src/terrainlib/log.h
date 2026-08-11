@@ -68,6 +68,3 @@ private:
             LOG_WARN(fmt_str " (occurrence {})", ##__VA_ARGS__, _log_warn_backoff.count()); \
         }                                                                \
     } while (false)
-
-template <typename... Ts>
-constexpr void USE(Ts &&...) noexcept {}

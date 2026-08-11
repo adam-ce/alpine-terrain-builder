@@ -107,9 +107,9 @@ inline glm::uvec2 compute_target_size(const TextureDemand &demand, const double 
 
 // One of the node's textures, with the size it will be rescaled or baked to.
 struct BakePlan {
-    std::optional<uint32_t> inherited_id; // set when the merge carried the texture in
     std::vector<uint32_t> clusters;
     glm::uvec2 size{1};
+    std::optional<uint32_t> inherited_id = {}; // set when the merge carried the texture in
 };
 
 // Scale every planned size down until they fit the node's texel budget together.

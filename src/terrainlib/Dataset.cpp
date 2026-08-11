@@ -47,12 +47,6 @@ static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigne
     return static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags, nullptr, nullptr, nullptr));
 }
 
-void GdalDatasetDeleter::operator()(GDALDataset *dataset) const {
-    if (dataset) {
-        GDALClose(dataset);
-    }
-}
-
 std::optional<Dataset> Dataset::open_raster(std::filesystem::path path) {
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
         return std::optional<Dataset>(Dataset(path, dataset));

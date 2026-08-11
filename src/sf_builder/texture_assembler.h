@@ -444,7 +444,7 @@ inline AssembledTexture splatter_tiles_to_texture(
 
 /// Creates a texture for the given region.
 [[nodiscard]]
-inline std::optional<cv::Mat> assemble_texture_from_tiles(
+inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.

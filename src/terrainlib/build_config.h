@@ -1,6 +1,6 @@
 #pragma once
 
-#define ALP_UNUSED(value) static_cast<void>(value)
+#define ALP_UNUSED(...) static_cast<void>([](auto &&...) {}(__VA_ARGS__))
 
 #ifdef NDEBUG
 constexpr bool IS_DEBUG_BUILD = false;

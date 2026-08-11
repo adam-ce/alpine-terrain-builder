@@ -5,6 +5,7 @@
 
 #include <glm/common.hpp>
 
+#include "build_config.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 #include "mesh/igl/cut.h"
@@ -46,11 +47,15 @@ inline std::vector<uint32_t> identity_map(const std::span<const glm::uvec3> tria
     return identity_map(max_vertex_index + 1);
 }
 inline void assert_disks(const std::span<const glm::uvec3> triangles) {
+#ifndef NDEBUG
     const Topology topology = compute_topology(triangles);
     for (const auto &component : topology.components()) {
         DEBUG_ASSERT(component.is_disk(true));
     }
     DEBUG_ASSERT(topology.is_disks(true));
+#else
+    ALP_UNUSED(triangles);
+#endif
 }
 }
 

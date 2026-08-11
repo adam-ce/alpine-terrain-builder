@@ -16,6 +16,7 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
+#include "build_config.h"
 #include "hash_utils.h"
 #include "log.h"
 #include "mesh/cgal.h"
@@ -247,6 +248,7 @@ public:
     }
 
     template <typename F>
+    [[maybe_unused]]
     decltype(auto) visit(F &&f) {
         return std::visit(std::forward<F>(f), _v);
     }
@@ -450,16 +452,11 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                 } else if (inside_count == 1) {
                     // A single vertex is inside the plane, cut the other two off.
 
-                    // First identify the vertices
-                    uint32_t inside_tri_index, outside1_tri_index, outside2_tri_index;
-                    for (uint8_t k = 0; k < 3; k++) {
-                        if (vertex_inside[k]) {
-                            inside_tri_index = k;
-                            outside1_tri_index = (k + 1) % 3;
-                            outside2_tri_index = (k + 2) % 3;
-                            break;
-                        }
-                    }
+                    // inside_count guarantees exactly one entry is true.
+                    const uint32_t inside_tri_index =
+                        vertex_inside[0] ? 0u : vertex_inside[1] ? 1u : 2u;
+                    const uint32_t outside1_tri_index = (inside_tri_index + 1) % 3;
+                    const uint32_t outside2_tri_index = (inside_tri_index + 2) % 3;
 
                     // Skip the triangle if it only touches the plane
                     if (distance_to_plane[inside_tri_index] == 0) {
@@ -505,16 +502,11 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                 } else if (inside_count == 2) {
                     // Two vertices is inside the plane, cut the last one off and split the triangle.
 
-                    // First identify the vertices
-                    uint32_t outside_tri_index, inside1_tri_index, inside2_tri_index;
-                    for (uint8_t k = 0; k < 3; k++) {
-                        if (!vertex_inside[k]) {
-                            outside_tri_index = k;
-                            inside1_tri_index = (k + 1) % 3;
-                            inside2_tri_index = (k + 2) % 3;
-                            break;
-                        }
-                    }
+                    // inside_count guarantees exactly one entry is false.
+                    const uint32_t outside_tri_index =
+                        !vertex_inside[0] ? 0u : !vertex_inside[1] ? 1u : 2u;
+                    const uint32_t inside1_tri_index = (outside_tri_index + 1) % 3;
+                    const uint32_t inside2_tri_index = (outside_tri_index + 2) % 3;
 
                     // Then compute the intersections
                     const glm::dvec3 outside_vertex = vertices[outside_tri_index];
@@ -710,6 +702,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
         HalfedgeDescriptor h_e, HalfedgeDescriptor h_f, 
         const TriangleMesh& tm_e, const TriangleMesh& tm_f, bool /*is_target_coplanar*/, bool /*is_source_coplanar*/) {
         DEBUG_ASSERT(i_id == intersections.size());
+        ALP_UNUSED(i_id);
         if (&mesh == &tm_e) {
             // The edge belongs to the mesh being clipped
             const auto source_vertex = mesh.source(h_e);

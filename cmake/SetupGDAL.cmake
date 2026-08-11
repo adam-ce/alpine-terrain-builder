@@ -46,9 +46,9 @@ function(alp_setup_gdal)
             -DBUILD_CSHARP_BINDINGS=OFF
             -DGDAL_USE_ICONV=OFF
             -DGDAL_USE_EXTERNAL_LIBS=OFF
+            "-DCMAKE_INSTALL_RPATH=\$ORIGIN/../../proj/lib"
         )
 
     find_package(GDAL CONFIG REQUIRED)
     set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" PARENT_SCOPE)
 endfunction()
-

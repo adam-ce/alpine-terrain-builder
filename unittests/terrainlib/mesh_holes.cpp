@@ -1,6 +1,7 @@
 #include <glm/glm.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <fmt/ranges.h>
 #include <glm/gtx/hash.hpp>
 
 #include "../catch2_helpers.h"

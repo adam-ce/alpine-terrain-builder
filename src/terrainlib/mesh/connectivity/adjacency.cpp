@@ -46,6 +46,8 @@ create_edge_to_triangle_mapping_impl(const std::span<const glm::uvec3> triangles
                     (triangle[0] == edge.y || triangle[1] == edge.y || triangle[2] == edge.y);
 
                 DEBUG_ASSERT(first_vertex_found_in_triangle && second_vertex_found_in_triangle, "Both vertices of the edge exist in the triangle");
+                ALP_UNUSED(first_vertex_found_in_triangle);
+                ALP_UNUSED(second_vertex_found_in_triangle);
             }
         }
     }

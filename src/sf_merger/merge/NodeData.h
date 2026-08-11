@@ -27,7 +27,7 @@ public:
 
     // Status::Leaf or Status::Inner guarantuess a node is present
     template <octree::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == octree::NodeStatus::Leaf || S == octree::NodeStatus::Inner, const SimpleMesh &>
+    std::enable_if_t<S == octree::NodeStatusOrMissing::Leaf || S == octree::NodeStatusOrMissing::Inner, const SimpleMesh &>
     mesh() const {
         auto mesh = this->load_mesh();
         if (mesh.has_value()) {
@@ -39,7 +39,7 @@ public:
 
     // Status::Missing and Status::Virtual do not exist on disk, but may be the child of a leaf or inner node
     template <octree::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == octree::NodeStatusOrMissing::Missing || S == octree::NodeStatus::Virtual, std::optional<std::reference_wrapper<SimpleMesh>>>
+    std::enable_if_t<S == octree::NodeStatusOrMissing::Missing || S == octree::NodeStatusOrMissing::Virtual, std::optional<std::reference_wrapper<SimpleMesh>>>
     mesh() const {
         return this->load_mesh();
     }

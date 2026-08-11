@@ -57,9 +57,11 @@ void validate_epsilon_mapping(
                     const glm::dvec3 &pj = meshes[originals[j].mesh_index].get().positions[originals[j].vertex_index];
                     const double dist2 = glm::distance2(pi, pj);
                     DEBUG_ASSERT(dist2 <= epsilon2);
+                    ALP_UNUSED(dist2);
                 }
             }
         }
+        ALP_UNUSED(epsilon2);
     }
 }
 

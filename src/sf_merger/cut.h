@@ -34,7 +34,7 @@ inline void cut_leaf_node(
     DEBUG_ASSERT(ctx.input.index().is(octree::NodeStatus::Leaf, id));
 
     const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.load(id)).value();
-    LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles", 
+    LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
         id, mask.mesh.vertex_count(), mask.mesh.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
@@ -43,7 +43,7 @@ inline void cut_leaf_node(
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
-            LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles", 
+            LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
             DEBUG_ASSERT_VAL(ctx.output.save(id, clipped_mesh));
         } else {
@@ -132,4 +132,3 @@ inline void cut_dataset(
 
     cut_dataset(input_dataset, mask, output_dataset, keep_inside);
 }
-

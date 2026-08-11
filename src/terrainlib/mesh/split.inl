@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
+#include "build_config.h"
 #include "containers/SegmentedBuffer.h"
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"
@@ -113,8 +114,12 @@ std::vector<uint32_t> calculate_vertex_counts(const uint32_t vertex_count, const
 template <typename Mapping>
 std::vector<uint32_t> calculate_triangle_counts(const std::span<const glm::uvec3> triangles, const uint32_t group_count, Mapping &&vertex_to_group, const bool allow_mixed_triangles) {
     std::vector<uint32_t> triangle_counts(group_count, 0);
+#ifdef NDEBUG
+    ALP_UNUSED(allow_mixed_triangles);
+#endif
     for (const glm::uvec3 &triangle : triangles) {
         const uint32_t g0 = vertex_to_group(triangle[0]);
+#ifndef NDEBUG
         const uint32_t g1 = vertex_to_group(triangle[1]);
         const uint32_t g2 = vertex_to_group(triangle[2]);
 
@@ -126,6 +131,7 @@ std::vector<uint32_t> calculate_triangle_counts(const std::span<const glm::uvec3
             DEBUG_ASSERT(g0 == g1);
             DEBUG_ASSERT(g0 == g2);
         }
+#endif
 
         triangle_counts[g0]++;
     }

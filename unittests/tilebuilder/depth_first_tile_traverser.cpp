@@ -41,7 +41,7 @@ TEST_CASE("depth_first_tile_traverser interface")
     const radix::tile::Id root_id = { 0, { 0, 0 }, tiler.scheme() };
     const unsigned max_zoom_level = 3;
 
-    ReadType result = traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
+    traverse_depth_first_and_aggregate(tiler, read_function, aggregate_function, root_id, max_zoom_level);
 }
 
 TEST_CASE("depth_first_tile_traverser basics")
@@ -116,8 +116,8 @@ TEST_CASE("depth_first_tile_traverser basics")
 TEST_CASE("depth_first_tile_traverser austrian heights")
 {
     const auto grid = ctb::GlobalMercator();
-    const auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_100m_mgi.tif").value();
-    //    const auto dataset = Dataset::open_shared_raster(ATB_TEST_DATA_DIR "/austria/at_mgi.tif");
+    const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_100m_mgi.tif").value();
+    //    const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
     const auto bounds = dataset->bounds(grid.getSRS());
     const auto tiler = TopDownTiler(grid, bounds, radix::tile::Border::No, radix::tile::Scheme::Tms);
     const auto tile_reader = DatasetReader(dataset, grid.getSRS(), 1, false);

@@ -171,6 +171,7 @@ public:
                     const std::optional<uint32_t> inv_mapped = this->map_backward(i, mapped);
                     DEBUG_ASSERT(inv_mapped.has_value());
                     DEBUG_ASSERT(inv_mapped.value() == j);
+                    ALP_UNUSED(inv_mapped);
                 }
             }
 
@@ -179,6 +180,9 @@ public:
                 DEBUG_ASSERT(source_mesh_index < this->mesh_count());
                 DEBUG_ASSERT(source_vertex_index < this->mesh_vertex_count(source_mesh_index));
                 DEBUG_ASSERT(this->map_forward(VertexId{.mesh_index = source_mesh_index, .vertex_index = source_vertex_index}) == merged_vertex_index);
+                ALP_UNUSED(merged_vertex_index);
+                ALP_UNUSED(source_mesh_index);
+                ALP_UNUSED(source_vertex_index);
             }
 
             // Check forward(x) != forward(y)
@@ -189,7 +193,9 @@ public:
                     for (uint32_t k = j + 1; k < vertex_count; k++) {
                         const uint32_t mapped_k = this->map_forward(VertexId{.mesh_index = i, .vertex_index = k});
                         DEBUG_ASSERT(mapped_j != mapped_k);
+                        ALP_UNUSED(mapped_k);
                     }
+                    ALP_UNUSED(mapped_j);
                 }
             }
 

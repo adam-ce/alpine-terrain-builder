@@ -54,7 +54,7 @@ struct fmt::formatter<io::Error> {
     }
 
     template <typename FormatContext>
-    auto format(const io::Error &error, FormatContext &ctx) {
+    auto format(const io::Error &error, FormatContext &ctx) const {
         const char *name = "Unknown";
 
         switch (error) {

@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <functional>
+#include <type_traits>
 
 #include <fmt/format.h>
 #include <glm/glm.hpp>
@@ -345,7 +346,7 @@ struct fmt::formatter<octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>>
     }
 
     template <typename FormatContext>
-    auto format(const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id, FormatContext &ctx) {
+    auto format(const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id, FormatContext &ctx) const {
         auto out = fmt::format_to(ctx.out(), "Id(level={}, coords=(", id.level());
 
         const auto coords = id.coords();
@@ -400,8 +401,7 @@ struct hash<octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>> {
 } // namespace std
 
 #include <zpp_bits.h>
-namespace zpp::bits {
-
+namespace octree {
 namespace {
 constexpr zpp::bits::errc success() {
     return zpp::bits::errc(std::errc());
@@ -419,17 +419,22 @@ constexpr auto serialize(auto &archive, octree::Id_<Dimensions, MaxLevel, LevelT
     typename Id::Level level;
     typename Id::Index index;
     auto result = archive(level, index);
-    if (failure(result)) {
+    using Result = std::remove_cvref_t<decltype(result)>;
+    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
         return result;
-    }
+    } else {
+        if (zpp::bits::failure(result)) {
+            return result;
+        }
 
-    auto maybe_id = Id::try_make(level, index);
-    if (!maybe_id) {
-        return zpp::bits::errc(std::errc::bad_message);
-    }
+        auto maybe_id = Id::try_make(level, index);
+        if (!maybe_id) {
+            return zpp::bits::errc(std::errc::bad_message);
+        }
 
-    id = *maybe_id;
-    return success();
+        id = *maybe_id;
+        return success();
+    }
 }
 
 template <
@@ -441,4 +446,4 @@ template <
 constexpr auto serialize(auto &archive, const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id) {
     return archive(id.level(), id.index_on_level());
 }
-}
+} // namespace octree

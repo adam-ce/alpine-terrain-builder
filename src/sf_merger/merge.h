@@ -124,7 +124,7 @@ private:
     case get_index(Status::left_status, Status::right_status): {            \
         merge::NodeData<Status::left_status> left_node(id, this->_left);    \
         merge::NodeData<Status::right_status> right_node(id, this->_right); \
-        return this->_visitor.template visit(id, left_node, right_node, ctx); \
+        return this->_visitor.template visit<Status::left_status, Status::right_status>(id, left_node, right_node, ctx); \
     }
 
             ALP_GENERATE_CASE(Missing, Missing);

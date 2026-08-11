@@ -12,7 +12,6 @@ struct ClusteringAndMap {
     VertexMap remap;
 };
 
-
 namespace detail {
 inline bool is_identity(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
     if (cluster_indices.size() != clustering.cluster_count()) {
@@ -30,6 +29,7 @@ inline bool is_identity(const Clustering &clustering, const std::span<const uint
 inline ClusteringAndMap slice_clusters_with_map(const Clustering &clustering, const std::span<const uint32_t> cluster_indices) {
     const uint32_t cluster_count = clustering.cluster_count();
     const uint32_t vertex_count = clustering.vertex_count();
+
     if (detail::is_identity(clustering, cluster_indices)) {
         return {clustering, VertexMap::identity(vertex_count)};
     }

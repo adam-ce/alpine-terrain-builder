@@ -358,7 +358,7 @@ TEST_CASE("clip_on_bounds produces manifold mesh") {
 #ifdef NDEBUG
 TEST_CASE("mesh::clip_on_bounds benchmark") {
     BENCHMARK_ADVANCED("clip based on octree")(Catch::Benchmark::Chronometer meter) {
-        const std::filesystem::path mesh_path = ATB_TEST_DATA_DIR "/meshes/6857.terrain";
+        const std::filesystem::path mesh_path = ALP_TEST_DATA_DIR "/meshes/6857.terrain";
         auto mesh_result = mesh::io::load_from_path(mesh_path);
         REQUIRE(mesh_result.has_value());
         SimpleMesh &mesh = mesh_result.value();

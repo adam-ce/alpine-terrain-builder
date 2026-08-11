@@ -21,9 +21,9 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   `src/terrainlib/sf` and use the `sf` namespace.
 - Existing 3D Structura Fundamentalis datasets must remain readable and
   writable without changing their on-disk contract.
-- Existing DAG datasets stored in the 3D hierarchy with `.bin` payloads must
-  also remain readable and writable without changing their index or payload
-  serialization.
+- DAG datasets written by the current code when Phase 0 begins must remain
+  readable and writable throughout the refactor without changing their index
+  or payload serialization. Older DAG payload schemas are not supported.
 - `Inner` is a valid shared topology state and is supported by DAG,
   raster-fundamentalis, and tile-base datasets. It is not valid in Structura
   Fundamentalis datasets.
@@ -49,6 +49,8 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   `std::expected`; unsupported operations and other operational failures are
   reported as error values. Reading and writing must be reentrant (callable
   concurrently from different threads).
+- The runtime glTF codec catches exceptions from the existing glTF mesh writer
+  and converts them to `CodecError`; changing the mesh I/O API is out of scope.
 - `store::RawStorage<Traits, NodeData>` exclusively owns the configured
   `std::unique_ptr<store::Codec<NodeData>>`. `store::Storage` owns the raw
   storage and therefore owns the codec transitively. Storage consumers do not
@@ -58,6 +60,9 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   and does not change their concurrency guarantees. Existing caller-side
   synchronization and concurrency behaviour are preserved; any concurrency
   bug fix is separate work.
+- Preserve `dag::ThreadSafeStorage` as the caller-side synchronization around
+  DAG output storage. DAG storage remains cacheless while shared-lock reads are
+  used.
 - Legacy index metadata selects a codec through an explicit, caller-supplied
   resolver supplied by the payload-domain opening function. The octree format
   adapter does not contain a global codec registry or depend on mesh or DAG
@@ -125,7 +130,7 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
 - Changing the existing 3D hard-link policy by adding a silent file-copy
   fallback.
 - Refactoring unrelated octree, DAG, mesh, or tile-builder code.
-- Changing the serialized schema of existing DAG `.bin` payloads.
+- Changing the serialized schema of the current DAG `.bin` payloads.
 
 ## Compatibility contract
 
@@ -147,15 +152,16 @@ Before moving code, tests must lock down the following 3D behaviour:
 | Layout detection | both existing layouts remain detectable |
 | Mesh codec selection | legacy preferred extension selects terrain or configured glTF codec |
 | DAG codec selection | legacy `.bin` preferred extension selects the ZPP Bits codec |
-| DAG payload encoding | existing `dag::ClusterBatch` ZPP Bits serialization |
+| DAG payload encoding | current `dag::ClusterBatch` ZPP Bits serialization: metadata, then clustering |
 | Equal codec path lists | hard-link every file, or report an explicit error |
 | Different codec path lists | decode with input codec and encode with output codec |
 | Overwrite setting | `StorageSettings::allow_overwrite`, default `false`; enabled writes replace existing payloads |
 
-Compatibility means that the refactored code can open datasets written before
-the refactor. Pre-refactor readers are not tested against post-refactor outpus. Exact
+Compatibility means that each refactor phase can open the Phase 0 fixtures
+written by the current code. DAG formats older than the Phase 0 baseline and
+pre-refactor readers opening post-refactor output are not tested. Exact
 byte-for-byte rewriting of an unordered index map is not required, but the
-serialized schema and values must remain compatible.
+serialized schema and values must remain compatible during the migration.
 
 The 3D index disk type should remain a versioned 3D adapter. The shared store
 must not add a topology field, new header, checksum, or compression layer to
@@ -244,11 +250,19 @@ extensions are recorded in [todo.md](todo.md).
 Temporary forwarding headers and aliases under `octree` are allowed during
 migration. They must not contain a second implementation.
 
-DAG serialization remains owned by `dag_builder`. Consolidate the existing
-`dag::Id`, `dag::ClusterBatch`, `Clustering`, `Cluster`, and `TextureSet`
-serialization functions in `src/dag_builder/serialization.h`. The DAG storage
-adapter includes that header explicitly so template instantiation does not
-depend on callers including `encoded.h` in the correct order.
+DAG serialization remains owned by `dag_builder`. Consolidate the serializers
+for `dag::Id`, `dag::Group`, `dag::NodeMetadata`, `dag::ClusterBatch`,
+`radix::geometry::Aabb3d`, GLM vectors, `Clustering`, `Cluster`, and
+`TextureSet` in `src/dag_builder/serialization.h`. The DAG storage adapter
+includes that header explicitly so template instantiation does not depend on
+caller include order. Preserve the current tuples exactly:
+
+- `ClusterBatch`: metadata, clustering;
+- `NodeMetadata`: group assignment, groups; and
+- `Group`: children, error, bounds.
+
+`Group::child_errors` is currently neither populated nor serialized. It remains
+non-persistent in this refactor and the Phase 0 fixture locks down its omission.
 
 ## Shared interfaces
 
@@ -311,6 +325,20 @@ Keys produced internally by `Traits::root()`, `Traits::parent()`, and
 `Traits::children()` are trusted only after trait-specific tests establish that
 they preserve validity. The child order affects traversal order and is locked
 down by the 2D and 3D trait tests; it is not serialized as separate metadata.
+
+The API result shapes are:
+
+- index lookup returns `expected<optional<NodeStatus>, InvalidKey<Key>>`;
+- index mutation and predicates return `expected<bool, InvalidKey<Key>>`;
+- traversal returns `expected<void, InvalidKey<Key>>`; and
+- storage `load`, `save`, `has`, `remove`, path lookup, and `copy_from` return
+  operation-specific `expected` types which retain `InvalidKey<Key>` and any
+  applicable codec, filesystem, missing-source, or overwrite error.
+
+During Phase 1, a forwarding `octree::IndexMap` compatibility wrapper preserves
+the old optional/bool API for existing 3D callers with already-valid
+`octree::Id` values. It delegates to `store::Index<octree::StoreTraits>`, is not
+a second implementation, and is removed after callers migrate.
 
 ### Sparse index and traversal
 
@@ -486,6 +514,11 @@ store::cache::Interface<Traits, NodeData>
 ownership. Moving storage transfers ownership. Caches, layouts, index formats,
 resolvers, and application consumers never own the codec.
 
+A move disarms the source so its destructor cannot save moved-out index state.
+Move assignment must finalize a displaced dirty destination through the
+existing destructor-save policy rather than silently discard it. Tests cover
+the DAG builder's move into and release from `dag::ThreadSafeStorage`.
+
 Domain-specific mesh codecs remain under `mesh::codec`. The reusable ZPP Bits
 codec remains under `store::codec`. RF codecs are deferred.
 
@@ -555,6 +588,9 @@ mesh::codec::from_extension
 
 dag::codec::from_extension
   .bin     -> store::codec::ZppBits<dag::ClusterBatch>
+
+dag::codec::metadata_from_extension
+  .bin     -> read-only dag::codec::MetadataView
 ```
 
 An unknown extension returns an explicit `UnsupportedCodec` error. Opening a
@@ -563,7 +599,12 @@ constructed codec at the payload-domain opening boundary; the generic storage
 does not infer persistent metadata from `Codec::paths()`. Mesh and DAG
 convenience functions select or resolve the codec and pass ownership into raw
 storage, so application storage consumers do not handle codec objects.
-Convenience functions in `src/dag_builder/storage.h` supply the DAG resolver.
+Convenience functions in `src/dag_builder/storage.h` supply the DAG resolvers.
+Preserve `DagMetaStorage` and `IndexedDagMetaStorage` as independently readable
+views of the metadata prefix in each `ClusterBatch` `.bin` file. Their codec
+returns `UnsupportedOperation` from writes instead of terminating or replacing
+a full batch with metadata alone. `dag::codec::MetadataView` implements this
+domain-specific read-only prefix view over the generic ZPP Bits codec.
 
 Opening functions return their requested storage type through
 `std::expected<..., OpenError>`. `OpenError` is a typed sum which retains the
@@ -578,13 +619,18 @@ failing path and the underlying error where applicable:
 Loading and saving likewise return storage-level expected errors which retain
 an invalid key, an underlying `CodecError`, and `AlreadyExists` for a rejected
 save. `CopyError` retains invalid-key, missing-source, overwrite, filesystem,
-and codec failures. Domain/application boundaries may add context, but must not
-discard these errors.
+and codec failures. The SF call chains changed in Phase 4 retain these errors
+to their application boundary. DAG callers preserve their existing per-node
+log-and-continue and command-line policies; making the DAG builder fail-fast is
+not part of this refactor.
 
 Legacy unindexed-directory discovery remains in the 3D adapter: it recognizes
 candidate endings by asking the supplied resolver, removes an accepted ending
 to obtain a `NodePath`, and then invokes the selected layout parser. The
 generic layout does not recover keys directly from codec-owned file paths.
+Only a missing index triggers this discovery path. An unreadable or malformed
+index, unknown layout, or unsupported codec selector returns `OpenError` and
+must not silently fall back to directory discovery.
 
 Automatic dirty-index saving currently happens in the 3D storage destructor.
 Preserve that behaviour for existing 3D entry points during the migration.
@@ -635,14 +681,15 @@ The dummy path must be fixed and collision-free, for example
 `__codec_probe__/node`. Path lists are compared exactly, including count,
 order, and filename endings.
 
-If linking several files fails partway through, return the error without a
-transactional rollback guarantee; target links already created by the call
-may remain. The copy operation stops immediately, leaves the target index
-unchanged for that logical node, and propagates the failure until the
-application aborts the overall operation. There is no journal, rollback,
-cleanup guarantee, or silent copy fallback. An unsupported read or write needed
-for re-encoding is returned through `CopyError`, retaining the underlying
-`CodecError`.
+If overwrite is enabled for an indexed target, remove the target index entry
+immediately before the first target file is modified. If linking several files
+then fails partway through, return the error without a transactional rollback
+guarantee; target links or old files may remain, but the logical node stays
+unindexed. The copy operation stops immediately and propagates the failure
+until the application aborts the overall operation. There is no journal,
+rollback, cleanup guarantee, or silent copy fallback. An unsupported read or
+write needed for re-encoding is returned through `CopyError`, retaining the
+underlying `CodecError`.
 
 Hard-link rules:
 
@@ -731,7 +778,10 @@ No production behaviour changes.
    - index entries containing `Leaf` and `Virtual`, but no `Inner`.
 2. Add one golden DAG dataset whose index selects `.bin`, whose payload
    contains a valid serialized `dag::ClusterBatch`, and whose index contains
-   `Leaf`, `Virtual`, and `Inner`.
+   `Leaf`, `Virtual`, and `Inner`. Use the current metadata-then-clustering
+   format, include non-trivial group metadata, and prove that the same file can
+   be opened through the read-only `NodeMetadata` view. Lock down that
+   `Group::child_errors` is not serialized.
 3. Test that all fixtures open, resolve the expected IDs and extensions, and
    traverse the expected sparse nodes.
 4. Add path round-trip tests for boundary IDs and both layouts.
@@ -742,7 +792,8 @@ No production behaviour changes.
    - indexed and unindexed opens; and
    - final index creation by directory scan.
 6. Record the pre-refactor public aliases used by `sf_builder`, `sf_merger`,
-   `sf_index_browser`, `dag_builder`, and `dag_convert_debug`.
+   `sf_index_browser`, `dag_builder`, and `dag_convert_debug`, including
+   `DagMetaStorage`, `IndexedDagMetaStorage`, and `dag::ThreadSafeStorage`.
 
 Exit criterion: the compatibility tests pass against the untouched
 implementation and fail when any stable filename, layout ID, path encoding,
@@ -760,7 +811,8 @@ changed.
 6. Run the same index-transition and DFS/BFS tests with both trait types,
    including deterministic child order, invalid-key errors through
    `std::expected`, maximum-depth children, and explicit traversal roots.
-7. Provide temporary `octree` aliases so downstream migration is separate where this makes sense, otherwise migrate downstream immediately.
+7. Provide the temporary forwarding `octree::IndexMap` wrapper and aliases so
+   downstream migration is separate; otherwise migrate downstream immediately.
 
 Exit criterion: 2D and 3D keys pass the same topology suite; existing 3D
 callers still build through aliases; no filesystem code has changed.
@@ -785,6 +837,7 @@ layout-plus-codec path construction in one step.
 5. Add the terrain codec and one glTF codec configured for binary `.glb` or
    JSON `.gltf`. Keep the current extension-dispatching `octree::MeshCodec`
    only as temporary production compatibility glue until the Phase 3 cutover.
+   Test that glTF writer exceptions become `CodecError` values.
 6. Port the two existing 3D layouts to ordinary function pairs without
    changing stable IDs. The mappings return `level-index` and
    `level/x/y/z` without file endings.
@@ -796,7 +849,9 @@ layout-plus-codec path construction in one step.
    paths.
 9. Add focused codec tests using single-file, multi-file, read/write, and
    write-only test codecs. Test stable path ordering, unsupported operations,
-   directory creation, and conversion of domain errors to `CodecError`.
+   directory creation, conversion of domain errors to `CodecError`, and
+   concurrent reads and writes. Exercise reentrancy of every production codec
+   used by the parallel DAG builder.
 
 Exit criterion: the extensionless mappings and runtime codecs together resolve
 all Phase 0 fixtures to their existing physical payload paths; generic
@@ -826,27 +881,31 @@ path.
    `mesh::codec`.
 8. Add the function-pointer-based `IndexFormat<Traits>`, `IndexMetadata`, and
    typed format/open errors. Split generic index maintenance from 3D index
-   serialization and legacy folder discovery.
+   serialization and legacy folder discovery. Test that only a missing index
+   starts discovery; all other index errors are returned.
 9. Keep the current 3D `terrain.index` DTO and open functions as compatibility
    adapters over the shared storage. Retain its exact preferred extension as
    `codec_selector`, resolve it through the payload-domain mesh or DAG
    resolver, and retain the format metadata required by automatic saving.
-10. Add DAG storage convenience functions that supply
-    `dag::codec::from_extension`, and mesh storage convenience functions that
-    select the configured terrain or glTF codec. Migrate `dag_builder`,
-    `dag_convert_debug`, and mesh storage consumers without exposing codec
-    objects at application call sites.
+10. Add DAG storage convenience functions that supply the writable batch and
+    read-only metadata resolvers, and mesh storage convenience functions that
+    select the configured terrain or glTF codec. Preserve the DAG metadata
+    storage aliases. Migrate `dag_builder`, `dag_convert_debug`, and mesh
+    storage consumers without exposing codec objects at application call sites.
 11. Migrate the existing octree storage aliases and all other application
-    callers.
+    callers, including adapting `dag::ThreadSafeStorage` to the new key and
+    expected-returning APIs while preserving its shared/exclusive locking.
 12. Preserve the current 3D destructor-save behaviour until all callers have
-    explicit index finalization.
+    explicit index finalization. Test move construction, move assignment over
+    dirty state, moved-from destruction, and the DAG move/release path.
 13. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
     overwrite mode and repeat debug export. Replace process termination on a
     rejected overwrite with `AlreadyExists` in the storage-level expected
     error. Test that a rejected save returns `AlreadyExists` and that enabling
     overwrite replaces the existing payload.
-14. Add resolver tests for `.terrain`, `.glb`, `.gltf`, and `.bin` open/read
-    dispatch, plus explicit failure for an unknown preferred extension.
+14. Add resolver tests for `.terrain`, `.glb`, `.gltf`, writable
+    `ClusterBatch` `.bin`, and read-only `NodeMetadata` `.bin` dispatch, plus
+    explicit failure for an unknown preferred extension and metadata writes.
 15. Instantiate the shared storage tests with `raster_store::StoreTraits`
     using a test-only path mapping and codec. This proves the storage templates
     contain no hidden `octree::Id` dependency without defining a stable RF
@@ -855,15 +914,15 @@ path.
     classes, static codec concept and codecs, and their temporary compatibility
     glue once no call site uses them.
 
-Test that a pre-refactor DAG fixture opens through the new resolver and that a
-new deterministic `.bin` payload matches the Phase 0 golden bytes and remains
-readable through the unchanged ZPP serialization functions. Test unknown
-layout IDs, malformed index metadata, invalid hierarchy keys, and retained
-underlying open/codec errors through `std::expected`.
+Test that the Phase 0 DAG fixture opens through both new resolvers and that a
+new deterministic `.bin` payload matches its golden bytes and remains readable
+through the unchanged ZPP serialization functions. Test unknown layout IDs,
+malformed index metadata, invalid hierarchy keys, and retained underlying
+open/codec errors through `std::expected`.
 
 Exit criterion: all existing applications build and all Phase 0 fixtures pass
-through the shared runtime codec and storage implementation. Existing DAG
-payload bytes and `.bin` paths remain compatible. No extension-dispatching
+through the shared runtime codec and storage implementation. Phase 0 DAG
+payload bytes and `.bin` paths remain unchanged. No extension-dispatching
 mesh codec, layout inheritance, RTTI lookup, static registrar, owning strategy
 pointer, or second storage implementation remains under `octree`.
 
@@ -881,6 +940,8 @@ pointer, or second storage implementation remains under `octree`.
    - multi-file hard linking;
    - different path counts and endings;
    - error propagation after a partially failed multi-file hard link;
+   - overwrite failure leaving an existing logical node unindexed even when
+     old or partial files remain;
    - conversion between terrain and glTF;
    - `copy_from()` overwrite rejection;
    - `copy_from()` overwrite-enabled replacement; and
@@ -895,6 +956,9 @@ pointer, or second storage implementation remains under `octree`.
    `sf::InvalidTopology` to the command line, and report that the output is
    invalid. Do not apply the validator when opening DAG datasets, through
    generic octree/store adapters, or in the diagnostic `sf_index_browser`.
+   Extract an SF-builder finalization boundary into `sfbuilderlib` which writes
+   the index, validates it, and returns the typed result so output validation
+   and command-line propagation are directly testable.
 7. Keep SF recursion, subtree traversal, and mesh policy in `sf_merger`.
    Change its subtree and cut call chains to propagate validation and
    `copy_from()` failures through `std::expected` to the application boundary.
@@ -936,6 +1000,18 @@ walker has been introduced.
 Exit criterion: repository search finds no generic implementation tied to
 `octree::Id`; all tests pass; the old layout strategy hierarchy is gone.
 
+### Phase 6 — Remove migration-only compatibility fixtures
+
+1. Delete the Phase 0 golden SF and DAG datasets and the tests whose only
+   purpose is opening or byte-comparing data written before the completed
+   refactor.
+2. Keep the format round-trip, path, resolver, topology, storage, error, and
+   application integration tests which exercise the final implementation
+   without pre-refactor fixture files.
+
+Exit criterion: no pre-refactor dataset fixture remains, and the retained test
+suite passes against data produced by the final implementation.
+
 ## Test and verification plan
 
 Generic store tests should live in the existing `unittests_terrainlib` target.
@@ -947,13 +1023,14 @@ unittests/terrainlib/store_traverse.cpp
 unittests/terrainlib/store_layout.cpp
 unittests/terrainlib/store_codec.cpp
 unittests/terrainlib/store_storage.cpp
-unittests/terrainlib/store_compatibility.cpp
+unittests/terrainlib/store_compatibility.cpp # temporary through Phase 5
 unittests/terrainlib/sf_validate_index.cpp
 ```
 
-The DAG payload-compatibility fixture and resolver integration test belong in
-`unittests_dagbuilder`, because `terrainlib` must not depend on
-`dag::ClusterBatch` or its serializers.
+The temporary DAG payload-compatibility fixture and resolver integration test
+belong in `unittests_dagbuilder`, because `terrainlib` must not depend on
+`dag::ClusterBatch` or its serializers. Phase 6 removes the fixture and its
+byte-comparison test while retaining resolver tests built from current data.
 
 The validator's unit tests belong in `unittests_terrainlib`. Boundary tests
 belong with their consumers: SF-builder output validation in
@@ -973,8 +1050,11 @@ During implementation:
 4. Run the full `unittests_terrainlib` target at every phase boundary.
 5. Run `unittests_dagbuilder` after the ZPP codec, DAG serialization header, or
    DAG resolver changes.
-6. Build `sf_builder`, `sf_merger`, `sf_index_browser`, `dag_builder`, and
-   `dag_convert_debug` after their storage aliases move.
+6. Configure with `ALP_BUILD_SF_BUILDER`, `ALP_BUILD_SF_MERGER`,
+   `ALP_BUILD_SF_INDEX_BROWSER`, `ALP_BUILD_DAG_BUILDER`, and
+   `ALP_BUILD_DAG_CONVERT_DEBUG` enabled, then build `sf-builder`, `sf-merger`,
+   `sf-index-browser`, `dag-builder`, and `dag-convert-debug` after their
+   storage aliases move.
 7. Run `unittests_sfbuilder`, `unittests_sfmerger`, and
    `unittests_dagbuilder`, plus any existing merger integration fixture, after
    the Phase 4 validation changes.
@@ -1000,14 +1080,16 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `octree/storage/codec/Codec.h` | runtime `store/Codec.h` |
 | `octree/storage/codec/DefaultCodec.h` | runtime `store/codec/ZppBits.h` |
 | `octree/storage/codec/MeshCodec.h` | `mesh/codec/Terrain.h` and configured `mesh/codec/Gltf.h` |
+| `octree/storage/codec/ReadOnlyCodec.h` metadata specialization | `dag::codec::MetadataView` |
 | `octree/storage/RawStorage.h` | `store/RawStorage.h` |
 | `octree/storage/Storage.h` | `store/Storage.h` |
 | `octree/storage/IndexedStorage.h` | `store/IndexedStorage.h` |
 | `octree::StorageSettings::allow_overwrite` | `store::StorageSettings::allow_overwrite`, preserving default and enabled behaviour |
 | `octree/storage/helpers.*` | generic scan helpers plus 3D format adapter |
 | `octree/disk/IndexFile.h` | versioned 3D format adapter under `octree` |
-| DAG serializers in `dag_node.h` and `encoded.h` | `dag_builder/serialization.h` |
-| `dag_builder/storage.h` aliases | DAG storage aliases plus codec resolver convenience functions |
+| DAG serializers in `dag_node.h`, `dag_id.h`, `metadata.h`, `encoded.h`, and `zpp_bits_glm.h` | `dag_builder/serialization.h` |
+| `dag_builder/storage.h` aliases | Batch and read-only metadata storage aliases plus codec resolver convenience functions |
+| `dag_builder/thread_safe_storage.h` | Adapted caller-side wrapper over shared storage |
 | `sf_merger::NodeWriter` subtree loop | remains in `sf_merger`; return copy failures through `std::expected` |
 | `sf_merger::NodeWriter` auxiliary `.png` write | remains an unmanaged, application-local debug artifact |
 | `sf_merger::cut_leaf_node()` copy path | remains in `sf_merger`; return copy failures through `std::expected` |
@@ -1018,7 +1100,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Risk | Control |
 |---|---|
 | Existing indexes stop loading | Golden pre-refactor fixtures and unchanged 3D DTO |
-| Existing DAG `.bin` datasets stop loading | Golden DAG fixture, unchanged serializers, and explicit `.bin` resolver |
+| The refactor changes current DAG `.bin` bytes | Temporary golden DAG fixture, unchanged serializers, and explicit `.bin` resolvers |
 | Octree format adapter gains DAG dependencies | Caller-supplied resolver owned by `dag_builder` |
 | Unknown legacy extension silently selects the wrong codec | Return an explicit `UnsupportedCodec` error |
 | Valid legacy paths are parsed differently | Characterization and round-trip tests before replacement |
@@ -1028,7 +1110,7 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | Invalid `Inner` nodes reach SF merge dispatch | Validate every SF input first and return the offending key in a typed error |
 | SF subtree copying is generalized before RF requirements exist | Keep it in `sf_merger`; reconsider extraction with `rf_merger` |
 | A paired-walker API is fixed before RF semantics are known | Defer its action algebra until `rf_merger` requirements are defined |
-| Multi-file hard linking fails partway through | Stop immediately, leave the node unindexed, propagate the error, and abort the overall operation; partial files may remain |
+| Multi-file hard linking fails partway through | Remove any existing index entry before modifying target files, stop immediately, leave the node unindexed, propagate the error, and abort the overall operation; old or partial files may remain |
 | Incompatible codecs return the same path list | Treat path-list equality as a codec contract and test every concrete codec pairing |
 | Output-only codec is selected for required input | Return a clear `UnsupportedOperation` error |
 | Shared code accumulates mesh or provisional RF policy | Dependency tests/review against the source boundary |
@@ -1044,8 +1126,8 @@ final here.
 
 A later RF design phase must resolve and test at least:
 
-- the persistent index filename, schema, versioning, and serialization
-  envelope;
+- the persistent index filename and schema, and how they use the existing
+  generic serialization envelope and versioning support;
 - persistent tile keys, coordinate convention, layout IDs, and node paths;
 - tile and source-attribution payload formats and codecs;
 - snapshot construction, validation, publication, and crash expectations;

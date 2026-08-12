@@ -37,6 +37,7 @@ function(alp_setup_gdal)
         CMAKE_ARGUMENTS
             -DBUILD_SHARED_LIBS=OFF
             -DBUILD_TESTING=OFF
+            -DGEOS_BUILD_DEVELOPER=OFF
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         )
 

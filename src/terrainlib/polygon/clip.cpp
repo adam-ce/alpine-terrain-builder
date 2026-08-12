@@ -54,14 +54,16 @@ void clip_triangle(const Triangle2d &subject, const Triangle2d &clip, std::vecto
 
     // Clip against each edge half space of the bounds
     Corners clipped;
+    Corners *current = &corners;
+    Corners *next = &clipped;
     for (const uint8_t corner : range<uint8_t>(3)) {
-        clip_to_half_space(corners, Edge2d{bounds[corner], bounds[(corner + 1) % 3]}, clipped);
-        std::swap(corners, clipped);
+        clip_to_half_space(*current, Edge2d{bounds[corner], bounds[(corner + 1) % 3]}, *next);
+        std::swap(current, next);
     }
 
     // Corners on a clip edge are kept by both sides, so the fan can hold collinear runs.
-    for (uint32_t corner = 2; corner < corners.size(); corner++) {
-        const Triangle2d piece = {corners[0], corners[corner - 1], corners[corner]};
+    for (uint32_t corner = 2; corner < current->size(); corner++) {
+        const Triangle2d piece = {(*current)[0], (*current)[corner - 1], (*current)[corner]};
         if (!geometry::is_empty_triangle(piece)) {
             out.push_back(piece);
         }

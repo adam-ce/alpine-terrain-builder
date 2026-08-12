@@ -25,6 +25,7 @@ inline void check_clean_vertex_remap(const std::span<uint32_t> vertex_remap, con
     if constexpr (IS_DEBUG_BUILD) {
         DEBUG_ASSERT(vertex_remap.size() == vertex_count);
         for (const uint32_t vertex_index : vertex_remap) {
+            ALP_UNUSED(vertex_index);
             DEBUG_ASSERT(vertex_index == no_vertex_remap);
         }
     } else {

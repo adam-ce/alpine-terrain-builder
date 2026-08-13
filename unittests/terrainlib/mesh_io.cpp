@@ -90,7 +90,7 @@ TEST_CASE("io roundtrip") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
             const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
@@ -133,7 +133,7 @@ TEST_CASE("io roundtrip high precision") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
             const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
@@ -176,7 +176,7 @@ TEST_CASE("io roundtrip no texture") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path);
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
             const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
@@ -213,7 +213,7 @@ TEST_CASE("io roundtrip no texture and uvs") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path);
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
             const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);

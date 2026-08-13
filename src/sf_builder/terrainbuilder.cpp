@@ -275,6 +275,7 @@ void build_all_patches(
         logger->set_level(new_level);
     }
 
+    tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
         if (!overwrite_existing && storage.has(node)) {
@@ -299,16 +300,33 @@ void build_all_patches(
         if (mesh_result.has_value()) {
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
-            storage.save(node, mesh);
+            const auto save_result = storage.save(node, mesh);
+            if (!save_result.has_value()) {
+                LOG_ERROR("Failed to save mesh for node {}: {}", node, save_result.error());
+                progress.task_finished();
+                context.cancel_group_execution();
+                return;
+            }
         }
 
         progress.task_finished();
-    });
+    }, context);
 
     // Restore original level
     logger->set_level(original_level);
 
+    if (context.is_group_execution_cancelled()) {
+        progress_thread.request_stop();
+    }
     progress_thread.join();
-    storage.save_or_create_index();
+
+    if (context.is_group_execution_cancelled()) {
+        LOG_ERROR_AND_EXIT("Failed to build all terrain patches");
+    }
+
+    const auto index_result = storage.save_or_create_index();
+    if (!index_result.has_value()) {
+        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", storage.base_path(), index_result.error());
+    }
 }
 }

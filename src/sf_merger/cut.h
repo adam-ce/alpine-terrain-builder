@@ -114,7 +114,10 @@ inline void cut_dataset(
     const bool keep_inside) {
     Context ctx(input, output, octree::Space::earth(), keep_inside);
     cut_node(ctx, octree::Id::root(), mask);
-    output.save_or_create_index();
+    const auto index_result = output.save_or_create_index();
+    if (!index_result.has_value()) {
+        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", output.base_path(), index_result.error());
+    }
 }
 
 inline void cut_dataset(

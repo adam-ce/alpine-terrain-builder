@@ -33,8 +33,8 @@ int main(int argc, char **argv) {
                 store::describe_error(output_result.error()));
             return EXIT_FAILURE;
         }
-        const octree::IndexedMeshStorage input_storage = std::move(input_result.value());
-        octree::IndexedDagStorage output_storage = std::move(output_result.value());
+        const mesh::storage::IndexedStorage input_storage = std::move(input_result.value());
+        dag::storage::IndexedStorage output_storage = std::move(output_result.value());
         output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
         dag::BuildOptions options{

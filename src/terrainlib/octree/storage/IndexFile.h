@@ -5,7 +5,6 @@
 #include <fmt/format.h>
 
 #include "io/serialize.h"
-#include "octree/IndexMap.h"
 #include "octree/StoreTraits.h"
 #include "octree/disk/IndexFile.h"
 #include "octree/store_layout/Mappings.h"
@@ -27,7 +26,7 @@ read_index_file(const std::filesystem::path &path) {
     }
     disk::v1::IndexFile file = std::move(result.value());
     return store::IndexMetadata<StoreTraits>{
-        std::move(file.map).take_shared(),
+        std::move(file.map),
         std::move(file.layout_strategy_id),
         std::move(file.preferred_extension),
     };
@@ -39,7 +38,7 @@ inline std::expected<void, store::IndexFormatError> write_index_file(
     disk::v1::IndexFile file;
     file.layout_strategy_id = metadata.layout_id;
     file.preferred_extension = metadata.codec_selector;
-    file.map = IndexMap(metadata.index);
+    file.map = metadata.index;
     const auto result = io::write_to_path(file, path);
     if (!result.has_value()) {
         return std::unexpected(store::IndexFormatError{

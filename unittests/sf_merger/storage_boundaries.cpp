@@ -66,13 +66,13 @@ mesh::Simple clipping_box() {
         });
 }
 
-octree::IndexedStorage indexed_storage(const std::filesystem::path &path) {
+mesh::storage::IndexedStorage indexed_storage(const std::filesystem::path &path) {
     auto result = octree::open_folder_indexed(path);
     REQUIRE(result.has_value());
     return std::move(result.value());
 }
 
-octree::Storage unindexed_storage(const std::filesystem::path &path) {
+mesh::storage::Storage unindexed_storage(const std::filesystem::path &path) {
     auto result = octree::open_folder(path);
     REQUIRE(result.has_value());
     return std::move(result.value());

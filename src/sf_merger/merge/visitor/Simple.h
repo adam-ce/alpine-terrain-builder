@@ -5,13 +5,13 @@
 #include "merge/visitor/Visitor.h"
 #include "mesh/merge.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
+#include "store/NodeStatusOrMissing.h"
 
 namespace merge::visitor {
 
 class Simple {
 public:
-    using Status = octree::NodeStatusOrMissing;
+    using Status = store::NodeStatusOrMissing;
     struct Context{};
     using Result = merge::Result<Context>;
 

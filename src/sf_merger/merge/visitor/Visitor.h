@@ -3,7 +3,7 @@
 #include "merge/NodeData.h"
 #include "merge/Result.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
+#include "store/NodeStatusOrMissing.h"
 
 namespace merge {
 template <typename T>
@@ -15,10 +15,10 @@ concept Visitor = requires(T t, const octree::Id &id) {
     { t.make_root_context() } -> std::same_as<typename T::Context>;
 
     {
-        t.template visit<octree::NodeStatusOrMissing::Leaf, octree::NodeStatusOrMissing::Leaf>(
+        t.template visit<store::NodeStatusOrMissing::Leaf, store::NodeStatusOrMissing::Leaf>(
             id,
-            std::declval<const NodeData<octree::NodeStatusOrMissing::Leaf> &>(),
-            std::declval<const NodeData<octree::NodeStatusOrMissing::Leaf> &>(),
+            std::declval<const NodeData<store::NodeStatusOrMissing::Leaf> &>(),
+            std::declval<const NodeData<store::NodeStatusOrMissing::Leaf> &>(),
             std::declval<const typename T::Context &>())
     } -> std::same_as<Result<typename T::Context>>;
 };

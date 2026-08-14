@@ -7,7 +7,7 @@
 #include "io/serialize.h"
 #include "log.h"
 #include "mesh/io.h"
-#include "octree/storage/MeshStorage.h"
+#include "mesh/storage.h"
 #include "octree/storage/open.h"
 #include "ProgressIndicator.h"
 #include "storage.h"
@@ -41,7 +41,7 @@ void export_storage(const cli::Args &args) {
             store::describe_error(input_result.error()));
         return;
     }
-    const octree::IndexedDagStorage input_storage = std::move(input_result.value());
+    const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
 
     octree::OpenOptions options;
     options.preferred_extension = ".glb";
@@ -56,7 +56,7 @@ void export_storage(const cli::Args &args) {
             store::describe_error(output_result.error()));
         return;
     }
-    octree::MeshStorage output_storage = std::move(output_result.value());
+    mesh::storage::Storage output_storage = std::move(output_result.value());
     output_storage.settings().allow_overwrite = true;
 
     size_t exported_count = 0;
@@ -65,7 +65,7 @@ void export_storage(const cli::Args &args) {
     auto progress_thread = progress.start_monitoring();
 
     for (const auto &[id, status] : input_storage.index()) {
-        if (status == octree::NodeStatus::Virtual) {
+        if (status == store::NodeStatus::Virtual) {
             progress.task_finished();
             continue;
         }

@@ -9,19 +9,21 @@
 #include "mesh/clip.h"
 #include "mesh/texture_trim.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
-#include "octree/storage/cache/Dummy.h"
-#include "octree/storage/cache/ICache.h"
+#include "mesh/storage.h"
+#include "store/NodeStatusOrMissing.h"
+#include "store/cache/Interface.h"
 
 class NodeLoader {
 public:
-    NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache<mesh::Simple> &cache, octree::Space space)
+    NodeLoader(
+        const mesh::storage::IndexedStorage &storage,
+        store::cache::Interface<octree::StoreTraits, mesh::Simple> &cache,
+        octree::Space space)
         : _storage(storage), _cache(cache), _space(space) {}
 
-    octree::NodeStatusOrMissing get_status(const octree::Id &id) const noexcept {
-        return octree::NodeStatusOrMissing(
+    store::NodeStatusOrMissing get_status(const octree::Id &id) const noexcept {
+        return store::NodeStatusOrMissing(
             DEBUG_ASSERT_VAL(this->_storage.index().get(id)).value());
     }
 
@@ -66,12 +68,12 @@ public:
         return std::nullopt;
     }
 
-    const octree::IndexedStorage &storage() const {
+    const mesh::storage::IndexedStorage &storage() const {
         return this->_storage;
     }
 
 private:
-    const octree::IndexedStorage &_storage;
-    octree::cache::ICache<mesh::Simple> &_cache;
+    const mesh::storage::IndexedStorage &_storage;
+    store::cache::Interface<octree::StoreTraits, mesh::Simple> &_cache;
     const octree::Space _space;
 };

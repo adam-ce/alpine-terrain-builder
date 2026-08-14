@@ -6,18 +6,17 @@
 #include "log.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
-#include "octree/Storage.h"
 #include "optional_utils.h"
+#include "store/NodeStatusOrMissing.h"
 
 namespace merge {
 
-template <octree::NodeStatusOrMissing Status>
+template <store::NodeStatusOrMissing Status>
 class NodeData {
 public:
     constexpr explicit NodeData(octree::Id id, const NodeLoader &loader) : _id(id), _loader(loader) {}
 
-    static constexpr octree::NodeStatusOrMissing status() {
+    static constexpr store::NodeStatusOrMissing status() {
         return Status;
     }
 
@@ -26,8 +25,8 @@ public:
     }
 
     // Status::Leaf or Status::Inner guarantuess a node is present
-    template <octree::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == octree::NodeStatusOrMissing::Leaf || S == octree::NodeStatusOrMissing::Inner, const SimpleMesh &>
+    template <store::NodeStatusOrMissing S = Status>
+    std::enable_if_t<S == store::NodeStatusOrMissing::Leaf || S == store::NodeStatusOrMissing::Inner, const SimpleMesh &>
     mesh() const {
         auto mesh = this->load_mesh();
         if (mesh.has_value()) {
@@ -38,8 +37,8 @@ public:
     }
 
     // Status::Missing and Status::Virtual do not exist on disk, but may be the child of a leaf or inner node
-    template <octree::NodeStatusOrMissing S = Status>
-    std::enable_if_t<S == octree::NodeStatusOrMissing::Missing || S == octree::NodeStatusOrMissing::Virtual, std::optional<std::reference_wrapper<SimpleMesh>>>
+    template <store::NodeStatusOrMissing S = Status>
+    std::enable_if_t<S == store::NodeStatusOrMissing::Missing || S == store::NodeStatusOrMissing::Virtual, std::optional<std::reference_wrapper<SimpleMesh>>>
     mesh() const {
         return this->load_mesh();
     }

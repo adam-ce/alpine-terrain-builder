@@ -37,8 +37,6 @@ add_executable(unittests_terrainlib
     terrainlib/store_layout.cpp
     terrainlib/store_storage.cpp
     terrainlib/store_traverse.cpp
-    terrainlib/index_map.cpp
-    terrainlib/index_traverse.cpp
     terrainlib/mesh_boundary.cpp
     terrainlib/mesh_bounds.cpp
     terrainlib/mesh_cleanup.cpp

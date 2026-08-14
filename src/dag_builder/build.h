@@ -8,7 +8,7 @@
 #include "Range.h"
 #include "build_config.h"
 #include "texturing.h"
-#include "octree/storage/MeshStorage.h"
+#include "mesh/storage.h"
 #include "storage.h"
 #include "sf/InvalidTopology.h"
 
@@ -33,13 +33,13 @@ struct BuildOptions {
 };
 
 std::expected<void, sf::InvalidTopology> build_full(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options);
 
 std::expected<void, sf::InvalidTopology> build_levels(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range);
 

@@ -11,14 +11,13 @@
 #include "io/serialize.h"
 #include "io/bytes.h"
 #include "mesh/SimpleMesh.h"
-#include "octree/Storage.h"
 #include "octree/disk/IndexFile.h"
 #include "mesh/codec/from_extension.h"
 #include "mesh/storage.h"
 #include "octree/store_layout/Mappings.h"
 #include "octree/storage/IndexFile.h"
 #include "octree/storage/open.h"
-#include "octree/traverse.h"
+#include "store/traverse.h"
 
 namespace {
 
@@ -56,18 +55,18 @@ mesh::Simple triangle_mesh(const double offset) {
         {{offset, 0.0, 0.0}, {offset + 1.0, 0.0, 0.0}, {offset, 1.0, 0.0}});
 }
 
-octree::IndexedStorage make_storage(
+mesh::storage::IndexedStorage make_storage(
     const std::filesystem::path &path,
     const store::PathMapping<octree::Id> mapping,
     const std::string &extension) {
     auto codec = mesh::codec::from_extension(extension);
     REQUIRE(codec.has_value());
-    return octree::IndexedStorage(
+    return mesh::storage::IndexedStorage(
         store::RawStorage<octree::StoreTraits, mesh::Simple>(
             store::Layout<octree::Id>(path, mapping),
             std::move(codec.value())),
         store::Index<octree::StoreTraits>{},
-        octree::Storage::Persistence{
+        mesh::storage::Storage::Persistence{
             octree::storage::index_format(),
             path / "terrain.index",
             std::string(mapping.id),
@@ -87,12 +86,12 @@ TEST_CASE("pre-refactor SF fixtures preserve index and path contracts") {
         CHECK(index_file->layout_strategy_id == "flat");
         CHECK(index_file->preferred_extension == ".terrain");
         CHECK(index_file->map.size() == 1);
-        CHECK(index_file->map.is(octree::NodeStatus::Leaf, root));
+        CHECK(index_file->map.is(store::NodeStatus::Leaf, root).value());
         CHECK(std::filesystem::is_regular_file(path / "0-0.terrain"));
 
         auto storage_result = octree::open_folder_indexed(path);
         REQUIRE(storage_result.has_value());
-        const octree::IndexedStorage storage = std::move(storage_result.value());
+        const mesh::storage::IndexedStorage storage = std::move(storage_result.value());
         const auto mesh = storage.load(root);
         REQUIRE(mesh.has_value());
         CHECK(mesh->face_count() == 1);
@@ -108,17 +107,19 @@ TEST_CASE("pre-refactor SF fixtures preserve index and path contracts") {
         REQUIRE(index_file.has_value());
         CHECK(index_file->layout_strategy_id == "level_and_coordinate_directories");
         CHECK(index_file->preferred_extension == ".terrain");
-        CHECK(index_file->map.is(octree::NodeStatus::Virtual, root));
-        CHECK(index_file->map.is(octree::NodeStatus::Leaf, child));
-        CHECK(index_file->map.is(octree::NodeStatus::Virtual, deep_parent));
-        CHECK(index_file->map.is(octree::NodeStatus::Leaf, deep));
+        CHECK(index_file->map.is(store::NodeStatus::Virtual, root).value());
+        CHECK(index_file->map.is(store::NodeStatus::Leaf, child).value());
+        CHECK(index_file->map.is(store::NodeStatus::Virtual, deep_parent).value());
+        CHECK(index_file->map.is(store::NodeStatus::Leaf, deep).value());
         CHECK(std::filesystem::is_regular_file(path / "1/0/1/0.terrain"));
         CHECK(std::filesystem::is_regular_file(path / "2/3/1/3.terrain"));
 
         std::vector<octree::Id> visited;
-        octree::traverse(index_file->map, [&](const octree::Id id, const octree::NodeStatus) {
-            visited.push_back(id);
-        });
+        REQUIRE(store::traverse(
+            index_file->map,
+            [&](const octree::Id id, const store::NodeStatus) {
+                visited.push_back(id);
+            }).has_value());
         CHECK(visited == std::vector{octree::Id{root}, child, deep_parent, deep});
     }
 }

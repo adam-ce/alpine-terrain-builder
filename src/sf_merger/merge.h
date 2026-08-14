@@ -13,14 +13,15 @@
 #include "merge/visitor/Simple.h"
 #include "merge/visitor/Visitor.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
-#include "octree/storage/cache/Dummy.h"
+#include "mesh/storage.h"
+#include "store/NodeStatusOrMissing.h"
+#include "store/cache/Dummy.h"
 #include "store/describe_error.h"
 #include "sf/Error.h"
 #include "sf/finalize_storage.h"
 #include "sf/validate_index.h"
 
-inline std::string get_dataset_name(const octree::Storage &storage) {
+inline std::string get_dataset_name(const mesh::storage::Storage &storage) {
     return storage.layout().base_path().filename().string();
 }
 
@@ -34,7 +35,7 @@ using smallest_uint_t =
 template <merge::Visitor Visitor>
 class Merger {
 public:
-    using Status = octree::NodeStatusOrMissing;
+    using Status = store::NodeStatusOrMissing;
     using Context = Visitor::Context;
     using Result = merge::Result<Context>;
     using Expected = std::expected<void, sf::ProcessingError>;
@@ -182,11 +183,11 @@ private:
 };
 
 inline std::expected<void, sf::ProcessingError> merge_datasets(
-    const octree::IndexedStorage &left_dataset,
-    const octree::IndexedStorage &right_dataset,
-    octree::Storage &output_dataset,
+    const mesh::storage::IndexedStorage &left_dataset,
+    const mesh::storage::IndexedStorage &right_dataset,
+    mesh::storage::Storage &output_dataset,
     const std::optional<MeshMask> mask = std::nullopt) {
-    for (const octree::IndexedStorage *input : {&left_dataset, &right_dataset}) {
+    for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
         const auto validation = sf::validate_index(input->index());
         if (!validation.has_value()) {
             return std::unexpected(sf::ProcessingError(validation.error()));
@@ -199,9 +200,9 @@ inline std::expected<void, sf::ProcessingError> merge_datasets(
         get_dataset_name(output_dataset));
 
     octree::Space space = octree::Space::earth();
-    octree::cache::Dummy<mesh::Simple> left_cache;
+    store::cache::Dummy<octree::StoreTraits, mesh::Simple> left_cache;
     NodeLoader left(left_dataset, left_cache, space);
-    octree::cache::Dummy<mesh::Simple> right_cache;
+    store::cache::Dummy<octree::StoreTraits, mesh::Simple> right_cache;
     NodeLoader right(right_dataset, right_cache, space);
     NodeWriter output(output_dataset);
     if (mask.has_value()) {

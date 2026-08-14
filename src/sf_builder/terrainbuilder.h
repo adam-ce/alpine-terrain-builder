@@ -9,7 +9,7 @@
 #include "octree/Id.h"
 #include "mesh/SimpleMesh.h"
 #include "tile_provider.h"
-#include "octree/Storage.h"
+#include "mesh/storage.h"
 #include "sf/Error.h"
 
 namespace terrainbuilder {
@@ -31,7 +31,7 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-std::expected<void, sf::FinalizeError> finalize_storage(octree::Storage &storage);
+std::expected<void, sf::FinalizeError> finalize_storage(mesh::storage::Storage &storage);
 
 std::expected<void, sf::FinalizeError> build_all_patches(
     Dataset &dataset,

@@ -8,11 +8,9 @@
 #include "log.h"
 #include "mask.h"
 #include "octree/Id.h"
-#include "octree/NodeStatus.h"
-#include "octree/Storage.h"
+#include "mesh/storage.h"
 #include "octree/storage/open.h"
 #include "octree/Space.h"
-#include "octree/traverse.h"
 #include "utils.h"
 #include "containers/Cow.h"
 #include "store/describe_error.h"
@@ -21,8 +19,8 @@
 #include "sf/validate_index.h"
 
 struct Context {
-    const octree::IndexedStorage& input;
-    octree::Storage& output;
+    const mesh::storage::IndexedStorage& input;
+    mesh::storage::Storage& output;
     const octree::Space space;
     const bool keep_inside;
 };
@@ -38,7 +36,7 @@ inline std::expected<void, sf::ProcessingError> cut_leaf_node(
     const MeshMask& mask
 ) {
     DEBUG_ASSERT(DEBUG_ASSERT_VAL(
-        ctx.input.index().is(octree::NodeStatus::Leaf, id)).value());
+        ctx.input.index().is(store::NodeStatus::Leaf, id)).value());
 
     const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.load(id)).value();
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
@@ -72,7 +70,7 @@ inline std::expected<void, sf::ProcessingError> cut_virtual_node(
     const MeshMask& mask
 ) {
     DEBUG_ASSERT(DEBUG_ASSERT_VAL(
-        ctx.input.index().is(octree::NodeStatus::Virtual, id)).value());
+        ctx.input.index().is(store::NodeStatus::Virtual, id)).value());
     DEBUG_ASSERT(id.has_children());
 
     const auto children = id.children().value();
@@ -113,11 +111,11 @@ inline std::expected<void, sf::ProcessingError> cut_node(
         return {};
     }
 
-    const octree::NodeStatus status = status_result->value();
+    const store::NodeStatus status = status_result->value();
     switch (status) {
-    case octree::NodeStatus::Virtual:
+    case store::NodeStatus::Virtual:
         return cut_virtual_node(ctx, id, mask);
-    case octree::NodeStatus::Leaf:
+    case store::NodeStatus::Leaf:
         return cut_leaf_node(ctx, id, mask);
     default:
         UNREACHABLE();
@@ -127,9 +125,9 @@ inline std::expected<void, sf::ProcessingError> cut_node(
 }
 
 inline std::expected<void, sf::ProcessingError> cut_dataset(
-    const octree::IndexedStorage &input,
+    const mesh::storage::IndexedStorage &input,
     const MeshMask& mask,
-    octree::Storage &output,
+    mesh::storage::Storage &output,
     const bool keep_inside) {
     const auto validation = sf::validate_index(input.index());
     if (!validation.has_value()) {
@@ -150,7 +148,7 @@ inline std::expected<void, sf::ProcessingError> cut_dataset(
 }
 
 inline std::expected<void, sf::ProcessingError> cut_dataset(
-    const octree::IndexedStorage &input_dataset,
+    const mesh::storage::IndexedStorage &input_dataset,
     const MeshMask& mask,
     const std::filesystem::path &output_path,
     const bool keep_inside) {
@@ -164,7 +162,7 @@ inline std::expected<void, sf::ProcessingError> cut_dataset(
     if (!output_result.has_value()) {
         return std::unexpected(sf::ProcessingError(output_result.error()));
     }
-    octree::IndexedStorage output_dataset = std::move(output_result.value());
+    mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {
         return std::unexpected(sf::ProcessingError(store::SaveError<octree::Id>(
             store::AlreadyExists{output_path})));

@@ -8,8 +8,8 @@
 
 namespace dag {
 
-// A mutex-based thread-safe wrapper around a Storage_ instance.
-// TODO: move this locking into Storage_ itself and remove this wrapper once that lands.
+// A mutex-based thread-safe wrapper around a Storage instance.
+// TODO: move this locking into Storage itself and remove this wrapper once that lands.
 template <typename Storage>
 class ThreadSafeStorage {
     static_assert(!std::is_const_v<Storage>, "ThreadSafeStorage requires a non-const Storage");

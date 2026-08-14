@@ -11,7 +11,7 @@
 #include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"
 #include "octree/Id.h"
-#include "octree/NodeStatusOrMissing.h"
+#include "store/NodeStatusOrMissing.h"
 #include "polygon/Polygon.h"
 #include "polygon/triangulate.h"
 #include "spatial_lookup/Hashmap.h"
@@ -26,7 +26,7 @@ namespace merge::visitor {
 
 class Masked {
 public:
-    using Status = octree::NodeStatusOrMissing;
+    using Status = store::NodeStatusOrMissing;
     struct Context {
         MeshMask mask;
         bool has_left_parent;

@@ -11,7 +11,7 @@
 #include "io/serialize.h"
 #include "octree/disk/IndexFile.h"
 #include "octree/storage/open.h"
-#include "octree/traverse.h"
+#include "store/traverse.h"
 #include "storage.h"
 #include "store/codec/ZppBits.h"
 #include "thread_safe_storage.h"
@@ -53,16 +53,18 @@ TEST_CASE("pre-refactor DAG fixture preserves index and payload contracts") {
     REQUIRE(index_file.has_value());
     CHECK(index_file->layout_strategy_id == "level_and_coordinate_directories");
     CHECK(index_file->preferred_extension == ".bin");
-    CHECK(index_file->map.is(octree::NodeStatus::Inner, root));
-    CHECK(index_file->map.is(octree::NodeStatus::Virtual, parent));
-    CHECK(index_file->map.is(octree::NodeStatus::Leaf, leaf));
+    CHECK(index_file->map.is(store::NodeStatus::Inner, root).value());
+    CHECK(index_file->map.is(store::NodeStatus::Virtual, parent).value());
+    CHECK(index_file->map.is(store::NodeStatus::Leaf, leaf).value());
     CHECK(std::filesystem::is_regular_file(path / "0/0/0/0.bin"));
     CHECK(std::filesystem::is_regular_file(path / "2/2/3/1.bin"));
 
     std::vector<octree::Id> visited;
-    octree::traverse(index_file->map, [&](const octree::Id id, const octree::NodeStatus) {
-        visited.push_back(id);
-    });
+    REQUIRE(store::traverse(
+        index_file->map,
+        [&](const octree::Id id, const store::NodeStatus) {
+            visited.push_back(id);
+        }).has_value());
     CHECK(visited == std::vector<octree::Id>{root, parent, leaf});
 
     auto batch_storage_result = dag::storage::open_folder_indexed(path);

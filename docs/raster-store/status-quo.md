@@ -1,5 +1,18 @@
 # Status quo and reuse assessment
 
+> **Historical assessment:** this document records the repository before the
+> shared-store refactor and is intentionally not rewritten as current code
+> documentation. The completed implementation and verification record is in
+> [refactor-status.md](refactor-status.md); the resulting public boundary is
+> summarized in [architecture.md](architecture.md#implementation-status).
+
+The refactor chose the generalization option discussed below. Sparse topology,
+traversal, layouts, runtime codecs, storage, index lifecycle, and cache
+interfaces now live under `store` and are parameterized by hierarchy traits.
+The legacy 3D format remains an adapter under `octree`, while
+`raster_store::StoreTraits` proves the shared in-memory mechanisms with
+`radix::tile::Id`. Persistent RF formats and RF tools remain future work.
+
 This document evaluates the current repository after commit `9cf9065`
 (`Consolidate raster handling and use std::expected`). It distinguishes
 reusable mechanisms from interfaces that encode assumptions unsuitable for

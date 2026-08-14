@@ -4,13 +4,13 @@
 
 #include <libassert/assert.hpp>
 
-#include "octree/Storage.h"
+#include "mesh/storage.h"
 #include "sf/Error.h"
 #include "sf/validate_index.h"
 
 namespace sf {
 
-inline std::expected<void, FinalizeError> finalize_storage(octree::Storage &storage) {
+inline std::expected<void, FinalizeError> finalize_storage(mesh::storage::Storage &storage) {
     const auto save_result = storage.save_or_create_index();
     if (!save_result.has_value()) {
         return std::unexpected(FinalizeError(save_result.error()));

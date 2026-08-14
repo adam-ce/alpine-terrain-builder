@@ -1,5 +1,17 @@
 # Storage format
 
+> **Status:** future raster-store design. The completed 2D/3D store refactor
+> did not implement or finalize the RF/TB formats described below. These
+> requirements were not acceptance criteria for that refactor. See
+> [refactor-status.md](refactor-status.md) for the implemented shared boundary.
+
+The refactor preserves the existing 3D `terrain.index` and payload contracts
+through the adapters under `octree` and `mesh::storage`. It supplies only an
+in-memory `raster_store::StoreTraits` adapter for `radix::tile::Id`; there is
+currently no persistent RF index, `.amort` codec, snapshot publisher, or RF
+opening API. Names and formats in this document remain proposals until their
+own implementation plans approve them.
+
 This document specifies the logical format and required invariants for the following data stores:
 - raster-fundamentalis (our authoritative raster store)
 - tile-base (the tile-pyramid for our tile-server)

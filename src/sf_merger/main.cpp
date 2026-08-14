@@ -8,7 +8,6 @@
 #include "log.h"
 #include "mask.h"
 #include "merge.h"
-#include "octree/Storage.h"
 #include "optional_utils.h"
 #include "earth.h"
 #include "store/describe_error.h"
@@ -43,7 +42,7 @@ void run(const cli::MergeArgs& args) {
             args.base_path,
             store::describe_error(base_result.error()));
     }
-    octree::IndexedStorage base_dataset = std::move(base_result.value());
+    mesh::storage::IndexedStorage base_dataset = std::move(base_result.value());
 
     LOG_TRACE("Loading new dataset from {}", args.new_path);
     auto new_result = octree::open_folder_indexed(args.new_path);
@@ -53,7 +52,7 @@ void run(const cli::MergeArgs& args) {
             args.new_path,
             store::describe_error(new_result.error()));
     }
-    octree::IndexedStorage new_dataset = std::move(new_result.value());
+    mesh::storage::IndexedStorage new_dataset = std::move(new_result.value());
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
@@ -67,7 +66,7 @@ void run(const cli::MergeArgs& args) {
             args.output_path,
             store::describe_error(output_result.error()));
     }
-    octree::Storage output_dataset = std::move(output_result.value());
+    mesh::storage::Storage output_dataset = std::move(output_result.value());
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
@@ -90,7 +89,7 @@ void run(const cli::CutArgs& args) {
             args.input_path,
             store::describe_error(input_result.error()));
     }
-    const octree::IndexedStorage input_dataset = std::move(input_result.value());
+    const mesh::storage::IndexedStorage input_dataset = std::move(input_result.value());
     const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
     const auto cut_result = cut_dataset(
         input_dataset,

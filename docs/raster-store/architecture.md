@@ -1,5 +1,64 @@
 # Architecture
 
+## Implementation status
+
+This document describes the intended raster-fundamentalis and tile-base
+architecture. Its RF format, snapshot-publication, builder, merger, pyramid,
+and server requirements are future work; they were not acceptance criteria
+for the completed 2D/3D hierarchy-store refactor. The implemented boundary is
+recorded in [refactor-status.md](refactor-status.md), and the original plan is
+kept in [refactor-plan.md](refactor-plan.md).
+
+The refactor delivered the dimension-neutral mechanisms needed by that future
+work:
+
+- `store::Index<Traits>`, `store::traverse`, layouts, runtime codecs, storage,
+  typed errors, and cache interfaces;
+- `octree::StoreTraits` plus legacy 3D layout/index/open adapters;
+- `raster_store::StoreTraits` for in-memory topology keyed by
+  `radix::tile::Id`; and
+- SF-only topology validation under `sf`.
+
+It deliberately did not define a persistent RF index, RF payload codec, RF
+opening API, `rf_builder`, `rf_merger`, tile-base generator, or tile server.
+
+### Final public names
+
+The shared API uses `store::NodeStatus`, `store::NodeStatusOrMissing`,
+`store::Index<Traits>`, `store::traverse`, `store::RawStorage`,
+`store::Storage`, and `store::IndexedStorage`. Mesh storage aliases live under
+`mesh::storage`; DAG batch and metadata aliases live under `dag::storage`.
+The `octree` namespace retains the 3D key, traits, path mappings, legacy index
+DTO, and mesh-opening compatibility functions.
+
+A legacy 3D mesh dataset is opened through the 3D adapter:
+
+```cpp
+#include "octree/storage/open.h"
+
+auto opened = octree::open_folder_indexed(dataset_path);
+if (!opened.has_value()) {
+    return std::unexpected(opened.error());
+}
+mesh::storage::IndexedStorage storage = std::move(opened.value());
+```
+
+The 2D traits adapter can exercise the shared topology without implying a
+persistent RF format:
+
+```cpp
+#include "raster_store/StoreTraits.h"
+#include "store/Index.h"
+#include "store/traverse.h"
+
+store::Index<raster_store::StoreTraits> index;
+const radix::tile::Id tile{2, {1, 3}};
+auto added = index.add(tile);
+auto walked = store::traverse(index, [](const auto &id, store::NodeStatus status) {
+    // In-memory hierarchy processing only.
+});
+```
+
 ## System boundary
 
 The design separates authoritative data management from delivery generation:

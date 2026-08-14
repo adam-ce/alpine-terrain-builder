@@ -8,14 +8,13 @@
 #include "NodeLoader.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
-#include "octree/NodeStatus.h"
-#include "octree/Storage.h"
-#include "octree/traverse.h"
+#include "mesh/storage.h"
+#include "store/traverse.h"
 
 // TODO: make thread safe
 class NodeWriter {
 public:
-    NodeWriter(octree::Storage &storage) : _storage(storage) {}
+    NodeWriter(mesh::storage::Storage &storage) : _storage(storage) {}
 
     std::expected<bool, store::FileOperationError<octree::Id>> has_node(
         const octree::Id &id) {
@@ -47,16 +46,16 @@ public:
         const octree::Id &id,
         const NodeLoader &loader) {
         std::optional<store::CopyError<octree::Id>> error;
-        octree::traverse(
+        const auto traversal = store::traverse(
             loader.storage().index(),
-            [&](const octree::Id &child_id, const octree::NodeStatus &status) {
+            [&](const octree::Id &child_id, const store::NodeStatus &status) {
                 if (error.has_value()) {
                     return;
                 }
-                if (status == octree::NodeStatus::Virtual) {
+                if (status == store::NodeStatus::Virtual) {
                     return;
                 }
-                DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
+                DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
                 const auto result = this->_storage.copy_from(child_id, loader.storage());
                 if (!result.has_value()) {
@@ -65,6 +64,9 @@ public:
             },
             [&](const octree::Id &) { return !error.has_value(); },
             id);
+        if (!traversal.has_value()) {
+            return std::unexpected(store::CopyError<octree::Id>(traversal.error()));
+        }
         if (error.has_value()) {
             return std::unexpected(std::move(error.value()));
         }
@@ -72,5 +74,5 @@ public:
     }
 
 private:
-    octree::Storage &_storage;
+    mesh::storage::Storage &_storage;
 };

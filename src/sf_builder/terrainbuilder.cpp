@@ -41,7 +41,6 @@
 
 #include "octree/Id.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
 #include "octree/storage/open.h"
 #include "octree/utils.h"
 #include "store/describe_error.h"
@@ -174,7 +173,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-std::expected<void, sf::FinalizeError> finalize_storage(octree::Storage &storage) {
+std::expected<void, sf::FinalizeError> finalize_storage(mesh::storage::Storage &storage) {
     return sf::finalize_storage(storage);
 }
 
@@ -207,7 +206,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
             output_base_path,
             store::describe_error(storage_result.error()));
     }
-    octree::Storage storage = std::move(storage_result.value());
+    mesh::storage::Storage storage = std::move(storage_result.value());
     storage.settings().allow_overwrite = overwrite_existing;
 
     const auto dataset_srs = dataset.srs();

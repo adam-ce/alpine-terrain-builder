@@ -1,5 +1,12 @@
 # SF storage and merge architecture before the 2D/3D refactor
 
+> **Historical report:** this file describes the pre-refactor tree and keeps
+> its original names, paths, diagrams, and conclusions for review history.
+> Some linked source paths were intentionally removed by the completed
+> migration. For the implemented boundary and verification results, see
+> [refactor-status.md](../refactor-status.md); for current public names and
+> examples, see [architecture.md](../architecture.md#implementation-status).
+
 This report describes the existing Structura Fundamentalis (SF) builder,
 sparse octree index, storage stack, and mask-based dataset merger. Its purpose
 is to identify the mechanisms that can be generalised from 3D octrees to a

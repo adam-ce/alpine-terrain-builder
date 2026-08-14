@@ -26,9 +26,8 @@
 #include "octree/IdRect.h"
 #include "octree/OddLevelShifted.h"
 #include "octree/Space.h"
-#include "octree/Storage.h"
 #include "octree/storage/open.h"
-#include "octree/traverse.h"
+#include "store/traverse.h"
 #include "ProgressIndicator.h"
 #include "partition.h"
 #include "simplify.h"
@@ -49,7 +48,7 @@ namespace {
 
 // Load a mesh from storage and clusterize it.
 std::optional<Clustering> load_and_clusterize_mesh(
-    const octree::MeshStorage &storage,
+    const mesh::storage::Storage &storage,
     const octree::Id &id) {
     const auto result = storage.load(id);
 
@@ -127,7 +126,7 @@ LodResult build_lod(
 // Load input meshes, clusterize, and filter them to the target region.
 std::vector<Clustering> load_input_clusters(
     const std::span<const octree::Id> input_ids,
-    const octree::MeshStorage &input_storage,
+    const mesh::storage::Storage &input_storage,
     const RegionFilter& filter) {
     std::vector<Clustering> result;
 
@@ -154,8 +153,8 @@ std::vector<Clustering> load_input_clusters(
 
 // Dependencies shared across the whole dag building pipeline.
 struct BuildContext {
-    const octree::IndexedMeshStorage &input_storage;
-    ThreadSafeStorage<octree::IndexedDagStorage> output_storage;
+    const mesh::storage::IndexedStorage &input_storage;
+    ThreadSafeStorage<dag::storage::IndexedStorage> output_storage;
     const BuildOptions &options;
     const octree::Space &space;
     const octree::OddLevelShifted &shifted_space;
@@ -462,10 +461,10 @@ std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
     const auto start = space.find_smallest_node_encompassing_bounds(root_bounds)
         .value_or(octree::Id::root());
     std::vector<std::vector<octree::Id>> result(octree::Id::max_level() + 1);
-    octree::traverse(
+    const auto traversal = store::traverse(
         index,
-        [&](const octree::Id &id, const octree::NodeStatus status) {
-            if (status == octree::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
+        [&](const octree::Id &id, const store::NodeStatus status) {
+            if (status == store::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
                 result[id.level()].push_back(id);
             }
         },
@@ -473,6 +472,7 @@ std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
             return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
         },
         start);
+    DEBUG_ASSERT(traversal.has_value());
     return result;
 }
 
@@ -518,7 +518,7 @@ std::unordered_set<octree::Id> build_level(
     }
 
     // Initialize debug storage if requested (contains .glb meshes)
-    std::optional<octree::MeshStorage> debug_storage;
+    std::optional<mesh::storage::Storage> debug_storage;
     if (ctx.options.write_debug_meshes) {
         octree::OpenOptions options;
         options.preferred_extension = ".glb";
@@ -586,8 +586,8 @@ std::unordered_set<octree::Id> build_level(
 // Iterates octree levels from finest to coarsest, simplifying and re-clustering geometry at each
 // level from its children.
 std::expected<void, sf::InvalidTopology> build_levels(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range) {
     const auto validation = sf::validate_index(input_storage.index());
@@ -619,7 +619,7 @@ std::expected<void, sf::InvalidTopology> build_levels(
     // TODO: use hierachical lookup here based on root_bounds and IdRect
     std::unordered_set<octree::Id> prev_level_built;
     for (const auto &[id, status] : output_storage.index()) {
-        if (id.level() == range.end && status != octree::NodeStatus::Virtual) {
+        if (id.level() == range.end && status != store::NodeStatus::Virtual) {
             prev_level_built.insert(id);
         }
     }
@@ -648,8 +648,8 @@ std::expected<void, sf::InvalidTopology> build_levels(
 
 // Builds the complete DAG from input_storage into output_storage.
 std::expected<void, sf::InvalidTopology> build_full(
-    const octree::IndexedMeshStorage &input_storage,
-    octree::IndexedDagStorage &output_storage,
+    const mesh::storage::IndexedStorage &input_storage,
+    dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options) {
     return build_levels(input_storage, output_storage, options, RangeFull{});
 }

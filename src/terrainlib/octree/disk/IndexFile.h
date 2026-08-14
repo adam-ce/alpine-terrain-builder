@@ -4,7 +4,8 @@
 
 #include <zpp_bits.h>
 
-#include "octree/IndexMap.h"
+#include "octree/StoreTraits.h"
+#include "store/Index.h"
 
 namespace octree::disk::v1 {
 
@@ -20,6 +21,6 @@ struct IndexFile {
 
     std::string layout_strategy_id;
     std::string preferred_extension;
-    IndexMap map;
+    store::Index<StoreTraits> map;
 };
 }

@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 4 — Harden node reuse and enforce SF topology
+- Phase: 5 — Cleanup and documentation
 - State: complete; completion commit pending.
-- Next action: commit and tag Phase 4, then begin Phase 5 cleanup and
-  documentation.
+- Next action: commit and tag Phase 5, then remove migration-only fixtures in
+  Phase 6.
 
 ## Phase log
 
@@ -114,6 +114,23 @@ This file is the resumable implementation log for
   hard links, and newly written changed/clipped nodes.
 - State: complete.
 
+### Phase 5 — Cleanup and documentation
+
+- Migrated repository callers from the temporary octree topology, traversal,
+  storage, and cache aliases to the final `store`, `mesh::storage`, and
+  `dag::storage` public names.
+- Removed the temporary `octree::IndexMap`, status, traversal, mesh-storage,
+  and cache forwarding headers and their wrapper-only unit tests.
+- Changed the unchanged legacy `terrain.index` DTO to serialize the shared
+  `store::Index<octree::StoreTraits>` directly.
+- Kept only 3D identity/geometry, traits, mappings, legacy index-format, and
+  opening adapters under `octree`.
+- Updated the architecture, storage-format, status-quo, historical
+  before-refactor report, and raster-store index documentation. The docs now
+  distinguish the implemented shared boundary from future RF formats and
+  tools and include final public names plus 3D-open and in-memory 2D examples.
+- State: complete.
+
 ## Verification log
 
 - Baseline `unittests_terrainlib`: 23,676 assertions in 391 test cases passed.
@@ -167,6 +184,15 @@ This file is the resumable implementation log for
   `radix::tile::Scheme` remains isolated; the new finalization tests build and
   pass in `unittests_sfbuilder_finalization`.
 - Phase 4 `git diff --check`: passed.
+- Phase 5 `unittests_terrainlib`: 24,017 assertions in 426 test cases passed.
+- Phase 5 `unittests_dagbuilder`: 472 assertions in 74 test cases passed.
+- Phase 5 `unittests_sfmerger`: 121 assertions in 8 test cases passed.
+- Phase 5 SF builder finalization: 19 assertions in 2 test cases passed.
+- Phase 5 application builds passed for `sf-builder`, `sf-merger`,
+  `sf-index-browser`, `dag-builder`, and `dag-convert-debug`.
+- Phase 5 repository searches found no remaining caller of a removed octree
+  forwarding name and no `octree::Id` dependency under `terrainlib/store`.
+- Phase 5 `git diff --check`: passed.
 
 ## Commit and tag log
 
@@ -184,3 +210,5 @@ This file is the resumable implementation log for
 - `61acb74` — Phase 3 shared runtime-codec storage core.
 - `4ffcdea` / `refactor_phase_3` — Phase 3 application migration and
   completion tag.
+- `3086336` / `refactor_phase_4` — hardened node reuse, SF topology
+  enforcement, and Phase 4 completion tag.

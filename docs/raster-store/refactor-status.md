@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 1 — Extract topology into `store`
+- Phase: 2 — Introduce path mappings and runtime codecs
 - State: in progress
-- Next action: build the shared topology extraction and run focused topology
-  plus compatibility tests.
+- Next action: run the complete Phase 2 verification, inspect the diff,
+  commit, and tag the phase boundary.
 
 ## Phase log
 
@@ -54,6 +54,20 @@ This file is the resumable implementation log for
   invalid-key tests.
 - State: complete.
 
+### Phase 2 — Introduce path mappings and runtime codecs
+
+- Added extensionless `NodePath`, `PathMapping`, and `Layout` values.
+- Added the stateful runtime `Codec` interface and typed `CodecError`.
+- Added runtime ZPP Bits, terrain, binary glTF, and JSON glTF codecs.
+- Added ordinary `flat` and `level_and_coordinate_directories` mapping
+  function pairs plus explicit lookup.
+- Consolidated DAG serialization in `dag_builder/serialization.h` and made
+  the legacy DAG storage adapter include it explicitly.
+- Added mapping/codec composition, parser validation, single-/multi-file,
+  unsupported-operation, write-only, directory-creation, error-conversion,
+  and concurrent codec tests.
+- State: complete.
+
 ## Verification log
 
 - Baseline `unittests_terrainlib`: 23,676 assertions in 391 test cases passed.
@@ -76,6 +90,15 @@ This file is the resumable implementation log for
   removed `radix::tile::Scheme` in `unittests/sf_builder/texture.cpp`; the
   affected refactor targets and suites build independently.
 - Phase 1 `git diff --check`: passed.
+- Phase 2 focused shared-store tests: 160 assertions in 17 test cases passed.
+- Phase 2 DAG golden fixture: 30 assertions passed, including runtime codec
+  output byte equality.
+- Phase 2 concurrent DAG runtime codec: 10 assertions passed.
+- Phase 2 `unittests_terrainlib`: 23,892 assertions in 414 test cases passed.
+- Phase 2 `unittests_dagbuilder`: 440 assertions in 71 test cases passed.
+- Phase 2 application builds passed for `sf-builder`, `dag-builder`, and
+  `dag-convert-debug`.
+- Phase 2 `git diff --check`: passed.
 
 ## Commit and tag log
 
@@ -86,3 +109,5 @@ This file is the resumable implementation log for
   `.terrain` golden payloads ignored by the repository's general artifact
   rule.
 - `refactor_phase_0` — annotated Phase 0 completion tag.
+- `4c171c8` / `refactor_phase_1` — shared topology extraction and Phase 1
+  completion tag.

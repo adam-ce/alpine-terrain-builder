@@ -18,17 +18,3 @@ inline ClusterBatch make_leaf_batch(Clustering clustering) {
 }
 
 }
-
-namespace dag {
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::ClusterBatch &node) {
-    return archive(node.metadata, node.clustering);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, dag::ClusterBatch &node) {
-    return archive(node.metadata, node.clustering);
-}
-
-} // namespace dag

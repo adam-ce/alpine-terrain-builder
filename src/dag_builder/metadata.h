@@ -8,7 +8,6 @@
 #include "cluster.h"
 #include "dag_id.h"
 #include "utils.h"
-#include "zpp_bits_glm.h"
 #include "octree/storage/defaults.h"
 #include "octree/storage/codec/ZppBitsCodec.h"
 #include "octree/storage/codec/ReadOnlyCodec.h"
@@ -80,34 +79,3 @@ struct DefaultCodec<dag::NodeMetadata> {
     using type = ReadOnlyCodec<ZppBitsCodec<dag::NodeMetadata>>;
 };
 }
-
-namespace zpp::bits {
-
-template <typename Archive>
-auto serialize(Archive &archive, const radix::geometry::Aabb3d &bounds) {
-    return archive(bounds.min, bounds.max);
-}
-template <typename Archive>
-auto serialize(Archive &archive, radix::geometry::Aabb3d &bounds) {
-    return archive(bounds.min, bounds.max);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::Group &group) {
-    return archive(group.children, group.error, group.bounds);
-}
-template <typename Archive>
-auto serialize(Archive &archive, dag::Group &group) {
-    return archive(group.children, group.error, group.bounds);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.groups);
-}
-template <typename Archive>
-auto serialize(Archive &archive, dag::NodeMetadata &metadata) {
-    return archive(metadata.group_assignment, metadata.groups);
-}
-
-} // namespace zpp::bits

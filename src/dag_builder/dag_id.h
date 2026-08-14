@@ -2,8 +2,6 @@
 
 #include <cstdint>
 
-#include <zpp_bits.h>
-
 #include "octree/Id.h"
 #include "hash_utils.h"
 
@@ -33,17 +31,3 @@ struct fmt::formatter<dag::Id> {
         return fmt::format_to(ctx.out(), "{}:{}", id.source_batch, id.cluster_index);
     }
 };
-
-namespace zpp::bits {
-
-template <typename Archive>
-auto serialize(Archive &archive, const dag::Id &id) {
-    return archive(id.source_batch, id.cluster_index);
-}
-
-template <typename Archive>
-auto serialize(Archive &archive, dag::Id &id) {
-    return archive(id.source_batch, id.cluster_index);
-}
-
-}

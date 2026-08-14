@@ -1,7 +1,6 @@
 #pragma once
 
-#include "dag_node.h"
-#include "metadata.h"
+#include "serialization.h"
 #include "octree/storage/Storage.h"
 #include "octree/storage/IndexedStorage.h"
 namespace octree {

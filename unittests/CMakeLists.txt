@@ -31,7 +31,9 @@ add_executable(unittests_terrainlib
     terrainlib/segmented_buffer.cpp
     terrainlib/stamp_set.cpp
     terrainlib/store_compatibility.cpp
+    terrainlib/store_codec.cpp
     terrainlib/store_index.cpp
+    terrainlib/store_layout.cpp
     terrainlib/store_traverse.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp

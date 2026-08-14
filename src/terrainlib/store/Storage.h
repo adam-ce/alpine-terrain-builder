@@ -147,15 +147,19 @@ public:
                 node_paths.empty() ? _raw.layout().node_path(key).path() : node_paths.front(),
             }));
         }
-        if (exists.value() && _index.has_value()) {
+        const auto prepare_target = [&]() -> std::expected<void, CopyError<Key>> {
+            if (!exists.value() || !_index.has_value()) {
+                return {};
+            }
             const auto removed = _index->remove(key);
             if (!removed.has_value()) {
                 return std::unexpected(CopyError<Key>(removed.error()));
             }
             _dirty = _dirty || removed.value();
-        }
+            return {};
+        };
 
-        const auto result = _raw.copy_from(key, source._raw);
+        const auto result = _raw.copy_from(key, source._raw, prepare_target);
         if (!result.has_value()) {
             return result;
         }

@@ -108,6 +108,16 @@ public:
     std::expected<void, CopyError<Key>> copy_from(
         const Key &key,
         const RawStorage &source) const {
+        return copy_from(key, source, []() -> std::expected<void, CopyError<Key>> {
+            return {};
+        });
+    }
+
+    template<typename BeforeModify>
+    std::expected<void, CopyError<Key>> copy_from(
+        const Key &key,
+        const RawStorage &source,
+        BeforeModify &&before_modify) const {
         if (!Traits::is_valid(key)) {
             return std::unexpected(CopyError<Key>(InvalidKey<Key>{key}));
         }
@@ -127,6 +137,10 @@ public:
             if (!loaded.has_value()) {
                 return std::unexpected(CopyError<Key>(loaded.error()));
             }
+            const auto prepared = before_modify();
+            if (!prepared.has_value()) {
+                return prepared;
+            }
             const auto written = _codec->write(_layout.node_path(key), loaded.value());
             if (!written.has_value()) {
                 return std::unexpected(CopyError<Key>(written.error()));
@@ -136,6 +150,17 @@ public:
 
         const auto source_paths = source._codec->paths(source._layout.node_path(key));
         const auto target_paths = _codec->paths(_layout.node_path(key));
+        if (source_paths.size() != target_paths.size()) {
+            return std::unexpected(CopyError<Key>(CodecError{
+                CodecOperation::Write,
+                CodecErrorCategory::Domain,
+                "matching codec probes produced different actual path counts",
+            }));
+        }
+        const auto prepared = before_modify();
+        if (!prepared.has_value()) {
+            return prepared;
+        }
         for (size_t index = 0; index < source_paths.size(); ++index) {
             std::error_code error;
             std::filesystem::remove(target_paths[index], error);

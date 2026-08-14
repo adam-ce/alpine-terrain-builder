@@ -6,6 +6,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "encoded.h"
+#include "build.h"
 #include "io/bytes.h"
 #include "io/serialize.h"
 #include "octree/disk/IndexFile.h"
@@ -173,4 +174,37 @@ TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[s
     REQUIRE(reopened_result.has_value());
     CHECK(reopened_result->has(octree::Id::root()).value());
     CHECK(reopened_result->load(octree::Id::root()).has_value());
+}
+
+TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf][validation]") {
+    const std::filesystem::path fixture_path =
+        std::filesystem::path(ALP_TEST_DATA_DIR) / "raster-store-refactor/sf-flat";
+    auto fixture_result = octree::open_folder_indexed(fixture_path);
+    REQUIRE(fixture_result.has_value());
+    const auto mesh_result = fixture_result->load(octree::Id::root());
+    REQUIRE(mesh_result.has_value());
+
+    TemporaryDirectory input_directory;
+    TemporaryDirectory output_directory;
+    auto input_result = octree::open_folder_indexed(input_directory.path());
+    REQUIRE(input_result.has_value());
+    auto input = std::move(input_result.value());
+    const octree::Id root = octree::Id::root();
+    REQUIRE(input.save(root, mesh_result.value()).has_value());
+    REQUIRE(input.save(root.child(0).value(), mesh_result.value()).has_value());
+    REQUIRE(input.index().is(store::NodeStatus::Inner, root).value());
+
+    auto output_result = dag::storage::open_folder_indexed(output_directory.path());
+    REQUIRE(output_result.has_value());
+    auto output = std::move(output_result.value());
+    const dag::BuildOptions options{
+        .clusters_per_partition = 1,
+        .target_ratio = 1.0f,
+        .relative_target_error = std::nullopt,
+    };
+
+    const auto built = dag::build_full(input, output, options);
+    REQUIRE_FALSE(built.has_value());
+    CHECK(built.error().key == root);
+    CHECK(output.index().empty());
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <expected>
+
 #include <libassert/assert.hpp>
 
 #include "mesh/SimpleMesh.h"
@@ -14,6 +16,9 @@
 #include "utils.h"
 #include "containers/Cow.h"
 #include "store/describe_error.h"
+#include "sf/Error.h"
+#include "sf/finalize_storage.h"
+#include "sf/validate_index.h"
 
 struct Context {
     const octree::IndexedStorage& input;
@@ -22,12 +27,12 @@ struct Context {
     const bool keep_inside;
 };
 
-void cut_node(
+std::expected<void, sf::ProcessingError> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask);
 
-inline void cut_leaf_node(
+inline std::expected<void, sf::ProcessingError> cut_leaf_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -41,20 +46,27 @@ inline void cut_leaf_node(
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        DEBUG_ASSERT_VAL(ctx.output.copy_from(id, ctx.input));
+        const auto copy_result = ctx.output.copy_from(id, ctx.input);
+        if (!copy_result.has_value()) {
+            return std::unexpected(sf::ProcessingError(copy_result.error()));
+        }
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
-            DEBUG_ASSERT_VAL(ctx.output.save(id, clipped_mesh));
+            const auto save_result = ctx.output.save(id, clipped_mesh);
+            if (!save_result.has_value()) {
+                return std::unexpected(sf::ProcessingError(save_result.error()));
+            }
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
         }
     }
+    return {};
 }
 
-inline void cut_virtual_node(
+inline std::expected<void, sf::ProcessingError> cut_virtual_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -69,18 +81,22 @@ inline void cut_virtual_node(
         const auto child_bounds = geometry::pad_bounds_relative(ctx.space.get_node_bounds(child_id), 0.125);
         LOG_TRACE("Clipping mask for {}", child_id);
         const auto child_mask = MeshMask(mesh::clip_on_bounds_and_cap(mask.mesh, child_bounds));
-        cut_node(ctx, child_id, child_mask);
+        const auto child_result = cut_node(ctx, child_id, child_mask);
+        if (!child_result.has_value()) {
+            return child_result;
+        }
     }
+    return {};
 }
 
-inline void cut_node(
+inline std::expected<void, sf::ProcessingError> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
 ) {
     if (ctx.keep_inside && mask.mesh.is_empty()) {
         LOG_TRACE("Mesh was fully outside the mask");
-        return;
+        return {};
     }
 
     /*
@@ -94,40 +110,46 @@ inline void cut_node(
     const auto status_result = ctx.input.index().get(id);
     DEBUG_ASSERT(status_result.has_value());
     if (!status_result->has_value()) {
-        return;
+        return {};
     }
 
     const octree::NodeStatus status = status_result->value();
     switch (status) {
     case octree::NodeStatus::Virtual:
-        cut_virtual_node(ctx, id, mask);
-        break;
+        return cut_virtual_node(ctx, id, mask);
     case octree::NodeStatus::Leaf:
-        cut_leaf_node(ctx, id, mask);
-        break;
+        return cut_leaf_node(ctx, id, mask);
     default:
         UNREACHABLE();
-        break;
+        return {};
     }
+    return {};
 }
 
-inline void cut_dataset(
+inline std::expected<void, sf::ProcessingError> cut_dataset(
     const octree::IndexedStorage &input,
     const MeshMask& mask,
     octree::Storage &output,
     const bool keep_inside) {
-    Context ctx(input, output, octree::Space::earth(), keep_inside);
-    cut_node(ctx, octree::Id::root(), mask);
-    const auto index_result = output.save_or_create_index();
-    if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT(
-            "Failed to save output index in {}: {}",
-            output.base_path(),
-            store::describe_error(index_result.error()));
+    const auto validation = sf::validate_index(input.index());
+    if (!validation.has_value()) {
+        return std::unexpected(sf::ProcessingError(validation.error()));
     }
+    Context ctx(input, output, octree::Space::earth(), keep_inside);
+    const auto cut_result = cut_node(ctx, octree::Id::root(), mask);
+    if (!cut_result.has_value()) {
+        return cut_result;
+    }
+    const auto finalization = sf::finalize_storage(output);
+    if (!finalization.has_value()) {
+        return std::unexpected(std::visit(
+            [](const auto &error) -> sf::ProcessingError { return error; },
+            finalization.error()));
+    }
+    return {};
 }
 
-inline void cut_dataset(
+inline std::expected<void, sf::ProcessingError> cut_dataset(
     const octree::IndexedStorage &input_dataset,
     const MeshMask& mask,
     const std::filesystem::path &output_path,
@@ -140,15 +162,13 @@ inline void cut_dataset(
     options.preferred_extension = ".glb";
     auto output_result = octree::open_folder_indexed(output_path, std::move(options));
     if (!output_result.has_value()) {
-        LOG_ERROR_AND_EXIT(
-            "Failed to open output dataset {}: {}",
-            output_path,
-            store::describe_error(output_result.error()));
+        return std::unexpected(sf::ProcessingError(output_result.error()));
     }
     octree::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {
-        LOG_ERROR_AND_EXIT("Output dataset has to be empty.");
+        return std::unexpected(sf::ProcessingError(store::SaveError<octree::Id>(
+            store::AlreadyExists{output_path})));
     }
 
-    cut_dataset(input_dataset, mask, output_dataset, keep_inside);
+    return cut_dataset(input_dataset, mask, output_dataset, keep_inside);
 }

@@ -29,6 +29,7 @@ add_executable(unittests_terrainlib
     terrainlib/hybrid_vector.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
+    terrainlib/sf_validate_index.cpp
     terrainlib/stamp_set.cpp
     terrainlib/store_compatibility.cpp
     terrainlib/store_codec.cpp
@@ -97,6 +98,15 @@ if(TARGET sfbuilderlib)
     )
     target_link_libraries(unittests_sfbuilder PRIVATE sfbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_sfbuilder)
+
+    add_executable(unittests_sfbuilder_finalization
+        catch2_helpers.h
+        sf_builder/storage_finalization.cpp
+    )
+    target_link_libraries(
+        unittests_sfbuilder_finalization
+        PRIVATE sfbuilderlib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_sfbuilder_finalization)
 endif()
 
 if(TARGET tile-downloader)
@@ -137,6 +147,7 @@ if(TARGET sfmergerlib)
         catch2_helpers.h
         sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
+        sf_merger/storage_boundaries.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_sfmerger)

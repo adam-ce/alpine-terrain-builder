@@ -45,6 +45,7 @@
 #include "octree/storage/open.h"
 #include "octree/utils.h"
 #include "store/describe_error.h"
+#include "sf/finalize_storage.h"
 
 namespace terrainbuilder {
 
@@ -173,7 +174,11 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-void build_all_patches(
+std::expected<void, sf::FinalizeError> finalize_storage(octree::Storage &storage) {
+    return sf::finalize_storage(storage);
+}
+
+std::expected<void, sf::FinalizeError> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
@@ -347,12 +352,6 @@ void build_all_patches(
         LOG_ERROR_AND_EXIT("Failed to build all terrain patches");
     }
 
-    const auto index_result = storage.save_or_create_index();
-    if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT(
-            "Failed to save output index in {}: {}",
-            storage.base_path(),
-            store::describe_error(index_result.error()));
-    }
+    return finalize_storage(storage);
 }
 }

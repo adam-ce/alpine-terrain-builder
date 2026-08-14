@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <expected>
 
 #include "ContinuationMode.h"
 #include "Range.h"
@@ -9,6 +10,7 @@
 #include "texturing.h"
 #include "octree/storage/MeshStorage.h"
 #include "storage.h"
+#include "sf/InvalidTopology.h"
 
 namespace dag {
 
@@ -30,12 +32,12 @@ struct BuildOptions {
     ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
-void build_full(
+std::expected<void, sf::InvalidTopology> build_full(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options);
 
-void build_levels(
+std::expected<void, sf::InvalidTopology> build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,

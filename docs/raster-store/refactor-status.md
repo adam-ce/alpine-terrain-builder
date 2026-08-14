@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 3 — Generalize storage and index lifecycle
+- Phase: 4 — Harden node reuse and enforce SF topology
 - State: complete; completion commit pending.
-- Next action: commit and tag Phase 3, then begin Phase 4 copy hardening and
-  SF topology validation.
+- Next action: commit and tag Phase 4, then begin Phase 5 cleanup and
+  documentation.
 
 ## Phase log
 
@@ -91,6 +91,29 @@ This file is the resumable implementation log for
   index no-fallback, and DAG synchronized move/release coverage.
 - State: complete.
 
+### Phase 4 — Harden node reuse and enforce SF topology
+
+- Hardened `copy_from()` around the fixed codec probe path: matching path
+  lists hard-link every physical file, differing lists decode/re-encode, and
+  actual path-count mismatches return a typed codec error.
+- Moved overwrite index removal to the mutation boundary. Missing-source and
+  decode failures leave the old logical target indexed; encode and partial
+  multi-file hard-link failures leave it unindexed for safety.
+- Added one-file and multi-file hard-link, re-encode, overwrite,
+  missing-source, decode, encode, and partial-hard-link failure coverage.
+- Added `sf::InvalidTopology`, `sf::validate_index()`, typed SF processing and
+  finalization errors, and an SF finalization boundary that writes the index
+  before validating it.
+- Applied SF validation before SF merge/cut and DAG processing and after SF
+  builder/merger output finalization. The diagnostic index browser remains
+  exempt.
+- Propagated SF merger save, copy, open, index, and validation failures through
+  `std::expected` to the command-line boundary.
+- Added SF builder, SF merger, SF cut, and DAG builder boundary tests,
+  including invalid-input rejection, inspectable invalid output, unchanged
+  hard links, and newly written changed/clipped nodes.
+- State: complete.
+
 ## Verification log
 
 - Baseline `unittests_terrainlib`: 23,676 assertions in 391 test cases passed.
@@ -130,6 +153,20 @@ This file is the resumable implementation log for
 - Phase 3 all-application configuration built `sf-builder`, `sf-merger`,
   `sf-index-browser`, `dag-builder`, and `dag-convert-debug` successfully.
 - Phase 3 `git diff --check`: passed.
+- Phase 4 focused storage-copy tests: 70 assertions in 5 test cases passed.
+- Phase 4 SF validator tests: 6 assertions in 2 test cases passed.
+- Phase 4 DAG SF-input boundary test: 12 assertions passed.
+- Phase 4 SF merger boundary tests: 66 assertions in 4 test cases passed.
+- Phase 4 SF builder finalization tests: 19 assertions in 2 test cases passed.
+- Phase 4 `unittests_terrainlib`: 24,049 assertions in 429 test cases passed.
+- Phase 4 `unittests_dagbuilder`: 471 assertions in 74 test cases passed.
+- Phase 4 `unittests_sfmerger`: 121 assertions in 8 test cases passed.
+- Phase 4 all-application configuration built `sf-builder`, `sf-merger`,
+  `sf-index-browser`, `dag-builder`, and `dag-convert-debug` successfully.
+- The pre-existing `unittests_sfbuilder` compile failure involving removed
+  `radix::tile::Scheme` remains isolated; the new finalization tests build and
+  pass in `unittests_sfbuilder_finalization`.
+- Phase 4 `git diff --check`: passed.
 
 ## Commit and tag log
 
@@ -145,3 +182,5 @@ This file is the resumable implementation log for
 - `fbc02d0` / `refactor_phase_2` — runtime layouts/codecs and Phase 2
   completion tag.
 - `61acb74` — Phase 3 shared runtime-codec storage core.
+- `4ffcdea` / `refactor_phase_3` — Phase 3 application migration and
+  completion tag.

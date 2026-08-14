@@ -1,5 +1,8 @@
 #pragma once
 
+#include <expected>
+#include <optional>
+
 #include <libassert/assert.hpp>
 
 #include "NodeLoader.h"
@@ -14,34 +17,58 @@ class NodeWriter {
 public:
     NodeWriter(octree::Storage &storage) : _storage(storage) {}
 
-    bool has_node(const octree::Id &id) {
-        return DEBUG_ASSERT_VAL(this->_storage.has(id)).value();
+    std::expected<bool, store::FileOperationError<octree::Id>> has_node(
+        const octree::Id &id) {
+        return this->_storage.has(id);
     }
 
-    void write_node(const octree::Id &id, const SimpleMesh &mesh) {
+    std::expected<void, store::SaveError<octree::Id>> write_node(
+        const octree::Id &id,
+        const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        DEBUG_ASSERT_VAL(this->_storage.save(id, mesh));
-        auto p = DEBUG_ASSERT_VAL(this->_storage.path_for(id)).value();
+        const auto save_result = this->_storage.save(id, mesh);
+        if (!save_result.has_value()) {
+            return save_result;
+        }
+        const auto path_result = this->_storage.path_for(id);
+        if (!path_result.has_value()) {
+            return std::unexpected(store::SaveError<octree::Id>(path_result.error()));
+        }
+        auto p = path_result.value();
         // change extension to .png
         p.replace_extension(".png");
-        cv::imwrite(p, mesh.texture.value_or(cv::Mat()));
+        if (mesh.texture.has_value()) {
+            cv::imwrite(p, mesh.texture.value());
+        }
+        return {};
     }
 
-    void copy_subtree_to_output(
+    std::expected<void, store::CopyError<octree::Id>> copy_subtree_to_output(
         const octree::Id &id,
         const NodeLoader &loader) {
+        std::optional<store::CopyError<octree::Id>> error;
         octree::traverse(
             loader.storage().index(),
             [&](const octree::Id &child_id, const octree::NodeStatus &status) {
+                if (error.has_value()) {
+                    return;
+                }
                 if (status == octree::NodeStatus::Virtual) {
                     return;
                 }
                 DEBUG_ASSERT(status == octree::NodeStatus::Leaf);
 
-                DEBUG_ASSERT_VAL(this->_storage.copy_from(child_id, loader.storage()));
+                const auto result = this->_storage.copy_from(child_id, loader.storage());
+                if (!result.has_value()) {
+                    error = result.error();
+                }
             },
-            octree::always_refine,
+            [&](const octree::Id &) { return !error.has_value(); },
             id);
+        if (error.has_value()) {
+            return std::unexpected(std::move(error.value()));
+        }
+        return {};
     }
 
 private:

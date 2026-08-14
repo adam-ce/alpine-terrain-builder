@@ -8,6 +8,7 @@
 #include "octree/storage/open.h"
 #include "storage.h"
 #include "store/describe_error.h"
+#include "sf/Error.h"
 #include "ContinuationMode.h"
 
 int main(int argc, char **argv) {
@@ -58,7 +59,15 @@ int main(int argc, char **argv) {
             options.relative_target_error = 0.001f;
         }
 
-        dag::build_levels(input_storage, output_storage, options, args.level_range);
+        const auto build_result = dag::build_levels(
+            input_storage,
+            output_storage,
+            options,
+            args.level_range);
+        if (!build_result.has_value()) {
+            LOG_ERROR("Invalid Structura Fundamentalis input: {}", sf::describe_error(build_result.error()));
+            return EXIT_FAILURE;
+        }
         const auto index_result = output_storage.save_index();
         if (!index_result.has_value()) {
             LOG_ERROR(

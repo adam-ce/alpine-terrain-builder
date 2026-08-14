@@ -18,6 +18,7 @@
 #include "terrainbuilder.h"
 #include "octree/Space.h"
 #include "tile_provider.h"
+#include "sf/Error.h"
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -317,7 +318,7 @@ int run(std::span<char *> args) {
         const auto maybe_s = actual_num_threads == 1 ? "" : "s";
         LOG_INFO("Using {} thread{} for batch processing.", actual_num_threads, maybe_s);
 
-        terrainbuilder::build_all_patches(
+        const auto build_result = terrainbuilder::build_all_patches(
             dataset,
             target_level,
             texture_srs,
@@ -326,6 +327,12 @@ int run(std::span<char *> args) {
             output_base_path,
             output_format,
             overwrite_existing);
+        if (!build_result.has_value()) {
+            LOG_ERROR(
+                "Failed to finalize Structura Fundamentalis output: {}",
+                sf::describe_error(build_result.error()));
+            return 1;
+        }
     }
 
     return 0;

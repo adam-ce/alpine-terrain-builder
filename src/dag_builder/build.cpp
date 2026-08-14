@@ -41,6 +41,7 @@
 #include "vertex_lock.h"
 #include "parallel.h"
 #include "ContinuationMode.h"
+#include "sf/validate_index.h"
 
 namespace dag {
 
@@ -584,11 +585,15 @@ std::unordered_set<octree::Id> build_level(
 // Builds the DAG from input_storage into output_storage, restricted to levels within level_range.
 // Iterates octree levels from finest to coarsest, simplifying and re-clustering geometry at each
 // level from its children.
-void build_levels(
+std::expected<void, sf::InvalidTopology> build_levels(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range) {
+    const auto validation = sf::validate_index(input_storage.index());
+    if (!validation.has_value()) {
+        return std::unexpected(validation.error());
+    }
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
     const octree::Space space = octree::Space::earth();
     const octree::Id root_node = options.root_node;
@@ -599,7 +604,7 @@ void build_levels(
     auto max_input_level_opt = find_max_input_level(input_by_level);
     if (!max_input_level_opt.has_value()) {
         LOG_WARN("No input nodes found for root {}", root_node);
-        return;
+        return {};
     }
     const uint32_t max_input_level = max_input_level_opt.value();
 
@@ -607,7 +612,7 @@ void build_levels(
     const Range<uint32_t> range = valid_range.intersect(level_range).to_range(max_input_level + 1);
     if (range.is_empty()) {
         LOG_WARN("Requested level range does not overlap with buildable levels {}-{}", root_node.level(), max_input_level);
-        return;
+        return {};
     }
 
     // Seed prev_level_built with any already-built nodes one level finer than the first level.
@@ -638,14 +643,15 @@ void build_levels(
     }
 
     output_storage = std::move(ctx.output_storage).release();
+    return {};
 }
 
 // Builds the complete DAG from input_storage into output_storage.
-void build_full(
+std::expected<void, sf::InvalidTopology> build_full(
     const octree::IndexedMeshStorage &input_storage,
     octree::IndexedDagStorage &output_storage,
     const BuildOptions &options) {
-    build_levels(input_storage, output_storage, options, RangeFull{});
+    return build_levels(input_storage, output_storage, options, RangeFull{});
 }
 
 } // namespace dag

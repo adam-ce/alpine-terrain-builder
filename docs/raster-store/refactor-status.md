@@ -57,3 +57,9 @@ This file is the resumable implementation log for
 ## Commit and tag log
 
 - `refactor_before` — annotated baseline tag at `d1309f5`.
+- `75277f8` — Phase 0 compatibility tests, indexes, DAG payloads, and status
+  log.
+- Phase 0 fixture-payload follow-up — force-adds the intentionally committed
+  `.terrain` golden payloads ignored by the repository's general artifact
+  rule.
+- `refactor_phase_0` — annotated Phase 0 completion tag.

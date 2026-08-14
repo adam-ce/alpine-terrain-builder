@@ -30,7 +30,7 @@
 class GDALDataset;
 class OGRSpatialReference;
 
-struct GdalDatasetDeleter {
+struct GDALDatasetDeleter {
     void operator()(GDALDataset *dataset) const;
 };
 
@@ -70,6 +70,6 @@ public:
 
 private:
     Dataset(const std::filesystem::path path, GDALDataset *dataset);
-    std::unique_ptr<GDALDataset, GdalDatasetDeleter> m_gdal_dataset;
+    std::unique_ptr<GDALDataset, GDALDatasetDeleter> m_gdal_dataset;
     std::optional<std::filesystem::path> m_path;
 };

@@ -4,7 +4,7 @@
 
 #include "Bound.h"
 #include "RangeBounds.h"
-#include "number_utils.h"
+#include "numeric/number_utils.h"
 
 template <typename T>
 struct Range : RangeBounds<Range<T>, T> {

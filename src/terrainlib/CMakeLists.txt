@@ -10,6 +10,12 @@ add_library(terrainlib
     io/compression.cpp
     io/utils.cpp
 
+    mesh/connectivity/adjacency.cpp
+    mesh/connectivity/boundary.cpp
+    mesh/connectivity/manifold.cpp
+    mesh/connectivity/topology.cpp
+    mesh/connectivity/vertex_index_range.cpp
+
     mesh/igl/igl.cpp
 
     mesh/io/gltf.cpp
@@ -21,19 +27,14 @@ add_library(terrainlib
 
     mesh/bfs.cpp
     mesh/boolean.cpp
-    mesh/boundary.cpp
     mesh/cleanup.cpp
     mesh/clip.cpp
-    mesh/compute_topology.cpp
     mesh/convert.cpp
     mesh/geometry.cpp
     mesh/holes.cpp
     mesh/io.cpp
-    mesh/manifold.cpp
     mesh/texture_trim.cpp
-    mesh/topology.cpp
     mesh/validate.cpp
-    mesh/vertex_index_range.cpp
 
     octree/storage/helpers.cpp
     octree/IndexMap.cpp
@@ -42,8 +43,12 @@ add_library(terrainlib
 
     polygon/triangulate.cpp
     polygon/utils.cpp
+    polygon/clip.cpp
+
+    texture/dilate_colors.cpp
 
     uv/unwrap.cpp
+    uv/atlas.cpp
 
     Dataset.cpp
     init.cpp
@@ -83,6 +88,7 @@ target_link_libraries(terrainlib PUBLIC
     WideInteger
     igl::core
     igl_restricted::triangle
+    xatlas
 )
 
 if(ALP_ENABLE_OVERVIEW_READING)

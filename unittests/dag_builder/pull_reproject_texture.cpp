@@ -4,6 +4,7 @@
 #include "../catch2_helpers.h"
 
 #include "atlas/pull_reproject_texture.h"
+#include "range_utils.h"
 
 namespace {
 
@@ -230,4 +231,41 @@ TEST_CASE("TextureReprojector pins rounding behavior for linear interpolation bl
     CHECK(pixel[0] == 128);
     CHECK(pixel[1] == 128);
     CHECK(pixel[2] == 128);
+}
+
+namespace {
+
+// A quad over the middle ninth of the target, which holds only the centre sample of a 3x3 output.
+std::array<ReprojectionTriangle, 2> make_centre_quad() {
+    const glm::dvec2 low(0.34);
+    const glm::dvec2 high(0.66);
+
+    std::array<ReprojectionTriangle, 2> triangles;
+    triangles[0].source_uvs = {glm::dvec2(0.5), glm::dvec2(0.5), glm::dvec2(0.5)};
+    triangles[0].target_uvs = {low, glm::dvec2(high.x, low.y), high};
+    triangles[1].source_uvs = triangles[0].source_uvs;
+    triangles[1].target_uvs = {low, high, glm::dvec2(low.x, high.y)};
+    return triangles;
+}
+
+} // namespace
+
+TEST_CASE("TextureReprojector extends the covered region by the requested gutter", "[dag_builder][pull_reproject_texture]") {
+    const cv::Mat source(1, 1, CV_8UC3, cv::Vec3b(10, 20, 30));
+    const std::array<ReprojectionTriangle, 2> triangles = make_centre_quad();
+
+    TextureReprojector without_gutter(glm::uvec2(3, 3), CV_8UC3, ReprojectionOptions{1, cv::INTER_NEAREST, 0});
+    const cv::Mat unfilled = without_gutter.render(std::span(&source, 1), triangles);
+
+    CHECK(unfilled.at<cv::Vec3b>(1, 1) == cv::Vec3b(10, 20, 30));
+    CHECK(unfilled.at<cv::Vec3b>(0, 0) == cv::Vec3b(0, 0, 0));
+
+    TextureReprojector with_gutter(glm::uvec2(3, 3), CV_8UC3, ReprojectionOptions{1, cv::INTER_NEAREST, 1});
+    const cv::Mat filled = with_gutter.render(std::span(&source, 1), triangles);
+
+    for (const uint32_t y : range<uint32_t>(3)) {
+        for (const uint32_t x : range<uint32_t>(3)) {
+            REQUIRE(filled.at<cv::Vec3b>(y, x) == cv::Vec3b(10, 20, 30));
+        }
+    }
 }

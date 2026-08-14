@@ -22,7 +22,7 @@ void export_node(const cli::Args &args) {
         return;
     }
 
-    const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering, true);
+    const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
     const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
     if (!save_result.has_value()) {

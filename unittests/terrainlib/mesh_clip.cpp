@@ -15,7 +15,7 @@
 #include "mesh/io.h"
 #include "mesh/bounds.h"
 #include "mesh/validate.h"
-#include "mesh/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "mesh/geometry.h"
 #include "octree/Space.h"
 #include "octree/Id.h"
@@ -207,7 +207,7 @@ TEST_CASE("single triangle around bounds") {
         CHECK(bounds2d.contains_inclusive(glm::dvec2(b)));
         CHECK(bounds2d.contains_inclusive(glm::dvec2(c)));
 
-        total_area += compute_triangle_area(a, b, c);
+        total_area += geometry::compute_triangle_area(a, b, c);
     }
 
     // The clipped region is exactly a 2x2 square.
@@ -239,6 +239,41 @@ TEST_CASE("single triangle with two vertices in bounds") {
     CAPTURE(expected1);
     CAPTURE(expected2);
     CHECK((clipped_soup == expected1 || clipped_soup == expected2));
+}
+
+TEST_CASE("single triangle split by one plane and partly discarded by the next") {
+    // The x plane leaves two vertices inside and splits the triangle in two. The piece clipped
+    // first falls entirely outside the y plane, while the one held back still reaches into bounds.
+    SimpleMesh mesh;
+    mesh.positions = {
+        glm::dvec3(-1, 1, 0),
+        glm::dvec3(1, -3, 0),
+        glm::dvec3(9, -1, 0),
+    };
+    mesh.triangles = {
+        glm::uvec3(0, 1, 2)};
+    const radix::geometry::Aabb3d bounds(glm::dvec3(0, 0, -1), glm::dvec3(10, 10, 1));
+    const SimpleMesh clipped_mesh = mesh::clip_on_bounds(mesh, bounds);
+    const TriangleSoup clipped_soup = to_sorted_triangle_soup(clipped_mesh);
+
+    double total_area = 0.0;
+    for (const auto &triangle : clipped_soup) {
+        const auto &a = triangle[0];
+        const auto &b = triangle[1];
+        const auto &c = triangle[2];
+
+        CAPTURE(a, b, c);
+        CHECK(bounds.contains_inclusive(a));
+        CHECK(bounds.contains_inclusive(b));
+        CHECK(bounds.contains_inclusive(c));
+
+        total_area += geometry::compute_triangle_area(a, b, c);
+    }
+
+    // The clipped region is the triangle (0, 0), (4, 0), (0, 0.8).
+    CAPTURE(clipped_soup);
+    CHECK(!clipped_soup.empty());
+    CHECK(total_area == Catch::Approx(1.6));
 }
 
 void run_checks(const SimpleMesh &mesh, const SimpleMesh &clipped_mesh, const radix::geometry::Aabb3d &bounds) {

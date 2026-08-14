@@ -1,5 +1,5 @@
 #include "../catch2_helpers.h"
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 
 TEST_CASE("UnionFind empty (size 0)", "[UnionFind]") {
     UnionFind uf(0);

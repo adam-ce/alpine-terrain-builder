@@ -3,82 +3,127 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <variant>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <glm/gtx/component_wise.hpp>
 
 #include "cluster.h"
+#include "mesh/geometry.h"
+#include "opencv_utils.h"
 #include "range_utils.h"
 #include "variant_utils.h"
 
-// Fixed texel budget per cluster.
+// Fixed texel budget per triangle.
 struct ConstantQuality {
-    uint32_t target_cluster_texels = 128 * 128;
+    double target_texels_per_triangle = 64;
 };
 
 // Dynamic texel budget relative to input textures.
 struct RelativeQuality {};
 
-struct BakeOptions {
+struct TextureSizingOptions {
     std::variant<ConstantQuality, RelativeQuality> mode = ConstantQuality{};
-    uint32_t max_node_texels = 4096 * 4096;
+    uint32_t max_node_texels = 8192 * 8192;
 };
 
-namespace detail {
+
+// Fraction of its texture a cluster's uvs reach.
+[[nodiscard]]
+inline double compute_utilization(const Cluster &cluster) {
+    return sum(cluster.local_triangles, [&](const glm::uvec3 &triangle) {
+        return geometry::compute_triangle_area(triangle, cluster.uvs);
+    });
+}
+
+// Texels of its texture a cluster actually reaches.
+[[nodiscard]]
+inline double compute_texel_area(const Clustering &clustering, const uint32_t cluster_index) {
+    const Cluster &cluster = clustering.clusters[cluster_index];
+    if (!cluster.is_textured()) {
+        return 0;
+    }
+    const glm::dvec2 texture_size = get_texture_size(clustering.textures[cluster.texture_id.value()]);
+    return compute_utilization(cluster) * glm::compMul(texture_size);
+}
+
+// Texels per triangle the group's textured sources carry.
+[[nodiscard]]
+inline double compute_source_texel_density(const Clustering &source, const std::span<const uint32_t> cluster_indices) {
+    double texel_area = 0;
+    uint32_t triangle_count = 0;
+    for (const uint32_t cluster_index : cluster_indices) {
+        const Cluster &cluster = source.clusters[cluster_index];
+        if (!cluster.is_textured()) {
+            continue;
+        }
+        texel_area += compute_texel_area(source, cluster_index);
+        triangle_count += cluster.triangle_count();
+    }
+
+    if (triangle_count == 0) {
+        return 0;
+    }
+    return texel_area / triangle_count;
+}
+
+// Texels a cluster should get per triangle.
+[[nodiscard]]
+inline double compute_target_texel_density(const TextureSizingOptions &options, const double source_texel_density) {
+    return match(options.mode,
+        [&](const ConstantQuality &mode) {
+            return std::min(mode.target_texels_per_triangle, source_texel_density);
+        },
+        [&](const RelativeQuality &) {
+            return source_texel_density;
+        });
+}
+
 // Smallest resolution holding the given texels at the given shape.
+[[nodiscard]]
 inline glm::uvec2 compute_size_from_area(const double area, const double aspect) {
     const glm::dvec2 size(std::sqrt(area * aspect), std::sqrt(area / aspect));
     return glm::max(glm::uvec2(glm::ceil(size)), glm::uvec2(1));
 }
 
-// Texels a merged cluster gets per triangle.
-inline double texel_density(
-    const BakeOptions &options,
-    const uint32_t source_triangle_count,
-    const double source_pixel_area) {
-    const double source_density = source_pixel_area / source_triangle_count;
+// Minimum utilization value so a collapsed unwrap cannot demand an unbounded texture.
+inline constexpr double MIN_TEXTURE_UTILIZATION = 0.1;
 
-    return match(options.mode,
-        [&](const ConstantQuality &mode) {
-            const double target_cluster_texels = mode.target_cluster_texels;
-            return std::min(target_cluster_texels / MAX_TRIANGLES_PER_CLUSTER, source_density);
-        },
-        [&](const RelativeQuality &) {
-            return source_density;
-        });
+// What the clusters of one output texture demand it to carry.
+struct TextureDemand {
+    double texels = 0; // texels they want on the surface
+    double utilization = 0; // fraction of the texture their uvs reach
+};
+
+// Compute size of a texture to hold the demanded texels.
+[[nodiscard]]
+inline glm::uvec2 compute_target_size(const TextureDemand &demand, const double aspect) {
+    const double area = demand.texels / std::max(demand.utilization, MIN_TEXTURE_UTILIZATION);
+    return compute_size_from_area(area, aspect);
 }
 
-inline void fit_node_budget(const std::span<glm::uvec2> sizes, const uint32_t max_node_texels) {
-    const double requested_texels = sum(sizes, [](const glm::uvec2& size) {
-        return glm::compMul(glm::dvec2(size));
+// One of the node's textures, with the size it will be rescaled or baked to.
+struct BakePlan {
+    std::vector<uint32_t> clusters;
+    glm::uvec2 size{1};
+    std::optional<uint32_t> inherited_id = {}; // set when the merge carried the texture in
+};
+
+// Scale every planned size down until they fit the node's texel budget together.
+inline void rescale_to_fit_budget(const std::span<BakePlan> plans, const uint32_t max_node_texels) {
+    const double requested_texels = sum(plans, [](const BakePlan &plan) {
+        return glm::compMul(glm::dvec2(plan.size));
     });
     if (requested_texels <= max_node_texels) {
         return;
     }
 
     const double scale = std::sqrt(max_node_texels / requested_texels);
-    for (glm::uvec2 &size : sizes) {
-        const glm::dvec2 scaled = glm::dvec2(size) * scale;
-        size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
+    for (BakePlan &plan : plans) {
+        const glm::dvec2 scaled = glm::dvec2(plan.size) * scale;
+        plan.size = glm::max(glm::uvec2(glm::ceil(scaled)), glm::uvec2(1));
     }
-}
-}
-
-// Resolution fitting the texel budget.
-inline glm::uvec2 compute_bake_texture_size(
-    const double source_pixel_area,
-    const uint32_t source_triangle_count,
-    const uint32_t target_triangle_count,
-    const double utilization,
-    const double aspect,
-    const BakeOptions &options) {
-    if (source_triangle_count == 0 || target_triangle_count == 0) {
-        return glm::uvec2(1);
-    }
-
-    const double density = detail::texel_density(options, source_triangle_count, source_pixel_area);
-    const double atlas_area = density * target_triangle_count / std::max(utilization, 1e-3);
-    return detail::compute_size_from_area(atlas_area, aspect);
 }

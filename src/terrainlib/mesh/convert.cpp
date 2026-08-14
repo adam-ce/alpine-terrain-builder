@@ -10,7 +10,7 @@
 #include "mesh/convert.h"
 #include "mesh/cgal.h"
 #include "mesh/validate.h"
-#include "log.h"
+#include "build_config.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/View.h"
 
@@ -45,7 +45,7 @@ cgal::Mesh to_cgal_mesh(const mesh::View &mesh) {
             cgal::VertexIndex(triangle.x),
             cgal::VertexIndex(triangle.y),
             cgal::VertexIndex(triangle.z));
-        USE(face);
+        ALP_UNUSED(face);
         DEBUG_ASSERT(face != cgal::Mesh::null_face());
     }
 

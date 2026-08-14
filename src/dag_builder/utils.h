@@ -8,63 +8,14 @@
 
 #include "atlas/rect/atlas.h"
 #include "cluster.h"
+#include "geometry/geometry.h"
+#include "mesh/cleanup.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/manifold.h"
+#include "mesh/connectivity/manifold.h"
 #include "mesh/texture_trim.h"
 #include "range_utils.h"
+#include "vector_utils.h"
 #include "enumerate.h"
-
-// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
-// Outputs are written as float coordinates.
-// Optionally outputs the computed AABB if out_bounds is provided.
-template <glm::length_t n_dims>
-void to_approximate_normalized(
-    std::span<const glm::vec<n_dims, double>> positions,
-    std::vector<glm::vec<n_dims, float>> &approx,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    // compute bounds
-    const radix::geometry::Aabb<n_dims, double> bounds = radix::geometry::find_bounds(positions);
-    const glm::vec<n_dims, double> center = bounds.centre();
-    const glm::vec<n_dims, double> extents = bounds.size() / 2.0;
-    const double max_extents = glm::compMax(extents);
-
-    if (out_bounds) {
-        *out_bounds = bounds;
-    }
-
-    // normalize based on aabb
-    approx.clear();
-    approx.reserve(positions.size());
-    for (const auto &p : positions) {
-        const glm::vec<n_dims, double> rel = (p - center) / max_extents;
-        approx.push_back(glm::vec<n_dims, float>(rel));
-    }
-}
-template <glm::length_t n_dims>
-void to_approximate_normalized(
-    const std::vector<glm::vec<n_dims, double>> &positions,
-    std::vector<glm::vec<n_dims, float>> &approx,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    return to_approximate_normalized(std::span(positions), approx, out_bounds);
-}
-
-// Normalize a set of positions into the range of [-1,1] based on maximum extents of the bounding box.
-// Outputs are written as float coordinates.
-// Optionally outputs the computed AABB if out_bounds is provided.
-template <glm::length_t n_dims>
-std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
-    std::span<const glm::vec<n_dims, double>> positions,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    std::vector<glm::vec<n_dims, float>> approx;
-    to_approximate_normalized(positions, approx, out_bounds);
-    return approx;
-}
-template <glm::length_t n_dims>
-std::vector<glm::vec<n_dims, float>> to_approximate_normalized(
-    const std::vector<glm::vec<n_dims, double>> &positions,
-    radix::geometry::Aabb<n_dims, double> *out_bounds = nullptr) {
-    return to_approximate_normalized(std::span(positions), out_bounds);
-}
 
 inline void collect_cluster_positions(const Cluster &cluster, const std::span<const glm::dvec3> global_positions, std::vector<glm::dvec3> &out_positions) {
     out_positions.clear();
@@ -130,6 +81,25 @@ inline Clustering make_manifold(const Clustering &clustering) {
     return manifold;
 }
 
+inline void remove_duplicate_triangles_inplace(Clustering &clustering) {
+    std::vector<glm::uvec3> global_triangles;
+    for (Cluster &cluster : clustering.clusters) {
+        global_triangles.clear();
+        global_triangles.reserve(cluster.local_triangles.size());
+        for (const glm::uvec3 &triangle : cluster.local_triangles) {
+            global_triangles.emplace_back(
+                cluster.vertex_indices[triangle.x],
+                cluster.vertex_indices[triangle.y],
+                cluster.vertex_indices[triangle.z]);
+        }
+
+        const std::vector<uint32_t> duplicates = mesh::find_duplicate_triangles_consider_orientation(global_triangles);
+        for (const uint32_t index : duplicates | std::views::reverse) {
+            erase_by_index(cluster.local_triangles, index);
+        }
+    }
+}
+
 namespace detail {
 inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, const bool debug_texture = false) {
     const size_t cluster_count = clustering.clusters.size();
@@ -146,7 +116,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
     }
 
     const bool any_has_uvs = std::ranges::any_of(clustering.clusters, [](const Cluster &c) {
-        return c.has_uvs();
+        return c.is_textured();
     });
 
     // Preallocate mesh buffers
@@ -177,7 +147,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
             mesh.triangles.push_back(local_triangle + base_vertex);
         }
     }
-    
+
     DEBUG_ASSERT(mesh::is_manifold(mesh));
 
     if (debug_texture) {
@@ -224,7 +194,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
             // remap the uvs to match the atlas
             uint32_t uv_offset = 0;
             for (const Cluster &cluster : clustering.clusters) {
-                if (any_has_uvs && cluster.has_texture()) {
+                if (any_has_uvs && cluster.is_textured()) {
                     std::span<glm::dvec2> cluster_uvs(mesh.uvs.data() + uv_offset, cluster.vertex_count());
                     atlas::map_uvs(plan, cluster.texture_id.value(), cluster_uvs);
                 }
@@ -264,7 +234,7 @@ inline void trim_textures_inplace(Clustering &clustering) {
     // Group clusters by texture
     std::vector<std::vector<uint32_t>> clusters_per_texture(clustering.textures.size());
     for (const auto& [i, cluster] : enumerate(clustering.clusters)) {
-        if (cluster.has_texture()) {
+        if (cluster.is_textured()) {
             clusters_per_texture[cluster.texture_id.value()].push_back(i);
         }
     }

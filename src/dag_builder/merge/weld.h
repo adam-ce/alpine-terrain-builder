@@ -10,12 +10,12 @@
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
 
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "cluster.h"
 #include "compact.h"
 #include "enumerate.h"
 #include "log.h"
-#include "mesh/topology.h"
+#include "mesh/connectivity/adjacency.h"
 #include "spatial_lookup/Hashmap.h"
 #include "validate.h"
 

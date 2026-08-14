@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <radix/geometry.h>
 
-#include "FixedVector.h"
+#include "containers/FixedVector.h"
 #include "octree/Id.h"
 #include "octree/IdRect.h"
 #include "octree/OddLevelShifted.h"

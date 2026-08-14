@@ -10,10 +10,10 @@
 #include <libassert/assert.hpp>
 #include <radix/geometry.h>
 
-#include "TinyVector.h"
+#include "containers/TinyVector.h"
 #include "centroids.h"
 #include "cluster.h"
-#include "mesh/triangle_compare.h"
+#include "mesh/connectivity/triangle_compare.h"
 #include "simplify.h"
 #include "utils.h"
 #include "VertexInCluster.h"

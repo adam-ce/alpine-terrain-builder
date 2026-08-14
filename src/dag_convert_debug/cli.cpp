@@ -50,16 +50,16 @@ Args cli::parse(int argc, const char *const *argv) {
 
     if (args.output_path.empty()) {
         auto input_path = args.input_path.lexically_normal();
+        // A trailing separator leaves an empty filename, which would put "-debug" inside the input.
+        if (input_path.filename().empty()) {
+            input_path = input_path.parent_path();
+        }
         if (std::filesystem::is_directory(input_path)) {
             auto stem = input_path.filename().string();
             args.output_path = input_path.parent_path() / fmt::format("{}-debug", stem);
         } else {
             auto stem = input_path.stem().string();
-            auto ext = input_path.extension().string();
-            if (!ext.empty()) {
-                ext = ".glb";
-            }
-            args.output_path = input_path.parent_path() / fmt::format("{}-debug{}", stem, ext);
+            args.output_path = input_path.parent_path() / fmt::format("{}-debug.glb", stem);
         }
     }
 

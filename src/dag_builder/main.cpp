@@ -25,11 +25,13 @@ int main(int argc, char **argv) {
             .clusters_per_partition = args.clusters_per_partition,
             .target_ratio = args.target_ratio,
             .relative_target_error = args.target_error,
-            .merge_options = {
-                .uv_unwrap_algorithm = args.uv_unwrap_algorithm,
+            .texture_options = {
+                .atlas = {.padding = args.texture_gutter},
+                .bake = {.reprojection = {.gutter = args.texture_gutter}},
+                .sizing = args.sizing_options,
+                .charting = args.charting,
                 .allow_texture_reuse = args.allow_texture_reuse,
             },
-            .bake_options = args.bake_options,
             .root_node = args.root_node,
             .include_mode = args.include_mode,
             .write_debug_meshes = args.write_debug_meshes,

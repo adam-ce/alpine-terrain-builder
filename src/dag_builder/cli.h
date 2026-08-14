@@ -10,14 +10,8 @@
 #include "build.h"
 #include "octree/Id.h"
 #include "Range.h"
-#include "uv/unwrap.h"
 
 namespace cli {
-
-enum class TextureSizingKind {
-    Constant,
-    Relative,
-};
 
 struct Args {
     spdlog::level::level_enum log_level;
@@ -27,13 +21,14 @@ struct Args {
     octree::Id root_node;
     AnyRange<uint32_t> level_range;
 
-    uv::Algorithm uv_unwrap_algorithm;
     bool allow_texture_reuse;
+    ChartingMode charting;
     uint32_t clusters_per_partition;
     std::optional<float> target_ratio;
     std::optional<float> target_error;
 
-    BakeOptions bake_options;
+    TextureSizingOptions sizing_options;
+    uint32_t texture_gutter;
 
     bool write_debug_meshes;
     bool parallelize;

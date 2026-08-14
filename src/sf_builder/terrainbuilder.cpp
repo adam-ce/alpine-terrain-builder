@@ -101,12 +101,15 @@ std::optional<SimpleMesh> build_patch(
     if (tile_provider != nullptr) {
         start = std::chrono::high_resolution_clock::now();
         LOG_INFO("Assembling mesh texture");
-        std::optional<cv::Mat> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
+        std::optional<AssembledTexture> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
         if (!texture.has_value()) {
             LOG_ERROR("Failed to assemble texture");
             // TODO: should we return nullopt here?
+        } else {
+            // The uvs address the requested bounds, the texture holds padding around them.
+            texture.value().remap_uvs(mesh.uvs);
+            mesh.texture = texture.value().image;
         }
-        mesh.texture = texture;
         LOG_DEBUG("Assembling mesh texture took {}s", format_secs_since(start));
         LOG_INFO("Finished assembling mesh texture");
     } else {

@@ -34,18 +34,18 @@
 #include "log.h"
 #include "srs.h"
 
+void GDALDatasetDeleter::operator()(GDALDataset *dataset) const {
+    if (dataset) {
+        GDALClose(dataset);
+    }
+}
+
 static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigned int flags) {
     initialize_gdal_once();
     const std::string path_str = path.string();
     static std::mutex gdal_open_mutex;
     const std::lock_guard lock(gdal_open_mutex);
     return static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags, nullptr, nullptr, nullptr));
-}
-
-void GdalDatasetDeleter::operator()(GDALDataset *dataset) const {
-    if (dataset) {
-        GDALClose(dataset);
-    }
 }
 
 std::optional<Dataset> Dataset::open_raster(std::filesystem::path path) {

@@ -21,7 +21,7 @@
 #include "build_config.h"
 #include "unwrap.h"
 #include "fit.h"
-#include "mesh/compute_topology.h"
+#include "mesh/connectivity/topology.h"
 
 namespace uv {
 

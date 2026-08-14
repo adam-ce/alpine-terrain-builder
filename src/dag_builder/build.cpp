@@ -16,7 +16,8 @@
 #include "clusterize.h"
 #include "compact.h"
 #include "encoded.h"
-#include "int_math.h"
+#include "geometry/geometry.h"
+#include "numeric/int_math.h"
 #include "log.h"
 #include "merge/clusterings.h"
 #include "mesh/SimpleMesh.h"
@@ -72,7 +73,7 @@ std::optional<Clustering> load_and_clusterize_mesh(
 struct LodResult {
     Clustering clustering;
     std::vector<uint32_t> group_assignment; // per cluster group index
-    std::vector<std::vector<uint32_t>> group_children; // per group child indices
+    PartitionToClusters group_children; // per group child indices
 };
 
 // Run the full LOD pipeline on a clustering: partition, simplify, re-clusterize, and build group structure.
@@ -83,16 +84,12 @@ LodResult build_lod(
     const RegionFilter &lock_filter) {
     const Partitioning partitioning = create_partitioning(clusters, PartitionOptions{
                                                                         .clusters_per_partition = options.clusters_per_partition});
-    // Apply the partitioning, without manifesting textures.
-    MergeResult merged = merge_clusters_unbaked(clusters, partitioning, options.merge_options);
-    // Create partition to cluster map
-    std::vector<std::vector<uint32_t>> partition_to_clusters(partitioning.partition_count);
-    for (const auto [cluster_index, partition_index] : enumerate(partitioning.cluster_partitions)) {
-        partition_to_clusters[partition_index].push_back(cluster_index);
-    }
+    // Apply the partitioning on geometry only.
+    Clustering clustering = merge_clusters(clusters, partitioning);
+    PartitionToClusters partition_to_clusters = invert_partitioning(partitioning);
 
     // Find vertices to lock
-    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(merged.clustering, lock_filter);
+    const std::vector<uint8_t> vertex_lock = find_vertices_to_lock(clustering, lock_filter);
 
     // Convert relative target error (a fraction of the node bounds) to absolute
     const std::optional<float> absolute_target_error = map(options.relative_target_error, [&](const float relative_error) {
@@ -105,14 +102,14 @@ LodResult build_lod(
         .error_mode = ErrorMode::Add,
         .preserve_cluster_count = true
     };
-    merged.clustering = simplify(merged.clustering, simplify_options);
-    remove_unused_vertices_inplace(merged.clustering);
+    clustering = simplify(clustering, simplify_options);
+    remove_duplicate_triangles_inplace(clustering);
 
-    // Render the textures now that the surviving triangle counts are known.
-    Clustering clustering = bake_textures(std::move(merged), options.bake_options);
+    // Unwrap the surviving geometry and render its texture.
+    clustering = texture_clusters(std::move(clustering), clusters, partition_to_clusters, options.texture_options);
 
-    // Trim textures
-    trim_textures_inplace(clustering);
+    // Compact the vertex buffer
+    remove_unused_vertices_inplace(clustering);
 
     // Split each cluster into parts again.
     auto result = clusterize(clustering);
@@ -161,17 +158,17 @@ struct BuildContext {
 // Assemble a node's metadata from a build_lod result.
 dag::NodeMetadata build_node_metadata(
     std::vector<uint32_t> group_assignment,
-    const std::vector<std::vector<uint32_t>> &group_children,
+    const PartitionToClusters &group_children,
     const Clustering &merged,
     const Clustering &simplified,
     const std::vector<dag::Id> &cluster_sources,
     const std::unordered_map<octree::Id, dag::NodeMetadata> &cluster_metadata) {
     dag::NodeMetadata metadata;
     metadata.group_assignment = std::move(group_assignment);
-    metadata.groups.resize(group_children.size());
+    metadata.groups.resize(group_children.segment_count());
 
     // map child indices to dag ids
-    for (const auto &[group_index, local_indices] : enumerate(group_children)) {
+    for (const auto [group_index, local_indices] : enumerate(group_children.segments())) {
         metadata.groups[group_index].children = transform_vector(local_indices, [&](const uint32_t merged_index) {
             return cluster_sources[merged.clusters[merged_index].id];
         });
@@ -279,8 +276,10 @@ dag::ClusterBatch combine_input_and_inner(
 }
 
 // Compute epsilon value for merging clusters based on the size of the node bounds.
-double compute_epsilon(const radix::geometry::Aabb3d &bounds) {
-    return glm::compAdd(bounds.size()) / 10'000;
+double compute_epsilon(const radix::geometry::Aabb3d &) {
+    // only needed for .glb input
+    // return glm::compAdd(bounds.size()) / 1'000'000;
+    return 0.0;
 }
 
 // Build a single target node by loading input clusters (preserved as-is) and
@@ -374,13 +373,23 @@ std::vector<octree::Id> find_relevant_input_nodes(
     return result;
 }
 
-// Return the already-built DAG nodes that are children of the given target node.
-std::vector<octree::Id> find_relevant_dag_nodes(
+// Nodes one level finer that may hold data belonging to the given node.
+octree::IdRect find_relevant_dag_nodes(
+    const octree::Id &target_id,
+    const octree::OddLevelShifted &shifted_space) {
+    // We cannot rely on the intersecting nodes on the next level, since some neighbours clusters may has a centroid in this node's bounds. This can happen when the groups is split at the end of the pipeline.
+    const radix::geometry::Aabb3d padded_bounds = geometry::pad_bounds_relative(shifted_space.get_node_bounds(target_id), 0.5 - 1e-6);
+    const radix::geometry::Aabb3d search_bounds = radix::geometry::intersection(padded_bounds, shifted_space.bounds());
+    return shifted_space.get_intersecting_nodes_on_level(search_bounds, target_id.level() + 1);
+}
+
+// Nodes one level finer that may hold data belonging to the given node and are resident.
+std::vector<octree::Id> find_relevant_resident_dag_nodes(
     const octree::Id &target_id,
     const std::unordered_set<octree::Id> &prev_level_built,
     const octree::OddLevelShifted &shifted_space) {
     std::vector<octree::Id> result;
-    for (const octree::Id &child : shifted_space.get_intersecting_nodes_on_level(target_id, target_id.level()+1)) {
+    for (const octree::Id &child : find_relevant_dag_nodes(target_id, shifted_space)) {
         if (prev_level_built.contains(child)) {
             result.push_back(child);
         }
@@ -428,7 +437,7 @@ LevelWorkplan build_level_workplan(
     std::unordered_map<octree::Id, std::vector<octree::Id>> inner_nodes;
     for (const octree::Id &target : target_set) {
         input_sources[target] = find_relevant_input_nodes(target, input_by_level, ctx.shifted_space, ctx.space, ctx.options.include_mode);
-        inner_nodes[target] = find_relevant_dag_nodes(target, prev_level_built, ctx.shifted_space);
+        inner_nodes[target] = find_relevant_resident_dag_nodes(target, prev_level_built, ctx.shifted_space);
     }
 
     return {
@@ -598,6 +607,11 @@ void build_levels(
             input_by_level,
             prev_level_built,
             ctx);
+
+        // Persist per level so a finished level can be read back before the whole run completes
+        if (const auto result = ctx.output_storage.save_or_create_index(); !result.has_value()) {
+            LOG_WARN("Could not save index after level {}: {}", level, result.error());
+        }
     }
 
     output_storage = std::move(ctx.output_storage).release();

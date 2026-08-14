@@ -1,5 +1,5 @@
 #include "../catch2_helpers.h"
-#include "OffsetTable.h"
+#include "containers/OffsetTable.h"
 
 #include <array>
 #include <vector>

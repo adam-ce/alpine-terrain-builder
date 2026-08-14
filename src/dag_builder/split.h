@@ -7,12 +7,12 @@
 #include <libassert/assert.hpp>
 #include <metis.h>
 
-#include "Size.h"
-#include "Buffer.h"
+#include "containers/Size.h"
+#include "containers/Buffer.h"
 #include "clusterize.h"
 #include "log.h"
 #include "meshopt.h"
-#include "number_types.h"
+#include "numeric/number_types.h"
 #include "utils.h"
 #include "validate.h"
 
@@ -35,7 +35,7 @@ inline Clustering split_each_into_equal_parts(const Clustering &input, const S n
     for (const auto& cluster : input.clusters) {
         const uint32_t triangle_count = cluster.local_triangles.size();
         const uint32_t vertex_count = cluster.vertex_indices.size();
-        const bool has_uvs = !cluster.uvs.empty();
+        const bool has_uvs = cluster.has_uvs();
 
         // Ensure we can meaningfully split triangles and vertices
         ASSERT(triangle_count >= num_parts, "Cluster has fewer triangles than requested parts");

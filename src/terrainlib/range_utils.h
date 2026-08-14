@@ -150,24 +150,46 @@ constexpr T sum(Range &&range, T init = T{}) {
     return sum(std::forward<Range>(range), init, std::identity{});
 }
 
-// Minimum element of a range, or the given default value if the range is empty.
+template <std::ranges::forward_range Range, typename T, typename F>
+constexpr T min(Range &&range, T default_value, F &&f) {
+    if (std::ranges::empty(range)) {
+        return default_value;
+    }
+    return std::ranges::min(range | std::views::transform(std::forward<F>(f)));
+}
+
+template <std::ranges::forward_range Range, typename F>
+    requires std::invocable<F &, std::ranges::range_reference_t<Range>>
+constexpr auto min(Range &&range, F &&f) {
+    using T = std::decay_t<std::invoke_result_t<F &, std::ranges::range_reference_t<Range>>>;
+    return min(std::forward<Range>(range), T{}, std::forward<F>(f));
+}
+
 template <std::ranges::forward_range Range, typename T = std::ranges::range_value_t<Range>>
     requires std::convertible_to<std::ranges::range_value_t<Range>, T>
 constexpr T min(Range &&range, T default_value = T{}) {
+    return min(std::forward<Range>(range), default_value, std::identity{});
+}
+
+template <std::ranges::forward_range Range, typename T, typename F>
+constexpr T max(Range &&range, T default_value, F &&f) {
     if (std::ranges::empty(range)) {
         return default_value;
     }
-    return std::ranges::min(std::forward<Range>(range));
+    return std::ranges::max(range | std::views::transform(std::forward<F>(f)));
 }
 
-// Maximum element of a range, or the given default value if the range is empty.
+template <std::ranges::forward_range Range, typename F>
+    requires std::invocable<F &, std::ranges::range_reference_t<Range>>
+constexpr auto max(Range &&range, F &&f) {
+    using T = std::decay_t<std::invoke_result_t<F &, std::ranges::range_reference_t<Range>>>;
+    return max(std::forward<Range>(range), T{}, std::forward<F>(f));
+}
+
 template <std::ranges::forward_range Range, typename T = std::ranges::range_value_t<Range>>
     requires std::convertible_to<std::ranges::range_value_t<Range>, T>
 constexpr T max(Range &&range, T default_value = T{}) {
-    if (std::ranges::empty(range)) {
-        return default_value;
-    }
-    return std::ranges::max(std::forward<Range>(range));
+    return max(std::forward<Range>(range), default_value, std::identity{});
 }
 
 template <typename T>

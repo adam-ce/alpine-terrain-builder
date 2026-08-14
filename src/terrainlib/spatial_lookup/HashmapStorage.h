@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "VecHash.h"
-#include "quantize.h"
+#include "numeric/quantize.h"
 #include "spatial_lookup/CellBasedStorage.h"
 
 namespace spatial_lookup {

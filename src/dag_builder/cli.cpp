@@ -32,29 +32,21 @@ const std::unordered_map<std::string, dag::IncludeMode> include_mode_names{
     {"current-and-coarser", dag::IncludeMode::CurrentAndCoarser},
 };
 
-const std::unordered_map<std::string, cli::TextureSizingKind> texture_sizing_kind_names{
-    {"constant", cli::TextureSizingKind::Constant},
-    {"relative", cli::TextureSizingKind::Relative},
+const std::unordered_map<std::string, ChartingMode> charting_mode_names{
+    {"per-cluster", ChartingMode::PerCluster},
+    {"per-node", ChartingMode::PerNode},
 };
 
-const std::unordered_map<std::string, uv::Algorithm> uv_unwrap_algorithm_names{
-    {"AsRigidAsPossible", uv::Algorithm::AsRigidAsPossible},
-    {"arap", uv::Algorithm::AsRigidAsPossible},
+// Use RelativeQuality texture budgeting mode.
+const std::string relative_texels_per_triangle = "relative";
 
-    {"DiscreteAuthalic", uv::Algorithm::DiscreteAuthalic},
-    {"da", uv::Algorithm::DiscreteAuthalic},
+std::variant<ConstantQuality, RelativeQuality> make_texture_sizing_mode(const std::string &texels_per_triangle) {
+    if (texels_per_triangle == relative_texels_per_triangle) {
+        return RelativeQuality{};
+    }
+    return ConstantQuality{std::stod(texels_per_triangle)};
+}
 
-    {"DiscreteConformalMap", uv::Algorithm::DiscreteConformalMap},
-    {"dcm", uv::Algorithm::DiscreteConformalMap},
-
-    {"FloaterMeanValueCoordinates", uv::Algorithm::FloaterMeanValueCoordinates},
-    {"fmvc", uv::Algorithm::FloaterMeanValueCoordinates},
-
-    {"LeastSquaresConformalMap", uv::Algorithm::LeastSquaresConformalMap},
-    {"lscm", uv::Algorithm::LeastSquaresConformalMap},
-
-    {"TutteBarycentricMapping", uv::Algorithm::TutteBarycentricMapping},
-    {"tutte", uv::Algorithm::TutteBarycentricMapping}};
 
 AnyRange<uint32_t> make_level_range(const std::vector<uint32_t>& input) {
     switch (input.size()) {
@@ -139,12 +131,13 @@ Args cli::parse(int argc, const char *const *argv) {
         .output_path = {},
         .root_node = octree::Id::root(),
         .level_range = RangeFull{},
-        .uv_unwrap_algorithm = {},
         .allow_texture_reuse = true,
+        .charting = ChartingMode::PerCluster,
         .clusters_per_partition = 8,
         .target_ratio = std::nullopt,
         .target_error = std::nullopt,
-        .bake_options = {},
+        .sizing_options = {},
+        .texture_gutter = 1,
         .write_debug_meshes = false,
         .parallelize = false,
         .include_mode = dag::IncludeMode::CurrentOnly,
@@ -171,10 +164,12 @@ Args cli::parse(int argc, const char *const *argv) {
         ->expected(1, 2)
         ->check(CLI::NonNegativeNumber);
 
-    app.add_option("--uv-unwrap-algorithm", args.uv_unwrap_algorithm, "UV unwrap algorithm")
-        ->transform(CLI::CheckedTransformer(uv_unwrap_algorithm_names, CLI::ignore_case));
 
     app.add_flag("!--no-texture-reuse", args.allow_texture_reuse, "Always unwrap merged clusters instead of adopting a shared source texture");
+
+    app.add_option("--charting", args.charting, "How the clusters of a node are unwrapped")
+        ->transform(CLI::CheckedTransformer(charting_mode_names, CLI::ignore_case))
+        ->default_val(args.charting);
 
     app.add_option("--clusters-per-group", args.clusters_per_partition, "Target number of clusters per partition")
         ->default_val(args.clusters_per_partition)
@@ -186,21 +181,19 @@ Args cli::parse(int argc, const char *const *argv) {
     app.add_option("--target-error", args.target_error, "Simplification target error as a fraction of node bounds")
         ->check(CLI::NonNegativeNumber);
 
-    TextureSizingKind texture_sizing_kind = TextureSizingKind::Constant;
-    ConstantQuality constant_quality;
+    std::string texels_per_triangle = std::to_string(ConstantQuality{}.target_texels_per_triangle);
 
-    app.add_option("--texture-sizing", texture_sizing_kind, "How merged cluster textures are sized")
-        ->transform(CLI::CheckedTransformer(texture_sizing_kind_names, CLI::ignore_case))
-        ->default_val(texture_sizing_kind);
+    app.add_option("--texels-per-triangle", texels_per_triangle, "Texel budget of a triangle, or relative to follow the source textures")
+        ->default_str("64")
+        ->check(CLI::PositiveNumber | CLI::IsMember({relative_texels_per_triangle}));
 
-    const CLI::Option *texels_per_cluster_option =
-        app.add_option("--texels-per-cluster", constant_quality.target_cluster_texels, "Texel budget of a full cluster")
-            ->default_val(constant_quality.target_cluster_texels)
-            ->check(CLI::PositiveNumber);
-
-    app.add_option("--max-node-texels", args.bake_options.max_node_texels, "Texel budget shared by all textures of a node")
-        ->default_val(args.bake_options.max_node_texels)
+    app.add_option("--max-node-texels", args.sizing_options.max_node_texels, "Texel budget shared by all textures of a node")
+        ->default_val(args.sizing_options.max_node_texels)
         ->check(CLI::PositiveNumber);
+
+    app.add_option("--texture-gutter", args.texture_gutter, "Texels kept between charts.")
+        ->default_val(args.texture_gutter)
+        ->check(CLI::NonNegativeNumber);
 
     bool resume = false;
     bool overwrite = false;
@@ -229,15 +222,7 @@ Args cli::parse(int argc, const char *const *argv) {
         }
         args.continuation_mode = make_continuation_mode(resume, overwrite);
 
-        if (texture_sizing_kind != TextureSizingKind::Constant && texels_per_cluster_option->count() > 0) {
-            throw CLI::ValidationError("--texels-per-cluster requires --texture-sizing constant");
-        }
-
-        if (texture_sizing_kind == TextureSizingKind::Constant) {
-            args.bake_options.mode = constant_quality;
-        } else {
-            args.bake_options.mode = RelativeQuality{};
-        }
+        args.sizing_options.mode = make_texture_sizing_mode(texels_per_triangle);
     } catch (const CLI::ParseError &e) {
         std::exit(app.exit(e));
     }

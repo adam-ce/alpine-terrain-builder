@@ -98,11 +98,11 @@ if(ALP_BUILD_SF_INDEX_BROWSER)
     alp_add_git_repository(ftxui URL https://github.com/ArthurSonzogni/FTXUI COMMITISH v6.1.9)
 endif()
 
-if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
-    alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
-    add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
-    target_include_directories(xatlas SYSTEM PUBLIC ${xatlas_SOURCE_DIR}/source)
+alp_add_git_repository(xatlas URL https://github.com/jpcy/xatlas COMMITISH f700c7790aaa030e794b52ba7791a05c085faf0c DO_NOT_ADD_SUBPROJECT)
+add_library(xatlas STATIC ${xatlas_SOURCE_DIR}/source/xatlas/xatlas.cpp)
+target_include_directories(xatlas SYSTEM PUBLIC ${xatlas_SOURCE_DIR}/source)
 
+if(ALP_BUILD_DAG_BUILDER OR ALP_BUILD_DAG_CONVERT_DEBUG)
     alp_add_git_repository(rectpack2D URL https://github.com/TeamHypersomnia/rectpack2D.git COMMITISH bbc9d0ec05b9b508f6c781667fec718bf9e78d21)
 
     set(METIS_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

@@ -48,8 +48,8 @@ void validate(const mesh::View_<n_dims, T> &mesh, const ValidationFlags flags) {
     if constexpr (IS_DEBUG_BUILD) {
         detail::validate_core(mesh, flags);
     } else {
-        USE(mesh);
-        USE(flags);
+        ALP_UNUSED(mesh);
+        ALP_UNUSED(flags);
     }
 }
 template <glm::length_t n_dims, typename T>

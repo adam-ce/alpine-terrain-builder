@@ -52,6 +52,11 @@ public:
         return this->_storage.save(id, value);
     }
 
+    auto save_or_create_index() const {
+        std::unique_lock lock(this->_mutex);
+        return this->_storage.save_or_create_index();
+    }
+
 private:
     mutable Storage _storage;
     mutable std::shared_mutex _mutex;

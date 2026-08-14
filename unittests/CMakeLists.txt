@@ -22,12 +22,14 @@ add_executable(unittests_terrainlib
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
     terrainlib/fixed_vector.cpp
+    terrainlib/geometry_frames.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
+    terrainlib/stamp_set.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/mesh_boundary.cpp
@@ -49,6 +51,7 @@ add_executable(unittests_terrainlib
     terrainlib/octree_id.cpp
     terrainlib/octree_space.cpp
     terrainlib/octree_odd_level_shifted.cpp
+    terrainlib/polygon_clip.cpp
     terrainlib/polygon_triangulate.cpp
     terrainlib/progress_indicator_test.cpp
     terrainlib/quantize.cpp
@@ -56,8 +59,10 @@ add_executable(unittests_terrainlib
     terrainlib/range_utils.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp
+    terrainlib/texture_dilate_colors.cpp
     terrainlib/tiny_vector.cpp
     terrainlib/union_find.cpp
+    terrainlib/uv_atlas.cpp
 )
 target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
 atb_configure_test(unittests_terrainlib)
@@ -105,11 +110,16 @@ endif()
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h
+        dag_builder/bake_cluster_texture.cpp
+        dag_builder/correspondence.cpp
+        dag_builder/reprojection.cpp
         dag_builder/merge_clusterings.cpp
         dag_builder/weld.cpp
         dag_builder/slice.cpp
         dag_builder/pull_reproject_texture.cpp
         dag_builder/fixed_point.cpp
+        dag_builder/texture_sizing.cpp
+        dag_builder/texture_reuse.cpp
     )
     target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_dagbuilder)

@@ -1,5 +1,5 @@
 #include "../catch2_helpers.h"
-#include "HybridIndexPairMap.h"
+#include "containers/HybridIndexPairMap.h"
 
 #include <algorithm>
 #include <set>

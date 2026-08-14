@@ -91,3 +91,24 @@ inline Clustering remove_unused_vertices(const Clustering &clustering) {
     remove_unused_vertices_inplace(copy);
     return copy;
 }
+
+inline void remove_unused_textures_inplace(Clustering &clustering) {
+    constexpr uint32_t invalid_texture = std::numeric_limits<uint32_t>::max();
+    std::vector<uint32_t> texture_remap(clustering.textures.size(), invalid_texture);
+
+    TextureSet textures;
+    for (Cluster &cluster : clustering.clusters) {
+        if (!cluster.is_textured()) {
+            continue;
+        }
+        const uint32_t texture_id = cluster.texture_id.value();
+        uint32_t &new_id = texture_remap[texture_id];
+        if (new_id == invalid_texture) {
+            new_id = textures.add(clustering.textures[texture_id]);
+        }
+        cluster.texture_id = new_id;
+    }
+    clustering.textures = std::move(textures);
+
+    validate(clustering);
+}

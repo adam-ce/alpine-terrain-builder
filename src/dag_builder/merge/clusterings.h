@@ -8,12 +8,13 @@ enum class MergeMode {
     GreedyLocal,
     ConnectedComponents,
     MultipartiteNearest,
+    ExactHashBased,
 };
 
 struct MergeOptions {
     MergeMode mode = MergeMode::MultipartiteNearest;
     bool only_consider_boundary = true;
-    bool average_positions = true;
+    bool average_positions = false;
     bool allow_interior_merges = false;
 };
 

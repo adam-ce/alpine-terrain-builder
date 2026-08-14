@@ -11,27 +11,11 @@
 
 #include <glm/glm.hpp>
 
-#include "OffsetTable.h"
 #include "cluster.h"
+#include "geometry/geometry.h"
 #include "enumerate.h"
-#include "glm_utils.h"
-#include "mesh/boundary.h"
-#include "mesh/connected_components.h"
-#include "mesh/igl/cut_to_disk.h"
-#include "mesh/igl/orient.h"
-#include "mesh/manifold.h"
-#include "mesh/merging/VertexMapping.h"
-#include "mesh/split.h"
-#include "mesh/texture_trim.h"
-#include "mesh/topology.h"
 #include "meshopt.h"
-#include "opencv_utils.h"
 #include "range_utils.h"
-#include "uv/unwrap.h"
-#include "vector_utils.h"
-#include "atlas/Packer.h"
-#include "mesh/igl/manifold.h"
-#include "bake_textures.h"
 #include "merge/clusters.h"
 #include "Partitioning.h"
 
@@ -50,7 +34,7 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
     }
 
     // meshopt only supports float positions
-    const std::vector<glm::vec3> positions_f = to_approximate_normalized(clustering.positions);
+    const std::vector<glm::vec3> positions_f = geometry::to_approximate_normalized(clustering.positions);
 
     // Prepare vertex counts per cluster and total vertex count
     std::vector<uint32_t> cluster_vertex_counts(cluster_count);
@@ -82,12 +66,7 @@ inline Partitioning create_partitioning(const Clustering &clustering, const Part
         std::move(partition_result.cluster_partitions)};
 }
 
-inline Clustering apply_partitioning(const Clustering &clustering, const Partitioning &partitioning, const MergePartitionOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
-    return bake_textures(merge_clusters_unbaked(clustering, partitioning, merge_options), bake_options);
-}
-
-inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}, const MergePartitionOptions &merge_options = {}, const BakeOptions &bake_options = {}) {
-    const Partitioning partitioning = create_partitioning(clustering, options);
-    return apply_partitioning(clustering, partitioning, merge_options, bake_options);
+inline Clustering partition(const Clustering &clustering, const PartitionOptions &options = {}) {
+    return merge_clusters(clustering, create_partitioning(clustering, options));
 }
 

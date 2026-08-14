@@ -9,7 +9,7 @@
 #include <libassert/assert.hpp>
 
 #include "build_config.h"
-#include "SegmentedBuffer.h"
+#include "containers/SegmentedBuffer.h"
 #include "enumerate.h"
 #include "mesh/SimpleMesh.h"
 #include "type_utils.h"

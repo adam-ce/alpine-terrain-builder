@@ -15,7 +15,7 @@ inline void validate(const CGAL::Surface_mesh<Point> &mesh) {
         DEBUG_ASSERT(CGAL::is_valid_polygon_mesh(mesh));
         DEBUG_ASSERT(!CGAL::Polygon_mesh_processing::does_self_intersect(mesh));
     } else {
-        USE(mesh);
+        ALP_UNUSED(mesh);
     }
 }
 }

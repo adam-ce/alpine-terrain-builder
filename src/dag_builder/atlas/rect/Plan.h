@@ -4,7 +4,7 @@
 
 #include <glm/glm.hpp>
 
-#include "Rect.h"
+#include "geometry/Rect.h"
 
 namespace atlas {
 

@@ -9,9 +9,9 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/holes.h"
 #include "mesh/validate.h"
-#include "mesh/boundary.h"
-#include "mesh/compute_topology.h"
-#include "mesh/manifold.h"
+#include "mesh/connectivity/boundary.h"
+#include "mesh/connectivity/topology.h"
+#include "mesh/connectivity/manifold.h"
 #include "log.h"
 
 std::string vec2d_to_string(const std::vector<std::vector<uint32_t>> &v) {

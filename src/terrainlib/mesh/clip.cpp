@@ -23,10 +23,10 @@
 #include "mesh/clip.h"
 #include "mesh/convert.h"
 #include "mesh/geometry.h"
-#include "mesh/topology.h"
+#include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
 #include "mesh/validate.h"
-#include "FixedVector.h"
+#include "containers/FixedVector.h"
 #include "vector_utils.h"
 
 namespace mesh {
@@ -492,7 +492,7 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
                     const std::array<glm::dvec3, 3> new_vertices = {inside_vertex, intersection1.point, intersection2.point};
                     const std::array<glm::dvec2, 3> new_uvs = {inside_uv, intersection1_uv, intersection2_uv};
 
-                    if (is_empty_triangle(new_vertices)) {
+                    if (geometry::is_empty_triangle(new_vertices)) {
                         skip_triangle = true;
                         break;
                     }
@@ -545,8 +545,8 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
 
                     // Set the first triangle as the current one
                     // Push the second triangle to the list of triangles left to clip
-                    const bool empty1 = is_empty_triangle(new_triangle1.positions);
-                    const bool empty2 = is_empty_triangle(new_triangle2.positions);
+                    const bool empty1 = geometry::is_empty_triangle(new_triangle1.positions);
+                    const bool empty2 = geometry::is_empty_triangle(new_triangle2.positions);
                     if (empty2) {
                         if (empty1) {
                             skip_triangle = true;
@@ -569,7 +569,13 @@ Cow<const SimpleMesh> clip_on_bounds(const SimpleMesh &mesh, const radix::geomet
             }
 
             if (skip_triangle) {
-                break;
+                // Discarding this piece must not abandon the pieces an earlier split left queued
+                if (triangles_left_to_clip.empty()) {
+                    break;
+                }
+                current_triangle_and_vertices = triangles_left_to_clip.back();
+                triangles_left_to_clip.pop_back();
+                continue;
             }
 
             // If we reached here we have a clipped triangle that was not discarded
@@ -663,41 +669,6 @@ Cow<const SimpleMesh> clip_on_bounds_and_cap(const SimpleMesh &mesh, const radix
 }
 
 namespace {
-template <glm::length_t n_dims, typename T>
-glm::vec<n_dims, T> compute_barycentric(
-    const glm::vec<n_dims, T> &point,
-    const glm::vec<n_dims, T> &a,
-    const glm::vec<n_dims, T> &b,
-    const glm::vec<n_dims, T> &c
-) {
-    using Vec = glm::vec<n_dims, T>;
-
-    const Vec v0 = b - a;
-    const Vec v1 = c - a;
-    const Vec v2 = point - a;
-
-    const T d00 = glm::dot(v0, v0);
-    const T d01 = glm::dot(v0, v1);
-    const T d11 = glm::dot(v1, v1);
-    const T d20 = glm::dot(v2, v0);
-    const T d21 = glm::dot(v2, v1);
-
-    const T denom = d00 * d11 - d01 * d01;
-    ASSERT(denom != 0);
-    const T inv_denom = 1 / denom;
-
-    const T v = (d11 * d20 - d01 * d21) * inv_denom;
-    const T w = (d00 * d21 - d01 * d20) * inv_denom;
-    const T u = 1 - v - w;
-
-    return Vec(u, v, w);
-}
-template <glm::length_t n_dims, typename T>
-[[maybe_unused]]
-glm::vec<n_dims, T> compute_barycentric(const glm::vec<n_dims, T> &point, const std::array<glm::vec<n_dims, T>, 3>& triangle) {
-    return compute_barycentric(point, triangle[0], triangle[1], triangle[2]);
-}
-
 template <typename TriangleMesh, typename UvMap>
 struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinement::Default_visitor<TriangleMesh> {
     using HalfedgeDescriptor = typename boost::graph_traits<TriangleMesh>::halfedge_descriptor;
@@ -777,7 +748,7 @@ struct UvInterpolatorVisitor : public CGAL::Polygon_mesh_processing::Corefinemen
                 const double t = glm::distance(new_position, intersection.source.position) / edge_length;
                 return glm::mix(intersection.source.uv, intersection.target.uv, t);
             } else {
-                const glm::dvec3 barycentric = compute_barycentric(
+                const glm::dvec3 barycentric = geometry::compute_barycentric(
                     new_position,
                     intersection.vertices[0].position,
                     intersection.vertices[1].position,

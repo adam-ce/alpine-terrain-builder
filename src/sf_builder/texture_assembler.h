@@ -16,6 +16,9 @@
 
 #include "ctb/GlobalMercator.hpp"
 #include "ctb/Grid.hpp"
+#include "geometry/geometry.h"
+#include "numeric/glm_math.h"
+#include "numeric/int_math.h"
 #include "srs.h"
 
 #include "tile_provider.h"
@@ -118,8 +121,24 @@ namespace terrainbuilder {
     return tiles_to_splatter;
 }
 
+/// Padding kept around the requested region to avoid bleeding at its borders.
+constexpr glm::uvec2 TexturePadding(2);
+/// Alignment of the assembled region, matches the JPEG macroblock size.
+constexpr uint32_t TextureAlignment = 16;
+/// Relative growth of the tile selection bounds, so the padding can be filled from neighbouring tiles.
+constexpr double TextureSelectionGrowth = 0.01;
+
+struct TargetImageRegion {
+    // Region with padding and alignemnt
+    radix::geometry::Aabb2ui full;
+
+    // Requested region, relative to `full`.
+    radix::geometry::Aabb2ui content;
+};
+
 /// Calculate the offset and size of the target bounds inside the root tile.
-[[nodiscard]] inline radix::geometry::Aabb2ui calculate_target_image_region(
+[[nodiscard]]
+inline TargetImageRegion calculate_target_image_region(
     /// The bounds for which texture data should be created.
     const radix::tile::SrsBounds target_bounds,
     /// The bounds of the root tile.
@@ -127,7 +146,13 @@ namespace terrainbuilder {
     /// The image size of each tile.
     const glm::uvec2 tile_image_pixel_size,
     /// The range of zoom levels from the root to the maximum zoom.
-    const uint32_t zoom_level_range) {
+    const uint32_t zoom_level_range,
+    /// Minimum padding to apply
+    const glm::uvec2 min_padding = TexturePadding,
+    /// Alignment of the region (to reuse JPEG blocks)
+    const uint32_t alignment = TextureAlignment
+) {
+    DEBUG_ASSERT(alignment >= 1);
     const glm::dvec2 relative_min = (target_bounds.min - root_tile_bounds.min) / root_tile_bounds.size();
     const glm::dvec2 relative_max = (target_bounds.max - root_tile_bounds.min) / root_tile_bounds.size();
 
@@ -137,10 +162,33 @@ namespace terrainbuilder {
     const glm::uvec2 target_pixel_offset_max(glm::ceil(relative_max * glm::dvec2(root_tile_image_size)));
     
     // Map from bottom-left origin to top-left origin
-    const radix::geometry::Aabb2ui target_image_region(
+    const radix::geometry::Aabb2ui requested(
         glm::uvec2(target_pixel_offset_min.x, root_tile_image_size.y - target_pixel_offset_max.y),
         glm::uvec2(target_pixel_offset_max.x, root_tile_image_size.y - target_pixel_offset_min.y));
-    return target_image_region;
+
+    // Apply padding
+    const radix::geometry::Aabb2ui padded(
+        saturating_sub(requested.min, min_padding),
+        saturating_add(requested.max, min_padding));
+
+    // Apply alignment
+    const radix::geometry::Aabb2ui aligned(
+        glm::uvec2(align_down(padded.min.x, alignment), align_down(padded.min.y, alignment)),
+        glm::uvec2(align_up(padded.max.x, alignment), align_up(padded.max.y, alignment)));
+
+    // Clamp to the root tile image, alignment is best effort at its borders
+    const radix::geometry::Aabb2ui clamped(
+        aligned.min,
+        glm::min(aligned.max, root_tile_image_size));
+
+    // Compute relative requested
+    const radix::geometry::Aabb2ui content = {
+        requested.min - clamped.min,
+        requested.max - clamped.min};
+
+    return TargetImageRegion{
+        .full = clamped,
+        .content = content};
 }
 
 [[nodiscard]] inline radix::geometry::Aabb2ui calculate_pixel_tile_bounds(
@@ -272,7 +320,36 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
 }
 }
 
-[[nodiscard]] inline cv::Mat splatter_tiles_to_texture(
+struct AssembledTexture {
+    cv::Mat image;
+
+    // Region of `image` covering the requested bounds.
+    radix::geometry::Aabb2ui content;
+
+    /// Maps uvs relative to the requested region into the assembled image.
+    void remap_uvs(const std::span<glm::dvec2> uvs) const {
+        DEBUG_ASSERT(!this->image.empty());
+        const glm::dvec2 image_size(this->image.cols, this->image.rows);
+        const glm::dvec2 offset = glm::dvec2(this->content.min) / image_size;
+        const glm::dvec2 scale = glm::dvec2(this->content.size()) / image_size;
+        for (glm::dvec2 &uv : uvs) {
+            uv = offset + uv * scale;
+        }
+    }
+};
+
+/// Find the deepest zoom level present in the given tiles.
+[[nodiscard]]
+inline uint32_t find_max_zoom_level(const std::span<const radix::tile::Id> tiles) {
+    uint32_t max_zoom_level = 0;
+    for (const radix::tile::Id &tile : tiles) {
+        max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
+    }
+    return max_zoom_level;
+}
+
+[[nodiscard]]
+inline AssembledTexture splatter_tiles_to_texture(
     const radix::tile::Id root_tile,
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
@@ -281,17 +358,18 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
     /// A mapping from tile id to a filesystem path.
     const TileProvider &tile_provider,
     const std::span<const radix::tile::Id> tiles_to_splatter,
-    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR,
+    /// Minimum padding to keep around the requested region.
+    const glm::uvec2 min_padding = TexturePadding,
+    /// Alignment of the assembled region.
+    const uint32_t alignment = TextureAlignment) {
     if (tiles_to_splatter.empty()) {
         return {};
     }
 
     const radix::tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
 
-    uint32_t max_zoom_level = 0;
-    for (const radix::tile::Id &tile : tiles_to_splatter) {
-        max_zoom_level = std::max(tile.zoom_level, max_zoom_level);
-    }
+    const uint32_t max_zoom_level = find_max_zoom_level(tiles_to_splatter);
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
     const uint32_t zoom_level_range = max_zoom_level - root_tile.zoom_level;
 
@@ -302,8 +380,8 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
 
     // Calculate the offset and size of the target bounds inside the smallest encompassing tile.
     // As we dont want to allocate and fill a larger buffer than we have to.
-    const radix::geometry::Aabb2ui target_image_region = calculate_target_image_region(target_bounds, root_tile_bounds, tile_image_size, zoom_level_range);
-    const glm::uvec2 image_size = target_image_region.size();
+    const TargetImageRegion target_image_region = calculate_target_image_region(target_bounds, root_tile_bounds, tile_image_size, zoom_level_range, min_padding, alignment);
+    const glm::uvec2 image_size = target_image_region.full.size();
 
     // Allocate the image to write all the individual tiles into.
     const float expected_memory_mb = (image_size.x * image_size.y * any_tile_image.elemSize()) / (1024.0 * 1024.0);
@@ -343,7 +421,7 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
         DEBUG_ASSERT(glm::all(glm::greaterThanEqual(pixel_tile_bounds.size(), current_tile_image_size)));
 
         // Pixel bounds relative to the target image texture region.
-        const glm::ivec2 tile_target_position = glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.min);
+        const glm::ivec2 tile_target_position = glm::ivec2(pixel_tile_bounds.min) - glm::ivec2(target_image_region.full.min);
         const radix::geometry::Aabb2i target_pixel_tile_bounds(tile_target_position, tile_target_position + glm::ivec2(pixel_tile_bounds.size()));
 
         // Resize current tile image and copy into image buffer.
@@ -353,11 +431,19 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
 
     cv::flip(image, image, 0);
 
-    return image;
+    // Map the content region into the flipped image
+    const radix::geometry::Aabb2ui content(
+        glm::uvec2(target_image_region.content.min.x, image_size.y - target_image_region.content.max.y),
+        glm::uvec2(target_image_region.content.max.x, image_size.y - target_image_region.content.min.y));
+
+    return AssembledTexture{
+        .image = image,
+        .content = content};
 }
 
 /// Creates a texture for the given region.
-[[nodiscard]] inline std::optional<cv::Mat> assemble_texture_from_tiles(
+[[nodiscard]]
+inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     /// Specifes the grid used to organize the image tiles.
     const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.
@@ -369,7 +455,11 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
     /// The maximal zoom level to be considered. If not present, this function will use the maximal available.
     const std::optional<uint32_t> max_zoom = std::nullopt,
     /// The filter used to rescale the tile images if required due to missing detail tiles.
-    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR) {
+    const cv::InterpolationFlags rescale_filter = cv::INTER_LINEAR,
+    /// Minimum padding to keep around the requested region.
+    const glm::uvec2 min_padding = TexturePadding,
+    /// Alignment of the assembled region.
+    const uint32_t alignment = TextureAlignment) {
     if (target_bounds.width() == 0 || target_bounds.height() == 0) {
         LOG_WARN("Texture target bounds are empty");
         return std::nullopt;
@@ -395,9 +485,14 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
     const uint32_t max_safe_zoom_level = static_cast<uint32_t>(std::log2(std::numeric_limits<uint32_t>::max() / grid.tileSize()));
     const uint32_t clamped_max_zoom = std::min(max_zoom.value_or(max_safe_zoom_level), max_safe_zoom_level);
 
+    // The padding reaches past the requested bounds, so select tiles for slightly grown bounds.
+    const radix::tile::SrsBounds selection_bounds = min_padding == glm::uvec2(0)
+        ? encompassing_bounds
+        : radix::tile::SrsBounds(geometry::pad_bounds_relative(encompassing_bounds, TextureSelectionGrowth));
+
     // Find relevant tiles in bounds
     const std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
-        smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, clamped_max_zoom);
+        smallest_encompassing_tile, grid, selection_bounds, tile_provider, clamped_max_zoom);
     LOG_TRACE("Found {} relevant texture tiles", tiles_to_splatter.size());
 
     // If we found to relevant tiles, we are done.
@@ -407,6 +502,6 @@ inline std::optional<std::filesystem::path> try_get_tile_path(const radix::tile:
     }
 
     // Splatter tiles into texture buffer
-    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter);
+    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter, min_padding, alignment);
 }
 }

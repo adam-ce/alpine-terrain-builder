@@ -14,10 +14,10 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/geometry.h"
 #include "mesh/normalize.h"
-#include "mesh/topology.h"
-#include "mesh/triangle_compare.h"
+#include "mesh/connectivity/adjacency.h"
+#include "mesh/connectivity/triangle_compare.h"
 #include "vector_utils.h"
-#include "HybridVector.h"
+#include "containers/HybridVector.h"
 
 namespace mesh {
 
@@ -108,14 +108,14 @@ inline uint32_t identify_triangle_to_remove(
     glm::dvec3 average_normal(0.0);
     for (const uint32_t triangle_index : neighbourhood) {
         const glm::uvec3 &triangle = triangles[triangle_index];
-        const glm::dvec3 scaled_normal = compute_normal(triangle, positions, false);
+        const glm::dvec3 scaled_normal = geometry::compute_normal(triangle, positions, false);
         average_normal += scaled_normal;
     }
     average_normal = glm::normalize(average_normal);
 
     // Identify triangle with most deviating normal
-    const glm::dvec3 normal_a = compute_normal(triangle_a, positions);
-    const glm::dvec3 normal_b = compute_normal(triangle_b, positions);
+    const glm::dvec3 normal_a = geometry::compute_normal(triangle_a, positions);
+    const glm::dvec3 normal_b = geometry::compute_normal(triangle_b, positions);
     uint32_t triangle_to_remove = a;
     if (glm::dot(normal_b, average_normal) <= glm::dot(normal_a, average_normal)) {
         triangle_to_remove = b;
@@ -244,7 +244,7 @@ size_t remove_triangles_of_negligible_size(
     std::vector<T> areas;
     areas.reserve(triangle_count);
     for (const glm::uvec3 &triangle : mesh.triangles) {
-        const T area = compute_triangle_area(triangle, mesh.positions);
+        const T area = geometry::compute_triangle_area(triangle, mesh.positions);
         areas.push_back(area);
     }
 

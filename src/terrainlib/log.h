@@ -5,7 +5,7 @@
 #define FMT_HEADER_ONLY
 #endif
 #include "fmt_impls.h"
-#include "int_math.h"
+#include "numeric/int_math.h"
 #include <fmt/core.h>
 #include <spdlog/spdlog.h>
 
@@ -68,6 +68,3 @@ private:
             LOG_WARN(fmt_str " (occurrence {})", ##__VA_ARGS__, _log_warn_backoff.count()); \
         }                                                                \
     } while (false)
-
-template <typename... Ts>
-constexpr void USE(Ts &&...) noexcept {}

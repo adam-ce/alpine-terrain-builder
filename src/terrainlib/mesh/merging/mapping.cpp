@@ -16,10 +16,10 @@
 #include <radix/geometry.h>
 
 #include "build_config.h"
-#include "UnionFind.h"
+#include "containers/UnionFind.h"
 #include "log.h"
 #include "mesh/convert.h"
-#include "mesh/boundary.h"
+#include "mesh/connectivity/boundary.h"
 #include "mesh/merging/EpsilonVertexDeduplicate.h"
 #include "mesh/merging/helpers.h"
 #include "mesh/merging/mapping.h"

@@ -5,10 +5,9 @@
 #include "cli.h"
 #include "build.h"
 #include "log.h"
-#include "octree/storage/Storage.h"
-#include "octree/storage/MeshStorage.h"
 #include "octree/storage/open.h"
 #include "storage.h"
+#include "store/describe_error.h"
 #include "ContinuationMode.h"
 
 int main(int argc, char **argv) {
@@ -17,8 +16,24 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     try {
-        const octree::IndexedMeshStorage input_storage = octree::open_folder_indexed(args.input_path);
-        octree::IndexedDagStorage output_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.output_path);
+        auto input_result = octree::open_folder_indexed(args.input_path);
+        if (!input_result.has_value()) {
+            LOG_ERROR(
+                "Failed to open input dataset {}: {}",
+                args.input_path,
+                store::describe_error(input_result.error()));
+            return EXIT_FAILURE;
+        }
+        auto output_result = dag::storage::open_folder_indexed(args.output_path);
+        if (!output_result.has_value()) {
+            LOG_ERROR(
+                "Failed to open output dataset {}: {}",
+                args.output_path,
+                store::describe_error(output_result.error()));
+            return EXIT_FAILURE;
+        }
+        const octree::IndexedMeshStorage input_storage = std::move(input_result.value());
+        octree::IndexedDagStorage output_storage = std::move(output_result.value());
         output_storage.settings().allow_overwrite = args.continuation_mode == ContinuationMode::Overwrite;
 
         dag::BuildOptions options{
@@ -46,7 +61,10 @@ int main(int argc, char **argv) {
         dag::build_levels(input_storage, output_storage, options, args.level_range);
         const auto index_result = output_storage.save_index();
         if (!index_result.has_value()) {
-            LOG_ERROR("Failed to save output index in {}: {}", args.output_path, index_result.error());
+            LOG_ERROR(
+                "Failed to save output index in {}: {}",
+                args.output_path,
+                store::describe_error(index_result.error()));
             return EXIT_FAILURE;
         }
 

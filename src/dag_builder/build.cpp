@@ -36,6 +36,7 @@
 #include "range_utils.h"
 #include "storage.h"
 #include "thread_safe_storage.h"
+#include "store/describe_error.h"
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
@@ -52,8 +53,13 @@ std::optional<Clustering> load_and_clusterize_mesh(
     const auto result = storage.load(id);
 
     if (!result) {
-        if (result.error() != mesh::io::LoadMeshErrorKind::FileNotFound) {
-            LOG_ERROR("Failed to read node {}: {}", id, result.error());
+        const auto *codec_error = std::get_if<store::CodecError>(&result.error());
+        if (codec_error == nullptr
+            || codec_error->category != store::CodecErrorCategory::FileNotFound) {
+            LOG_ERROR(
+                "Failed to read node {}: {}",
+                id,
+                store::describe_error(result.error()));
         }
         return std::nullopt;
     }
@@ -448,7 +454,7 @@ LevelWorkplan build_level_workplan(
 
 // Pre-filter input nodes to only those that intersect the target root bounds.
 std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
-    const octree::IndexMap &index,
+    const store::Index<octree::StoreTraits> &index,
     const octree::Space &space,
     const radix::geometry::Aabb3d &root_bounds)
 {
@@ -500,7 +506,7 @@ std::unordered_set<octree::Id> build_level(
     std::unordered_set<octree::Id> already_built;
     if (ctx.options.continuation_mode != ContinuationMode::Overwrite) {
         for (const octree::Id &target : targets) {
-            if (ctx.output_storage.has(target)) {
+            if (DEBUG_ASSERT_VAL(ctx.output_storage.has(target)).value()) {
                 already_built.insert(target);
             }
         }
@@ -513,10 +519,18 @@ std::unordered_set<octree::Id> build_level(
     // Initialize debug storage if requested (contains .glb meshes)
     std::optional<octree::MeshStorage> debug_storage;
     if (ctx.options.write_debug_meshes) {
-        debug_storage = octree::open_folder(
+        octree::OpenOptions options;
+        options.preferred_extension = ".glb";
+        auto debug_result = octree::open_folder(
             ctx.output_storage.base_path().string() + "-debug",
             false,
-            octree::OpenOptions{.preferred_extension_with_dot = ".glb"});
+            std::move(options));
+        if (!debug_result.has_value()) {
+            LOG_ERROR_AND_EXIT(
+                "Failed to open debug mesh storage: {}",
+                store::describe_error(debug_result.error()));
+        }
+        debug_storage = std::move(debug_result.value());
     }
 
     tbb::concurrent_vector<octree::Id> saved_ids;
@@ -540,12 +554,18 @@ std::unordered_set<octree::Id> build_level(
                 if (debug_storage) {
                     const auto debug_save_result = debug_storage->save(target, clustering_to_mesh(result->clustering));
                     if (!debug_save_result.has_value()) {
-                        LOG_ERROR_AND_EXIT("Failed to save debug mesh for node {}: {}", target, debug_save_result.error());
+                        LOG_ERROR_AND_EXIT(
+                            "Failed to save debug mesh for node {}: {}",
+                            target,
+                            store::describe_error(debug_save_result.error()));
                     }
                 }
                 saved_ids.push_back(target);
             } else {
-                LOG_ERROR("Failed to save node {}: {}", target, save_result.error());
+                LOG_ERROR(
+                    "Failed to save node {}: {}",
+                    target,
+                    store::describe_error(save_result.error()));
             }
         }
         progress.task_finished();
@@ -610,7 +630,10 @@ void build_levels(
 
         // Persist per level so a finished level can be read back before the whole run completes
         if (const auto result = ctx.output_storage.save_or_create_index(); !result.has_value()) {
-            LOG_WARN("Could not save index after level {}: {}", level, result.error());
+            LOG_WARN(
+                "Could not save index after level {}: {}",
+                level,
+                store::describe_error(result.error()));
         }
     }
 

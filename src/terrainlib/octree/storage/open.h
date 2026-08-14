@@ -1,37 +1,31 @@
 #pragma once
 
 #include <filesystem>
-#include <memory>
-#include <optional>
+#include <utility>
 
-#include <expected>
-
-#include "io/Error.h"
-#include "octree/disk/layout/strategy/Default.h"
-#include "octree/storage/IndexedStorage.h"
-#include "octree/storage/Storage.h"
-#include "octree/storage/codec/Codec.h"
-#include "octree/storage/defaults.h"
+#include "mesh/storage.h"
+#include "octree/Storage.h"
 
 namespace octree {
 
-struct OpenOptions {
-    std::unique_ptr<disk::layout::Strategy> default_layout_strategy = {};
-    std::optional<std::string> preferred_extension_with_dot = {};
-};
+using OpenOptions = mesh::storage::OpenOptions;
 
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-std::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path);
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-Storage_<T, Codec> open_folder(
-    const std::filesystem::path &base_path,
-    const bool create_index = false,
-    OpenOptions options = {});
-template <typename T = DefaultT, CodecFor<T> Codec = DefaultCodecFor<T>>
-IndexedStorage_<T, Codec> open_folder_indexed(
-    const std::filesystem::path &base_path,
-    OpenOptions options = {});
+inline std::expected<IndexedStorage, store::OpenError<Id>> open_index(
+    const std::filesystem::path &path) {
+    return mesh::storage::open_index(path);
 }
 
-#include "open.inl"
+inline std::expected<Storage, store::OpenError<Id>> open_folder(
+    const std::filesystem::path &path,
+    const bool create_index = false,
+    OpenOptions options = {}) {
+    return mesh::storage::open_folder(path, create_index, std::move(options));
+}
 
+inline std::expected<IndexedStorage, store::OpenError<Id>> open_folder_indexed(
+    const std::filesystem::path &path,
+    OpenOptions options = {}) {
+    return mesh::storage::open_folder_indexed(path, std::move(options));
+}
+
+} // namespace octree

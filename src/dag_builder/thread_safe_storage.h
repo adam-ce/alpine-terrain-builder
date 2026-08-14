@@ -6,8 +6,6 @@
 
 #include <expected>
 
-#include "octree/Id.h"
-
 namespace dag {
 
 // A mutex-based thread-safe wrapper around a Storage_ instance.
@@ -18,6 +16,7 @@ class ThreadSafeStorage {
 
 public:
     using value_type = typename Storage::value_type;
+    using key_type = typename Storage::key_type;
     using load_error = typename Storage::load_error;
     using save_error = typename Storage::save_error;
 
@@ -33,12 +32,12 @@ public:
         return std::move(this->_storage);
     }
 
-    std::expected<value_type, load_error> load(const octree::Id &id) const {
+    std::expected<value_type, load_error> load(const key_type &id) const {
         std::shared_lock lock(this->_mutex);
         return this->_storage.load(id);
     }
 
-    bool has(const octree::Id &id) const {
+    auto has(const key_type &id) const {
         std::shared_lock lock(this->_mutex);
         return this->_storage.has(id);
     }
@@ -47,7 +46,7 @@ public:
         return this->_storage.base_path();
     }
 
-    std::expected<void, save_error> save(const octree::Id &id, const value_type &value) const {
+    std::expected<void, save_error> save(const key_type &id, const value_type &value) const {
         std::unique_lock lock(this->_mutex);
         return this->_storage.save(id, value);
     }

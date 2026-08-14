@@ -42,8 +42,9 @@
 #include "octree/Id.h"
 #include "octree/Space.h"
 #include "octree/Storage.h"
-#include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
+#include "octree/storage/open.h"
 #include "octree/utils.h"
+#include "store/describe_error.h"
 
 namespace terrainbuilder {
 
@@ -189,13 +190,19 @@ void build_all_patches(
         LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
     }
 
-    octree::Storage storage = octree::open_folder(
+    octree::OpenOptions open_options;
+    open_options.preferred_extension = output_format;
+    auto storage_result = octree::open_folder(
         output_base_path,
         false,
-        octree::OpenOptions {
-            .preferred_extension_with_dot = output_format
-        }
-    );
+        std::move(open_options));
+    if (!storage_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open output dataset {}: {}",
+            output_base_path,
+            store::describe_error(storage_result.error()));
+    }
+    octree::Storage storage = std::move(storage_result.value());
     storage.settings().allow_overwrite = overwrite_existing;
 
     const auto dataset_srs = dataset.srs();
@@ -281,7 +288,17 @@ void build_all_patches(
     tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        if (!overwrite_existing && storage.has(node)) {
+        const auto already_exists = storage.has(node);
+        if (!already_exists.has_value()) {
+            LOG_ERROR(
+                "Failed to inspect node {}: {}",
+                node,
+                store::describe_error(already_exists.error()));
+            progress.task_finished();
+            context.cancel_group_execution();
+            return;
+        }
+        if (!overwrite_existing && already_exists.value()) {
             progress.task_finished(); // TODO: correctly handle virtual nodes
             return;
         }
@@ -305,7 +322,10 @@ void build_all_patches(
             mesh::validate(mesh);
             const auto save_result = storage.save(node, mesh);
             if (!save_result.has_value()) {
-                LOG_ERROR("Failed to save mesh for node {}: {}", node, save_result.error());
+                LOG_ERROR(
+                    "Failed to save mesh for node {}: {}",
+                    node,
+                    store::describe_error(save_result.error()));
                 progress.task_finished();
                 context.cancel_group_execution();
                 return;
@@ -329,7 +349,10 @@ void build_all_patches(
 
     const auto index_result = storage.save_or_create_index();
     if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", storage.base_path(), index_result.error());
+        LOG_ERROR_AND_EXIT(
+            "Failed to save output index in {}: {}",
+            storage.base_path(),
+            store::describe_error(index_result.error()));
     }
 }
 }

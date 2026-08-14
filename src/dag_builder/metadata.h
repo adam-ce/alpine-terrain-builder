@@ -8,9 +8,6 @@
 #include "cluster.h"
 #include "dag_id.h"
 #include "utils.h"
-#include "octree/storage/defaults.h"
-#include "octree/storage/codec/ZppBitsCodec.h"
-#include "octree/storage/codec/ReadOnlyCodec.h"
 
 
 namespace dag {
@@ -71,11 +68,3 @@ inline const radix::geometry::Aabb3d &get_group_bounds(const NodeMetadata &metad
 }
 
 } // namespace dag
-
-// Set default codec for metadata.
-namespace octree {
-template <>
-struct DefaultCodec<dag::NodeMetadata> {
-    using type = ReadOnlyCodec<ZppBitsCodec<dag::NodeMetadata>>;
-};
-}

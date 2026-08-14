@@ -13,6 +13,7 @@
 #include "octree/traverse.h"
 #include "storage.h"
 #include "store/codec/ZppBits.h"
+#include "thread_safe_storage.h"
 
 namespace {
 
@@ -63,7 +64,9 @@ TEST_CASE("pre-refactor DAG fixture preserves index and payload contracts") {
     });
     CHECK(visited == std::vector<octree::Id>{root, parent, leaf});
 
-    const auto batch_storage = octree::open_folder_indexed<dag::ClusterBatch>(path);
+    auto batch_storage_result = dag::storage::open_folder_indexed(path);
+    REQUIRE(batch_storage_result.has_value());
+    const auto batch_storage = std::move(batch_storage_result.value());
     const auto batch = batch_storage.load(root);
     REQUIRE(batch.has_value());
     CHECK(batch->metadata.group_assignment == std::vector<uint32_t>{0});
@@ -73,7 +76,9 @@ TEST_CASE("pre-refactor DAG fixture preserves index and payload contracts") {
     REQUIRE(batch->clustering.clusters.size() == 1);
     CHECK(batch->clustering.clusters.front().id == 17);
 
-    const auto metadata_storage = octree::open_folder_indexed<dag::NodeMetadata>(path);
+    auto metadata_storage_result = dag::storage::open_metadata_indexed(path);
+    REQUIRE(metadata_storage_result.has_value());
+    const auto metadata_storage = std::move(metadata_storage_result.value());
     const auto metadata = metadata_storage.load(root);
     REQUIRE(metadata.has_value());
     CHECK(metadata->group_assignment == batch->metadata.group_assignment);
@@ -125,4 +130,47 @@ TEST_CASE("runtime DAG ZPP Bits codec is reentrant") {
     for (auto &operation : operations) {
         REQUIRE(operation.get());
     }
+}
+
+TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]") {
+    const auto batch_codec = dag::codec::from_extension(".bin");
+    REQUIRE(batch_codec.has_value());
+    CHECK(batch_codec.value()->paths(store::NodePath("node"))
+          == std::vector<std::filesystem::path>{"node.bin"});
+
+    const auto metadata_codec = dag::codec::metadata_from_extension(".bin");
+    REQUIRE(metadata_codec.has_value());
+    const auto write_result = metadata_codec.value()->write(
+        store::NodePath("node"),
+        dag::NodeMetadata{});
+    REQUIRE_FALSE(write_result.has_value());
+    CHECK(write_result.error().operation == store::CodecOperation::Write);
+    CHECK(write_result.error().category == store::CodecErrorCategory::UnsupportedOperation);
+
+    const auto unknown = dag::codec::from_extension(".unknown");
+    REQUIRE_FALSE(unknown.has_value());
+    CHECK(unknown.error().category == store::CodecErrorCategory::UnsupportedCodec);
+}
+
+TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[store][storage]") {
+    const std::filesystem::path fixture =
+        std::filesystem::path(ALP_TEST_DATA_DIR)
+        / "raster-store-refactor/dag/0/0/0/0.bin";
+    const auto batch = io::read_from_path<dag::ClusterBatch>(fixture);
+    REQUIRE(batch.has_value());
+
+    TemporaryDirectory output;
+    auto storage_result = dag::storage::open_folder_indexed(output.path());
+    REQUIRE(storage_result.has_value());
+    dag::ThreadSafeStorage synchronized(std::move(storage_result.value()));
+    REQUIRE(synchronized.save(octree::Id::root(), batch.value()).has_value());
+
+    auto released = std::move(synchronized).release();
+    REQUIRE(released.save_index().has_value());
+    CHECK(std::filesystem::is_regular_file(output.path() / "terrain.index"));
+
+    auto reopened_result = dag::storage::open_folder_indexed(output.path());
+    REQUIRE(reopened_result.has_value());
+    CHECK(reopened_result->has(octree::Id::root()).value());
+    CHECK(reopened_result->load(octree::Id::root()).has_value());
 }

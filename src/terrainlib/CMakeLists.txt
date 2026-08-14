@@ -36,7 +36,6 @@ add_library(terrainlib
     mesh/texture_trim.cpp
     mesh/validate.cpp
 
-    octree/storage/helpers.cpp
     octree/Space.cpp
     octree/OddLevelShifted.cpp
 

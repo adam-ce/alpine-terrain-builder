@@ -1,3 +1,4 @@
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -8,12 +9,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "io/serialize.h"
+#include "io/bytes.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Storage.h"
 #include "octree/disk/IndexFile.h"
-#include "octree/disk/layout/strategy/Flat.h"
-#include "octree/disk/layout/strategy/LevelAndCoordinateDirectories.h"
-#include "octree/storage/RawStorage.h"
+#include "mesh/codec/from_extension.h"
+#include "mesh/storage.h"
+#include "octree/store_layout/Mappings.h"
+#include "octree/storage/IndexFile.h"
 #include "octree/storage/open.h"
 #include "octree/traverse.h"
 
@@ -55,10 +58,21 @@ mesh::Simple triangle_mesh(const double offset) {
 
 octree::IndexedStorage make_storage(
     const std::filesystem::path &path,
-    std::unique_ptr<octree::disk::layout::Strategy> strategy,
+    const store::PathMapping<octree::Id> mapping,
     const std::string &extension) {
-    octree::disk::Layout layout(path, std::move(strategy), extension);
-    return octree::IndexedStorage(octree::RawStorage_(std::move(layout)), octree::IndexMap{});
+    auto codec = mesh::codec::from_extension(extension);
+    REQUIRE(codec.has_value());
+    return octree::IndexedStorage(
+        store::RawStorage<octree::StoreTraits, mesh::Simple>(
+            store::Layout<octree::Id>(path, mapping),
+            std::move(codec.value())),
+        store::Index<octree::StoreTraits>{},
+        octree::Storage::Persistence{
+            octree::storage::index_format(),
+            path / "terrain.index",
+            std::string(mapping.id),
+            extension,
+        });
 }
 
 } // namespace
@@ -76,7 +90,9 @@ TEST_CASE("pre-refactor SF fixtures preserve index and path contracts") {
         CHECK(index_file->map.is(octree::NodeStatus::Leaf, root));
         CHECK(std::filesystem::is_regular_file(path / "0-0.terrain"));
 
-        const octree::IndexedStorage storage = octree::open_folder_indexed(path);
+        auto storage_result = octree::open_folder_indexed(path);
+        REQUIRE(storage_result.has_value());
+        const octree::IndexedStorage storage = std::move(storage_result.value());
         const auto mesh = storage.load(root);
         REQUIRE(mesh.has_value());
         CHECK(mesh->face_count() == 1);
@@ -114,14 +130,14 @@ TEST_CASE("pre-refactor layouts round-trip boundary IDs") {
         octree::Id(octree::Id::max_level(), octree::Id::max_index_on_level(octree::Id::max_level())),
     };
 
-    octree::disk::layout::strategy::Flat flat;
-    octree::disk::layout::strategy::LevelAndCoordinateDirectories coordinates;
+    const auto flat = octree::store_layout::flat();
+    const auto coordinates = octree::store_layout::level_and_coordinate_directories();
     for (const octree::Id id : ids) {
-        const auto flat_path = flat.get_relative_node_path(id, ".terrain");
-        CHECK(flat.get_id_from_relative_node_path(flat_path) == id);
+        const auto flat_path = flat.key_to_node_path(id);
+        CHECK(flat.node_path_to_key(flat_path) == id);
 
-        const auto coordinate_path = coordinates.get_relative_node_path(id, ".terrain");
-        CHECK(coordinates.get_id_from_relative_node_path(coordinate_path) == id);
+        const auto coordinate_path = coordinates.key_to_node_path(id);
+        CHECK(coordinates.node_path_to_key(coordinate_path) == id);
     }
 }
 
@@ -130,17 +146,17 @@ TEST_CASE("pre-refactor storage hard-links matching payload formats") {
     TemporaryDirectory target_directory("hard-link-target");
     auto source = make_storage(
         source_directory.path(),
-        std::make_unique<octree::disk::layout::strategy::Flat>(),
+        octree::store_layout::flat(),
         ".terrain");
     auto target = make_storage(
         target_directory.path(),
-        std::make_unique<octree::disk::layout::strategy::Flat>(),
+        octree::store_layout::flat(),
         ".terrain");
 
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, triangle_mesh(0.0)).has_value());
     REQUIRE(target.copy_from(root, source).has_value());
-    CHECK(std::filesystem::equivalent(source.path_for(root), target.path_for(root)));
+    CHECK(std::filesystem::equivalent(source.path_for(root).value(), target.path_for(root).value()));
     REQUIRE(source.save_index().has_value());
     REQUIRE(target.save_index().has_value());
 }
@@ -150,17 +166,19 @@ TEST_CASE("pre-refactor storage re-encodes differing payload formats") {
     TemporaryDirectory target_directory("reencode-target");
     auto source = make_storage(
         source_directory.path(),
-        std::make_unique<octree::disk::layout::strategy::Flat>(),
+        octree::store_layout::flat(),
         ".terrain");
     auto target = make_storage(
         target_directory.path(),
-        std::make_unique<octree::disk::layout::strategy::Flat>(),
+        octree::store_layout::flat(),
         ".glb");
 
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, triangle_mesh(4.0)).has_value());
     REQUIRE(target.copy_from(root, source).has_value());
-    CHECK_FALSE(std::filesystem::equivalent(source.path_for(root), target.path_for(root)));
+    CHECK_FALSE(std::filesystem::equivalent(
+        source.path_for(root).value(),
+        target.path_for(root).value()));
     const auto loaded = target.load(root);
     REQUIRE(loaded.has_value());
     CHECK(loaded->face_count() == 1);
@@ -172,7 +190,7 @@ TEST_CASE("pre-refactor storage supports enabled overwrites") {
     TemporaryDirectory directory("overwrite");
     auto storage = make_storage(
         directory.path(),
-        std::make_unique<octree::disk::layout::strategy::Flat>(),
+        octree::store_layout::flat(),
         ".terrain");
     storage.settings().allow_overwrite = true;
 
@@ -189,24 +207,75 @@ TEST_CASE("pre-refactor storage supports enabled overwrites") {
 TEST_CASE("pre-refactor folder opening scans payloads and creates an index") {
     TemporaryDirectory directory("folder-open");
     octree::OpenOptions options;
-    options.default_layout_strategy = std::make_unique<octree::disk::layout::strategy::Flat>();
-    options.preferred_extension_with_dot = ".terrain";
+    options.default_mapping = octree::store_layout::flat();
+    options.preferred_extension = ".terrain";
 
     {
-        auto storage = octree::open_folder(directory.path(), false, std::move(options));
+        auto storage_result = octree::open_folder(directory.path(), false, std::move(options));
+        REQUIRE(storage_result.has_value());
+        auto storage = std::move(storage_result.value());
         CHECK_FALSE(storage.is_indexed());
         REQUIRE(storage.save(octree::Id::root(), triangle_mesh(2.0)).has_value());
         CHECK_FALSE(std::filesystem::exists(directory.path() / "terrain.index"));
     }
 
     {
-        const auto storage = octree::open_folder_indexed(directory.path());
+        auto storage_result = octree::open_folder_indexed(directory.path());
+        REQUIRE(storage_result.has_value());
+        const auto storage = std::move(storage_result.value());
         CHECK(storage.is_indexed());
-        CHECK(storage.has(octree::Id::root()));
+        CHECK(storage.has(octree::Id::root()).value());
         CHECK(std::filesystem::is_regular_file(directory.path() / "terrain.index"));
     }
 
-    const auto reopened = octree::open_index<>(directory.path() / "terrain.index");
+    const auto reopened = octree::open_index(directory.path() / "terrain.index");
     REQUIRE(reopened.has_value());
-    CHECK(reopened->has(octree::Id::root()));
+    CHECK(reopened->has(octree::Id::root()).value());
+}
+
+TEST_CASE("mesh codec resolver dispatches every supported legacy selector", "[store][open]") {
+    for (const std::string extension : {".terrain", ".glb", ".gltf"}) {
+        const auto codec = mesh::codec::from_extension(extension);
+        REQUIRE(codec.has_value());
+        const auto paths = codec.value()->paths(store::NodePath("node"));
+        REQUIRE_FALSE(paths.empty());
+        CHECK(paths.front().extension() == extension);
+    }
+
+    const auto unknown = mesh::codec::from_extension(".unknown");
+    REQUIRE_FALSE(unknown.has_value());
+    CHECK(unknown.error().category == store::CodecErrorCategory::UnsupportedCodec);
+    CHECK(unknown.error().operation == store::CodecOperation::Resolve);
+}
+
+TEST_CASE("octree opening retains index failures without directory fallback", "[store][open]") {
+    TemporaryDirectory directory("open-errors");
+    const std::filesystem::path index_path = directory.path() / "terrain.index";
+
+    octree::disk::v1::IndexFile index_file;
+    index_file.layout_strategy_id = "unknown-layout";
+    index_file.preferred_extension = ".terrain";
+    REQUIRE(io::write_to_path(index_file, index_path).has_value());
+
+    const auto unknown_layout = octree::open_folder_indexed(directory.path());
+    REQUIRE_FALSE(unknown_layout.has_value());
+    REQUIRE(std::holds_alternative<store::UnknownLayout>(unknown_layout.error()));
+    CHECK(std::get<store::UnknownLayout>(unknown_layout.error()).id == "unknown-layout");
+
+    index_file.layout_strategy_id = "flat";
+    index_file.preferred_extension = ".unknown";
+    REQUIRE(io::write_to_path(index_file, index_path).has_value());
+    const auto unknown_codec = octree::open_folder_indexed(directory.path());
+    REQUIRE_FALSE(unknown_codec.has_value());
+    REQUIRE(std::holds_alternative<store::CodecError>(unknown_codec.error()));
+    CHECK(std::get<store::CodecError>(unknown_codec.error()).category
+          == store::CodecErrorCategory::UnsupportedCodec);
+
+    const std::array<uint8_t, 3> malformed_bytes{0xff, 0x00, 0x01};
+    REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
+    const auto malformed = octree::open_folder_indexed(directory.path());
+    REQUIRE_FALSE(malformed.has_value());
+    REQUIRE(std::holds_alternative<store::IndexFormatError>(malformed.error()));
+    CHECK(std::get<store::IndexFormatError>(malformed.error()).category
+          == store::IndexFormatErrorCategory::Malformed);
 }

@@ -4,19 +4,21 @@
 #include "cli.h"
 #include "dag_node.h"
 #include "encoded.h"
+#include "io/serialize.h"
 #include "log.h"
 #include "mesh/io.h"
 #include "octree/storage/MeshStorage.h"
-#include "octree/storage/codec/ZppBitsCodec.h"
 #include "octree/storage/open.h"
 #include "ProgressIndicator.h"
 #include "storage.h"
 #include "utils.h"
+#include "serialization.h"
+#include "store/describe_error.h"
 
 namespace {
 
 void export_node(const cli::Args &args) {
-    const auto load_result = octree::ZppBitsCodec<dag::ClusterBatch>::load_from_path(args.input_path);
+    const auto load_result = io::read_from_path<dag::ClusterBatch>(args.input_path);
     if (!load_result.has_value()) {
         LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error());
         return;
@@ -31,12 +33,30 @@ void export_node(const cli::Args &args) {
 }
 
 void export_storage(const cli::Args &args) {
-    const octree::IndexedDagStorage input_storage = octree::open_folder_indexed<dag::ClusterBatch>(args.input_path);
+    auto input_result = dag::storage::open_folder_indexed(args.input_path);
+    if (!input_result.has_value()) {
+        LOG_ERROR(
+            "Failed to open input storage {}: {}",
+            args.input_path,
+            store::describe_error(input_result.error()));
+        return;
+    }
+    const octree::IndexedDagStorage input_storage = std::move(input_result.value());
 
-    octree::MeshStorage output_storage = octree::open_folder<mesh::Simple, octree::MeshCodec>(
+    octree::OpenOptions options;
+    options.preferred_extension = ".glb";
+    auto output_result = octree::open_folder(
         args.output_path,
         false,
-        octree::OpenOptions{.preferred_extension_with_dot = ".glb"});
+        std::move(options));
+    if (!output_result.has_value()) {
+        LOG_ERROR(
+            "Failed to open output storage {}: {}",
+            args.output_path,
+            store::describe_error(output_result.error()));
+        return;
+    }
+    octree::MeshStorage output_storage = std::move(output_result.value());
     output_storage.settings().allow_overwrite = true;
 
     size_t exported_count = 0;
@@ -52,7 +72,10 @@ void export_storage(const cli::Args &args) {
 
         const auto load_result = input_storage.load(id);
         if (!load_result.has_value()) {
-            LOG_ERROR("Failed to load node {}: {}", id, load_result.error());
+            LOG_ERROR(
+                "Failed to load node {}: {}",
+                id,
+                store::describe_error(load_result.error()));
             progress.task_finished();
             continue;
         }
@@ -61,7 +84,10 @@ void export_storage(const cli::Args &args) {
 
         const auto save_result = output_storage.save(id, mesh);
         if (!save_result.has_value()) {
-            LOG_ERROR("Failed to save mesh for node {}: {}", id, save_result.error().description());
+            LOG_ERROR(
+                "Failed to save mesh for node {}: {}",
+                id,
+                store::describe_error(save_result.error()));
             progress.task_finished();
             continue;
         }
@@ -74,7 +100,10 @@ void export_storage(const cli::Args &args) {
 
     const auto index_result = output_storage.save_or_create_index();
     if (!index_result.has_value()) {
-        LOG_ERROR("Failed to save index for {}: {}", args.output_path, index_result.error());
+        LOG_ERROR(
+            "Failed to save index for {}: {}",
+            args.output_path,
+            store::describe_error(index_result.error()));
     }
 
     LOG_INFO("Exported {} debug meshes to {}", exported_count, args.output_path);

@@ -16,6 +16,9 @@ public:
     using iterator = SharedIndex::iterator;
     using const_iterator = SharedIndex::const_iterator;
 
+    IndexMap() = default;
+    explicit IndexMap(SharedIndex index) : _index(std::move(index)) {}
+
     std::optional<NodeStatus> get(const Id id) const {
         return _index.get(id).value();
     }
@@ -76,6 +79,9 @@ public:
     }
     const SharedIndex &shared() const {
         return _index;
+    }
+    SharedIndex take_shared() && {
+        return std::move(_index);
     }
 
     using serialize = zpp::bits::members<1>;

@@ -11,6 +11,7 @@
 #include "octree/Storage.h"
 #include "optional_utils.h"
 #include "earth.h"
+#include "store/describe_error.h"
 
 std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) {
@@ -34,14 +35,38 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
 
 void run(const cli::MergeArgs& args) {
     LOG_TRACE("Loading base dataset from {}", args.base_path);
-    octree::IndexedStorage base_dataset = octree::open_folder_indexed(args.base_path);
+    auto base_result = octree::open_folder_indexed(args.base_path);
+    if (!base_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open base dataset {}: {}",
+            args.base_path,
+            store::describe_error(base_result.error()));
+    }
+    octree::IndexedStorage base_dataset = std::move(base_result.value());
 
     LOG_TRACE("Loading new dataset from {}", args.new_path);
-    octree::IndexedStorage new_dataset = octree::open_folder_indexed(args.new_path);
+    auto new_result = octree::open_folder_indexed(args.new_path);
+    if (!new_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open new dataset {}: {}",
+            args.new_path,
+            store::describe_error(new_result.error()));
+    }
+    octree::IndexedStorage new_dataset = std::move(new_result.value());
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
-    octree::Storage output_dataset = octree::open_folder(args.output_path, false, octree::OpenOptions{.preferred_extension_with_dot = std::string(base_dataset.layout().extension_with_dot())});
+    octree::OpenOptions options;
+    options.default_mapping = base_dataset.layout().mapping();
+    options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".terrain"));
+    auto output_result = octree::open_folder(args.output_path, false, std::move(options));
+    if (!output_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open output dataset {}: {}",
+            args.output_path,
+            store::describe_error(output_result.error()));
+    }
+    octree::Storage output_dataset = std::move(output_result.value());
 
     std::optional<MeshMask> mask = flatten(map(args.mask_path, load_mask_from_path));
 
@@ -50,7 +75,14 @@ void run(const cli::MergeArgs& args) {
 
 void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
-    const octree::IndexedStorage input_dataset = octree::open_folder_indexed(args.input_path);
+    auto input_result = octree::open_folder_indexed(args.input_path);
+    if (!input_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open input dataset {}: {}",
+            args.input_path,
+            store::describe_error(input_result.error()));
+    }
+    const octree::IndexedStorage input_dataset = std::move(input_result.value());
     const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
     cut_dataset(input_dataset, mask, args.output_path, args.keep_inside);
 }

@@ -17,9 +17,9 @@ This file is the resumable implementation log for
 ## Current position
 
 - Phase: 3 — Generalize storage and index lifecycle
-- State: in progress
-- Next action: build and verify the shared storage core, then make the first
-  Phase 3 commit before migrating production adapters.
+- State: complete; completion commit pending.
+- Next action: commit and tag Phase 3, then begin Phase 4 copy hardening and
+  SF topology validation.
 
 ## Phase log
 
@@ -70,7 +70,6 @@ This file is the resumable implementation log for
 
 ### Phase 3 — Generalize storage and index lifecycle
 
-- In progress.
 - Added typed storage, filesystem, overwrite, and index-format errors.
 - Added shared `RawStorage`, `Storage`, and `IndexedStorage` with exclusive
   runtime-codec ownership, trait-keyed operations, multi-file `has`/`remove`,
@@ -79,7 +78,18 @@ This file is the resumable implementation log for
   overwrite, invalid-key, and multi-file tests.
 - Shared storage core focused tests: 48 assertions in 6 test cases passed.
 - Shared storage core build and `git diff --check`: passed.
-- Next: migrate 3D format/opening adapters and application callers.
+- Added the legacy 3D `terrain.index` format adapter, explicit mesh and DAG
+  codec resolvers, folder discovery, and expected-returning opening APIs.
+- Preserved independently readable, read-only DAG metadata views and migrated
+  DAG output synchronization to the shared storage types.
+- Migrated SF builder, SF merger, SF index browser, DAG builder, and DAG
+  convert debug without exposing codec ownership at application call sites.
+- Ported cache API aliases for compile compatibility.
+- Deleted the legacy layout class hierarchy and registry, static codec stack,
+  and duplicate octree storage implementation.
+- Added resolver, unsupported metadata write, unknown layout/codec, malformed
+  index no-fallback, and DAG synchronized move/release coverage.
+- State: complete.
 
 ## Verification log
 
@@ -112,6 +122,14 @@ This file is the resumable implementation log for
 - Phase 2 application builds passed for `sf-builder`, `dag-builder`, and
   `dag-convert-debug`.
 - Phase 2 `git diff --check`: passed.
+- Phase 3 focused terrain store/open tests: 233 assertions in 25 test cases
+  passed.
+- Phase 3 focused DAG store tests: 17 assertions in 2 test cases passed.
+- Phase 3 `unittests_terrainlib`: 23,973 assertions in 422 test cases passed.
+- Phase 3 `unittests_dagbuilder`: 459 assertions in 73 test cases passed.
+- Phase 3 all-application configuration built `sf-builder`, `sf-merger`,
+  `sf-index-browser`, `dag-builder`, and `dag-convert-debug` successfully.
+- Phase 3 `git diff --check`: passed.
 
 ## Commit and tag log
 
@@ -124,3 +142,6 @@ This file is the resumable implementation log for
 - `refactor_phase_0` — annotated Phase 0 completion tag.
 - `4c171c8` / `refactor_phase_1` — shared topology extraction and Phase 1
   completion tag.
+- `fbc02d0` / `refactor_phase_2` — runtime layouts/codecs and Phase 2
+  completion tag.
+- `61acb74` — Phase 3 shared runtime-codec storage core.

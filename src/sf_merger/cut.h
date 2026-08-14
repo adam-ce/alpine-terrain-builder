@@ -7,12 +7,13 @@
 #include "mask.h"
 #include "octree/Id.h"
 #include "octree/NodeStatus.h"
-#include "octree/storage/IndexedStorage.h"
+#include "octree/Storage.h"
 #include "octree/storage/open.h"
 #include "octree/Space.h"
 #include "octree/traverse.h"
 #include "utils.h"
 #include "containers/Cow.h"
+#include "store/describe_error.h"
 
 struct Context {
     const octree::IndexedStorage& input;
@@ -31,7 +32,8 @@ inline void cut_leaf_node(
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    DEBUG_ASSERT(ctx.input.index().is(octree::NodeStatus::Leaf, id));
+    DEBUG_ASSERT(DEBUG_ASSERT_VAL(
+        ctx.input.index().is(octree::NodeStatus::Leaf, id)).value());
 
     const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.load(id)).value();
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
@@ -57,7 +59,8 @@ inline void cut_virtual_node(
     const octree::Id& id,
     const MeshMask& mask
 ) {
-    DEBUG_ASSERT(ctx.input.index().is(octree::NodeStatus::Virtual, id));
+    DEBUG_ASSERT(DEBUG_ASSERT_VAL(
+        ctx.input.index().is(octree::NodeStatus::Virtual, id)).value());
     DEBUG_ASSERT(id.has_children());
 
     const auto children = id.children().value();
@@ -88,12 +91,13 @@ inline void cut_node(
     mesh::io::save_to_path(mask.mesh, new_path);
     */
 
-    const auto status_opt = ctx.input.index().get(id);
-    if (!status_opt.has_value()) {
+    const auto status_result = ctx.input.index().get(id);
+    DEBUG_ASSERT(status_result.has_value());
+    if (!status_result->has_value()) {
         return;
     }
 
-    const octree::NodeStatus status = status_opt.value();
+    const octree::NodeStatus status = status_result->value();
     switch (status) {
     case octree::NodeStatus::Virtual:
         cut_virtual_node(ctx, id, mask);
@@ -116,7 +120,10 @@ inline void cut_dataset(
     cut_node(ctx, octree::Id::root(), mask);
     const auto index_result = output.save_or_create_index();
     if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", output.base_path(), index_result.error());
+        LOG_ERROR_AND_EXIT(
+            "Failed to save output index in {}: {}",
+            output.base_path(),
+            store::describe_error(index_result.error()));
     }
 }
 
@@ -128,7 +135,17 @@ inline void cut_dataset(
     LOG_TRACE("Creating output dataset at {}", output_path);
     std::filesystem::create_directories(output_path);
 
-    octree::IndexedStorage output_dataset = octree::open_folder_indexed(output_path, octree::OpenOptions(octree::disk::layout::strategy::make_default(), ".glb"));
+    octree::OpenOptions options;
+    options.default_mapping = octree::store_layout::level_and_coordinate_directories();
+    options.preferred_extension = ".glb";
+    auto output_result = octree::open_folder_indexed(output_path, std::move(options));
+    if (!output_result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open output dataset {}: {}",
+            output_path,
+            store::describe_error(output_result.error()));
+    }
+    octree::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {
         LOG_ERROR_AND_EXIT("Output dataset has to be empty.");
     }

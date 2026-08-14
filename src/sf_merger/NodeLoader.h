@@ -11,21 +11,18 @@
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "octree/Space.h"
-#include "octree/storage/IndexedStorage.h"
+#include "octree/Storage.h"
 #include "octree/storage/cache/Dummy.h"
 #include "octree/storage/cache/ICache.h"
 
 class NodeLoader {
 public:
     NodeLoader(const octree::IndexedStorage &storage, octree::cache::ICache<mesh::Simple> &cache, octree::Space space)
-        : _storage(storage), _cache(cache), _space(space) {
-        if (storage.cache().has_value() && dynamic_cast<octree::cache::Dummy<mesh::Simple> *>(&cache) != nullptr) {
-            LOG_WARN("Backing storage for NodeLoader instance is cached, but another cache was provided leading to double caching.");
-        }
-    }
+        : _storage(storage), _cache(cache), _space(space) {}
 
     octree::NodeStatusOrMissing get_status(const octree::Id &id) const noexcept {
-        return this->_storage.index().get(id);
+        return octree::NodeStatusOrMissing(
+            DEBUG_ASSERT_VAL(this->_storage.index().get(id)).value());
     }
 
     // Try to retrieve or reconstruct node mesh by ID

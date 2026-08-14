@@ -14,6 +14,7 @@
 #include "octree/Id.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "octree/storage/cache/Dummy.h"
+#include "store/describe_error.h"
 
 inline std::string get_dataset_name(const octree::Storage &storage) {
     return storage.layout().base_path().filename().string();
@@ -179,6 +180,9 @@ inline void merge_datasets(
 
     const auto index_result = output_dataset.save_or_create_index();
     if (!index_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", output_dataset.base_path(), index_result.error());
+        LOG_ERROR_AND_EXIT(
+            "Failed to save output index in {}: {}",
+            output_dataset.base_path(),
+            store::describe_error(index_result.error()));
     }
 }

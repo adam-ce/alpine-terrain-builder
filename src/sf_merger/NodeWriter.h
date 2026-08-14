@@ -6,7 +6,7 @@
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
 #include "octree/NodeStatus.h"
-#include "octree/storage/Storage.h"
+#include "octree/Storage.h"
 #include "octree/traverse.h"
 
 // TODO: make thread safe
@@ -15,13 +15,13 @@ public:
     NodeWriter(octree::Storage &storage) : _storage(storage) {}
 
     bool has_node(const octree::Id &id) {
-        return this->_storage.has(id);
+        return DEBUG_ASSERT_VAL(this->_storage.has(id)).value();
     }
 
     void write_node(const octree::Id &id, const SimpleMesh &mesh) {
         mesh::validate(mesh);
         DEBUG_ASSERT_VAL(this->_storage.save(id, mesh));
-        auto p = this->_storage.path_for(id);
+        auto p = DEBUG_ASSERT_VAL(this->_storage.path_for(id)).value();
         // change extension to .png
         p.replace_extension(".png");
         cv::imwrite(p, mesh.texture.value_or(cv::Mat()));

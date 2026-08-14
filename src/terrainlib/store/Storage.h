@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <string>
+#include <unordered_set>
 #include <utility>
 
 #include <expected>
@@ -18,7 +20,10 @@ template<HierarchyTraits Traits, typename NodeData>
 class Storage {
 public:
     using Key = typename Traits::Key;
+    using key_type = Key;
     using value_type = NodeData;
+    using load_error = LoadError<Key>;
+    using save_error = SaveError<Key>;
 
     struct Persistence {
         IndexFormat<Traits> format;
@@ -28,6 +33,9 @@ public:
     };
 
     explicit Storage(RawStorage<Traits, NodeData> raw) : _raw(std::move(raw)) {}
+
+    Storage(RawStorage<Traits, NodeData> raw, Persistence persistence)
+        : _raw(std::move(raw)), _persistence(std::move(persistence)) {}
 
     Storage(
         RawStorage<Traits, NodeData> raw,
@@ -195,6 +203,17 @@ public:
         return _raw.paths(key);
     }
 
+    std::expected<std::filesystem::path, InvalidKey<Key>> path_for(
+        const Key &key) const {
+        const auto node_paths = paths(key);
+        if (!node_paths.has_value()) {
+            return std::unexpected(node_paths.error());
+        }
+        return node_paths->empty()
+            ? _raw.layout().node_path(key).path()
+            : node_paths->front();
+    }
+
     const std::filesystem::path &base_path() const {
         return _raw.layout().base_path();
     }
@@ -203,6 +222,12 @@ public:
     }
     const Codec<NodeData> &codec() const {
         return _raw.codec();
+    }
+    std::optional<std::string_view> codec_selector() const {
+        if (!_persistence.has_value()) {
+            return std::nullopt;
+        }
+        return _persistence->codec_selector;
     }
 
     bool is_indexed() const {
@@ -247,6 +272,18 @@ public:
         return result;
     }
 
+    std::expected<void, IndexFormatError> save_or_create_index() {
+        if (!_index.has_value()) {
+            const auto scan_result = scan_index();
+            if (!scan_result.has_value()) {
+                return std::unexpected(scan_result.error());
+            }
+            _index = std::move(scan_result.value());
+            _dirty = true;
+        }
+        return save_index();
+    }
+
     const StorageSettings &settings() const {
         return _settings;
     }
@@ -269,6 +306,85 @@ protected:
     }
 
 private:
+    std::expected<Index<Traits>, IndexFormatError> scan_index() const {
+        std::error_code error;
+        std::filesystem::create_directories(base_path(), error);
+        if (error) {
+            return std::unexpected(IndexFormatError{
+                IndexFormatErrorCategory::Open,
+                base_path(),
+                error.message(),
+            });
+        }
+
+        const NodePath probe("__codec_probe__/node");
+        const std::string probe_text = probe.path().generic_string();
+        std::vector<std::string> suffixes;
+        for (const auto &codec_path : _raw.codec().paths(probe)) {
+            const std::string text = codec_path.generic_string();
+            if (text.starts_with(probe_text)) {
+                suffixes.push_back(text.substr(probe_text.size()));
+            }
+        }
+
+        std::unordered_set<Key, typename Traits::Hasher> candidates;
+        for (std::filesystem::recursive_directory_iterator iterator(base_path(), error), end;
+             !error && iterator != end;
+             iterator.increment(error)) {
+            if (!iterator->is_regular_file(error) && !iterator->is_symlink(error)) {
+                if (error) {
+                    break;
+                }
+                continue;
+            }
+            const std::string path_text = iterator->path().generic_string();
+            for (const std::string &suffix : suffixes) {
+                if (path_text.size() < suffix.size()
+                    || !path_text.ends_with(suffix)) {
+                    continue;
+                }
+                const NodePath node_path(
+                    std::filesystem::path(path_text.substr(0, path_text.size() - suffix.size())));
+                const auto key = _raw.layout().key_from_node_path(node_path);
+                if (key.has_value() && Traits::is_valid(key.value())) {
+                    candidates.insert(key.value());
+                }
+            }
+        }
+        if (error) {
+            return std::unexpected(IndexFormatError{
+                IndexFormatErrorCategory::Open,
+                base_path(),
+                error.message(),
+            });
+        }
+
+        Index<Traits> result;
+        for (const Key &key : candidates) {
+            const auto present = _raw.has(key);
+            if (!present.has_value()) {
+                const FilesystemError &filesystem_error =
+                    std::get<FilesystemError>(present.error());
+                return std::unexpected(IndexFormatError{
+                    IndexFormatErrorCategory::Open,
+                    filesystem_error.path,
+                    filesystem_error.error.message(),
+                });
+            }
+            if (present.value()) {
+                const auto added = result.add(key);
+                if (!added.has_value()) {
+                    return std::unexpected(IndexFormatError{
+                        IndexFormatErrorCategory::Malformed,
+                        base_path(),
+                        "codec path resolved to an invalid hierarchy key",
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
     void finalize_displaced_state() noexcept {
         if (!_dirty || !_index.has_value()) {
             return;

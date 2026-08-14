@@ -1,14 +1,13 @@
 #pragma once
 
-#include "octree/storage/IndexedStorage.h"
-#include "octree/storage/MeshStorage.h"
-#include "octree/storage/RawStorage.h"
-#include "octree/storage/Storage.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 
 namespace octree {
 
+using MeshStorage = mesh::storage::Storage;
+using IndexedMeshStorage = mesh::storage::IndexedStorage;
 using Storage = MeshStorage;
 using IndexedStorage = IndexedMeshStorage;
+using StorageSettings = store::StorageSettings;
 
-}
+} // namespace octree

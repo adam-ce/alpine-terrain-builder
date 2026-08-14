@@ -1,3 +1,4 @@
+#include <list>
 #include <numeric>
 #include <string>
 #include <unordered_map>
@@ -15,8 +16,10 @@
 #include "octree/NodeStatus.h"
 #include "octree/NodeStatusOrMissing.h"
 #include "octree/Storage.h"
+#include "octree/storage/open.h"
 #include "octree/traverse.h"
 #include "cli.h"
+#include "store/describe_error.h"
 
 namespace {
 struct IndexNode {
@@ -42,7 +45,8 @@ public:
     using const_iterator = std::list<DisplayEntry>::const_iterator;
 
     explicit TreeView(const octree::IndexedStorage &storage, const octree::Id root) : root(root), _storage(storage) {
-        const octree::NodeStatusOrMissing status = this->_storage.index().get(root);
+        const octree::NodeStatusOrMissing status(
+            DEBUG_ASSERT_VAL(this->_storage.index().get(root)).value());
         this->_view.emplace_back(IndexNode{root, status, false});
     }
 
@@ -85,7 +89,7 @@ public:
                 const auto &mesh = result.value();
                 entry = MeshNode{parent.id, mesh.vertex_count(), mesh.face_count()};
             } else {
-                entry = ErrorNode{parent.id, result.error().description()};
+                entry = ErrorNode{parent.id, store::describe_error(result.error())};
             }
             it++;
             it = this->_view.emplace(it, entry);
@@ -97,11 +101,12 @@ public:
         }
         const auto children = parent.id.children().value();
         for (const auto &child_id : children) {
-            auto status_opt = this->_storage.index().get(child_id);
-            if (!status_opt.has_value()) {
+            auto status_result = this->_storage.index().get(child_id);
+            DEBUG_ASSERT(status_result.has_value());
+            if (!status_result->has_value()) {
                 continue;
             }
-            const octree::NodeStatus status = status_opt.value();
+            const octree::NodeStatus status = status_result->value();
             IndexNode child_node{child_id, status, false};
             it++;
             it = this->_view.emplace(it, child_node);
@@ -148,8 +153,10 @@ private:
     const octree::IndexedStorage& _storage;
 };
 
-const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::Id &root = octree::Id::root()) {
-    switch (octree::NodeStatusOrMissing(index.get(root))) {
+const octree::Id find_deepest_root(
+    const store::Index<octree::StoreTraits> &index,
+    const octree::Id &root = octree::Id::root()) {
+    switch (octree::NodeStatusOrMissing(DEBUG_ASSERT_VAL(index.get(root)).value())) {
     case octree::NodeStatusOrMissing::Missing:
         return octree::Id::root();
     case octree::NodeStatusOrMissing::Leaf:
@@ -163,7 +170,8 @@ const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::
         const auto children = current.children().value();
         std::optional<octree::Id> next;
         for (const octree::Id &child_id : children) {
-            if (!index.get(child_id).has_value()) {
+            const auto status = DEBUG_ASSERT_VAL(index.get(child_id)).value();
+            if (!status.has_value()) {
                 continue;
             }
             if (next.has_value()) {
@@ -184,11 +192,16 @@ const octree::Id find_deepest_root(const octree::IndexMap &index, const octree::
 } // namespace
 
 octree::IndexedStorage open_path_indexed(const std::filesystem::path& path) {
-    if (std::filesystem::is_directory(path)) {
-        return octree::open_folder_indexed(path);
-    } else {
-        return octree::open_index(path).value();
+    auto result = std::filesystem::is_directory(path)
+        ? octree::open_folder_indexed(path)
+        : octree::open_index(path);
+    if (!result.has_value()) {
+        LOG_ERROR_AND_EXIT(
+            "Failed to open dataset {}: {}",
+            path,
+            store::describe_error(result.error()));
     }
+    return std::move(result.value());
 }
 
 std::string render_line_content(const DisplayEntry &entry) {
@@ -220,7 +233,7 @@ ftxui::Element render_line(const DisplayEntry &entry, size_t base_level, bool is
 
 int run(const cli::Args &args) {
     const octree::IndexedStorage storage = open_path_indexed(args.dataset_path);
-    const octree::IndexMap &index = storage.index();
+    const store::Index<octree::StoreTraits> &index = storage.index();
     const octree::Id root_id = args.full_view ? octree::Id::root() : find_deepest_root(index);
 
     TreeView tree_view(storage, root_id);

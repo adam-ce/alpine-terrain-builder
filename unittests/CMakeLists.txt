@@ -30,6 +30,7 @@ add_executable(unittests_terrainlib
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
     terrainlib/stamp_set.cpp
+    terrainlib/store_compatibility.cpp
     terrainlib/index_map.cpp
     terrainlib/index_traverse.cpp
     terrainlib/mesh_boundary.cpp
@@ -120,6 +121,7 @@ if(TARGET dagbuilderlib)
         dag_builder/fixed_point.cpp
         dag_builder/texture_sizing.cpp
         dag_builder/texture_reuse.cpp
+        dag_builder/storage_compatibility.cpp
     )
     target_link_libraries(unittests_dagbuilder PUBLIC dagbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_dagbuilder)

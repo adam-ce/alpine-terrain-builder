@@ -7,39 +7,47 @@
 set -Eeuo pipefail
 
 readonly SOURCE_DIR="/home/codex/Documents/alpine-terrain-builder/terrain-builder-raster-store"
-readonly BUILD_DIR="${SOURCE_DIR}/build/hfa-vector-srs"
+readonly BUILD_DIR="${SOURCE_DIR}/build/golden-e2e"
 readonly RUN_ROOT="/data/scratch/codex/alpine-terrain-builder-golden-e2e"
 readonly INPUT_ROOT="${RUN_ROOT}/inputs"
 readonly REFERENCE_ROOT="${RUN_ROOT}/reference"
 readonly LOG_ROOT="${RUN_ROOT}/logs"
 readonly STATE_ROOT="${RUN_ROOT}/state"
+readonly RUN_ID="${RUN_ID:-$(date +%Y%m%dT%H%M%S)}"
+readonly RUN_LOG_ROOT="${LOG_ROOT}/runs/${RUN_ID}"
+readonly TIMINGS_FILE="${RUN_LOG_ROOT}/timings.tsv"
 
 readonly SF_BUILDER="${BUILD_DIR}/src/sf_builder/sf-builder"
 readonly SF_MERGER="${BUILD_DIR}/src/sf_merger/sf-merger"
 readonly DAG_BUILDER="${BUILD_DIR}/src/dag_builder/dag-builder"
 
-# This VRT is a 4x4 km, native-resolution window into the original HFA dataset.
-readonly GS_VRT="${INPUT_ROOT}/grossglockner-gs-4km/grossglockner-gs-4km.vrt"
+# These VRTs are identical 4x4 km, native-resolution windows into the GS and
+# GT rasters. They are recreated from the raw datasets at the start of a run.
+readonly RAW_GS="/data/raw/raster_data/Oe_2020/OeRect_01m_gs_31287.img"
+readonly RAW_GT="/data/raw/raster_data/Oe_2020/OeRect_01m_gt_31287.img"
+readonly ELEVATION_ROOT="${INPUT_ROOT}/grossglockner-elevation-4km"
+readonly GS_VRT="${ELEVATION_ROOT}/grossglockner-gs-4km.vrt"
+readonly GT_VRT="${ELEVATION_ROOT}/grossglockner-gt-4km.vrt"
 readonly BASEMAP_TILES="${INPUT_ROOT}/basemap"
 readonly GATAKI_TILES="${INPUT_ROOT}/gataki"
-# The exact Tirol border exercises the sf-merger's built-in 0.1 m
-# topology-preserving mask simplification.
-readonly TIROL_MASK="${INPUT_ROOT}/tirol-boundary/benchmark-shape/exact/tirol.shp"
+# A 0.01 m simplification preserves the Tirol border to sub-centimetre area
+# accuracy while avoiding the exact geometry's pathological merge time.
+readonly TIROL_MASK="${INPUT_ROOT}/tirol-boundary/benchmark-shape/0_01m/tirol.shp"
 
 readonly SF_ROOT="${REFERENCE_ROOT}/sf"
 readonly DAG_ROOT="${REFERENCE_ROOT}/dag"
-readonly SF_BASEMAP="${SF_ROOT}/grossglockner-gs-basemap-terrain"
-readonly SF_GATAKI="${SF_ROOT}/grossglockner-gs-gataki-terrain"
-readonly SF_MERGED="${SF_ROOT}/grossglockner-gs-merged-terrain"
-readonly DAG_MERGED="${DAG_ROOT}/grossglockner-gs-merged-terrain"
+readonly SF_BASEMAP="${SF_ROOT}/grossglockner-basemap-gs-terrain"
+readonly SF_GATAKI="${SF_ROOT}/grossglockner-gataki-gt-terrain"
+readonly SF_MERGED="${SF_ROOT}/grossglockner-merged-terrain"
+readonly DAG_MERGED="${DAG_ROOT}/grossglockner-merged-terrain"
 
 readonly SF_TARGET_LEVEL="${SF_TARGET_LEVEL:-15}"
 readonly SF_THREADS="${SF_THREADS:-12}"
 readonly MIN_TEXTURE_LEVEL=12
 readonly MAX_TEXTURE_LEVEL=19
 
-mkdir -p "${SF_ROOT}" "${DAG_ROOT}" "${LOG_ROOT}" "${STATE_ROOT}"
-exec > >(tee -a "${LOG_ROOT}/golden-e2e.log") 2>&1
+mkdir -p "${SF_ROOT}" "${DAG_ROOT}" "${RUN_LOG_ROOT}" "${STATE_ROOT}"
+exec > >(tee -a "${RUN_LOG_ROOT}/golden-e2e.log") 2>&1
 
 timestamp()
 {
@@ -64,7 +72,7 @@ run_timed()
     elapsed=$((end_epoch - start_epoch))
     printf '%s\t%s\t%s\t%s\t%s\n' \
         "${name}" "${start_epoch}" "${end_epoch}" "${elapsed}" "${status}" \
-        >> "${LOG_ROOT}/timings.tsv"
+        >> "${TIMINGS_FILE}"
     printf '[%s] END %s status=%s elapsed_seconds=%s\n' \
         "$(timestamp)" "${name}" "${status}" "${elapsed}"
 
@@ -120,8 +128,9 @@ verify_snapshot()
 build_sf()
 {
     local name="$1"
-    local textures="$2"
-    local output="$3"
+    local dataset="$2"
+    local textures="$3"
+    local output="$4"
     local marker="${STATE_ROOT}/${name}.complete"
 
     if [[ -f "${marker}" ]]; then
@@ -133,7 +142,7 @@ build_sf()
     mkdir -p "${output}"
     run_timed "${name}" \
         "${SF_BUILDER}" \
-        --dataset "${GS_VRT}" \
+        --dataset "${dataset}" \
         --textures "${textures}" \
         --min-texture-level "${MIN_TEXTURE_LEVEL}" \
         --max-texture-level "${MAX_TEXTURE_LEVEL}" \
@@ -168,8 +177,8 @@ merge_sf()
     mkdir -p "${SF_MERGED}"
     run_timed merge_sf \
         "${SF_MERGER}" merge \
-        --base "${SF_GATAKI}" \
-        --new "${SF_BASEMAP}" \
+        --base "${SF_BASEMAP}" \
+        --new "${SF_GATAKI}" \
         --mask "${TIROL_MASK}" \
         --output "${SF_MERGED}" \
         --verbosity info
@@ -209,7 +218,7 @@ write_manifest()
 {
     local name="$1"
     local snapshot="$2"
-    local output="${LOG_ROOT}/${name}.sha256"
+    local output="${RUN_LOG_ROOT}/${name}.sha256"
 
     (
         cd "${snapshot}"
@@ -253,10 +262,23 @@ record_hard_links()
 
     printf 'merged_payloads=%s\nlinked_to_gataki=%s\nlinked_to_basemap=%s\nnewly_written=%s\n' \
         "${merged_count}" "${linked_to_gataki}" "${linked_to_basemap}" "${newly_written}" \
-        | tee "${LOG_ROOT}/merge-hard-links.txt"
+        | tee "${RUN_LOG_ROOT}/merge-hard-links.txt"
 }
 
+prepare_elevation_vrts()
+{
+    mkdir -p "${ELEVATION_ROOT}"
+    gdal_translate -q -of VRT -srcwin 259507 245043 4000 4000 "${RAW_GS}" "${GS_VRT}"
+    gdal_translate -q -of VRT -srcwin 259507 245043 4000 4000 "${RAW_GT}" "${GT_VRT}"
+    gdal_edit.py -units m "${GS_VRT}"
+    gdal_edit.py -units m "${GT_VRT}"
+}
+
+require_file "${RAW_GS}"
+require_file "${RAW_GT}"
+run_timed prepare_elevation_vrts prepare_elevation_vrts
 require_file "${GS_VRT}"
+require_file "${GT_VRT}"
 require_file "${TIROL_MASK}"
 require_directory "${BASEMAP_TILES}"
 require_directory "${GATAKI_TILES}"
@@ -273,10 +295,10 @@ require_executable "${DAG_BUILDER}"
     printf 'min_texture_level=%s\n' "${MIN_TEXTURE_LEVEL}"
     printf 'max_texture_level=%s\n' "${MAX_TEXTURE_LEVEL}"
     printf 'cpu_count=%s\n' "$(nproc)"
-} >> "${LOG_ROOT}/run-metadata.txt"
+} >> "${RUN_LOG_ROOT}/run-metadata.txt"
 
-build_sf build_sf_basemap_terrain "${BASEMAP_TILES}" "${SF_BASEMAP}"
-build_sf build_sf_gataki_terrain "${GATAKI_TILES}" "${SF_GATAKI}"
+build_sf build_sf_basemap_gs_terrain "${GS_VRT}" "${BASEMAP_TILES}" "${SF_BASEMAP}"
+build_sf build_sf_gataki_gt_terrain "${GT_VRT}" "${GATAKI_TILES}" "${SF_GATAKI}"
 merge_sf
 record_hard_links
 build_dag

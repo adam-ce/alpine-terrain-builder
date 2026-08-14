@@ -57,9 +57,11 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   receive a codec template parameter and application call sites do not manage
   codec objects.
 - This refactor does not add synchronization to storage, indexes, or caches
-  and does not change their concurrency guarantees. Existing caller-side
-  synchronization and concurrency behaviour are preserved; any concurrency
-  bug fix is separate work.
+  and does not change their concurrency guarantees. Any concurrency bug fix is
+  separate work.
+- Application callers retain their existing storage lifecycle,
+  synchronization, and failure-handling behaviour unless explicitly changed
+  by this plan.
 - Preserve `dag::ThreadSafeStorage` as the caller-side synchronization around
   DAG output storage. DAG storage remains cacheless while shared-lock reads are
   used.
@@ -79,8 +81,7 @@ Persistent raster-fundamentalis formats, adapters, and tools are later work.
   booleans.
 - Preserve `StorageSettings::allow_overwrite`. It defaults to `false`;
   rejected overwrites return `AlreadyExists` through `std::expected`, and
-  enabling it preserves the existing DAG-builder overwrite and debug-export
-  behaviour.
+  enabling it replaces existing payloads.
 - The existing cache implementations are currently non-functional. Port their
   public API where it remains useful, keep application call sites building, and
   provide compile coverage only. Cache behaviour is not a compatibility
@@ -260,9 +261,6 @@ caller include order. Preserve the current tuples exactly:
 - `ClusterBatch`: metadata, clustering;
 - `NodeMetadata`: group assignment, groups; and
 - `Group`: children, error, bounds.
-
-`Group::child_errors` is currently neither populated nor serialized. It remains
-non-persistent in this refactor and the Phase 0 fixture locks down its omission.
 
 ## Shared interfaces
 
@@ -620,9 +618,7 @@ Loading and saving likewise return storage-level expected errors which retain
 an invalid key, an underlying `CodecError`, and `AlreadyExists` for a rejected
 save. `CopyError` retains invalid-key, missing-source, overwrite, filesystem,
 and codec failures. The SF call chains changed in Phase 4 retain these errors
-to their application boundary. DAG callers preserve their existing per-node
-log-and-continue and command-line policies; making the DAG builder fail-fast is
-not part of this refactor.
+to their application boundary.
 
 Legacy unindexed-directory discovery remains in the 3D adapter: it recognizes
 candidate endings by asking the supplied resolver, removes an accepted ending
@@ -631,9 +627,6 @@ generic layout does not recover keys directly from codec-owned file paths.
 Only a missing index triggers this discovery path. An unreadable or malformed
 index, unknown layout, or unsupported codec selector returns `OpenError` and
 must not silently fall back to directory discovery.
-
-Automatic dirty-index saving currently happens in the 3D storage destructor.
-Preserve that behaviour for existing 3D entry points during the migration.
 
 ### Copying one node and SF subtree reuse
 
@@ -780,8 +773,7 @@ No production behaviour changes.
    contains a valid serialized `dag::ClusterBatch`, and whose index contains
    `Leaf`, `Virtual`, and `Inner`. Use the current metadata-then-clustering
    format, include non-trivial group metadata, and prove that the same file can
-   be opened through the read-only `NodeMetadata` view. Lock down that
-   `Group::child_errors` is not serialized.
+   be opened through the read-only `NodeMetadata` view.
 3. Test that all fixtures open, resolve the expected IDs and extensions, and
    traverse the expected sparse nodes.
 4. Add path round-trip tests for boundary IDs and both layouts.
@@ -894,13 +886,12 @@ path.
     storage consumers without exposing codec objects at application call sites.
 11. Migrate the existing octree storage aliases and all other application
     callers, including adapting `dag::ThreadSafeStorage` to the new key and
-    expected-returning APIs while preserving its shared/exclusive locking.
+    expected-returning APIs.
 12. Preserve the current 3D destructor-save behaviour until all callers have
     explicit index finalization. Test move construction, move assignment over
     dirty state, moved-from destruction, and the DAG move/release path.
-13. Preserve `StorageSettings::allow_overwrite`, including the DAG builder's
-    overwrite mode and repeat debug export. Replace process termination on a
-    rejected overwrite with `AlreadyExists` in the storage-level expected
+13. Preserve `StorageSettings::allow_overwrite`. Replace process termination
+    on a rejected overwrite with `AlreadyExists` in the storage-level expected
     error. Test that a rejected save returns `AlreadyExists` and that enabling
     overwrite replaces the existing payload.
 14. Add resolver tests for `.terrain`, `.glb`, `.gltf`, writable

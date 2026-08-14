@@ -1,49 +1,88 @@
 #pragma once
 
-#include <unordered_map>
 #include <optional>
 
 #include <zpp_bits.h>
 
-#include "octree/Id.h"
 #include "octree/NodeStatus.h"
+#include "octree/StoreTraits.h"
+#include "store/Index.h"
 
 namespace octree {
 
 class IndexMap {
 public:
-    using Container = std::unordered_map<Id, NodeStatus>;
-    using iterator = Container::iterator;
-    using const_iterator = Container::const_iterator;
+    using SharedIndex = store::Index<StoreTraits>;
+    using iterator = SharedIndex::iterator;
+    using const_iterator = SharedIndex::const_iterator;
 
-    std::optional<NodeStatus> get(Id id) const;
-    bool add(Id id);
-    bool remove(Id id);
+    std::optional<NodeStatus> get(const Id id) const {
+        return _index.get(id).value();
+    }
+    bool add(const Id id) {
+        return _index.add(id).value();
+    }
+    bool remove(const Id id) {
+        return _index.remove(id).value();
+    }
+    bool is_present(const Id id) const {
+        return _index.is_present(id).value();
+    }
+    bool is_absent(const Id id) const {
+        return _index.is_absent(id).value();
+    }
+    bool is(const NodeStatus status, const Id id) const {
+        return _index.is(status, id).value();
+    }
 
-    bool is_present(Id id) const;
-    bool is_absent(Id id) const;
-    bool is(NodeStatus status, Id id) const;
+    void clear() {
+        _index.clear();
+    }
+    bool empty() const {
+        return _index.empty();
+    }
+    size_t size() const {
+        return _index.size();
+    }
 
-    void clear();
-    bool empty() const;
-    size_t size() const;
+    const_iterator begin() const {
+        return _index.begin();
+    }
+    const_iterator end() const {
+        return _index.end();
+    }
+    const_iterator cbegin() const {
+        return _index.cbegin();
+    }
+    const_iterator cend() const {
+        return _index.cend();
+    }
 
-    const_iterator begin() const;
-    const_iterator end() const;
-    const_iterator cbegin() const;
-    const_iterator cend() const;
+    NodeStatus *get_raw(const Id id) {
+        return _index.get_raw(id).value();
+    }
+    const NodeStatus *get_raw(const Id id) const {
+        return _index.get_raw(id).value();
+    }
+    void set_raw(const Id id, const NodeStatus status) {
+        _index.set_raw(id, status).value();
+    }
+    void remove_raw(const Id id) {
+        _index.remove_raw(id).value();
+    }
 
-    NodeStatus* get_raw(Id id);
-    const NodeStatus* get_raw(Id id) const;
-    void set_raw(Id id, NodeStatus status);
-    void remove_raw(Id id);
+    SharedIndex &shared() {
+        return _index;
+    }
+    const SharedIndex &shared() const {
+        return _index;
+    }
 
     using serialize = zpp::bits::members<1>;
     friend zpp::bits::access;
 
 private:
-    Container _index;
-    void update_parent_after_remove(Id id);
+    SharedIndex _index;
 };
 
 } // namespace octree

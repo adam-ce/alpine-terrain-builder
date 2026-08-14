@@ -37,7 +37,6 @@ add_library(terrainlib
     mesh/validate.cpp
 
     octree/storage/helpers.cpp
-    octree/IndexMap.cpp
     octree/Space.cpp
     octree/OddLevelShifted.cpp
 

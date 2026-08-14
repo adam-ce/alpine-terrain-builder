@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 0 — Capture current compatibility
+- Phase: 1 — Extract topology into `store`
 - State: in progress
-- Next action: run the full Phase 0 verification, inspect the diff, commit,
-  and tag the phase boundary.
+- Next action: build the shared topology extraction and run focused topology
+  plus compatibility tests.
 
 ## Phase log
 
@@ -43,6 +43,17 @@ This file is the resumable implementation log for
     `dag::ThreadSafeStorage<octree::IndexedDagStorage>`.
 - State: complete.
 
+### Phase 1 — Extract topology into `store`
+
+- Added shared node-status types, hierarchy traits, invalid-key errors,
+  sparse index, and traversal under `terrainlib/store`.
+- Added `octree::StoreTraits` and `raster_store::StoreTraits`.
+- Converted `octree::IndexMap` and `octree::traverse` to compatibility
+  wrappers over the shared implementation.
+- Added common 2D/3D topology and traversal coverage plus 2D boundary and
+  invalid-key tests.
+- State: complete.
+
 ## Verification log
 
 - Baseline `unittests_terrainlib`: 23,676 assertions in 391 test cases passed.
@@ -53,6 +64,18 @@ This file is the resumable implementation log for
 - Phase 0 `unittests_terrainlib`: 23,732 assertions in 397 test cases passed.
 - Phase 0 `unittests_dagbuilder`: 423 assertions in 70 test cases passed.
 - Phase 0 `git diff --check`: passed.
+- Phase 1 focused shared-store tests: 67 assertions in 7 test cases passed.
+- Phase 1 pre-refactor terrain compatibility tests: 56 assertions in 6 test
+  cases passed.
+- Phase 1 `unittests_terrainlib`: 23,799 assertions in 404 test cases passed.
+- Phase 1 `unittests_dagbuilder`: 423 assertions in 70 test cases passed.
+- Phase 1 application builds passed for `sf-builder`, `dag-builder`, and
+  `dag-convert-debug`. The current Debug configuration has `sf-merger` and
+  `sf-index-browser` disabled.
+- The all-target build remains blocked by a pre-existing, unrelated call to
+  removed `radix::tile::Scheme` in `unittests/sf_builder/texture.cpp`; the
+  affected refactor targets and suites build independently.
+- Phase 1 `git diff --check`: passed.
 
 ## Commit and tag log
 

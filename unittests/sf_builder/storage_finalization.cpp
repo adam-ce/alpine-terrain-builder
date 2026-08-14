@@ -33,14 +33,10 @@ private:
     std::filesystem::path _path;
 };
 
-mesh::Simple fixture_mesh() {
-    const std::filesystem::path fixture_path =
-        std::filesystem::path(ALP_TEST_DATA_DIR) / "raster-store-refactor/sf-flat";
-    auto fixture = octree::open_folder_indexed(fixture_path);
-    REQUIRE(fixture.has_value());
-    auto loaded = fixture->load(octree::Id::root());
-    REQUIRE(loaded.has_value());
-    return std::move(loaded.value());
+mesh::Simple sample_mesh() {
+    return mesh::Simple(
+        {{0, 1, 2}},
+        {{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}});
 }
 
 } // namespace
@@ -50,7 +46,7 @@ TEST_CASE("SF builder finalization writes and validates a valid index", "[sfbuil
     auto storage_result = octree::open_folder(directory.path());
     REQUIRE(storage_result.has_value());
     auto storage = std::move(storage_result.value());
-    REQUIRE(storage.save(octree::Id::root(), fixture_mesh()).has_value());
+    REQUIRE(storage.save(octree::Id::root(), sample_mesh()).has_value());
 
     CHECK(terrainbuilder::finalize_storage(storage).has_value());
     CHECK(std::filesystem::is_regular_file(directory.path() / "terrain.index"));
@@ -64,7 +60,7 @@ TEST_CASE(
     REQUIRE(storage_result.has_value());
     auto storage = std::move(storage_result.value());
     const octree::Id root = octree::Id::root();
-    const mesh::Simple mesh = fixture_mesh();
+    const mesh::Simple mesh = sample_mesh();
     REQUIRE(storage.save(root, mesh).has_value());
     REQUIRE(storage.save(root.child(0).value(), mesh).has_value());
 

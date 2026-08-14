@@ -7,29 +7,28 @@
 #include "octree/store_layout/Mappings.h"
 #include "store/Layout.h"
 
-TEST_CASE("extensionless octree mappings preserve physical fixture paths", "[store][layout]") {
-    const std::filesystem::path fixtures =
-        std::filesystem::path(ALP_TEST_DATA_DIR) / "raster-store-refactor";
+TEST_CASE("extensionless octree mappings preserve physical paths", "[store][layout]") {
+    const std::filesystem::path dataset = "dataset";
     mesh::codec::Terrain terrain;
 
     SECTION("flat") {
-        const store::Layout layout(fixtures / "sf-flat", octree::store_layout::flat());
+        const store::Layout layout(dataset / "sf-flat", octree::store_layout::flat());
         const store::NodePath node_path = layout.node_path(octree::Id::root());
-        CHECK(node_path.path() == fixtures / "sf-flat/0-0");
-        CHECK(terrain.paths(node_path) == std::vector{fixtures / "sf-flat/0-0.terrain"});
+        CHECK(node_path.path() == dataset / "sf-flat/0-0");
+        CHECK(terrain.paths(node_path) == std::vector{dataset / "sf-flat/0-0.terrain"});
         CHECK(layout.key_from_node_path(node_path) == octree::Id::root());
     }
 
     SECTION("level and coordinate directories") {
         const store::Layout layout(
-            fixtures / "sf-coordinates",
+            dataset / "sf-coordinates",
             octree::store_layout::level_and_coordinate_directories());
         const octree::Id child = octree::Id::root().child(2).value();
         const octree::Id deep = octree::Id::root().child(5).value().child(7).value();
         CHECK(terrain.paths(layout.node_path(child))
-              == std::vector{fixtures / "sf-coordinates/1/0/1/0.terrain"});
+              == std::vector{dataset / "sf-coordinates/1/0/1/0.terrain"});
         CHECK(terrain.paths(layout.node_path(deep))
-              == std::vector{fixtures / "sf-coordinates/2/3/1/3.terrain"});
+              == std::vector{dataset / "sf-coordinates/2/3/1/3.terrain"});
         CHECK(layout.key_from_node_path(layout.node_path(child)) == child);
         CHECK(layout.key_from_node_path(layout.node_path(deep)) == deep);
     }

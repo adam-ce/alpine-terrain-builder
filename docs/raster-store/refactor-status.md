@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 5 — Cleanup and documentation
+- Phase: 6 — Remove migration-only compatibility fixtures
 - State: complete; completion commit pending.
-- Next action: commit and tag Phase 5, then remove migration-only fixtures in
-  Phase 6.
+- Next action: commit and tag Phase 6, then perform the final clean-worktree
+  and tag audit.
 
 ## Phase log
 
@@ -131,6 +131,19 @@ This file is the resumable implementation log for
   tools and include final public names plus 3D-open and in-memory 2D examples.
 - State: complete.
 
+### Phase 6 — Remove migration-only compatibility fixtures
+
+- Removed the golden pre-refactor SF and DAG indexes and payload files.
+- Removed fixture-only SF/DAG opening and byte-comparison assertions.
+- Converted DAG codec reentrancy, metadata-prefix reading, synchronized
+  storage, SF-builder finalization, and DAG validation tests to generate
+  current data in temporary directories.
+- Retained layout/path, resolver, topology, storage, error, merge/cut, and
+  producer/consumer boundary coverage.
+- Repository search and filesystem inspection find no remaining pre-refactor
+  fixture reference or fixture file.
+- State: complete.
+
 ## Verification log
 
 - Baseline `unittests_terrainlib`: 23,676 assertions in 391 test cases passed.
@@ -193,6 +206,12 @@ This file is the resumable implementation log for
 - Phase 5 repository searches found no remaining caller of a removed octree
   forwarding name and no `octree::Id` dependency under `terrainlib/store`.
 - Phase 5 `git diff --check`: passed.
+- Phase 6 `unittests_terrainlib`: 23,997 assertions in 425 test cases passed.
+- Phase 6 `unittests_dagbuilder`: 439 assertions in 73 test cases passed.
+- Phase 6 `unittests_sfmerger`: 121 assertions in 8 test cases passed.
+- Phase 6 SF builder finalization: 15 assertions in 2 test cases passed.
+- Phase 6 fixture-reference search, fixture-file inspection, and
+  `git diff --check`: passed.
 
 ## Commit and tag log
 
@@ -212,3 +231,7 @@ This file is the resumable implementation log for
   completion tag.
 - `3086336` / `refactor_phase_4` — hardened node reuse, SF topology
   enforcement, and Phase 4 completion tag.
+- `bca0b5c` / `refactor_phase_5` — removed migration shims, documented final
+  public boundaries, and tagged Phase 5 completion.
+- Phase 6 completion commit / `refactor_phase_6` — removed migration-only
+  fixtures while retaining current-data coverage.

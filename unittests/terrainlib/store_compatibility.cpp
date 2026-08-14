@@ -17,13 +17,8 @@
 #include "octree/store_layout/Mappings.h"
 #include "octree/storage/IndexFile.h"
 #include "octree/storage/open.h"
-#include "store/traverse.h"
 
 namespace {
-
-std::filesystem::path fixture_path(const std::string_view name) {
-    return std::filesystem::path(ALP_TEST_DATA_DIR) / "raster-store-refactor" / name;
-}
 
 class TemporaryDirectory {
 public:
@@ -76,55 +71,7 @@ mesh::storage::IndexedStorage make_storage(
 
 } // namespace
 
-TEST_CASE("pre-refactor SF fixtures preserve index and path contracts") {
-    const octree::Id root = octree::Id::root();
-
-    SECTION("flat") {
-        const std::filesystem::path path = fixture_path("sf-flat");
-        const auto index_file = io::read_from_path<octree::disk::v1::IndexFile>(path / "terrain.index");
-        REQUIRE(index_file.has_value());
-        CHECK(index_file->layout_strategy_id == "flat");
-        CHECK(index_file->preferred_extension == ".terrain");
-        CHECK(index_file->map.size() == 1);
-        CHECK(index_file->map.is(store::NodeStatus::Leaf, root).value());
-        CHECK(std::filesystem::is_regular_file(path / "0-0.terrain"));
-
-        auto storage_result = octree::open_folder_indexed(path);
-        REQUIRE(storage_result.has_value());
-        const mesh::storage::IndexedStorage storage = std::move(storage_result.value());
-        const auto mesh = storage.load(root);
-        REQUIRE(mesh.has_value());
-        CHECK(mesh->face_count() == 1);
-    }
-
-    SECTION("level and coordinate directories") {
-        const std::filesystem::path path = fixture_path("sf-coordinates");
-        const octree::Id child = root.child(2).value();
-        const octree::Id deep = root.child(5).value().child(7).value();
-        const octree::Id deep_parent = deep.parent().value();
-
-        const auto index_file = io::read_from_path<octree::disk::v1::IndexFile>(path / "terrain.index");
-        REQUIRE(index_file.has_value());
-        CHECK(index_file->layout_strategy_id == "level_and_coordinate_directories");
-        CHECK(index_file->preferred_extension == ".terrain");
-        CHECK(index_file->map.is(store::NodeStatus::Virtual, root).value());
-        CHECK(index_file->map.is(store::NodeStatus::Leaf, child).value());
-        CHECK(index_file->map.is(store::NodeStatus::Virtual, deep_parent).value());
-        CHECK(index_file->map.is(store::NodeStatus::Leaf, deep).value());
-        CHECK(std::filesystem::is_regular_file(path / "1/0/1/0.terrain"));
-        CHECK(std::filesystem::is_regular_file(path / "2/3/1/3.terrain"));
-
-        std::vector<octree::Id> visited;
-        REQUIRE(store::traverse(
-            index_file->map,
-            [&](const octree::Id id, const store::NodeStatus) {
-                visited.push_back(id);
-            }).has_value());
-        CHECK(visited == std::vector{octree::Id{root}, child, deep_parent, deep});
-    }
-}
-
-TEST_CASE("pre-refactor layouts round-trip boundary IDs") {
+TEST_CASE("octree layouts round-trip boundary IDs") {
     const std::vector ids{
         octree::Id::root(),
         octree::Id(octree::Id::max_level(), octree::Id::Index{0}),
@@ -142,7 +89,7 @@ TEST_CASE("pre-refactor layouts round-trip boundary IDs") {
     }
 }
 
-TEST_CASE("pre-refactor storage hard-links matching payload formats") {
+TEST_CASE("storage hard-links matching payload formats") {
     TemporaryDirectory source_directory("hard-link-source");
     TemporaryDirectory target_directory("hard-link-target");
     auto source = make_storage(
@@ -162,7 +109,7 @@ TEST_CASE("pre-refactor storage hard-links matching payload formats") {
     REQUIRE(target.save_index().has_value());
 }
 
-TEST_CASE("pre-refactor storage re-encodes differing payload formats") {
+TEST_CASE("storage re-encodes differing payload formats") {
     TemporaryDirectory source_directory("reencode-source");
     TemporaryDirectory target_directory("reencode-target");
     auto source = make_storage(
@@ -187,7 +134,7 @@ TEST_CASE("pre-refactor storage re-encodes differing payload formats") {
     REQUIRE(target.save_index().has_value());
 }
 
-TEST_CASE("pre-refactor storage supports enabled overwrites") {
+TEST_CASE("storage supports enabled overwrites") {
     TemporaryDirectory directory("overwrite");
     auto storage = make_storage(
         directory.path(),
@@ -205,7 +152,7 @@ TEST_CASE("pre-refactor storage supports enabled overwrites") {
     REQUIRE(storage.save_index().has_value());
 }
 
-TEST_CASE("pre-refactor folder opening scans payloads and creates an index") {
+TEST_CASE("folder opening scans payloads and creates an index") {
     TemporaryDirectory directory("folder-open");
     octree::OpenOptions options;
     options.default_mapping = octree::store_layout::flat();

@@ -16,10 +16,10 @@ This file is the resumable implementation log for
 
 ## Current position
 
-- Phase: 2 — Introduce path mappings and runtime codecs
+- Phase: 3 — Generalize storage and index lifecycle
 - State: in progress
-- Next action: run the complete Phase 2 verification, inspect the diff,
-  commit, and tag the phase boundary.
+- Next action: build and verify the shared storage core, then make the first
+  Phase 3 commit before migrating production adapters.
 
 ## Phase log
 
@@ -67,6 +67,19 @@ This file is the resumable implementation log for
   unsupported-operation, write-only, directory-creation, error-conversion,
   and concurrent codec tests.
 - State: complete.
+
+### Phase 3 — Generalize storage and index lifecycle
+
+- In progress.
+- Added typed storage, filesystem, overwrite, and index-format errors.
+- Added shared `RawStorage`, `Storage`, and `IndexedStorage` with exclusive
+  runtime-codec ownership, trait-keyed operations, multi-file `has`/`remove`,
+  overwrite handling, index persistence, and move finalization.
+- Added shared storage instantiations for both 2D and 3D traits plus move,
+  overwrite, invalid-key, and multi-file tests.
+- Shared storage core focused tests: 48 assertions in 6 test cases passed.
+- Shared storage core build and `git diff --check`: passed.
+- Next: migrate 3D format/opening adapters and application callers.
 
 ## Verification log
 

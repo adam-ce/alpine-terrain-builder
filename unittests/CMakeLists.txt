@@ -116,5 +116,13 @@ if(TARGET sfmergerlib)
         sf_merger/sphere_projector.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
+    if(TARGET sf-builder AND TARGET sf-merger)
+        target_sources(unittests_sfmerger PRIVATE sf_merger/integration.cpp)
+        target_compile_definitions(unittests_sfmerger PRIVATE
+            ALP_SF_BUILDER_PATH="$<TARGET_FILE:sf-builder>"
+            ALP_SF_MERGER_PATH="$<TARGET_FILE:sf-merger>"
+        )
+        add_dependencies(unittests_sfmerger sf-builder sf-merger)
+    endif()
     atb_configure_test(unittests_sfmerger)
 endif()

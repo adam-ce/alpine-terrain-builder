@@ -11,7 +11,13 @@ alp_add_git_repository(eigen URL https://gitlab.com/libeigen/eigen.git COMMITISH
 add_library(Eigen3 INTERFACE)
 target_include_directories(Eigen3 SYSTEM INTERFACE ${eigen_SOURCE_DIR})
 
-alp_setup_cmake_project(boost URL https://github.com/boostorg/boost.git COMMITISH "boost-1.88.0" CMAKE_ARGUMENTS -DBOOST_ENABLE_PYTHON=OFF -DBUILD_TESTING=OFF "-DBOOST_INCLUDE_LIBRARIES='graph\;multiprecision\;heap\;format\;logic'")
+alp_setup_cmake_project(boost
+    URL https://github.com/boostorg/boost/releases/download/boost-1.88.0/boost-1.88.0-cmake.tar.xz
+    SHA256 f48b48390380cfb94a629872346e3a81370dc498896f16019ade727ab72eb1ec
+    CMAKE_ARGUMENTS
+        -DBOOST_ENABLE_PYTHON=OFF
+        -DBUILD_TESTING=OFF
+        "-DBOOST_INCLUDE_LIBRARIES=graph\;multiprecision\;heap\;format\;logic")
 find_package(Boost CONFIG REQUIRED)
 
 alp_setup_cmake_project(tbb URL https://github.com/uxlfoundation/oneTBB.git COMMITISH v2023.1.0 CMAKE_ARGUMENTS -DTBB_TEST=OFF -DTBBMALLOC_BUILD=OFF)

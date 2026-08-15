@@ -1,202 +1,206 @@
-# SF Merger Failure with Point-Touching Multipolygon Masks
+# Multipolygon Masks in the SF Merger
 
-## Summary
+## Scope
 
-The SF merger can produce an empty merged node even when both input nodes contain significant geometry. The known reproducer uses the Tirol mask and the level-15 node at:
+This document describes how the SF merger represents and applies polygon masks.
+It covers the part of the pipeline from repaired polygon components through
+triangulation, extrusion, node-local mask clipping, and clipping of terrain
+meshes. It also states the topology that these operations require and the
+assumptions made about later mesh processing.
+
+It does not describe the complete SF merge traversal, source dataset creation,
+terrain serialization, texture generation, or the general DAG simplification
+algorithm. Those systems are mentioned only where they constrain or consume the
+result of mask clipping.
+
+## Mask model
+
+An SF mask has multipolygon set semantics: its covered region is the union of
+all polygon components. A component consists of one outer boundary and any
+holes belonging to that boundary.
+
+The component boundary is also a topology boundary. Components remain separate
+meshes even when they have equal coordinates at a point or along part of an
+edge. Coordinate equality must not create shared vertices, shared edges, or
+other mesh connectivity between components.
+
+The mask passes through three representations:
+
+- `SpherePolygonMask` contains the repaired polygon components and the local
+  sphere projector used for triangulation.
+- `SphereMeshMask` contains one triangulated surface mesh per polygon
+  component.
+- `MeshMask` contains one closed, extruded volume mesh per non-empty component.
+
+The `components` collection in `SphereMeshMask` and `MeshMask` represents a
+union. It is not an arbitrary collection of overlapping solids.
+
+## Constructing mask volumes
+
+### Repair and triangulation
+
+The input polygon set is repaired before triangulation. Repair may normalize
+rings and produce a different collection of valid polygons with holes, so the
+components returned by repair are the components used by the rest of the
+pipeline.
+
+`mask::triangulate()` creates a separate constrained Delaunay triangulation for
+each repaired polygon component. The outer ring and all of that component's
+holes are constraints in the same triangulation. Only faces inside the polygon
+and outside its holes are converted to the component surface mesh.
+
+Separate triangulations are required even if two components touch. Inserting
+both components into one triangulation would map coincident coordinates to the
+same triangulation vertex and therefore introduce connectivity that is absent
+from the multipolygon.
+
+### Extrusion
+
+`mask::extrude()` extrudes every triangulated component independently between
+the padded minimum and maximum Earth radii. Each surface becomes its own closed
+volume and is stored as one `MeshMask` component.
+
+The volume components are not combined after extrusion. For example, if two
+surface components meet at one point, combining their extrusion into one
+indexed mesh would turn that point into a radial edge shared by both volumes.
+Such an edge has more than two incident faces and is non-manifold.
+
+In debug builds, each extruded component is checked as a valid polygon mesh,
+checked for self-intersections, checked for closure, and checked to ensure that
+it bounds a volume.
+
+## Restricting a mask to an octree node
+
+The SF merge traversal restricts the mask to padded node bounds before applying
+it to the node's terrain. `clip_mask_on_bounds()` clips each volume component
+against the bounds independently and drops empty results.
+
+The result is another `MeshMask`, so the component boundary and union semantics
+are preserved while descending the octree. Bounds clipping must never combine
+the remaining components into a shared mesh.
+
+An empty component list means that the mask covers none of the current node.
+This permits the traversal to return the unmasked side without performing a
+terrain Boolean operation.
+
+## Applying a mask to terrain
+
+`clip_on_mask()` implements the set operations against the union of all mask
+components. The two modes deliberately use different iteration strategies.
+
+### Keeping terrain inside the mask
+
+The original terrain mesh is clipped independently against every component.
+The non-empty results are then combined:
 
 ```text
-15/26290/18610/27235
+inside(source, mask) = combine(inside(source, component) for each component)
 ```
 
-The failure is caused by the topology of the extruded mask, not by missing input geometry and not primarily by terrain serialization. Two components of the input multipolygon touch at one point. They are triangulated together, so the shared point becomes a shared mesh vertex. Extrusion turns that vertex into an edge with four incident faces, making the mask non-manifold. Subsequent clipping treats the damaged mask as a solid and removes both input meshes. The terrain serializer then writes the resulting empty mesh, which exposes a separate empty-mesh decoding limitation.
+If the source is entirely inside any component, the original mesh can be
+returned unchanged. If the mask has no components, the inside result is empty.
 
-The proposed fix is to preserve polygon components as independent closed volumes throughout triangulation, extrusion, recursive mask clipping, and mesh clipping.
+The independent results may be combined because valid multipolygon components
+have disjoint interiors. Combining them concatenates their geometry; it does
+not weld coincident vertices between pieces.
 
-## Reproducer and CI Symptoms
+### Keeping terrain outside the mask
 
-The reproducer is in:
-
-```text
-unittests/data/sf_builder_merge_border
-```
-
-It builds two `.terrain` datasets, merges them using the Tirol boundary, and checks two adjacent mask-border nodes. The node at `15/26291/18610/27235` merges successfully. The node at `15/26290/18610/27235` is written as a malformed `.terrain` file.
-
-Normal GCC and Clang unity configurations reach the final test assertion and report:
-
-```text
-Malformed mask-border merge: invalid file format
-```
-
-ASAN and TSAN configurations fail earlier while loading and extruding the mask:
-
-```text
-DEBUG_ASSERT(is_manifold(mesh))
-```
-
-These are two observations of the same mask-topology defect. Debug configurations detect the invalid mask immediately, while release configurations continue until the invalid clipping result is serialized.
-
-## Confirmed Diagnosis
-
-### The source nodes contain substantial geometry
-
-The failing merge processes two leaf nodes. Immediately before clipping, their sizes are approximately:
-
-| Input | Vertices | Faces |
-| --- | ---: | ---: |
-| New node | 581 | 1,000 |
-| Base node | 581 | 998 |
-
-The empty merged result is therefore not explained by empty or insignificant source data.
-
-### Two mask components touch at one point
-
-The Tirol fixture is a valid three-part `MultiPolygon`. Its first and second components have a distance of zero and intersect at exactly one point:
-
-```text
-POINT(183502.2 410278.98)
-```
-
-Point-touching components are valid polygonal input, but they must not be converted into a single non-manifold surface mesh.
-
-### Joint triangulation welds the touching components
-
-`mask::triangulate()` inserts all polygon components into one constrained Delaunay triangulation. Coincident polygon vertices map to the same CDT vertex handle. The two components that touch at the point above therefore share one vertex in the triangulated surface.
-
-This converts two topologically separate polygon components into one surface with a shared vertex.
-
-### Extrusion creates a non-manifold edge
-
-`mask::extrude()` extrudes the jointly triangulated surface between the minimum and maximum mask radii. The shared surface vertex becomes a radial edge in the extruded volume. Both components contribute side walls to that edge, leaving four incident faces where a manifold edge must have two.
-
-Inspection of the full extruded mask found:
-
-| Property | Value |
-| --- | ---: |
-| Vertices | 22,670 |
-| Faces | 45,332 |
-| Boundary edges | 0 |
-| Edges with four incident faces | 1 |
-
-The mask is closed in the boundary-edge sense, but it is not manifold because of that single four-face edge. This is the condition caught by the sanitizer configurations.
-
-### Recursive clipping turns the invalid mask into an open mask
-
-The masked merger recursively clips the current mask to each octree node's padded bounds using `mesh::clip_on_bounds_and_cap()`. CGAL's volume-clipping operation requires a valid closed input surface. Continuing with the non-manifold extrusion violates that expectation.
-
-At the failing leaf, the node-local clipping mask has only 11 vertices and 9 faces, with 11 boundary edges. It is open and cannot reliably classify points as inside or outside a volume.
-
-### Both clipping operations incorrectly return empty geometry
-
-The merger applies complementary operations:
-
-- retain the new mesh inside the mask;
-- retain the base mesh outside the mask.
-
-Because the clipping mesh is open and non-manifold, CGAL removes all geometry in both operations. The special cases in `Masked::merge_meshes()` do not apply because both results are newly owned empty meshes. The code combines them and returns `Merged` with zero vertices and zero faces.
-
-### Terrain decoding is a downstream symptom
-
-Terrain encoding permits a mesh with zero vertices and writes no encoded position buffer. Terrain decoding unconditionally calls `meshopt_decodeVertexBuffer()`, even when the serialized vertex count and position-buffer size are both zero. Meshoptimizer returns `-2`, which is reported as `invalid file format`.
-
-Making the decoder accept an empty mesh would not fix this regression. The integration test correctly requires the merged node to be non-empty, and accepting the empty file would merely hide the geometry loss.
-
-## Proposed Solution
-
-### Preserve mask components as independent volumes
-
-The mask representation should retain the component structure of the source `MultiPolygon`. Each `PolygonWithHoles` should be processed independently:
-
-1. Create a separate constrained Delaunay triangulation for the component.
-2. Convert that triangulation to its own surface mesh.
-3. Extrude the surface into its own closed volume.
-4. Validate that the volume is closed, manifold, and free of self-intersections.
-
-Point-touching components will then remain topologically independent instead of sharing a vertex or radial edge.
-
-`SphereMeshMask` and `MeshMask` should represent a collection of component meshes rather than one combined `SimpleMesh`.
-
-### Clip each mask component independently
-
-Recursive clipping to octree bounds should operate on each mask volume independently:
-
-1. Clip every component to the padded node bounds.
-2. Validate or assert the topology required by the following CGAL operation.
-3. Remove empty components.
-4. Pass the remaining component collection into the child context.
-
-This prevents a failure in one component from corrupting the complete mask and avoids recreating shared topology while descending the octree.
-
-### Apply multipolygon set semantics to terrain clipping
-
-Clipping against multiple volumes must preserve the union semantics of a multipolygon.
-
-For `keep_inside`, retain the part of the source mesh inside each component and combine the retained pieces. Valid multipolygon components have disjoint interiors, so the resulting pieces should not overlap in area.
-
-For `keep_outside`, subtract the components sequentially:
+The components are subtracted sequentially:
 
 ```text
 result = source
-for each mask component:
-    result = result outside component
+for each component in mask:
+    result = outside(result, component)
 ```
 
-This computes the complement of the component union without first constructing a geometrically touching combined clipping surface.
+This computes the complement of the component union without constructing a
+single clipping volume from geometrically touching components. If the mask has
+no components, the original mesh is returned unchanged.
 
-Texture coordinates and texture ownership must be preserved while combining inside pieces. The implementation should avoid rebuilding a texture atlas when all pieces still reference the same source texture.
+### Textures
 
-## Alternatives Considered
+All inside pieces originate from the same source mesh and continue to reference
+its texture. After pieces are combined, unused texture data is trimmed. The
+sequential outside operation likewise preserves the source texture through each
+clipping step and trims the final owned result.
 
-### Accept empty terrain meshes
+## Use by the masked merge
 
-The terrain decoder could special-case a zero vertex count and skip Meshoptimizer decoding. That would make the file readable but leave the merged tile empty. It does not address the regression and should not be treated as its fix.
+At a leaf, the masked merge retains:
 
-### Ignore empty clipping results
+- the new terrain inside the component union; and
+- the base terrain outside the component union.
 
-Adding a branch that chooses one input when both clipped results are empty would conceal the clipping failure and arbitrarily select incorrect data at the mask boundary.
+These results are complementary with respect to the mask, but either result may
+legitimately be empty. A node whose mask has no positive-area overlap with the
+new terrain can correctly reuse the complete base node. Conversely, a node
+fully covered by one mask component can reuse the new node. Correctness therefore
+requires a readable, non-empty result when substantial geometry should survive;
+it does not require every boundary node to contain geometry from both inputs.
 
-### Duplicate non-manifold vertices after extrusion
+## Topology and numerical requirements
 
-CGAL provides utilities for duplicating non-manifold vertices. This may repair combinatorial adjacency, but the duplicated components would still occupy the same geometric radial edge. Such coincident surfaces can still violate corefinement and clipping preconditions. It is therefore not a robust replacement for preserving components through the complete pipeline.
+CGAL volume clipping assumes suitable polygon meshes. Before a component is
+used as a volume clipper, it must be:
 
-### Perturb or buffer the input mask
+- a valid triangle polygon mesh;
+- closed;
+- manifold;
+- free of self-intersections; and
+- the boundary of a volume.
 
-Moving the shared point or buffering the polygon could avoid the reproducer, but it changes the requested geographic boundary and makes correctness depend on an arbitrary tolerance. Valid point-touching multipolygons should be supported without modifying their geometry.
+Using double-precision coordinates does not make these properties automatic.
+In particular, a point contact is an exact topological relationship, not merely
+a rounding problem. Duplicating a non-manifold vertex after components have
+already been combined also leaves coincident surfaces that can violate Boolean
+operation preconditions. Applying an epsilon offset would change the geographic
+mask and make its behavior tolerance-dependent. Neither approach replaces
+component preservation.
 
-## Verification Plan
+Boolean operations can introduce invalid output even when both inputs are
+valid. Debug validation therefore checks CGAL terrain meshes and mask clippers
+before mesh-on-mesh clipping and validates the resulting terrain mesh after the
+operation. Tests also validate component volumes after bounds clipping, including
+self-intersection checks.
 
-The fix should be verified at three levels.
+## Boundary with downstream mesh processing
 
-### Mask topology tests
+Clipped terrain is later clustered and simplified by the DAG builder. The mask
+code does not control those algorithms, but it must provide them with separate
+vertex identities for separate components, including components that occupy the
+same coordinate at a point. Downstream processing may simplify geometry but
+must not turn a point contact between disconnected pieces into non-manifold
+connectivity or a self-intersection.
 
-- Load the existing Tirol fixture.
-- Confirm that it produces three independent component volumes.
-- Confirm that every volume is closed and manifold.
-- Check for self-intersections before using a volume as a CGAL clipper.
-- Confirm that recursive clipping to the failing node's bounds preserves valid topology.
+The regression coverage exercises the production clustering, simplification,
+and manifoldization path for two disconnected meshes that meet at one point.
+This documents the currently verified handoff; it is not a general guarantee
+for arbitrary downstream mesh operations.
 
-### Focused clipping regression
+## Maintained invariants
 
-For node `15/26290/18610/27235`:
+Changes to SF mask processing must preserve these invariants:
 
-- confirm that both source meshes are non-empty before clipping;
-- confirm that the retained new-inside and base-outside pieces are not both empty;
-- confirm that the final merged mesh is non-empty and valid.
+1. Each repaired polygon-with-holes component is triangulated independently.
+2. Each triangulated component is extruded into an independent closed volume.
+3. Bounds clipping operates independently on every volume component.
+4. A `MeshMask` component list represents the union of its components.
+5. Inside clipping combines independent clips of the original source.
+6. Outside clipping subtracts the components sequentially.
+7. Separate components never share mesh connectivity solely because their
+   coordinates touch.
+8. Meshes passed to CGAL volume operations satisfy the required topology, and
+   Boolean outputs are validated in debug builds.
 
-With a valid component-wise mask, this node has no positive-area contribution
-inside the mask: the new side retains 0 of 1,000 triangles and the base side
-retains all 998 triangles. Reusing the base node is therefore a correct result.
-The regression must not require this particular output to differ from both
-inputs; it must require that the substantial result remains readable and
-non-empty.
+## Regression coverage
 
-### End-to-end and configuration coverage
+The relevant tests are:
 
-- Run the existing SF builder/merger integration test.
-- Confirm that both adjacent output tiles load successfully and contain geometry.
-- Run the normal GCC configuration.
-- Run ASAN and TSAN configurations to ensure the earlier manifold assertion is also resolved.
-
-## Expected Outcome
-
-After the change, valid point-touching multipolygon components remain independent clipping volumes. The merger can correctly select geometry on both sides of the mask boundary, the failing node remains substantial (in this case by correctly reusing the base node), and no empty terrain file is produced. The same design also supports disconnected islands and other valid multipolygon inputs without welding their topology together.
+- `unittests/sf_merger/mask.cpp`: disconnected and point-touching synthetic
+  masks, union and empty-mask semantics, and the real multipolygon fixture after
+  node-bounds clipping.
+- `unittests/sf_merger/integration.cpp`: an end-to-end SF build and merge across
+  regular and point-touching mask borders.
+- `unittests/dag_builder/multi_component.cpp`: the downstream simplification
+  handoff for disconnected components that meet at one point.

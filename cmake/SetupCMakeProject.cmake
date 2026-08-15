@@ -327,6 +327,86 @@ function(_alp_setup_cmake_project_from_git arg_NAME arg_URL arg_COMMITISH CMAKE_
     _alp_cmake_project_propagate_result("${arg_NAME}")
 endfunction()
 
+function(_alp_cmake_project_archive_source_dir arg_NAME arg_SHA256 output_var)
+    if(NOT arg_NAME MATCHES "^[A-Za-z0-9_.+-]+$"
+            OR arg_NAME STREQUAL "." OR arg_NAME STREQUAL "..")
+        message(FATAL_ERROR
+            "[alp] ${arg_NAME}: archive dependency names may only contain letters, "
+            "digits, '_', '.', '+', and '-'")
+    endif()
+
+    if(NOT DEFINED ALP_EXTERN_DIR OR ALP_EXTERN_DIR STREQUAL "")
+        set(_extern_dir "extern")
+    else()
+        set(_extern_dir "${ALP_EXTERN_DIR}")
+    endif()
+
+    cmake_path(IS_ABSOLUTE _extern_dir _extern_is_absolute)
+    if(_extern_is_absolute)
+        message(FATAL_ERROR
+            "[alp] ${arg_NAME}: ALP_EXTERN_DIR '${_extern_dir}' must be relative to "
+            "CMAKE_SOURCE_DIR ('${CMAKE_SOURCE_DIR}')")
+    endif()
+    cmake_path(NORMAL_PATH _extern_dir OUTPUT_VARIABLE _normalized_extern_dir)
+    if(_normalized_extern_dir STREQUAL ".." OR _normalized_extern_dir MATCHES "^\.\./")
+        message(FATAL_ERROR
+            "[alp] ${arg_NAME}: ALP_EXTERN_DIR '${_extern_dir}' escapes "
+            "CMAKE_SOURCE_DIR ('${CMAKE_SOURCE_DIR}')")
+    endif()
+
+    set(_relative_source_dir "${_normalized_extern_dir}/${arg_NAME}_${arg_SHA256}")
+    cmake_path(ABSOLUTE_PATH _relative_source_dir
+        BASE_DIRECTORY "${CMAKE_SOURCE_DIR}" NORMALIZE OUTPUT_VARIABLE _source_dir)
+    set("${output_var}" "${_source_dir}" PARENT_SCOPE)
+endfunction()
+
+function(_alp_cmake_project_prepare_archive_source arg_NAME arg_URL arg_SHA256 output_var)
+    _alp_cmake_project_archive_source_dir("${arg_NAME}" "${arg_SHA256}" _source_dir)
+    get_filename_component(_source_parent "${_source_dir}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_source_parent}")
+
+    set(_lock_file "${_source_dir}.lock")
+    file(LOCK "${_lock_file}" GUARD FUNCTION TIMEOUT 600 RESULT_VARIABLE _lock_result)
+    if(NOT _lock_result STREQUAL "0")
+        message(FATAL_ERROR
+            "[alp] ${arg_NAME}: could not lock shared archive source "
+            "'${_source_dir}': ${_lock_result}")
+    endif()
+
+    set(_signature_file "${_source_dir}/.alp_archive_signature")
+    set(_source_ready FALSE)
+    if(EXISTS "${_signature_file}" AND EXISTS "${_source_dir}/CMakeLists.txt")
+        file(READ "${_signature_file}" _installed_signature)
+        string(STRIP "${_installed_signature}" _installed_signature)
+        if(_installed_signature STREQUAL "SHA256=${arg_SHA256}")
+            set(_source_ready TRUE)
+        endif()
+    endif()
+
+    if(_source_ready)
+        message(STATUS "[alp] Using shared archive source for ${arg_NAME}: ${_source_dir}")
+    else()
+        file(REMOVE_RECURSE "${_source_dir}")
+        include(FetchContent)
+        string(MAKE_C_IDENTIFIER "alp_${arg_NAME}_${arg_SHA256}" _content_name)
+        FetchContent_Declare(${_content_name}
+            URL "${arg_URL}"
+            URL_HASH "SHA256=${arg_SHA256}"
+            DOWNLOAD_EXTRACT_TIMESTAMP FALSE
+            SOURCE_DIR "${_source_dir}"
+            SOURCE_SUBDIR _alp_archive_no_subdirectory)
+        FetchContent_MakeAvailable(${_content_name})
+
+        if(NOT EXISTS "${_source_dir}/CMakeLists.txt")
+            message(FATAL_ERROR
+                "[alp] ${arg_NAME}: archive '${arg_URL}' does not contain a root CMakeLists.txt")
+        endif()
+        file(WRITE "${_signature_file}" "SHA256=${arg_SHA256}\n")
+    endif()
+
+    set("${output_var}" "${_source_dir}" PARENT_SCOPE)
+endfunction()
+
 function(_alp_setup_cmake_project_from_archive arg_NAME arg_URL arg_SHA256 CMAKE_ARGUMENTS_VAR)
     set(_cmake_arguments "${${CMAKE_ARGUMENTS_VAR}}")
     string(LENGTH "${arg_SHA256}" _sha256_length)
@@ -345,16 +425,8 @@ function(_alp_setup_cmake_project_from_archive arg_NAME arg_URL arg_SHA256 CMAKE
         return()
     endif()
 
-    include(FetchContent)
-    string(SUBSTRING "${_sha256}" 0 12 _sha256_short)
-    string(MAKE_C_IDENTIFIER "alp_${arg_NAME}_${_sha256_short}" _content_name)
-    FetchContent_Declare(${_content_name}
-        URL "${arg_URL}"
-        URL_HASH "SHA256=${_sha256}"
-        DOWNLOAD_EXTRACT_TIMESTAMP FALSE
-        SOURCE_SUBDIR _alp_archive_no_subdirectory)
-    FetchContent_MakeAvailable(${_content_name})
-    FetchContent_GetProperties(${_content_name} SOURCE_DIR _src_dir)
+    _alp_cmake_project_prepare_archive_source(
+        "${arg_NAME}" "${arg_URL}" "${_sha256}" _src_dir)
 
     _alp_setup_cmake_project_from_source(
         "${arg_NAME}" "${_src_dir}" "${_source_signature}" _cmake_arguments)

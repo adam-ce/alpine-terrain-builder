@@ -128,6 +128,7 @@ if(TARGET dagbuilderlib)
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
         dag_builder/merge_clusterings.cpp
+        dag_builder/multi_component.cpp
         dag_builder/weld.cpp
         dag_builder/slice.cpp
         dag_builder/pull_reproject_texture.cpp
@@ -148,5 +149,13 @@ if(TARGET sfmergerlib)
         sf_merger/storage_boundaries.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)
+    if(TARGET sf-builder AND TARGET sf-merger)
+        target_sources(unittests_sfmerger PRIVATE sf_merger/integration.cpp)
+        target_compile_definitions(unittests_sfmerger PRIVATE
+            ALP_SF_BUILDER_PATH="$<TARGET_FILE:sf-builder>"
+            ALP_SF_MERGER_PATH="$<TARGET_FILE:sf-merger>"
+        )
+        add_dependencies(unittests_sfmerger sf-builder sf-merger)
+    endif()
     atb_configure_test(unittests_sfmerger)
 endif()

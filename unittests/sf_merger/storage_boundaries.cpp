@@ -184,7 +184,7 @@ TEST_CASE("SF cut hard-links unchanged leaves and writes clipped leaves", "[sfme
         auto output = unindexed_storage(output_directory.path());
         REQUIRE(input.save(root, triangle()).has_value());
 
-        REQUIRE(cut_dataset(input, MeshMask{clipping_box()}, output, true).has_value());
+        REQUIRE(cut_dataset(input, MeshMask{.components = {clipping_box()}}, output, true).has_value());
         REQUIRE(output.has(root).value());
         CHECK_FALSE(std::filesystem::equivalent(
             input.paths(root)->front(),

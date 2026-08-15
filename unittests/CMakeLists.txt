@@ -99,6 +99,7 @@ if(TARGET dagbuilderlib)
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
         dag_builder/merge_clusterings.cpp
+        dag_builder/multi_component.cpp
         dag_builder/weld.cpp
         dag_builder/slice.cpp
         dag_builder/pull_reproject_texture.cpp
@@ -113,6 +114,7 @@ endif()
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
         catch2_helpers.h
+        sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
     )
     target_link_libraries(unittests_sfmerger PRIVATE sfmergerlib Catch2::Catch2WithMain)

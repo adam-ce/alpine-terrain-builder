@@ -29,6 +29,8 @@ option(ALP_ENABLE_ASSERTS "Do not define NDEBUG, i.e., enable asserts" ${ALP_ENA
 
 set(ALP_UNITY_BUILD_BATCH_SIZE 4 CACHE STRING "Number of source files per unity translation unit")
 set(ALP_RELEASE_OPT_LEVEL "3" CACHE STRING "Optimization level (0=O0,1=O1,2=O2,3=O3)")
+set(ALP_DEPENDENCIES_N_BUILD_JOBS "" CACHE STRING
+    "Maximum number of parallel jobs for independently built CMake dependencies")
 
 # Unit-test configuration
 option(ALP_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)

@@ -63,18 +63,18 @@ public:
 
         // If the parent mask is empty, we can just return whatevers on the left
         if constexpr (LeftStatus != Status::Missing) {
-            if (ctx.mask.mesh.is_empty()) {
+            if (ctx.mask.is_empty()) {
                 return Unchanged{Source::Left};
             }
         }
 
         LOG_TRACE("Clipping mask for {}", id);
         const auto bounds = geometry::pad_bounds_relative(this->_space.get_node_bounds(id), 0.05);
-        MeshMask mask(mesh::clip_on_bounds_and_cap(ctx.mask.mesh, bounds));
+        MeshMask mask = clip_mask_on_bounds(ctx.mask, bounds);
 
         // Same when the current mask is empty
         if constexpr (LeftStatus != Status::Missing) {
-            if (mask.mesh.is_empty()) {
+            if (mask.is_empty()) {
                 return Unchanged{Source::Left};
             }
         }
@@ -161,6 +161,13 @@ private:
         LOG_TRACE("Clipping meshes on mask");
         const Cow<const SimpleMesh> new_mesh_clipped = clip_on_mask(new_mesh, mask, true);
         const Cow<const SimpleMesh> base_mesh_clipped = clip_on_mask(base_mesh, mask, false);
+        LOG_TRACE(
+            "Mask with {} components retained {}/{} new and {}/{} base triangles",
+            mask.components.size(),
+            new_mesh_clipped->face_count(),
+            new_mesh.face_count(),
+            base_mesh_clipped->face_count(),
+            base_mesh.face_count());
 
         if (base_mesh_clipped.is_ref() && new_mesh_clipped->is_empty()) {
             if (can_ref_base_mesh) {

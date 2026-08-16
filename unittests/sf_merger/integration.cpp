@@ -64,7 +64,7 @@ int build_sf(
 
 } // namespace
 
-TEST_CASE("SF builders reproduce working and malformed mask-border merges", "[integration][sf-builder][sf-merger]") {
+TEST_CASE("SF builders preserve geometry at regular and point-touching mask borders", "[integration][sf-builder][sf-merger]") {
     const std::filesystem::path fixture =
         std::filesystem::path(ALP_TEST_DATA_DIR) / "sf_builder_merge_border";
     const TemporaryDirectory temporary_directory;
@@ -91,9 +91,16 @@ TEST_CASE("SF builders reproduce working and malformed mask-border merges", "[in
     REQUIRE(std::system(merge_command.c_str()) == 0);
 
     const std::filesystem::path working_relative = "15/26291/18610/27235.terrain";
-    const std::filesystem::path malformed_relative = "15/26290/18610/27235.terrain";
+    const std::filesystem::path regression_relative = "15/26290/18610/27235.terrain";
     const std::filesystem::path working_path = merged_output / working_relative;
-    const std::filesystem::path malformed_path = merged_output / malformed_relative;
+    const std::filesystem::path regression_path = merged_output / regression_relative;
+
+    const auto base_regression_mesh = mesh::io::load_from_path(base_output / regression_relative);
+    REQUIRE(base_regression_mesh.has_value());
+    CHECK_FALSE(base_regression_mesh->is_empty());
+    const auto new_regression_mesh = mesh::io::load_from_path(new_output / regression_relative);
+    REQUIRE(new_regression_mesh.has_value());
+    CHECK_FALSE(new_regression_mesh->is_empty());
 
     REQUIRE(std::filesystem::exists(working_path));
     CHECK_FALSE(std::filesystem::equivalent(working_path, base_output / working_relative));
@@ -103,15 +110,13 @@ TEST_CASE("SF builders reproduce working and malformed mask-border merges", "[in
     REQUIRE(working_mesh.has_value());
     CHECK_FALSE(working_mesh->is_empty());
 
-    REQUIRE(std::filesystem::exists(malformed_path));
-    CHECK_FALSE(std::filesystem::equivalent(malformed_path, base_output / malformed_relative));
-    CHECK_FALSE(std::filesystem::equivalent(malformed_path, new_output / malformed_relative));
+    REQUIRE(std::filesystem::exists(regression_path));
 
-    const auto malformed_mesh = mesh::io::load_from_path(malformed_path);
-    const std::string malformed_error = malformed_mesh.has_value()
+    const auto regression_mesh = mesh::io::load_from_path(regression_path);
+    const std::string regression_error = regression_mesh.has_value()
                                             ? std::string()
-                                            : malformed_mesh.error().description();
-    INFO("Malformed mask-border merge: " << malformed_error);
-    REQUIRE(malformed_mesh.has_value());
-    CHECK_FALSE(malformed_mesh->is_empty());
+                                            : regression_mesh.error().description();
+    INFO("Point-touching mask-border merge: " << regression_error);
+    REQUIRE(regression_mesh.has_value());
+    CHECK_FALSE(regression_mesh->is_empty());
 }

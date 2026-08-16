@@ -11,6 +11,7 @@
 #include <vector>
 
 #include <CGAL/Polygon_mesh_processing/clip.h>
+#include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_mesh_processing/remesh_planar_patches.h>
 #include <glm/glm.hpp>
 #include <libassert/assert.hpp>
@@ -26,6 +27,7 @@
 #include "mesh/connectivity/adjacency.h"
 #include "mesh/normalize.h"
 #include "mesh/validate.h"
+#include "mesh/validate_cgal.h"
 #include "containers/FixedVector.h"
 #include "vector_utils.h"
 
@@ -789,6 +791,9 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
 
     cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mesh);
     cgal::Mesh cgal_clip_mesh = convert::to_cgal_mesh(clip_mesh);
+    cgal::validate(cgal_mesh);
+    cgal::validate(cgal_clip_mesh);
+    DEBUG_ASSERT(CGAL::Polygon_mesh_processing::does_bound_a_volume(cgal_clip_mesh));
 
     bool success;
     bool has_intersections;
@@ -815,6 +820,7 @@ Cow<const SimpleMesh> clip_on_mesh(const SimpleMesh &mesh, const SimpleMesh &cli
     }
     
     cgal_mesh.collect_garbage();
+    cgal::validate(cgal_mesh);
     SimpleMesh result = convert::to_simple_mesh(cgal_mesh);
     if (mesh.has_texture()) {
         result.texture = mesh.texture.value();

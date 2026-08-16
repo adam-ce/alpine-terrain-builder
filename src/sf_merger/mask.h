@@ -14,6 +14,7 @@
 #include "mesh/cgal.h"
 #include "mesh/convert.h"
 #include "mesh/validate.h"
+#include "mesh/validate_cgal.h"
 #include "mesh/bounds.h"
 #include "srs.h"
 #include "SphereProjector.h"
@@ -24,6 +25,7 @@
 #include <CGAL/Multipolygon_with_holes_2.h>
 #include <CGAL/Polygon_2.h>
 #include <CGAL/Polygon_mesh_processing/extrude.h>
+#include <CGAL/Polygon_mesh_processing/orientation.h>
 #include <CGAL/Polygon_repair/repair.h>
 #include <CGAL/Polygon_with_holes_2.h>
 #include <CGAL/Triangulation_face_base_with_info_2.h>
@@ -47,11 +49,31 @@ struct SpherePolygonMask {
 };
 
 struct SphereMeshMask {
-    SimpleMesh3d mesh;
+    std::vector<SimpleMesh3d> components;
 };
 
 struct MeshMask {
-    SimpleMesh3d mesh;
+    std::vector<SimpleMesh3d> components;
+
+    [[nodiscard]] bool is_empty() const {
+        return components.empty();
+    }
+
+    [[nodiscard]] size_t vertex_count() const {
+        size_t result = 0;
+        for (const SimpleMesh3d &component : components) {
+            result += component.vertex_count();
+        }
+        return result;
+    }
+
+    [[nodiscard]] size_t face_count() const {
+        size_t result = 0;
+        for (const SimpleMesh3d &component : components) {
+            result += component.face_count();
+        }
+        return result;
+    }
 };
 
 namespace mask {
@@ -384,52 +406,58 @@ inline SphereMeshMask triangulate(const SpherePolygonMask &mask) {
     // Fix self intersections
     const MultipolygonWithHoles2 polygons = CGAL::Polygon_repair::repair(mask.polygons);
 
-    CDT cdt;
+    SphereMeshMask result;
+    result.components.reserve(polygons.polygons_with_holes().size());
     for (const auto &polygon : polygons.polygons_with_holes()) {
+        CDT cdt;
         const auto &boundary = polygon.outer_boundary();
         cdt.insert_constraint(boundary.vertices_begin(), boundary.vertices_end(), true);
 
         for (const auto &hole : polygon.holes()) {
             cdt.insert_constraint(hole.vertices_begin(), hole.vertices_end(), true);
         }
-    }
+        std::unordered_map<FaceHandle, bool> in_domain_map;
+        boost::associative_property_map<std::unordered_map<FaceHandle, bool>> in_domain(in_domain_map);
 
-    std::unordered_map<FaceHandle, bool> in_domain_map;
-    boost::associative_property_map<std::unordered_map<FaceHandle, bool>> in_domain(in_domain_map);
+        // Mark facets that are inside the domain bounded by the polygon
+        CGAL::mark_domain_in_triangulation(cdt, in_domain);
+        DEBUG_ASSERT(cdt.is_valid());
 
-    // Mark facets that are inside the domain bounded by the polygon
-    CGAL::mark_domain_in_triangulation(cdt, in_domain);
-    DEBUG_ASSERT(cdt.is_valid());
+        // Build one triangle mesh per polygon component. Separate CDTs are
+        // important here: distinct polygons may touch at a point, but must not
+        // share a vertex in the extruded volume mesh.
+        SimpleMesh3d component;
+        std::unordered_map<VertexHandle, uint32_t> vertex_index_map;
 
-    // Build the resulting triangle mesh
-    SimpleMesh3d result;
-    // Map from CGAL vertex handles to output mesh indices
-    std::unordered_map<VertexHandle, uint32_t> vertex_index_map;
-
-    for (FaceHandle face : cdt.finite_face_handles()) {
-        if (!get(in_domain, face)) {
-            continue;
-        }
-
-        glm::uvec3 triangle;
-        for (uint32_t i = 0; i < 3; i++) {
-            const VertexHandle vertex = face->vertex(i);
-            auto [it, inserted] = vertex_index_map.emplace(vertex, 0);
-            if (inserted) {
-                const uint32_t new_index = result.positions.size();
-                const Point2 &cgal_point = vertex->point();
-                const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
-                const glm::dvec3 point3d = mask.projector.unproject_point(point2d);
-                result.positions.push_back(point3d);
-                it->second = new_index;
+        for (FaceHandle face : cdt.finite_face_handles()) {
+            if (!get(in_domain, face)) {
+                continue;
             }
-            triangle[i] = it->second;
+
+            glm::uvec3 triangle;
+            for (uint32_t i = 0; i < 3; i++) {
+                const VertexHandle vertex = face->vertex(i);
+                auto [it, inserted] = vertex_index_map.emplace(vertex, 0);
+                if (inserted) {
+                    const uint32_t new_index = component.positions.size();
+                    const Point2 &cgal_point = vertex->point();
+                    const glm::dvec2 point2d = convert::to_glm_point(cgal_point);
+                    const glm::dvec3 point3d = mask.projector.unproject_point(point2d);
+                    component.positions.push_back(point3d);
+                    it->second = new_index;
+                }
+                triangle[i] = it->second;
+            }
+
+            component.triangles.push_back(triangle);
         }
 
-        result.triangles.push_back(triangle);
+        if (!component.is_empty()) {
+            result.components.push_back(std::move(component));
+        }
     }
 
-    return SphereMeshMask(result);
+    return result;
 }
 
 namespace {
@@ -480,26 +508,35 @@ inline glm::dvec2 pad_radius_range(const glm::dvec2& radius_range, double paddin
 inline MeshMask extrude(
     const SphereMeshMask &mask,
     const glm::dvec2& radius_range) {
-    cgal::Mesh cgal_mesh = convert::to_cgal_mesh(mask.mesh);
+    MeshMask result;
+    result.components.reserve(mask.components.size());
 
-    cgal::Mesh output_mesh;
-    auto bottom = [&](cgal::VertexDescriptor input_vertex, cgal::VertexDescriptor output_vertex) {
-        const cgal::Point3 input_point = cgal_mesh.point(input_vertex);
-        const glm::dvec3 glm_input_point = convert::to_glm_point(input_point);
-        const glm::dvec3 glm_offset_point = scale_to_length(glm_input_point, radius_range.x);
-        const cgal::Point3 offset_point = convert::to_cgal_point<cgal::Kernel>(glm_offset_point);
-        output_mesh.point(output_vertex) = offset_point;
-    };
-    auto top = [&](cgal::VertexDescriptor input_vertex, cgal::VertexDescriptor output_vertex) {
-        const cgal::Point3 input_point = cgal_mesh.point(input_vertex);
-        const glm::dvec3 glm_input_point = convert::to_glm_point(input_point);
-        const glm::dvec3 glm_offset_point = scale_to_length(glm_input_point, radius_range.y);
-        const cgal::Point3 offset_point = convert::to_cgal_point<cgal::Kernel>(glm_offset_point);
-        output_mesh.point(output_vertex) = offset_point;
-    };
-    CGAL::Polygon_mesh_processing::extrude_mesh(cgal_mesh, output_mesh, bottom, top);
+    for (const SimpleMesh3d &component : mask.components) {
+        cgal::Mesh cgal_mesh = convert::to_cgal_mesh(component);
+        cgal::Mesh output_mesh;
+        auto bottom = [&](cgal::VertexDescriptor input_vertex, cgal::VertexDescriptor output_vertex) {
+            const cgal::Point3 input_point = cgal_mesh.point(input_vertex);
+            const glm::dvec3 glm_input_point = convert::to_glm_point(input_point);
+            const glm::dvec3 glm_offset_point = scale_to_length(glm_input_point, radius_range.x);
+            const cgal::Point3 offset_point = convert::to_cgal_point<cgal::Kernel>(glm_offset_point);
+            output_mesh.point(output_vertex) = offset_point;
+        };
+        auto top = [&](cgal::VertexDescriptor input_vertex, cgal::VertexDescriptor output_vertex) {
+            const cgal::Point3 input_point = cgal_mesh.point(input_vertex);
+            const glm::dvec3 glm_input_point = convert::to_glm_point(input_point);
+            const glm::dvec3 glm_offset_point = scale_to_length(glm_input_point, radius_range.y);
+            const cgal::Point3 offset_point = convert::to_cgal_point<cgal::Kernel>(glm_offset_point);
+            output_mesh.point(output_vertex) = offset_point;
+        };
+        CGAL::Polygon_mesh_processing::extrude_mesh(cgal_mesh, output_mesh, bottom, top);
 
-    return MeshMask(convert::to_simple_mesh(output_mesh));
+        cgal::validate(output_mesh);
+        DEBUG_ASSERT(CGAL::is_closed(output_mesh));
+        DEBUG_ASSERT(CGAL::Polygon_mesh_processing::does_bound_a_volume(output_mesh));
+        result.components.push_back(convert::to_simple_mesh(output_mesh));
+    }
+
+    return result;
 }
 
 inline MeshMask extrude(

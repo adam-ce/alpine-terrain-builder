@@ -114,6 +114,7 @@ if(TARGET dagbuilderlib)
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
         dag_builder/merge_clusterings.cpp
+        dag_builder/multi_component.cpp
         dag_builder/weld.cpp
         dag_builder/slice.cpp
         dag_builder/pull_reproject_texture.cpp

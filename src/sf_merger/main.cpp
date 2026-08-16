@@ -20,7 +20,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
         if (result.has_value()) {
             const auto mask = result.value();
             LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)",
-                mask.mesh.vertex_count(), mask.mesh.face_count());
+                mask.vertex_count(), mask.face_count());
             return mask;
         } else {
             LOG_ERROR("Failed to load mask: {}", result.error().description());

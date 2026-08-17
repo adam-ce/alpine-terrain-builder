@@ -101,6 +101,18 @@ std::expected<Bytes, Error> serialize(
 }
 
 template <typename Schema>
+std::expected<Bytes, Error> serialize(
+    const typename Schema::latest_type &payload,
+    const CompressionAlgorithm compression_algorithm,
+    const ChecksumAlgorithm checksum_algorithm)
+{
+    return serialize<Schema, Schema::latest_version>(
+        payload,
+        compression_algorithm,
+        checksum_algorithm);
+}
+
+template <typename Schema>
 std::expected<typename Schema::latest_type, Error> deserialize(
     const std::span<const std::byte> bytes,
     const std::size_t max_decompressed_size)

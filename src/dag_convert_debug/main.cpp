@@ -2,9 +2,8 @@
 #include <filesystem>
 
 #include "cli.h"
+#include "codec/Dag.h"
 #include "dag_node.h"
-#include "encoded.h"
-#include "io/serialize.h"
 #include "log.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
@@ -12,15 +11,21 @@
 #include "ProgressIndicator.h"
 #include "storage.h"
 #include "utils.h"
-#include "serialization.h"
 #include "store/describe_error.h"
 
 namespace {
 
 void export_node(const cli::Args &args) {
-    const auto load_result = io::read_from_path<dag::ClusterBatch>(args.input_path);
+    if (args.input_path.extension() != ".dag") {
+        LOG_ERROR("Expected a .dag input file, got {}", args.input_path);
+        return;
+    }
+    std::filesystem::path node_path = args.input_path;
+    node_path.replace_extension();
+    const dag::codec::Dag codec;
+    const auto load_result = codec.read(store::NodePath(node_path));
     if (!load_result.has_value()) {
-        LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error());
+        LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().message);
         return;
     }
 
@@ -47,7 +52,6 @@ void export_storage(const cli::Args &args) {
     options.preferred_extension = ".glb";
     auto output_result = octree::open_folder(
         args.output_path,
-        false,
         std::move(options));
     if (!output_result.has_value()) {
         LOG_ERROR(

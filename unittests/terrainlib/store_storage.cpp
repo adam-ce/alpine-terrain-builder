@@ -1,5 +1,6 @@
 #include <atomic>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -9,12 +10,11 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include "io/serialize.h"
+#include "io/bytes.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
 #include "raster_store/StoreTraits.h"
 #include "store/IndexedStorage.h"
-#include "store/codec/ZppBits.h"
 #include "string_utils.h"
 
 namespace {
@@ -80,11 +80,66 @@ store::PathMapping<radix::tile::Id> test_mapping<raster_store::StoreTraits>() {
     return {"test_tiles", tile_to_path, path_to_tile};
 }
 
+std::expected<int, store::CodecError> read_int(const std::filesystem::path &path) {
+    auto bytes = io::read_bytes_from_path(path);
+    if (!bytes || bytes->size() != sizeof(int)) {
+        return std::unexpected(store::CodecError{
+            store::CodecOperation::Read,
+            store::CodecErrorCategory::Io,
+            "test integer read failed",
+        });
+    }
+    int value;
+    std::memcpy(&value, bytes->data(), sizeof(value));
+    return value;
+}
+
+std::expected<void, store::CodecError> write_int(
+    const int value,
+    const std::filesystem::path &path)
+{
+    const auto bytes = std::span(
+        reinterpret_cast<const uint8_t *>(&value),
+        sizeof(value));
+    if (!io::write_bytes_to_path(bytes, path)) {
+        return std::unexpected(store::CodecError{
+            store::CodecOperation::Write,
+            store::CodecErrorCategory::Io,
+            "test integer write failed",
+        });
+    }
+    return {};
+}
+
+class IntCodec final : public store::Codec<int> {
+public:
+    std::vector<std::filesystem::path> paths(
+        const store::NodePath &node_path) const override
+    {
+        std::filesystem::path path = node_path.path();
+        path += ".data";
+        return {path};
+    }
+
+    std::expected<int, store::CodecError> read(
+        const store::NodePath &node_path) const override
+    {
+        return read_int(paths(node_path).front());
+    }
+
+    std::expected<void, store::CodecError> write(
+        const store::NodePath &node_path,
+        const int &value) const override
+    {
+        return write_int(value, paths(node_path).front());
+    }
+};
+
 template<typename Traits>
 store::Storage<Traits, int> make_storage(const std::filesystem::path &path) {
     return store::Storage<Traits, int>(store::RawStorage<Traits, int>(
         store::Layout<typename Traits::Key>(path, test_mapping<Traits>()),
-        std::make_unique<store::codec::ZppBits<int>>()));
+        std::make_unique<IntCodec>()));
 }
 
 class MultiFileCodec final : public store::Codec<int> {
@@ -99,8 +154,8 @@ public:
 
     std::expected<int, store::CodecError> read(
         const store::NodePath &node_path) const override {
-        const auto value = io::read_from_path<int>(paths(node_path).front());
-        if (!value.has_value()) {
+        const auto value = read_int(paths(node_path).front());
+        if (!value) {
             return std::unexpected(store::CodecError{
                 store::CodecOperation::Read,
                 store::CodecErrorCategory::Io,
@@ -114,8 +169,8 @@ public:
         const store::NodePath &node_path,
         const int &value) const override {
         const auto node_paths = paths(node_path);
-        if (!io::write_to_path(value, node_paths[0]).has_value()
-            || !io::write_to_path(value + 1, node_paths[1]).has_value()) {
+        if (!write_int(value, node_paths[0])
+            || !write_int(value + 1, node_paths[1])) {
             return std::unexpected(store::CodecError{
                 store::CodecOperation::Write,
                 store::CodecErrorCategory::Io,
@@ -147,8 +202,8 @@ public:
                 "injected decode failure",
             });
         }
-        const auto value = io::read_from_path<int>(paths(node_path).front());
-        if (!value.has_value()) {
+        const auto value = read_int(paths(node_path).front());
+        if (!value) {
             return std::unexpected(store::CodecError{
                 store::CodecOperation::Read,
                 store::CodecErrorCategory::Io,
@@ -168,7 +223,7 @@ public:
                 "injected encode failure",
             });
         }
-        if (!io::write_to_path(value, paths(node_path).front()).has_value()) {
+        if (!write_int(value, paths(node_path).front())) {
             return std::unexpected(store::CodecError{
                 store::CodecOperation::Write,
                 store::CodecErrorCategory::Io,
@@ -214,7 +269,7 @@ store::PathMapping<octree::Id> fake_default_mapping() {
 
 store::IndexFormat<octree::StoreTraits> counting_index_format() {
     return {
-        "terrain.index",
+        "octree.storeindex",
         unused_index_read,
         count_index_write,
         fake_mapping_from_id,
@@ -225,7 +280,7 @@ store::IndexFormat<octree::StoreTraits> counting_index_format() {
 store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
     const std::filesystem::path &path,
     std::unique_ptr<store::Codec<int>> codec =
-        std::make_unique<store::codec::ZppBits<int>>()) {
+        std::make_unique<IntCodec>()) {
     using Storage = store::Storage<octree::StoreTraits, int>;
     return store::IndexedStorage<octree::StoreTraits, int>(
         store::RawStorage<octree::StoreTraits, int>(
@@ -234,9 +289,10 @@ store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
         store::Index<octree::StoreTraits>{},
         Storage::Persistence{
             counting_index_format(),
-            path / "terrain.index",
+            path / "octree.storeindex",
             "flat",
-            ".bin",
+            "test.Int",
+            ".data",
         });
 }
 
@@ -301,9 +357,9 @@ TEST_CASE("raw storage requires and removes every codec path", "[store][storage]
     const auto paths = storage.paths(root).value();
     REQUIRE(paths.size() == 2);
 
-    REQUIRE(io::write_to_path(1, paths[0]).has_value());
+    REQUIRE(write_int(1, paths[0]).has_value());
     CHECK_FALSE(storage.has(root).value());
-    REQUIRE(io::write_to_path(2, paths[1]).has_value());
+    REQUIRE(write_int(2, paths[1]).has_value());
     CHECK(storage.has(root).value());
     REQUIRE(storage.remove(root).value());
     CHECK_FALSE(std::filesystem::exists(paths[0]));
@@ -431,7 +487,7 @@ TEST_CASE(
     const auto target_paths = target.paths(root).value();
     REQUIRE(std::filesystem::remove(target_paths[1]));
     REQUIRE(std::filesystem::create_directory(target_paths[1]));
-    REQUIRE(io::write_to_path(9, target_paths[1] / "blocker.bin").has_value());
+    REQUIRE(write_int(9, target_paths[1] / "blocker.data").has_value());
 
     const auto copied = target.copy_from(root, source);
     REQUIRE_FALSE(copied.has_value());

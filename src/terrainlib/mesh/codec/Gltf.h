@@ -8,7 +8,7 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/io/gltf.h"
 #include "store/Codec.h"
-#include "store/codec/ZppBits.h"
+#include "store/codec/Path.h"
 
 namespace mesh::codec {
 

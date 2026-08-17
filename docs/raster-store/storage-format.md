@@ -5,12 +5,12 @@
 > requirements were not acceptance criteria for that refactor. See
 > [refactor-status.md](refactor-status.md) for the implemented shared boundary.
 
-The refactor preserves the existing 3D `terrain.index` and payload contracts
-through the adapters under `octree` and `mesh::storage`. It supplies only an
-in-memory `raster_store::StoreTraits` adapter for `radix::tile::Id`; there is
-currently no persistent RF index, `.amort` codec, snapshot publisher, or RF
-opening API. Names and formats in this document remain proposals until their
-own implementation plans approve them.
+The 3D octree stores now use the versioned envelope formats described in
+[envelope-migration-plan.md](envelope-migration-plan.md). The shared store
+still supplies only an in-memory `raster_store::StoreTraits` adapter for
+`radix::tile::Id`; there is currently no persistent RF index, `.amort` codec,
+snapshot publisher, or RF opening API. Names and formats below remain
+proposals until their own implementation plans approve them.
 
 This document specifies the logical format and required invariants for the following data stores:
 - raster-fundamentalis (our authoritative raster store)
@@ -74,7 +74,7 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
   - `uint32 class_version`, identifying the versioned payload type;
   - `ChecksumAlgorithm checksum_algorithm`, default `HandledByCompressionLib`, alternatively `Crc32c` or `None`;
   - `string checksum`, empty when no external checksum is used, otherwise the CRC-32C value;
-  - `CompressionAlgorithm compression_algorithm`, default `ZstdBestCompressionWithChecksum`, alternatively `None`;
+  - `CompressionAlgorithm compression_algorithm`, default `ZstdDefaultCompressionWithChecksum`, alternatively `ZstdBestCompressionWithChecksum` or `None`;
   - `uint64 uncompressed_size`, the exact size of the uncompressed second level;
   - `Bytes compressed_data`, containing the second level.
  - The second level is a compressed byte vector. It is deserialised directly into the selected versioned payload class.
@@ -93,12 +93,12 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
  - if the compression algorithm is missing or unsupported.
  - deserialization fails
 - we fail by returning an unexpected in these cases
-- Compression uses libzstd at its best compression level. Libzstd is imported through the project's CMake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. `ZstdBestCompressionWithChecksum` writes an embedded zstd frame checksum, which libzstd verifies while decompressing.
+- Compression uses libzstd at its default compression level. Libzstd is imported through the project's CMake install facility from https://github.com/AlpineMapsOrgDependencies/zstd. Both zstd modes write an embedded frame checksum, which libzstd verifies while decompressing; `ZstdBestCompressionWithChecksum` remains available for explicit callers.
 - `compress_with_checksum` accepts a `vector<byte>` and returns the compressed bytes plus the external checksum string. `checked_decompress` accepts both and returns the decompressed bytes. Both use `std::expected` and dispatch with a switch.
 - `Crc32c` is an external CRC-32C (Castagnoli) checksum of the complete uncompressed serialised payload. It uses the reflected polynomial `82F63B78`, an initial value of `FFFFFFFF`, and a final XOR of `FFFFFFFF`. The checksum string contains exactly eight lowercase hexadecimal characters. The empty payload has checksum `00000000`; the ASCII test vector `123456789` has checksum `e3069283`. CRC-32C detects accidental corruption but is not cryptographic.
 - `checked_decompress` accepts a maximum decompressed size, defaulting to 1 GiB. It uses a size reported by the compression format when available, otherwise it uses the maximum as its allocation bound and shrinks the result to the produced size.
 - Envelope deserialisation passes `uncompressed_size` as that maximum and requires the produced size to match it exactly. A mismatch is a decompression failure. A declared size above the caller's limit or the hard 1 GiB limit is a size-limit failure.
-- `None` compression may be paired with `None` or `Crc32c`. `ZstdBestCompressionWithChecksum` may be paired with `HandledByCompressionLib` or `Crc32c`; with `Crc32c`, both the embedded zstd checksum and the external CRC-32C are checked. `HandledByCompressionLib` is invalid with `None` compression, and `None` checksum is invalid with `ZstdBestCompressionWithChecksum`.
+- `None` compression may be paired with `None` or `Crc32c`. Either zstd mode may be paired with `HandledByCompressionLib` or `Crc32c`; with `Crc32c`, both the embedded zstd checksum and the external CRC-32C are checked. `HandledByCompressionLib` is invalid with `None` compression, and `None` checksum is invalid with a zstd mode.
 - `None` and `HandledByCompressionLib` require an empty checksum string. `Crc32c` requires its canonical eight-character checksum. Deserialisation verifies it after bounded decompression and before parsing the payload with `zpp::bits`; envelope deserialisation also requires the resulting size to exactly match `uncompressed_size`.
 - Decompression never allocates or produces output larger than 1 GiB.
 

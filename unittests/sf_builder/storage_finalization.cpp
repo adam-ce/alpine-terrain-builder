@@ -49,7 +49,8 @@ TEST_CASE("SF builder finalization writes and validates a valid index", "[sfbuil
     REQUIRE(storage.save(octree::Id::root(), sample_mesh()).has_value());
 
     CHECK(terrainbuilder::finalize_storage(storage).has_value());
-    CHECK(std::filesystem::is_regular_file(directory.path() / "terrain.index"));
+    CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storeindex"));
+    CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storemeta"));
 }
 
 TEST_CASE(
@@ -68,9 +69,9 @@ TEST_CASE(
     REQUIRE_FALSE(finalized.has_value());
     REQUIRE(std::holds_alternative<sf::InvalidTopology>(finalized.error()));
     CHECK(std::get<sf::InvalidTopology>(finalized.error()).key == root);
-    CHECK(std::filesystem::is_regular_file(directory.path() / "terrain.index"));
+    CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storeindex"));
 
-    auto reopened = octree::open_index(directory.path() / "terrain.index");
+    auto reopened = octree::open_index(directory.path() / "octree.storeindex");
     REQUIRE(reopened.has_value());
     CHECK(reopened->index().is(store::NodeStatus::Inner, root).value());
 }

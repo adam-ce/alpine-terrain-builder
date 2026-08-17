@@ -38,7 +38,7 @@ public:
         if (!result.has_value()) {
             return std::unexpected(LoadError<Key>(result.error()));
         }
-        return result.value();
+        return std::move(*result);
     }
 
     std::expected<void, SaveError<Key>> save(const Key &key, const NodeData &data) const {

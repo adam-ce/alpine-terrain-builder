@@ -6,8 +6,6 @@
 #include <unordered_map>
 
 #include <libassert/assert.hpp>
-#include <zpp_bits.h>
-
 #include "log.h"
 #include "store/InvalidKey.h"
 #include "store/NodeStatus.h"
@@ -181,9 +179,6 @@ public:
     const_iterator cend() const {
         return _index.cend();
     }
-
-    using serialize = zpp::bits::members<1>;
-    friend zpp::bits::access;
 
 private:
     NodeStatus *get_raw_unchecked(const Key &key) {

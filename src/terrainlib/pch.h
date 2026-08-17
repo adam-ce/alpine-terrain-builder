@@ -35,7 +35,6 @@
 #include <radix/geometry.h>
 #include <spdlog/spdlog.h>
 #include <expected>
-#include <zpp_bits.h>
 
 // Internal headers
 #include "log.h"

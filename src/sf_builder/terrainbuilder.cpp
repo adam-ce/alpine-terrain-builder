@@ -198,7 +198,6 @@ std::expected<void, sf::FinalizeError> build_all_patches(
     open_options.preferred_extension = output_format;
     auto storage_result = octree::open_folder(
         output_base_path,
-        false,
         std::move(open_options));
     if (!storage_result.has_value()) {
         LOG_ERROR_AND_EXIT(

@@ -20,7 +20,6 @@ add_library(terrainlib
     mesh/igl/igl.cpp
 
     mesh/io/gltf.cpp
-    mesh/io/terrain.cpp
     mesh/io/texture.cpp
     mesh/io/utils.cpp
 

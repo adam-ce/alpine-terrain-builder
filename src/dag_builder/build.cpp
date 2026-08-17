@@ -15,7 +15,6 @@
 #include "cluster.h"
 #include "clusterize.h"
 #include "compact.h"
-#include "encoded.h"
 #include "geometry/geometry.h"
 #include "numeric/int_math.h"
 #include "log.h"
@@ -524,7 +523,6 @@ std::unordered_set<octree::Id> build_level(
         options.preferred_extension = ".glb";
         auto debug_result = octree::open_folder(
             ctx.output_storage.base_path().string() + "-debug",
-            false,
             std::move(options));
         if (!debug_result.has_value()) {
             LOG_ERROR_AND_EXIT(

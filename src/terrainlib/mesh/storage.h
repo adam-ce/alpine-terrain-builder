@@ -12,6 +12,8 @@
 
 namespace mesh::storage {
 
+inline constexpr std::string_view payload_class = "mesh.Simple3d";
+
 using Storage = store::Storage<octree::StoreTraits, mesh::Simple>;
 using IndexedStorage = store::IndexedStorage<octree::StoreTraits, mesh::Simple>;
 using OpenOptions = octree::storage::OpenOptions;
@@ -21,17 +23,17 @@ inline std::expected<IndexedStorage, store::OpenError<octree::Id>> open_index(
     return store::open_index<octree::StoreTraits, mesh::Simple>(
         path,
         octree::storage::index_format(),
+        payload_class,
         mesh::codec::from_extension);
 }
 
 inline std::expected<Storage, store::OpenError<octree::Id>> open_folder(
     const std::filesystem::path &path,
-    const bool create_index = false,
     OpenOptions options = {}) {
     return octree::storage::open_folder<mesh::Simple>(
         path,
-        create_index,
-        ".terrain",
+        std::string(payload_class),
+        ".sfmesh",
         mesh::codec::from_extension,
         std::move(options));
 }
@@ -41,7 +43,8 @@ inline std::expected<IndexedStorage, store::OpenError<octree::Id>> open_folder_i
     OpenOptions options = {}) {
     return octree::storage::open_folder_indexed<mesh::Simple>(
         path,
-        ".terrain",
+        std::string(payload_class),
+        ".sfmesh",
         mesh::codec::from_extension,
         std::move(options));
 }

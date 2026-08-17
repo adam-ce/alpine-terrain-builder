@@ -58,8 +58,8 @@ void run(const cli::MergeArgs& args) {
     std::filesystem::create_directories(args.output_path);
     octree::OpenOptions options;
     options.default_mapping = base_dataset.layout().mapping();
-    options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".terrain"));
-    auto output_result = octree::open_folder(args.output_path, false, std::move(options));
+    options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".sfmesh"));
+    auto output_result = octree::open_folder(args.output_path, std::move(options));
     if (!output_result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",

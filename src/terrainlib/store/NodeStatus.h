@@ -6,8 +6,6 @@
 
 #include <fmt/format.h>
 #include <fmt/ostream.h>
-#include <zpp_bits.h>
-
 #include "log.h"
 
 namespace store {
@@ -45,10 +43,6 @@ public:
 
 private:
     Value _value;
-
-public:
-    using serialize = zpp::bits::members<1>;
-    friend zpp::bits::access;
 };
 
 } // namespace store

@@ -170,7 +170,7 @@ TEST_CASE("Envelope round trips the latest payload version")
     CHECK(envelope.checksum_algorithm == io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
     CHECK(envelope.checksum.empty());
     CHECK(envelope.compression_algorithm
-          == io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum);
+          == io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum);
     CHECK(envelope.uncompressed_size == encode_value(expected).size());
 
     const auto result = io::envelope::deserialize<Schema>(*bytes);

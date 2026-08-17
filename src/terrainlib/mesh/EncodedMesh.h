@@ -3,8 +3,6 @@
 #include <vector>
 
 #include <glm/glm.hpp>
-#include <zpp_bits.h>
-
 namespace mesh {
 
 class Encoded {
@@ -20,7 +18,6 @@ public:
         bool operator!=(const Header &) const = default;
     };
 
-    using serialize = zpp::bits::members<5>;
     Header header;
     std::vector<uint8_t> triangles;
     std::vector<uint8_t> positions;

@@ -21,7 +21,7 @@ TEST_CASE("from_chars rejects non-numeric input", "[string_utils]") {
 }
 
 TEST_CASE("from_chars rejects trailing garbage after a valid number", "[string_utils]") {
-    CHECK(from_chars<int>(std::string_view("123.terrain")) == std::nullopt);
+    CHECK(from_chars<int>(std::string_view("123.sfmesh")) == std::nullopt);
     CHECK(from_chars<int>(std::string_view("123abc")) == std::nullopt);
 }
 

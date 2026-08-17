@@ -95,7 +95,7 @@ TEST_CASE("SF merge rejects Inner input before dispatch", "[sfmerger][sf][valida
     REQUIRE_FALSE(merged.has_value());
     REQUIRE(std::holds_alternative<sf::InvalidTopology>(merged.error()));
     CHECK(std::get<sf::InvalidTopology>(merged.error()).key == root);
-    CHECK_FALSE(std::filesystem::exists(output_directory.path() / "terrain.index"));
+    CHECK_FALSE(std::filesystem::exists(output_directory.path() / "octree.storeindex"));
 }
 
 TEST_CASE(
@@ -115,7 +115,7 @@ TEST_CASE(
     REQUIRE_FALSE(merged.has_value());
     REQUIRE(std::holds_alternative<sf::InvalidTopology>(merged.error()));
     CHECK(std::get<sf::InvalidTopology>(merged.error()).key == root);
-    CHECK(std::filesystem::is_regular_file(output_directory.path() / "terrain.index"));
+    CHECK(std::filesystem::is_regular_file(output_directory.path() / "octree.storeindex"));
 }
 
 TEST_CASE("SF merge hard-links unchanged nodes and writes changed nodes", "[sfmerger][sf][copy]") {

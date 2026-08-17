@@ -2,15 +2,16 @@
 #include <chrono>
 #include <filesystem>
 #include <future>
+#include <limits>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "build.h"
+#include "codec/Dag.h"
 #include "dag_node.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/storage/open.h"
 #include "storage.h"
-#include "store/codec/ZppBits.h"
 #include "thread_safe_storage.h"
 
 namespace {
@@ -69,11 +70,11 @@ mesh::Simple sample_mesh() {
 
 } // namespace
 
-TEST_CASE("runtime DAG ZPP Bits codec is reentrant") {
+TEST_CASE("runtime DAG envelope codec is reentrant") {
     const dag::ClusterBatch batch = sample_batch();
 
     TemporaryDirectory output;
-    store::codec::ZppBits<dag::ClusterBatch> codec;
+    dag::codec::Dag codec;
     std::vector<std::future<bool>> operations;
     for (int index = 0; index < 8; ++index) {
         operations.push_back(std::async(std::launch::async, [&codec, &batch, &output, index] {
@@ -91,14 +92,32 @@ TEST_CASE("runtime DAG ZPP Bits codec is reentrant") {
     }
 }
 
+TEST_CASE("versioned DAG payload validation is free-standing") {
+    dag::format::NodeMetadata invalid_metadata{
+        .group_assignment = {0},
+        .groups = {},
+    };
+    CHECK_FALSE(dag::format::validate(invalid_metadata).has_value());
+
+    dag::format::Clustering oversized_clustering{
+        .vertex_count = std::numeric_limits<std::uint64_t>::max(),
+        .encoded_positions = {},
+        .clusters = {},
+        .textures = {},
+    };
+    CHECK_FALSE(dag::format::validate(oversized_clustering).has_value());
+}
+
 TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]") {
-    const auto batch_codec = dag::codec::from_extension(".bin");
+    const auto batch_codec = dag::codec::from_extension(".dag");
     REQUIRE(batch_codec.has_value());
     CHECK(batch_codec.value()->paths(store::NodePath("node"))
-          == std::vector<std::filesystem::path>{"node.bin"});
+          == std::vector<std::filesystem::path>{"node.dag", "node.dagmeta"});
 
-    const auto metadata_codec = dag::codec::metadata_from_extension(".bin");
+    const auto metadata_codec = dag::codec::metadata_from_extension(".dag");
     REQUIRE(metadata_codec.has_value());
+    CHECK(metadata_codec.value()->paths(store::NodePath("node"))
+          == std::vector<std::filesystem::path>{"node.dagmeta"});
     const auto write_result = metadata_codec.value()->write(
         store::NodePath("node"),
         dag::NodeMetadata{});
@@ -122,19 +141,47 @@ TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[s
 
     auto released = std::move(synchronized).release();
     REQUIRE(released.save_index().has_value());
-    CHECK(std::filesystem::is_regular_file(output.path() / "terrain.index"));
+    CHECK(std::filesystem::is_regular_file(output.path() / "octree.storeindex"));
+    CHECK(std::filesystem::is_regular_file(output.path() / "octree.storemeta"));
 
     auto reopened_result = dag::storage::open_folder_indexed(output.path());
     REQUIRE(reopened_result.has_value());
     CHECK(reopened_result->has(octree::Id::root()).value());
     CHECK(reopened_result->load(octree::Id::root()).has_value());
+    const auto full_paths = reopened_result->paths(octree::Id::root());
+    REQUIRE(full_paths.has_value());
+    REQUIRE(full_paths->size() == 2);
 
     auto metadata_result = dag::storage::open_metadata_indexed(output.path());
     REQUIRE(metadata_result.has_value());
+    REQUIRE(std::filesystem::remove(full_paths->front()));
     const auto metadata = metadata_result->load(octree::Id::root());
     REQUIRE(metadata.has_value());
     CHECK(metadata->group_assignment == batch.metadata.group_assignment);
     CHECK(metadata->groups.front().error == batch.metadata.groups.front().error);
+}
+
+TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy]") {
+    TemporaryDirectory source_directory;
+    TemporaryDirectory target_directory;
+    auto source_result = dag::storage::open_folder_indexed(source_directory.path());
+    auto target_result = dag::storage::open_folder_indexed(target_directory.path());
+    REQUIRE(source_result.has_value());
+    REQUIRE(target_result.has_value());
+    auto source = std::move(*source_result);
+    auto target = std::move(*target_result);
+    const octree::Id root = octree::Id::root();
+    REQUIRE(source.save(root, sample_batch()).has_value());
+    REQUIRE(target.copy_from(root, source).has_value());
+
+    const auto source_paths = source.paths(root);
+    const auto target_paths = target.paths(root);
+    REQUIRE(source_paths.has_value());
+    REQUIRE(target_paths.has_value());
+    REQUIRE(source_paths->size() == 2);
+    REQUIRE(target_paths->size() == 2);
+    CHECK(std::filesystem::equivalent((*source_paths)[0], (*target_paths)[0]));
+    CHECK(std::filesystem::equivalent((*source_paths)[1], (*target_paths)[1]));
 }
 
 TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf][validation]") {

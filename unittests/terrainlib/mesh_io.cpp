@@ -109,7 +109,7 @@ TEST_CASE("io roundtrip") {
 }
 
 TEST_CASE("io roundtrip high precision") {
-    for (const auto& format : {"terrain"}) {
+    for (const auto& format : {"sfmesh"}) {
         DYNAMIC_SECTION(format) {
             SimpleMesh mesh;
 
@@ -152,7 +152,7 @@ TEST_CASE("io roundtrip high precision") {
 }
 
 TEST_CASE("io roundtrip no texture") {
-    for (const auto &format : {"gltf", "glb", "terrain"}) {
+    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
         DYNAMIC_SECTION(format) {
             SimpleMesh mesh;
 
@@ -194,7 +194,7 @@ TEST_CASE("io roundtrip no texture") {
 }
 
 TEST_CASE("io roundtrip no texture and uvs") {
-    for (const auto &format : {"gltf", "glb", "terrain"}) {
+    for (const auto &format : {"gltf", "glb", "sfmesh"}) {
         DYNAMIC_SECTION(format) {
             SimpleMesh mesh;
 

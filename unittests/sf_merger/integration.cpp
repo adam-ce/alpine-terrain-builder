@@ -58,7 +58,7 @@ int build_sf(
         " --min-texture-level 12 --max-texture-level 17"
         " --mesh-srs EPSG:4978 --verbosity warn"
         " batch --target-level 15 --output " + shell_quote(output) +
-        " --format .terrain --threads 1";
+        " --format .sfmesh --threads 1";
     return std::system(command.c_str());
 }
 
@@ -90,8 +90,8 @@ TEST_CASE("SF builders preserve geometry at regular and point-touching mask bord
         " --verbosity warn";
     REQUIRE(std::system(merge_command.c_str()) == 0);
 
-    const std::filesystem::path working_relative = "15/26291/18610/27235.terrain";
-    const std::filesystem::path regression_relative = "15/26290/18610/27235.terrain";
+    const std::filesystem::path working_relative = "15/26291/18610/27235.sfmesh";
+    const std::filesystem::path regression_relative = "15/26290/18610/27235.sfmesh";
     const std::filesystem::path working_path = merged_output / working_relative;
     const std::filesystem::path regression_path = merged_output / regression_relative;
 

@@ -232,7 +232,7 @@ int run(std::span<char *> args) {
         ->expected(2, 4);
     target->require_option(1);
 
-    single->add_option("--output", output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
+    single->add_option("--output", output_path, "Output path were the mesh is written to (.sfmesh, .gltf or .glb)")
         ->required();
 
     single->add_option("--srs", target_srs_input, "EPSG code of the srs of the target bounds or id");
@@ -260,8 +260,8 @@ int run(std::span<char *> args) {
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")
-        ->check(CLI::IsMember({".glb", ".gltf", ".terrain"}))
-        ->default_val(".terrain");
+        ->check(CLI::IsMember({".glb", ".gltf", ".sfmesh"}))
+        ->default_val(".sfmesh");
     uint32_t num_threads = 0;
     batch->add_option("--threads", num_threads, "Number of threads to use")
         ->check(CLI::PositiveNumber);

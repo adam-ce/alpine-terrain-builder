@@ -30,6 +30,7 @@ template<HierarchyTraits Traits>
 struct IndexMetadata {
     Index<Traits> index;
     std::string layout_id;
+    std::string payload_class;
     std::string codec_selector;
 };
 

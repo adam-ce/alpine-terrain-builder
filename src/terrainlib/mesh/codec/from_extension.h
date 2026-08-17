@@ -7,15 +7,15 @@
 #include <expected>
 
 #include "mesh/codec/Gltf.h"
-#include "mesh/codec/Terrain.h"
+#include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
 
 namespace mesh::codec {
 
 inline std::expected<std::unique_ptr<store::Codec<mesh::Simple>>, store::CodecError>
 from_extension(const std::string_view extension) {
-    if (extension == ".terrain") {
-        return std::make_unique<Terrain>();
+    if (extension == ".sfmesh") {
+        return std::make_unique<SfMesh>();
     }
     if (extension == ".glb") {
         return std::make_unique<Gltf>(GltfContainer::Binary);

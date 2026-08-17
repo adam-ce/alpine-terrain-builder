@@ -109,11 +109,13 @@ verify_snapshot()
 {
     local snapshot="$1"
     local extension="$2"
+    local companion_extension="${3:-}"
     local payload_count
 
-    require_file "${snapshot}/terrain.index"
-    if [[ ! -s "${snapshot}/terrain.index" ]]; then
-        printf 'Index is empty: %s\n' "${snapshot}/terrain.index" >&2
+    require_file "${snapshot}/octree.storemeta"
+    require_file "${snapshot}/octree.storeindex"
+    if [[ ! -s "${snapshot}/octree.storemeta" ]] || [[ ! -s "${snapshot}/octree.storeindex" ]]; then
+        printf 'Octree metadata or index is empty: %s\n' "${snapshot}" >&2
         return 1
     fi
 
@@ -121,6 +123,15 @@ verify_snapshot()
     if ((payload_count == 0)); then
         printf 'No %s payloads found in %s\n' "${extension}" "${snapshot}" >&2
         return 1
+    fi
+    if [[ -n "${companion_extension}" ]]; then
+        local companion_count
+        companion_count="$(find "${snapshot}" -type f -name "*${companion_extension}" | wc -l)"
+        if [[ "${companion_count}" != "${payload_count}" ]]; then
+            printf '%s payload count (%s) does not match %s count (%s) in %s\n' \
+                "${extension}" "${payload_count}" "${companion_extension}" "${companion_count}" "${snapshot}" >&2
+            return 1
+        fi
     fi
     printf 'Verified %s: %s payloads\n' "${snapshot}" "${payload_count}"
 }
@@ -135,7 +146,7 @@ build_sf()
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP %s: completion marker exists\n' "$(timestamp)" "${name}"
-        verify_snapshot "${output}" ".terrain"
+        verify_snapshot "${output}" ".sfmesh"
         return
     fi
 
@@ -151,10 +162,10 @@ build_sf()
         batch \
         --target-level "${SF_TARGET_LEVEL}" \
         --output "${output}" \
-        --format .terrain \
+        --format .sfmesh \
         --threads "${SF_THREADS}"
 
-    verify_snapshot "${output}" ".terrain"
+    verify_snapshot "${output}" ".sfmesh"
     touch "${marker}"
 }
 
@@ -164,7 +175,7 @@ merge_sf()
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP merge_sf: completion marker exists\n' "$(timestamp)"
-        verify_snapshot "${SF_MERGED}" ".terrain"
+        verify_snapshot "${SF_MERGED}" ".sfmesh"
         return
     fi
 
@@ -183,7 +194,7 @@ merge_sf()
         --output "${SF_MERGED}" \
         --verbosity info
 
-    verify_snapshot "${SF_MERGED}" ".terrain"
+    verify_snapshot "${SF_MERGED}" ".sfmesh"
     touch "${marker}"
 }
 
@@ -194,12 +205,12 @@ build_dag()
 
     if [[ -f "${marker}" ]]; then
         printf '[%s] SKIP build_dag: completion marker exists\n' "$(timestamp)"
-        verify_snapshot "${DAG_MERGED}" ".bin"
+        verify_snapshot "${DAG_MERGED}" ".dag" ".dagmeta"
         return
     fi
 
     mkdir -p "${DAG_MERGED}"
-    if [[ -s "${DAG_MERGED}/terrain.index" ]]; then
+    if [[ -s "${DAG_MERGED}/octree.storeindex" ]]; then
         continuation=(--resume)
     fi
 
@@ -210,7 +221,7 @@ build_dag()
         "${continuation[@]}" \
         --verbosity info
 
-    verify_snapshot "${DAG_MERGED}" ".bin"
+    verify_snapshot "${DAG_MERGED}" ".dag" ".dagmeta"
     touch "${marker}"
 }
 
@@ -222,7 +233,7 @@ write_manifest()
 
     (
         cd "${snapshot}"
-        find . -type f ! -name terrain.index -print0 \
+        find . -type f ! -name octree.storeindex ! -name octree.storemeta -print0 \
             | sort -z \
             | xargs -0 -r sha256sum
     ) > "${output}"
@@ -258,7 +269,7 @@ record_hard_links()
         fi
 
         ((newly_written += 1))
-    done < <(find "${SF_MERGED}" -type f -name '*.terrain' -print0)
+    done < <(find "${SF_MERGED}" -type f -name '*.sfmesh' -print0)
 
     printf 'merged_payloads=%s\nlinked_to_gataki=%s\nlinked_to_basemap=%s\nnewly_written=%s\n' \
         "${merged_count}" "${linked_to_gataki}" "${linked_to_basemap}" "${newly_written}" \

@@ -98,7 +98,7 @@ public:
         return Coords(max_coord_on_level(level));
     }
 
-    constexpr Id_() = default; // zpp::bits requires a default constructor
+    constexpr Id_() = default;
     template <typename... Coordinates>
         requires(sizeof...(Coordinates) == Dimensions && (std::convertible_to<Coordinates, Coord> && ...))
     constexpr Id_(const Level level, Coordinates... coordinates) : Id_(level, Coords{coordinates...}) {}
@@ -399,51 +399,3 @@ struct hash<octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>> {
     }
 };
 } // namespace std
-
-#include <zpp_bits.h>
-namespace octree {
-namespace {
-constexpr zpp::bits::errc success() {
-    return zpp::bits::errc(std::errc());
-}
-} // namespace
-
-template <
-    size_t Dimensions,
-    size_t MaxLevel,
-    typename LevelT,
-    typename IndexT,
-    typename CoordT>
-constexpr auto serialize(auto &archive, octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id) {
-    using Id = octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT>;
-    typename Id::Level level;
-    typename Id::Index index;
-    auto result = archive(level, index);
-    using Result = std::remove_cvref_t<decltype(result)>;
-    if constexpr (!std::is_same_v<Result, zpp::bits::errc> && !std::is_same_v<Result, std::errc>) {
-        return result;
-    } else {
-        if (zpp::bits::failure(result)) {
-            return result;
-        }
-
-        auto maybe_id = Id::try_make(level, index);
-        if (!maybe_id) {
-            return zpp::bits::errc(std::errc::bad_message);
-        }
-
-        id = *maybe_id;
-        return success();
-    }
-}
-
-template <
-    size_t Dimensions,
-    size_t MaxLevel,
-    typename LevelT,
-    typename IndexT,
-    typename CoordT>
-constexpr auto serialize(auto &archive, const octree::Id_<Dimensions, MaxLevel, LevelT, IndexT, CoordT> &id) {
-    return archive(id.level(), id.index_on_level());
-}
-} // namespace octree

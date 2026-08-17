@@ -15,6 +15,7 @@ template<HierarchyTraits Traits, typename NodeData, typename CodecResolver>
 std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>> open_index(
     const std::filesystem::path &index_path,
     const IndexFormat<Traits> format,
+    const std::string_view expected_payload_class,
     CodecResolver &&resolve_codec) {
     using Key = typename Traits::Key;
     const auto metadata_result = format.read(index_path);
@@ -22,6 +23,13 @@ std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>>
         return std::unexpected(OpenError<Key>(metadata_result.error()));
     }
     IndexMetadata<Traits> metadata = std::move(metadata_result.value());
+    if (metadata.payload_class != expected_payload_class) {
+        return std::unexpected(OpenError<Key>(CodecError{
+            CodecOperation::Resolve,
+            CodecErrorCategory::UnsupportedCodec,
+            "unexpected payload class: " + metadata.payload_class,
+        }));
+    }
     for (const auto &[key, status] : metadata.index) {
         static_cast<void>(status);
         if (!Traits::is_valid(key)) {
@@ -49,6 +57,7 @@ std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>>
             format,
             index_path,
             std::move(metadata.layout_id),
+            std::move(metadata.payload_class),
             std::move(metadata.codec_selector),
         });
 }
@@ -58,9 +67,9 @@ std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_s
     const std::filesystem::path &base_path,
     const IndexFormat<Traits> format,
     const PathMapping<typename Traits::Key> mapping,
+    std::string payload_class,
     std::string codec_selector,
-    std::unique_ptr<Codec<NodeData>> codec,
-    const bool indexed) {
+    std::unique_ptr<Codec<NodeData>> codec) {
     using Key = typename Traits::Key;
     std::error_code error;
     std::filesystem::create_directories(base_path, error);
@@ -76,18 +85,17 @@ std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_s
         format,
         base_path / format.index_filename,
         std::string(mapping.id),
+        std::move(payload_class),
         std::move(codec_selector),
     };
     RawStorage<Traits, NodeData> raw(
         Layout<Key>(base_path, mapping),
         std::move(codec));
-    if (indexed) {
-        return Storage<Traits, NodeData>(
-            std::move(raw),
-            Index<Traits>{},
-            std::move(persistence));
-    }
-    return Storage<Traits, NodeData>(std::move(raw), std::move(persistence));
+    return Storage<Traits, NodeData>(
+        std::move(raw),
+        Index<Traits>{},
+        std::move(persistence),
+        true);
 }
 
 } // namespace store

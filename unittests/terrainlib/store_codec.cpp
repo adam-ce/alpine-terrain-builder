@@ -9,9 +9,8 @@
 
 #include "io/bytes.h"
 #include "mesh/codec/Gltf.h"
-#include "mesh/codec/Terrain.h"
+#include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
-#include "store/codec/ZppBits.h"
 
 namespace {
 
@@ -130,52 +129,11 @@ TEST_CASE("runtime write-only codec remains explicitly unreadable", "[store][cod
     CHECK(read.error().category == store::CodecErrorCategory::UnsupportedOperation);
 }
 
-TEST_CASE("ZPP Bits runtime codec creates directories and converts errors", "[store][codec]") {
-    TemporaryDirectory directory("zpp");
-    const store::NodePath path(directory.path() / "nested/deeper/node");
-    store::codec::ZppBits<int> codec;
-
-    REQUIRE(codec.write(path, 12345).has_value());
-    CHECK(codec.paths(path) == std::vector{directory.path() / "nested/deeper/node.bin"});
-    REQUIRE(std::filesystem::is_regular_file(codec.paths(path).front()));
-    const auto value = codec.read(path);
-    REQUIRE(value.has_value());
-    CHECK(value.value() == 12345);
-
-    REQUIRE(io::write_bytes_to_path(
-                std::vector<uint8_t>{0xff},
-                directory.path() / "invalid.bin")
-                .has_value());
-    const auto invalid = codec.read(store::NodePath(directory.path() / "invalid"));
-    REQUIRE_FALSE(invalid.has_value());
-    CHECK(invalid.error().operation == store::CodecOperation::Read);
-    CHECK(invalid.error().category == store::CodecErrorCategory::Io);
-}
-
-TEST_CASE("ZPP Bits runtime codec is reentrant", "[store][codec]") {
-    TemporaryDirectory directory("zpp-reentrant");
-    store::codec::ZppBits<int> codec;
-    std::vector<std::future<bool>> operations;
-    for (int index = 0; index < 16; ++index) {
-        operations.push_back(std::async(std::launch::async, [&codec, &directory, index] {
-            const store::NodePath path(directory.path() / std::to_string(index) / "node");
-            if (!codec.write(path, index).has_value()) {
-                return false;
-            }
-            const auto value = codec.read(path);
-            return value.has_value() && value.value() == index;
-        }));
-    }
-    for (auto &operation : operations) {
-        REQUIRE(operation.get());
-    }
-}
-
 TEST_CASE("runtime mesh codecs are reentrant", "[store][codec]") {
     TemporaryDirectory directory("mesh-reentrant");
 
-    SECTION("terrain") {
-        check_mesh_codec_reentrancy(mesh::codec::Terrain{}, directory.path() / "terrain");
+    SECTION("SF mesh") {
+        check_mesh_codec_reentrancy(mesh::codec::SfMesh{}, directory.path() / "sfmesh");
     }
     SECTION("binary glTF") {
         check_mesh_codec_reentrancy(

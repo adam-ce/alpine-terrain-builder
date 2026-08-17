@@ -1,6 +1,5 @@
 #pragma once
 
-#include <zpp_bits.h>
 #include <libassert/assert.hpp>
 
 #include "log.h"
@@ -14,8 +13,6 @@ public:
         WriteBytes,
         DetermineSize,
         ReadBytes,
-        Serialize,
-        Deserialize,
         OutOfMemory
     };
 
@@ -37,10 +34,6 @@ public:
 
 private:
     Value _value;
-
-public:
-    using serialize = zpp::bits::members<1>;
-    friend zpp::bits::access;
 };
 
 } // namespace io
@@ -69,12 +62,6 @@ struct fmt::formatter<io::Error> {
             break;
         case io::Error::Value::ReadBytes:
             name = "ReadBytes";
-            break;
-        case io::Error::Value::Serialize:
-            name = "Serialize";
-            break;
-        case io::Error::Value::Deserialize:
-            name = "Deserialize";
             break;
         case io::Error::Value::OutOfMemory:
             name = "OutOfMemory";

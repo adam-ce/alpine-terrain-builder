@@ -351,7 +351,7 @@ TEST_CASE("texture assembler reports the content region", "[terrainbuilder]") {
         tile_image.row(row).setTo(uint8_t(row));
     }
 
-    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(0, {0, 0});
     const StaticTileProvider tile_provider({{root_tile, tile_image}});
     const std::vector<radix::tile::Id> tiles_to_splatter = {root_tile};
 

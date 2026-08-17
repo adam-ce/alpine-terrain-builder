@@ -8,6 +8,7 @@ add_library(terrainlib
 
     io/bytes.cpp
     io/compression.cpp
+    io/conversion.h
     io/utils.cpp
 
     mesh/connectivity/adjacency.cpp

@@ -20,22 +20,22 @@
 
 #include "image_writer.h"
 
+#include "io/conversion.h"
+
 #include <opencv2/opencv.hpp>
 #include <stdexcept>
 
 void image::saveImageAsPng(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
 {
-    const int width = static_cast<int>(input_image.width());
-    const int height = static_cast<int>(input_image.height());
-
-    cv::Mat image(height, width, CV_8UC3);
-
-    for (int row = 0; row < height; ++row) {
-        for (int column = 0; column < width; ++column) {
-            const auto& pixel = input_image.pixel({ static_cast<unsigned>(column), static_cast<unsigned>(height - row - 1) });
-            image.at<cv::Vec3b>(row, column) = cv::Vec3b(pixel.z, pixel.y, pixel.x);
-        }
+    auto converted = io::conversion::to_mat(input_image);
+    if (!converted) {
+        throw std::runtime_error("Failed to convert raster to OpenCV image");
     }
+
+    cv::Mat flipped;
+    cv::flip(*converted, flipped, 0);
+    cv::Mat image;
+    cv::cvtColor(flipped, image, cv::COLOR_RGB2BGR);
 
     try {
         if (!cv::imwrite(path, image))

@@ -63,6 +63,7 @@ std::expected<void, Error> validate_algorithms(
     switch (compression_algorithm) {
     case CompressionAlgorithm::None:
     case CompressionAlgorithm::ZstdBestCompressionWithChecksum:
+    case CompressionAlgorithm::ZstdDefaultCompressionWithChecksum:
         break;
     default:
         return std::unexpected(Error{ErrorCode::UnsupportedCompressionAlgorithm});
@@ -72,7 +73,8 @@ std::expected<void, Error> validate_algorithms(
         && (checksum_algorithm == ChecksumAlgorithm::None
             || checksum_algorithm == ChecksumAlgorithm::Crc32c);
     const bool zstd_with_checksum =
-        compression_algorithm == CompressionAlgorithm::ZstdBestCompressionWithChecksum
+        (compression_algorithm == CompressionAlgorithm::ZstdBestCompressionWithChecksum
+         || compression_algorithm == CompressionAlgorithm::ZstdDefaultCompressionWithChecksum)
         && (checksum_algorithm == ChecksumAlgorithm::HandledByCompressionLib
             || checksum_algorithm == ChecksumAlgorithm::Crc32c);
     if (!no_compression && !zstd_with_checksum) {
@@ -109,7 +111,14 @@ std::expected<CompressedData, Error> compress_with_checksum(
         return std::unexpected(Error{ErrorCode::CompressionFailed});
     }
 
-    if (ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_compressionLevel, ZSTD_maxCLevel()))
+    const int compression_level =
+        compression_algorithm == CompressionAlgorithm::ZstdBestCompressionWithChecksum
+        ? ZSTD_maxCLevel()
+        : 0;
+    if (ZSTD_isError(ZSTD_CCtx_setParameter(
+            context.get(),
+            ZSTD_c_compressionLevel,
+            compression_level))
         || ZSTD_isError(ZSTD_CCtx_setParameter(context.get(), ZSTD_c_checksumFlag, 1))) {
         return std::unexpected(Error{ErrorCode::CompressionFailed});
     }

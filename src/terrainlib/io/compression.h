@@ -24,6 +24,7 @@ enum class ChecksumAlgorithm : std::uint8_t {
 enum class CompressionAlgorithm : std::uint8_t {
     None,
     ZstdBestCompressionWithChecksum,
+    ZstdDefaultCompressionWithChecksum,
 };
 
 enum class ErrorCode : std::uint8_t {

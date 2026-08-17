@@ -5,6 +5,7 @@
 #include <zstd.h>
 #include <zpp_bits.h>
 
+#include <array>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -71,6 +72,11 @@ using Schema = io::envelope::PayloadSchema<
     io::envelope::Version<1, v1::Payload>,
     io::envelope::Version<2, v2::Payload>,
     io::envelope::Version<3, v3::Payload>>;
+
+constexpr std::array zstd_compression_algorithms{
+    io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+    io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum,
+};
 
 static_assert(std::is_aggregate_v<v1::Payload>);
 static_assert(std::is_aggregate_v<v2::Payload>);
@@ -288,30 +294,33 @@ TEST_CASE("CRC-32C protects independently compressed data")
 
     SECTION("with zstd compression")
     {
-        const auto compressed = io::envelope::compress_with_checksum(
-            original,
-            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-            io::envelope::ChecksumAlgorithm::Crc32c);
-        REQUIRE(compressed.has_value());
-        REQUIRE(compressed->checksum.size() == 8);
+        for (const auto compression_algorithm : zstd_compression_algorithms) {
+            CAPTURE(compression_algorithm);
+            const auto compressed = io::envelope::compress_with_checksum(
+                original,
+                compression_algorithm,
+                io::envelope::ChecksumAlgorithm::Crc32c);
+            REQUIRE(compressed.has_value());
+            REQUIRE(compressed->checksum.size() == 8);
 
-        const auto result = io::envelope::checked_decompress(
-            compressed->compressed_data,
-            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-            io::envelope::ChecksumAlgorithm::Crc32c,
-            compressed->checksum);
-        REQUIRE(result.has_value());
-        CHECK(*result == original);
-
-        auto wrong_checksum = compressed->checksum;
-        wrong_checksum.front() = wrong_checksum.front() == '0' ? '1' : '0';
-        check_error(
-            io::envelope::checked_decompress(
+            const auto result = io::envelope::checked_decompress(
                 compressed->compressed_data,
-                io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+                compression_algorithm,
                 io::envelope::ChecksumAlgorithm::Crc32c,
-                wrong_checksum),
-            io::envelope::ErrorCode::ChecksumMismatch);
+                compressed->checksum);
+            REQUIRE(result.has_value());
+            CHECK(*result == original);
+
+            auto wrong_checksum = compressed->checksum;
+            wrong_checksum.front() = wrong_checksum.front() == '0' ? '1' : '0';
+            check_error(
+                io::envelope::checked_decompress(
+                    compressed->compressed_data,
+                    compression_algorithm,
+                    io::envelope::ChecksumAlgorithm::Crc32c,
+                    wrong_checksum),
+                io::envelope::ErrorCode::ChecksumMismatch);
+        }
     }
 
     SECTION("malformed checksum")
@@ -387,53 +396,56 @@ TEST_CASE("Envelope round trips and upgrades payloads protected by CRC-32C")
 TEST_CASE("Checked compression round trips and validates its checksum")
 {
     const io::envelope::Bytes original(4096, std::byte{0x2a});
-    const auto compressed = io::envelope::compress_with_checksum(
-        original,
-        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-        io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
-    REQUIRE(compressed.has_value());
-    CHECK(compressed->compressed_data.size() < original.size());
-    CHECK(compressed->checksum.empty());
+    for (const auto compression_algorithm : zstd_compression_algorithms) {
+        CAPTURE(compression_algorithm);
+        const auto compressed = io::envelope::compress_with_checksum(
+            original,
+            compression_algorithm,
+            io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
+        REQUIRE(compressed.has_value());
+        CHECK(compressed->compressed_data.size() < original.size());
+        CHECK(compressed->checksum.empty());
 
-    const auto result = io::envelope::checked_decompress(
-        compressed->compressed_data,
-        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-        io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
-        compressed->checksum);
-    REQUIRE(result.has_value());
-    CHECK(*result == original);
-
-    const auto empty_compressed = io::envelope::compress_with_checksum(
-        {},
-        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-        io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
-    REQUIRE(empty_compressed.has_value());
-    const auto empty_result = io::envelope::checked_decompress(
-        empty_compressed->compressed_data,
-        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-        io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
-        empty_compressed->checksum);
-    REQUIRE(empty_result.has_value());
-    CHECK(empty_result->empty());
-
-    auto corrupted = compressed->compressed_data;
-    corrupted.back() ^= std::byte{0x01};
-    check_error(
-        io::envelope::checked_decompress(
-            corrupted,
-            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-            io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
-            {}),
-        io::envelope::ErrorCode::ChecksumMismatch);
-
-    check_error(
-        io::envelope::checked_decompress(
+        const auto result = io::envelope::checked_decompress(
             compressed->compressed_data,
-            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+            compression_algorithm,
             io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+            compressed->checksum);
+        REQUIRE(result.has_value());
+        CHECK(*result == original);
+
+        const auto empty_compressed = io::envelope::compress_with_checksum(
             {},
-            original.size() - 1),
-        io::envelope::ErrorCode::SizeLimitExceeded);
+            compression_algorithm,
+            io::envelope::ChecksumAlgorithm::HandledByCompressionLib);
+        REQUIRE(empty_compressed.has_value());
+        const auto empty_result = io::envelope::checked_decompress(
+            empty_compressed->compressed_data,
+            compression_algorithm,
+            io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+            empty_compressed->checksum);
+        REQUIRE(empty_result.has_value());
+        CHECK(empty_result->empty());
+
+        auto corrupted = compressed->compressed_data;
+        corrupted.back() ^= std::byte{0x01};
+        check_error(
+            io::envelope::checked_decompress(
+                corrupted,
+                compression_algorithm,
+                io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+                {}),
+            io::envelope::ErrorCode::ChecksumMismatch);
+
+        check_error(
+            io::envelope::checked_decompress(
+                compressed->compressed_data,
+                compression_algorithm,
+                io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+                {},
+                original.size() - 1),
+            io::envelope::ErrorCode::SizeLimitExceeded);
+    }
 }
 
 TEST_CASE("Checked decompression uses its maximum when the format omits the content size")
@@ -441,23 +453,26 @@ TEST_CASE("Checked decompression uses its maximum when the format omits the cont
     const io::envelope::Bytes original(4096, std::byte{0x37});
     const auto compressed_data = compress_without_content_size(original);
 
-    const auto result = io::envelope::checked_decompress(
-        compressed_data,
-        io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
-        io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
-        {},
-        original.size());
-    REQUIRE(result.has_value());
-    CHECK(*result == original);
-
-    check_error(
-        io::envelope::checked_decompress(
+    for (const auto compression_algorithm : zstd_compression_algorithms) {
+        CAPTURE(compression_algorithm);
+        const auto result = io::envelope::checked_decompress(
             compressed_data,
-            io::envelope::CompressionAlgorithm::ZstdBestCompressionWithChecksum,
+            compression_algorithm,
             io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
             {},
-            original.size() - 1),
-        io::envelope::ErrorCode::SizeLimitExceeded);
+            original.size());
+        REQUIRE(result.has_value());
+        CHECK(*result == original);
+
+        check_error(
+            io::envelope::checked_decompress(
+                compressed_data,
+                compression_algorithm,
+                io::envelope::ChecksumAlgorithm::HandledByCompressionLib,
+                {},
+                original.size() - 1),
+            io::envelope::ErrorCode::SizeLimitExceeded);
+    }
 }
 
 TEST_CASE("Envelope rejects incompatible metadata")

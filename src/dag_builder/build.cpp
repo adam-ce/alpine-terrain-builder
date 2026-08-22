@@ -452,7 +452,7 @@ LevelWorkplan build_level_workplan(
 }
 
 // Pre-filter input nodes to only those that intersect the target root bounds.
-std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
+std::expected<std::vector<std::vector<octree::Id>>, sf::InvalidTopology> gather_relevant_input_leaves(
     const store::Index<octree::StoreTraits> &index,
     const octree::Space &space,
     const radix::geometry::Aabb3d &root_bounds)
@@ -471,7 +471,9 @@ std::vector<std::vector<octree::Id>> gather_relevant_input_leaves(
             return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
         },
         start);
-    DEBUG_ASSERT(traversal.has_value());
+    if (!traversal.has_value()) {
+        return std::unexpected(sf::InvalidTopology{traversal.error().key});
+    }
     return result;
 }
 
@@ -596,7 +598,11 @@ std::expected<void, sf::InvalidTopology> build_levels(
     const octree::Space space = octree::Space::earth();
     const octree::Id root_node = options.root_node;
     const auto root_bounds = shifted_space.get_node_bounds_with_children(root_node);
-    auto input_by_level = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
+    auto input_by_level_result = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
+    if (!input_by_level_result.has_value()) {
+        return std::unexpected(input_by_level_result.error());
+    }
+    auto input_by_level = std::move(input_by_level_result.value());
 
     // Find the maximum input level that has any nodes
     auto max_input_level_opt = find_max_input_level(input_by_level);

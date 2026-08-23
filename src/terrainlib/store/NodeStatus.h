@@ -4,9 +4,9 @@
 #include <iostream>
 #include <string>
 
+#include "log.h"
 #include <fmt/format.h>
 #include <fmt/ostream.h>
-#include "log.h"
 
 namespace store {
 
@@ -20,42 +20,37 @@ public:
     };
 
     constexpr NodeStatus() = default;
-    constexpr NodeStatus(const Value value) : _value(value) {}
+    constexpr NodeStatus(const Value value)
+        : m_value(value)
+    {
+    }
 
-    constexpr operator Value() const {
-        return _value;
-    }
+    constexpr operator Value() const { return m_value; }
     explicit operator bool() const = delete;
-    constexpr bool operator==(const NodeStatus other) const {
-        return _value == other._value;
-    }
-    constexpr bool operator!=(const NodeStatus other) const {
-        return !(*this == other);
-    }
-    constexpr bool operator==(const Value other) const {
-        return _value == other;
-    }
-    constexpr bool operator!=(const Value other) const {
-        return _value != other;
-    }
+    constexpr bool operator==(const NodeStatus other) const { return m_value == other.m_value; }
+    constexpr bool operator!=(const NodeStatus other) const { return !(*this == other); }
+    constexpr bool operator==(const Value other) const { return m_value == other; }
+    constexpr bool operator!=(const Value other) const { return m_value != other; }
 
     std::string to_string() const;
 
 private:
-    Value _value;
+    Value m_value;
 };
 
 } // namespace store
 
-template<>
+template <>
 struct fmt::formatter<store::NodeStatus> {
-    template<typename ParseContext>
-    constexpr auto parse(ParseContext &context) {
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& context)
+    {
         return context.begin();
     }
 
-    template<typename FormatContext>
-    auto format(const store::NodeStatus &status, FormatContext &context) const {
+    template <typename FormatContext>
+    auto format(const store::NodeStatus& status, FormatContext& context) const
+    {
         switch (status) {
         case store::NodeStatus::Leaf:
             return fmt::format_to(context.out(), "Leaf");
@@ -69,11 +64,10 @@ struct fmt::formatter<store::NodeStatus> {
     }
 };
 
-inline std::string store::NodeStatus::to_string() const {
-    return fmt::format("{}", *this);
-}
+inline std::string store::NodeStatus::to_string() const { return fmt::format("{}", *this); }
 
-inline std::ostream &operator<<(std::ostream &stream, const store::NodeStatus &status) {
+inline std::ostream& operator<<(std::ostream& stream, const store::NodeStatus& status)
+{
     fmt::print(stream, "{}", status);
     return stream;
 }

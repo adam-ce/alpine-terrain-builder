@@ -13,12 +13,11 @@
 
 namespace octree::store_layout {
 
-inline store::NodePath flat_key_to_node_path(const Id &id) {
-    return store::NodePath(fmt::format("{}-{}", id.level(), id.index_on_level()));
-}
+inline store::NodePath flat_key_to_node_path(const Id& id) { return store::NodePath(fmt::format("{}-{}", id.level(), id.index_on_level())); }
 
-inline std::optional<Id> flat_node_path_to_key(const store::NodePath &node_path) {
-    const std::filesystem::path &path = node_path.path();
+inline std::optional<Id> flat_node_path_to_key(const store::NodePath& node_path)
+{
+    const std::filesystem::path& path = node_path.path();
     if (path.empty() || path.is_absolute() || path.has_parent_path() || path.has_extension()) {
         return std::nullopt;
     }

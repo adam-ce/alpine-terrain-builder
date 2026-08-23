@@ -4,7 +4,7 @@
 
 namespace store {
 
-template<typename Traits>
+template <typename Traits>
 concept HierarchyTraits = requires(typename Traits::Key key) {
     typename Traits::Key;
     typename Traits::Hasher;

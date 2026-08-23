@@ -9,7 +9,7 @@
 
 namespace tile_downloader_detail {
 
-inline void write_file_checked_direct(const std::filesystem::path &path, const std::vector<char> &data)
+inline void write_file_checked_direct(const std::filesystem::path& path, const std::vector<char>& data)
 {
     std::ofstream output(path, std::ios::binary);
     if (!output) {
@@ -27,23 +27,23 @@ inline void write_file_checked_direct(const std::filesystem::path &path, const s
     }
 }
 
-}
+} // namespace tile_downloader_detail
 
-[[nodiscard]] inline std::filesystem::path partial_tile_path(const std::filesystem::path &path)
+[[nodiscard]] inline std::filesystem::path partial_tile_path(const std::filesystem::path& path)
 {
     auto partial_path = path;
     partial_path += ".part";
     return partial_path;
 }
 
-[[nodiscard]] inline std::filesystem::path children_pending_tile_path(const std::filesystem::path &path)
+[[nodiscard]] inline std::filesystem::path children_pending_tile_path(const std::filesystem::path& path)
 {
     auto pending_path = path;
     pending_path += ".children-pending";
     return pending_path;
 }
 
-inline void write_file_children_pending(const std::filesystem::path &path, const std::vector<char> &data)
+inline void write_file_children_pending(const std::filesystem::path& path, const std::vector<char>& data)
 {
     const auto partial_path = partial_tile_path(path);
     const auto pending_path = children_pending_tile_path(path);
@@ -58,7 +58,7 @@ inline void write_file_children_pending(const std::filesystem::path &path, const
     }
 }
 
-inline void mark_tile_children_complete(const std::filesystem::path &path)
+inline void mark_tile_children_complete(const std::filesystem::path& path)
 {
     const auto pending_path = children_pending_tile_path(path);
     std::filesystem::rename(pending_path, path);

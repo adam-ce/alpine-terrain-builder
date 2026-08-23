@@ -18,59 +18,55 @@ namespace {
 
 class TemporaryDirectory {
 public:
-    TemporaryDirectory() {
+    TemporaryDirectory()
+    {
         static std::atomic_uint64_t counter = 0;
         const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        _path = std::filesystem::temp_directory_path()
-            / ("atb-dag-codec-" + std::to_string(timestamp) + "-"
-               + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(_path));
+        m_path = std::filesystem::temp_directory_path() / ("atb-dag-codec-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
+        REQUIRE(std::filesystem::create_directories(m_path));
     }
-    ~TemporaryDirectory() {
+    ~TemporaryDirectory()
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
     }
-    const std::filesystem::path &path() const {
-        return _path;
-    }
+    const std::filesystem::path& path() const { return m_path; }
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
-dag::ClusterBatch sample_batch() {
+dag::ClusterBatch sample_batch()
+{
     dag::ClusterBatch batch;
-    batch.metadata.group_assignment = {0};
-    batch.metadata.groups = {{
-        .children = {{octree::Id::root().child(4).value(), 3}},
+    batch.metadata.group_assignment = { 0 };
+    batch.metadata.groups = { {
+        .children = { { octree::Id::root().child(4).value(), 3 } },
         .error = 12.5,
         .bounds = {},
-    }};
+    } };
     batch.clustering.positions = {
-        {0.0, 0.0, 0.0},
-        {1.0, 0.0, 0.0},
-        {0.0, 1.0, 0.0},
+        { 0.0, 0.0, 0.0 },
+        { 1.0, 0.0, 0.0 },
+        { 0.0, 1.0, 0.0 },
     };
-    batch.clustering.clusters = {{
+    batch.clustering.clusters = { {
         .id = 17,
-        .vertex_indices = {0, 1, 2},
-        .local_triangles = {{0, 1, 2}},
+        .vertex_indices = { 0, 1, 2 },
+        .local_triangles = { { 0, 1, 2 } },
         .uvs = {},
         .texture_id = std::nullopt,
         .absolute_error = 0.0,
-    }};
+    } };
     return batch;
 }
 
-mesh::Simple sample_mesh() {
-    return mesh::Simple(
-        {{0, 1, 2}},
-        {{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}});
-}
+mesh::Simple sample_mesh() { return mesh::Simple({ { 0, 1, 2 } }, { { 0.0, 0.0, 0.0 }, { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 } }); }
 
 } // namespace
 
-TEST_CASE("runtime DAG envelope codec is reentrant") {
+TEST_CASE("runtime DAG envelope codec is reentrant")
+{
     const dag::ClusterBatch batch = sample_batch();
 
     TemporaryDirectory output;
@@ -83,23 +79,23 @@ TEST_CASE("runtime DAG envelope codec is reentrant") {
                 return false;
             }
             const auto loaded = codec.read(path);
-            return loaded.has_value()
-                && loaded->metadata.group_assignment == batch.metadata.group_assignment;
+            return loaded.has_value() && loaded->metadata.group_assignment == batch.metadata.group_assignment;
         }));
     }
-    for (auto &operation : operations) {
+    for (auto& operation : operations) {
         REQUIRE(operation.get());
     }
 }
 
-TEST_CASE("versioned DAG payload validation is free-standing") {
-    dag::format::NodeMetadata invalid_metadata{
-        .group_assignment = {0},
+TEST_CASE("versioned DAG payload validation is free-standing")
+{
+    dag::format::NodeMetadata invalid_metadata {
+        .group_assignment = { 0 },
         .groups = {},
     };
     CHECK_FALSE(dag::format::validate(invalid_metadata).has_value());
 
-    dag::format::Clustering oversized_clustering{
+    dag::format::Clustering oversized_clustering {
         .vertex_count = std::numeric_limits<std::uint64_t>::max(),
         .encoded_positions = {},
         .clusters = {},
@@ -108,19 +104,16 @@ TEST_CASE("versioned DAG payload validation is free-standing") {
     CHECK_FALSE(dag::format::validate(oversized_clustering).has_value());
 }
 
-TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]") {
+TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]")
+{
     const auto batch_codec = dag::codec::from_extension(".dag");
     REQUIRE(batch_codec.has_value());
-    CHECK(batch_codec.value()->paths(store::NodePath("node"))
-          == std::vector<std::filesystem::path>{"node.dag", "node.dagmeta"});
+    CHECK(batch_codec.value()->paths(store::NodePath("node")) == std::vector<std::filesystem::path> { "node.dag", "node.dagmeta" });
 
     const auto metadata_codec = dag::codec::metadata_from_extension(".dag");
     REQUIRE(metadata_codec.has_value());
-    CHECK(metadata_codec.value()->paths(store::NodePath("node"))
-          == std::vector<std::filesystem::path>{"node.dagmeta"});
-    const auto write_result = metadata_codec.value()->write(
-        store::NodePath("node"),
-        dag::NodeMetadata{});
+    CHECK(metadata_codec.value()->paths(store::NodePath("node")) == std::vector<std::filesystem::path> { "node.dagmeta" });
+    const auto write_result = metadata_codec.value()->write(store::NodePath("node"), dag::NodeMetadata {});
     REQUIRE_FALSE(write_result.has_value());
     CHECK(write_result.error().operation == store::CodecOperation::Write);
     CHECK(write_result.error().category == store::CodecErrorCategory::UnsupportedOperation);
@@ -130,7 +123,8 @@ TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[stor
     CHECK(unknown.error().category == store::CodecErrorCategory::UnsupportedCodec);
 }
 
-TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[store][storage]") {
+TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[store][storage]")
+{
     const dag::ClusterBatch batch = sample_batch();
 
     TemporaryDirectory output;
@@ -161,7 +155,8 @@ TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[s
     CHECK(metadata->groups.front().error == batch.metadata.groups.front().error);
 }
 
-TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy]") {
+TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy]")
+{
     TemporaryDirectory source_directory;
     TemporaryDirectory target_directory;
     auto source_result = dag::storage::open_folder_indexed(source_directory.path());
@@ -184,7 +179,8 @@ TEST_CASE("DAG storage hard-links both files for the same format", "[store][copy
     CHECK(std::filesystem::equivalent((*source_paths)[1], (*target_paths)[1]));
 }
 
-TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf][validation]") {
+TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf][validation]")
+{
     TemporaryDirectory input_directory;
     TemporaryDirectory output_directory;
     auto input_result = octree::open_folder_indexed(input_directory.path());
@@ -199,7 +195,7 @@ TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf
     auto output_result = dag::storage::open_folder_indexed(output_directory.path());
     REQUIRE(output_result.has_value());
     auto output = std::move(output_result.value());
-    const dag::BuildOptions options{
+    const dag::BuildOptions options {
         .clusters_per_partition = 1,
         .target_ratio = 1.0f,
         .relative_target_error = std::nullopt,

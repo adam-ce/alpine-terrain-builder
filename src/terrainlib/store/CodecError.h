@@ -26,13 +26,12 @@ struct CodecError {
     CodecErrorCategory category;
     std::string message;
 
-    static CodecError unsupported_operation(
-        const CodecOperation operation,
-        const std::string_view name) {
-        return {operation, CodecErrorCategory::UnsupportedOperation, std::string(name)};
+    static CodecError unsupported_operation(const CodecOperation operation, const std::string_view name)
+    {
+        return { operation, CodecErrorCategory::UnsupportedOperation, std::string(name) };
     }
 
-    bool operator==(const CodecError &) const = default;
+    bool operator==(const CodecError&) const = default;
 };
 
 } // namespace store

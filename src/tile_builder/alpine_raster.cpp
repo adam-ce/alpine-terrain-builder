@@ -38,5 +38,5 @@ ParallelTileGenerator alpine_raster::make_generator(const std::string& input_dat
 
 void alpine_raster::TileWriter::write(const std::string& file_path, const radix::tile::Descriptor&, const radix::Raster<float>& heights) const
 {
-    image::saveImageAsPng(radix::raster::transform(heights, radix::height_encoding::to_rgb), file_path);
+    image::save_image_as_png(radix::raster::transform(heights, radix::height_encoding::to_rgb), file_path);
 }

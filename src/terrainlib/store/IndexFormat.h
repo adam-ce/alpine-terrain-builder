@@ -23,10 +23,10 @@ struct IndexFormatError {
     std::filesystem::path path;
     std::string message;
 
-    bool operator==(const IndexFormatError &) const = default;
+    bool operator==(const IndexFormatError&) const = default;
 };
 
-template<HierarchyTraits Traits>
+template <HierarchyTraits Traits>
 struct IndexMetadata {
     Index<Traits> index;
     std::string layout_id;
@@ -34,15 +34,12 @@ struct IndexMetadata {
     std::string codec_selector;
 };
 
-template<HierarchyTraits Traits>
+template <HierarchyTraits Traits>
 struct IndexFormat {
     std::string_view index_filename;
 
-    std::expected<IndexMetadata<Traits>, IndexFormatError> (*read)(
-        const std::filesystem::path &index_path);
-    std::expected<void, IndexFormatError> (*write)(
-        const std::filesystem::path &index_path,
-        const IndexMetadata<Traits> &metadata);
+    std::expected<IndexMetadata<Traits>, IndexFormatError> (*read)(const std::filesystem::path& index_path);
+    std::expected<void, IndexFormatError> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
     std::optional<PathMapping<typename Traits::Key>> (*mapping_from_id)(std::string_view id);
     PathMapping<typename Traits::Key> (*default_mapping)();
 };

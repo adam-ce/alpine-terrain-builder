@@ -28,6 +28,6 @@ TEST_CASE("tile logger session can finish normally")
     TileLogger logger(0);
     auto session = logger.start();
 
-    logger.skipped(radix::tile::Id{0, {0, 0}});
+    logger.skipped(radix::tile::Id { 0, { 0, 0 } });
     session.finish();
 }

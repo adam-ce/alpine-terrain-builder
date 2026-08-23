@@ -11,37 +11,32 @@ namespace {
 
 class TemporaryDirectory {
 public:
-    TemporaryDirectory() {
+    TemporaryDirectory()
+    {
         static std::atomic_uint64_t counter = 0;
         const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        _path = std::filesystem::temp_directory_path()
-            / ("atb-sfbuilder-finalize-" + std::to_string(timestamp) + "-"
-               + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(_path));
+        m_path = std::filesystem::temp_directory_path() / ("atb-sfbuilder-finalize-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
+        REQUIRE(std::filesystem::create_directories(m_path));
     }
 
-    ~TemporaryDirectory() {
+    ~TemporaryDirectory()
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
     }
 
-    const std::filesystem::path &path() const {
-        return _path;
-    }
+    const std::filesystem::path& path() const { return m_path; }
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
-mesh::Simple sample_mesh() {
-    return mesh::Simple(
-        {{0, 1, 2}},
-        {{0.0, 0.0, 0.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}});
-}
+mesh::Simple sample_mesh() { return mesh::Simple({ { 0, 1, 2 } }, { { 0.0, 0.0, 0.0 }, { 1.0, 0.0, 0.0 }, { 0.0, 1.0, 0.0 } }); }
 
 } // namespace
 
-TEST_CASE("SF builder finalization writes and validates a valid index", "[sfbuilder][sf]") {
+TEST_CASE("SF builder finalization writes and validates a valid index", "[sfbuilder][sf]")
+{
     TemporaryDirectory directory;
     auto storage_result = octree::open_folder(directory.path());
     REQUIRE(storage_result.has_value());
@@ -53,9 +48,8 @@ TEST_CASE("SF builder finalization writes and validates a valid index", "[sfbuil
     CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storemeta"));
 }
 
-TEST_CASE(
-    "SF builder finalization retains an invalid written index for diagnosis",
-    "[sfbuilder][sf]") {
+TEST_CASE("SF builder finalization retains an invalid written index for diagnosis", "[sfbuilder][sf]")
+{
     TemporaryDirectory directory;
     auto storage_result = octree::open_folder(directory.path());
     REQUIRE(storage_result.has_value());

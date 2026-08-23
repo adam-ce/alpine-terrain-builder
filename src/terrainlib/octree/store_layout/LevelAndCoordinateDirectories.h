@@ -12,19 +12,15 @@
 
 namespace octree::store_layout {
 
-inline store::NodePath level_and_coordinate_key_to_node_path(const Id &id) {
+inline store::NodePath level_and_coordinate_key_to_node_path(const Id& id)
+{
     const Id::Coords coordinates = id.coords();
-    return store::NodePath(fmt::format(
-        "{}/{}/{}/{}",
-        id.level(),
-        coordinates.x,
-        coordinates.y,
-        coordinates.z));
+    return store::NodePath(fmt::format("{}/{}/{}/{}", id.level(), coordinates.x, coordinates.y, coordinates.z));
 }
 
-inline std::optional<Id> level_and_coordinate_node_path_to_key(
-    const store::NodePath &node_path) {
-    const std::filesystem::path &path = node_path.path();
+inline std::optional<Id> level_and_coordinate_node_path_to_key(const store::NodePath& node_path)
+{
+    const std::filesystem::path& path = node_path.path();
     if (path.empty() || path.is_absolute() || std::distance(path.begin(), path.end()) != 4) {
         return std::nullopt;
     }
@@ -43,7 +39,7 @@ inline std::optional<Id> level_and_coordinate_node_path_to_key(
     if (!level.has_value() || !x.has_value() || !y.has_value() || !z.has_value()) {
         return std::nullopt;
     }
-    return Id::try_make(level.value(), {x.value(), y.value(), z.value()});
+    return Id::try_make(level.value(), { x.value(), y.value(), z.value() });
 }
 
 } // namespace octree::store_layout

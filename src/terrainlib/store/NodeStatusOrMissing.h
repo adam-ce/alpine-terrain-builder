@@ -27,88 +27,82 @@ public:
     };
 
     constexpr NodeStatusOrMissing() = default;
-    constexpr NodeStatusOrMissing(const Value value) : _value(value) {}
-    NodeStatusOrMissing(const NodeStatus status) : _value(from_status(status)) {}
-    NodeStatusOrMissing(const std::optional<NodeStatus> status) : _value(from_optional_status(status)) {}
+    constexpr NodeStatusOrMissing(const Value value)
+        : m_value(value)
+    {
+    }
+    NodeStatusOrMissing(const NodeStatus status)
+        : m_value(from_status(status))
+    {
+    }
+    NodeStatusOrMissing(const std::optional<NodeStatus> status)
+        : m_value(from_optional_status(status))
+    {
+    }
 
-    constexpr operator Value() const {
-        return _value;
-    }
-    constexpr operator std::optional<NodeStatus>() const {
-        return to_optional_status();
-    }
+    constexpr operator Value() const { return m_value; }
+    constexpr operator std::optional<NodeStatus>() const { return to_optional_status(); }
     explicit operator bool() const = delete;
-    constexpr bool operator==(const NodeStatusOrMissing other) const {
-        return _value == other._value;
-    }
-    constexpr bool operator!=(const NodeStatusOrMissing other) const {
-        return !(*this == other);
-    }
-    constexpr bool operator==(const Value other) const {
-        return _value == other;
-    }
-    constexpr bool operator!=(const Value other) const {
-        return _value != other;
-    }
+    constexpr bool operator==(const NodeStatusOrMissing other) const { return m_value == other.m_value; }
+    constexpr bool operator!=(const NodeStatusOrMissing other) const { return !(*this == other); }
+    constexpr bool operator==(const Value other) const { return m_value == other; }
+    constexpr bool operator!=(const Value other) const { return m_value != other; }
 
     std::string to_string() const;
 
 private:
-    static constexpr NodeStatusOrMissing from_status(const NodeStatus status) noexcept {
-        return static_cast<Value>(static_cast<NodeStatus::Value>(status));
+    static constexpr NodeStatusOrMissing from_status(const NodeStatus status) noexcept { return static_cast<Value>(static_cast<NodeStatus::Value>(status)); }
+    static constexpr NodeStatusOrMissing from_optional_status(const std::optional<NodeStatus> status) noexcept
+    {
+        return status.has_value() ? from_status(status.value()) : NodeStatusOrMissing(NodeStatusOrMissing::Missing);
     }
-    static constexpr NodeStatusOrMissing from_optional_status(const std::optional<NodeStatus> status) noexcept {
-        return status.has_value()
-            ? from_status(status.value())
-            : NodeStatusOrMissing(NodeStatusOrMissing::Missing);
-    }
-    constexpr std::optional<NodeStatus> to_optional_status() const noexcept {
-        if (_value == Missing) {
+    constexpr std::optional<NodeStatus> to_optional_status() const noexcept
+    {
+        if (m_value == Missing) {
             return std::nullopt;
         }
-        return static_cast<NodeStatus::Value>(_value);
+        return static_cast<NodeStatus::Value>(m_value);
     }
 
 public:
-    Value _value;
+    Value m_value;
 };
 
 namespace detail {
-template<std::size_t... Indices>
-consteval bool verify_node_status_values(std::index_sequence<Indices...>) {
-    constexpr auto status_values = magic_enum::enum_values<NodeStatus::Value>();
-    constexpr auto optional_values = magic_enum::enum_values<NodeStatusOrMissing::Value>();
-    return ((magic_enum::enum_underlying(status_values[Indices])
-             == magic_enum::enum_underlying(optional_values[Indices]))
-            && ...);
-}
+    template <std::size_t... Indices>
+    consteval bool verify_node_status_values(std::index_sequence<Indices...>)
+    {
+        constexpr auto status_values = magic_enum::enum_values<NodeStatus::Value>();
+        constexpr auto optional_values = magic_enum::enum_values<NodeStatusOrMissing::Value>();
+        return ((magic_enum::enum_underlying(status_values[Indices]) == magic_enum::enum_underlying(optional_values[Indices])) && ...);
+    }
 
-consteval bool verify_node_status_enums() {
-    static_assert(
-        std::is_same_v<
-            magic_enum::underlying_type_t<NodeStatus::Value>,
-            magic_enum::underlying_type_t<NodeStatusOrMissing::Value>>);
-    constexpr auto status_values = magic_enum::enum_values<NodeStatus::Value>();
-    constexpr auto optional_values = magic_enum::enum_values<NodeStatusOrMissing::Value>();
-    static_assert(optional_values.size() == status_values.size() + 1);
-    static_assert(verify_node_status_values(std::make_index_sequence<status_values.size()>()));
-    return true;
-}
+    consteval bool verify_node_status_enums()
+    {
+        static_assert(std::is_same_v<magic_enum::underlying_type_t<NodeStatus::Value>, magic_enum::underlying_type_t<NodeStatusOrMissing::Value>>);
+        constexpr auto status_values = magic_enum::enum_values<NodeStatus::Value>();
+        constexpr auto optional_values = magic_enum::enum_values<NodeStatusOrMissing::Value>();
+        static_assert(optional_values.size() == status_values.size() + 1);
+        static_assert(verify_node_status_values(std::make_index_sequence<status_values.size()>()));
+        return true;
+    }
 
-static_assert(verify_node_status_enums());
+    static_assert(verify_node_status_enums());
 } // namespace detail
 
 } // namespace store
 
-template<>
+template <>
 struct fmt::formatter<store::NodeStatusOrMissing> {
-    template<typename ParseContext>
-    constexpr auto parse(ParseContext &context) {
+    template <typename ParseContext>
+    constexpr auto parse(ParseContext& context)
+    {
         return context.begin();
     }
 
-    template<typename FormatContext>
-    auto format(const store::NodeStatusOrMissing &status, FormatContext &context) const {
+    template <typename FormatContext>
+    auto format(const store::NodeStatusOrMissing& status, FormatContext& context) const
+    {
         switch (status) {
         case store::NodeStatusOrMissing::Leaf:
             return fmt::format_to(context.out(), "Leaf");
@@ -124,11 +118,10 @@ struct fmt::formatter<store::NodeStatusOrMissing> {
     }
 };
 
-inline std::string store::NodeStatusOrMissing::to_string() const {
-    return fmt::format("{}", *this);
-}
+inline std::string store::NodeStatusOrMissing::to_string() const { return fmt::format("{}", *this); }
 
-inline std::ostream &operator<<(std::ostream &stream, const store::NodeStatusOrMissing &status) {
+inline std::ostream& operator<<(std::ostream& stream, const store::NodeStatusOrMissing& status)
+{
     fmt::print(stream, "{}", status);
     return stream;
 }

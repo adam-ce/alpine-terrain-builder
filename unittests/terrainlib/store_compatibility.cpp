@@ -14,54 +14,48 @@
 #include "mesh/codec/SfMeshFormat.h"
 #include "mesh/codec/from_extension.h"
 #include "mesh/storage.h"
-#include "octree/store_layout/Mappings.h"
 #include "octree/storage/IndexFile.h"
 #include "octree/storage/open.h"
+#include "octree/store_layout/Mappings.h"
 
 namespace {
 
 class TemporaryDirectory {
 public:
-    explicit TemporaryDirectory(const std::string_view label) {
+    explicit TemporaryDirectory(const std::string_view label)
+    {
         static std::atomic_uint64_t counter = 0;
         const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        _path = std::filesystem::temp_directory_path()
-            / ("atb-raster-store-" + std::string(label) + "-"
-               + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(_path));
+        m_path = std::filesystem::temp_directory_path()
+            / ("atb-raster-store-" + std::string(label) + "-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
+        REQUIRE(std::filesystem::create_directories(m_path));
     }
 
-    ~TemporaryDirectory() {
+    ~TemporaryDirectory()
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
     }
 
-    const std::filesystem::path &path() const {
-        return _path;
-    }
+    const std::filesystem::path& path() const { return m_path; }
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
-mesh::Simple triangle_mesh(const double offset) {
-    return mesh::Simple(
-        {{0, 1, 2}},
-        {{offset, 0.0, 0.0}, {offset + 1.0, 0.0, 0.0}, {offset, 1.0, 0.0}});
+mesh::Simple triangle_mesh(const double offset)
+{
+    return mesh::Simple({ { 0, 1, 2 } }, { { offset, 0.0, 0.0 }, { offset + 1.0, 0.0, 0.0 }, { offset, 1.0, 0.0 } });
 }
 
-mesh::storage::IndexedStorage make_storage(
-    const std::filesystem::path &path,
-    const store::PathMapping<octree::Id> mapping,
-    const std::string &extension) {
+mesh::storage::IndexedStorage make_storage(const std::filesystem::path& path, const store::PathMapping<octree::Id> mapping, const std::string& extension)
+{
     auto codec = mesh::codec::from_extension(extension);
     REQUIRE(codec.has_value());
     return mesh::storage::IndexedStorage(
-        store::RawStorage<octree::StoreTraits, mesh::Simple>(
-            store::Layout<octree::Id>(path, mapping),
-            std::move(codec.value())),
-        store::Index<octree::StoreTraits>{},
-        mesh::storage::Storage::Persistence{
+        store::RawStorage<octree::StoreTraits, mesh::Simple>(store::Layout<octree::Id>(path, mapping), std::move(codec.value())),
+        store::Index<octree::StoreTraits> {},
+        mesh::storage::Storage::Persistence {
             octree::storage::index_format(),
             path / "octree.storeindex",
             std::string(mapping.id),
@@ -72,10 +66,11 @@ mesh::storage::IndexedStorage make_storage(
 
 } // namespace
 
-TEST_CASE("octree layouts round-trip boundary IDs") {
-    const std::vector ids{
+TEST_CASE("octree layouts round-trip boundary IDs")
+{
+    const std::vector ids {
         octree::Id::root(),
-        octree::Id(octree::Id::max_level(), octree::Id::Index{0}),
+        octree::Id(octree::Id::max_level(), octree::Id::Index { 0 }),
         octree::Id(octree::Id::max_level(), octree::Id::max_index_on_level(octree::Id::max_level())),
     };
 
@@ -90,36 +85,32 @@ TEST_CASE("octree layouts round-trip boundary IDs") {
     }
 }
 
-TEST_CASE("versioned octree and SF payload validation is free-standing") {
-    const octree::storage::StoreIndex invalid_index{{{
+TEST_CASE("versioned octree and SF payload validation is free-standing")
+{
+    const octree::storage::StoreIndex invalid_index { { {
         .level = std::numeric_limits<std::uint8_t>::max(),
         .index = 0,
         .status = static_cast<std::uint8_t>(store::NodeStatus::Leaf),
-    }}};
+    } } };
     CHECK_FALSE(octree::storage::decode_index(invalid_index).has_value());
 
-    const mesh::sf::Payload oversized_mesh{
+    const mesh::sf::Payload oversized_mesh {
         .vertex_count = std::numeric_limits<std::uint32_t>::max(),
         .face_count = 0,
         .triangles = {},
-        .positions = {0},
+        .positions = { 0 },
         .uvs = {},
         .texture = {},
     };
     CHECK_FALSE(mesh::sf::validate(oversized_mesh).has_value());
 }
 
-TEST_CASE("storage hard-links matching payload formats") {
+TEST_CASE("storage hard-links matching payload formats")
+{
     TemporaryDirectory source_directory("hard-link-source");
     TemporaryDirectory target_directory("hard-link-target");
-    auto source = make_storage(
-        source_directory.path(),
-        octree::store_layout::flat(),
-        ".sfmesh");
-    auto target = make_storage(
-        target_directory.path(),
-        octree::store_layout::flat(),
-        ".sfmesh");
+    auto source = make_storage(source_directory.path(), octree::store_layout::flat(), ".sfmesh");
+    auto target = make_storage(target_directory.path(), octree::store_layout::flat(), ".sfmesh");
 
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, triangle_mesh(0.0)).has_value());
@@ -129,24 +120,17 @@ TEST_CASE("storage hard-links matching payload formats") {
     REQUIRE(target.save_index().has_value());
 }
 
-TEST_CASE("storage re-encodes differing payload formats") {
+TEST_CASE("storage re-encodes differing payload formats")
+{
     TemporaryDirectory source_directory("reencode-source");
     TemporaryDirectory target_directory("reencode-target");
-    auto source = make_storage(
-        source_directory.path(),
-        octree::store_layout::flat(),
-        ".sfmesh");
-    auto target = make_storage(
-        target_directory.path(),
-        octree::store_layout::flat(),
-        ".glb");
+    auto source = make_storage(source_directory.path(), octree::store_layout::flat(), ".sfmesh");
+    auto target = make_storage(target_directory.path(), octree::store_layout::flat(), ".glb");
 
     const octree::Id root = octree::Id::root();
     REQUIRE(source.save(root, triangle_mesh(4.0)).has_value());
     REQUIRE(target.copy_from(root, source).has_value());
-    CHECK_FALSE(std::filesystem::equivalent(
-        source.path_for(root).value(),
-        target.path_for(root).value()));
+    CHECK_FALSE(std::filesystem::equivalent(source.path_for(root).value(), target.path_for(root).value()));
     const auto loaded = target.load(root);
     REQUIRE(loaded.has_value());
     CHECK(loaded->face_count() == 1);
@@ -154,12 +138,10 @@ TEST_CASE("storage re-encodes differing payload formats") {
     REQUIRE(target.save_index().has_value());
 }
 
-TEST_CASE("storage supports enabled overwrites") {
+TEST_CASE("storage supports enabled overwrites")
+{
     TemporaryDirectory directory("overwrite");
-    auto storage = make_storage(
-        directory.path(),
-        octree::store_layout::flat(),
-        ".sfmesh");
+    auto storage = make_storage(directory.path(), octree::store_layout::flat(), ".sfmesh");
     storage.settings().allow_overwrite = true;
 
     const octree::Id root = octree::Id::root();
@@ -172,7 +154,8 @@ TEST_CASE("storage supports enabled overwrites") {
     REQUIRE(storage.save_index().has_value());
 }
 
-TEST_CASE("folder opening persists and reopens metadata-driven storage") {
+TEST_CASE("folder opening persists and reopens metadata-driven storage")
+{
     TemporaryDirectory directory("folder-open");
     octree::OpenOptions options;
     options.default_mapping = octree::store_layout::flat();
@@ -209,8 +192,9 @@ TEST_CASE("folder opening persists and reopens metadata-driven storage") {
     CHECK(metadata->codec_selector == ".sfmesh");
 }
 
-TEST_CASE("mesh codec resolver dispatches every supported selector", "[store][open]") {
-    for (const std::string extension : {".sfmesh", ".glb", ".gltf"}) {
+TEST_CASE("mesh codec resolver dispatches every supported selector", "[store][open]")
+{
+    for (const std::string extension : { ".sfmesh", ".glb", ".gltf" }) {
         const auto codec = mesh::codec::from_extension(extension);
         REQUIRE(codec.has_value());
         const auto paths = codec.value()->paths(store::NodePath("node"));
@@ -224,10 +208,11 @@ TEST_CASE("mesh codec resolver dispatches every supported selector", "[store][op
     CHECK(unknown.error().operation == store::CodecOperation::Resolve);
 }
 
-TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store][open]") {
+TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store][open]")
+{
     TemporaryDirectory directory("payload-class");
     const std::filesystem::path index_path = directory.path() / "octree.storeindex";
-    const store::IndexMetadata<octree::StoreTraits> index_file{
+    const store::IndexMetadata<octree::StoreTraits> index_file {
         .index = {},
         .layout_id = "flat",
         .payload_class = "dag.ClusterBatch",
@@ -238,15 +223,15 @@ TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store]
     const auto result = octree::open_index(index_path);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(std::holds_alternative<store::CodecError>(result.error()));
-    CHECK(std::get<store::CodecError>(result.error()).category
-          == store::CodecErrorCategory::UnsupportedCodec);
+    CHECK(std::get<store::CodecError>(result.error()).category == store::CodecErrorCategory::UnsupportedCodec);
 }
 
-TEST_CASE("octree opening retains index failures without directory fallback", "[store][open]") {
+TEST_CASE("octree opening retains index failures without directory fallback", "[store][open]")
+{
     TemporaryDirectory directory("open-errors");
     const std::filesystem::path index_path = directory.path() / "octree.storeindex";
 
-    store::IndexMetadata<octree::StoreTraits> index_file{
+    store::IndexMetadata<octree::StoreTraits> index_file {
         .index = {},
         .layout_id = "unknown-layout",
         .payload_class = std::string(mesh::storage::payload_class),
@@ -265,19 +250,16 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     const auto unknown_codec = octree::open_folder_indexed(directory.path());
     REQUIRE_FALSE(unknown_codec.has_value());
     REQUIRE(std::holds_alternative<store::CodecError>(unknown_codec.error()));
-    CHECK(std::get<store::CodecError>(unknown_codec.error()).category
-          == store::CodecErrorCategory::UnsupportedCodec);
+    CHECK(std::get<store::CodecError>(unknown_codec.error()).category == store::CodecErrorCategory::UnsupportedCodec);
 
-    const std::array<uint8_t, 3> malformed_bytes{0xff, 0x00, 0x01};
+    const std::array<uint8_t, 3> malformed_bytes { 0xff, 0x00, 0x01 };
     REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
     const auto malformed = octree::open_folder_indexed(directory.path());
     REQUIRE_FALSE(malformed.has_value());
     REQUIRE(std::holds_alternative<store::IndexFormatError>(malformed.error()));
-    CHECK(std::get<store::IndexFormatError>(malformed.error()).category
-          == store::IndexFormatErrorCategory::Malformed);
+    CHECK(std::get<store::IndexFormatError>(malformed.error()).category == store::IndexFormatErrorCategory::Malformed);
 
-    const auto independent_metadata =
-        octree::storage::read_store_metadata(directory.path());
+    const auto independent_metadata = octree::storage::read_store_metadata(directory.path());
     REQUIRE(independent_metadata.has_value());
     CHECK(independent_metadata->codec_selector == ".unknown");
 }

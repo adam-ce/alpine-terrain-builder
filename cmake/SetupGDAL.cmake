@@ -39,7 +39,7 @@ function(alp_setup_gdal)
             -DBUILD_TESTING=OFF
             -DGEOS_BUILD_DEVELOPER=OFF
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
-        )
+    )
 
     alp_setup_cmake_project(gdal
         URL https://github.com/OSGeo/gdal.git

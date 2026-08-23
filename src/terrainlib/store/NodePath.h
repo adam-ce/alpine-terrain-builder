@@ -8,16 +8,17 @@ namespace store {
 class NodePath {
 public:
     NodePath() = default;
-    explicit NodePath(std::filesystem::path path) : _path(std::move(path)) {}
-
-    const std::filesystem::path &path() const {
-        return _path;
+    explicit NodePath(std::filesystem::path path)
+        : m_path(std::move(path))
+    {
     }
 
-    bool operator==(const NodePath &) const = default;
+    const std::filesystem::path& path() const { return m_path; }
+
+    bool operator==(const NodePath&) const = default;
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
 } // namespace store

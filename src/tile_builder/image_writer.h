@@ -31,20 +31,21 @@
 
 namespace image {
 
-void saveImageAsPng(const radix::Raster<glm::u8vec3>& image, const std::string& path);
+void save_image_as_png(const radix::Raster<glm::u8vec3>& image, const std::string& path);
 
 template <typename T>
-void debugOut(const radix::Raster<T>& image, const std::string& path)
+void debug_out(const radix::Raster<T>& image, const std::string& path)
 {
     if (image.buffer().empty())
         throw std::invalid_argument("Can't write an empty raster to " + path);
 
     const auto [min, max] = std::ranges::minmax(image);
     const auto range = float(max) - float(min);
-    saveImageAsPng(radix::raster::transform(image, [min, range](const auto value) {
-        const auto intensity = range == 0.F ? std::uint8_t(0) : std::uint8_t(255.F * (float(value) - float(min)) / range);
-        return glm::u8vec3(intensity);
-    }),
+    save_image_as_png(radix::raster::transform(image,
+                          [min, range](const auto value) {
+                              const auto intensity = range == 0.F ? std::uint8_t(0) : std::uint8_t(255.F * (float(value) - float(min)) / range);
+                              return glm::u8vec3(intensity);
+                          }),
         path);
 }
 

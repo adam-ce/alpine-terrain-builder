@@ -51,10 +51,8 @@ TEST_CASE("io::conversion copies non-contiguous matrices row by row")
     cv::Mat backing(4, 6, CV_8UC3);
     for (int row = 0; row < backing.rows; ++row) {
         for (int column = 0; column < backing.cols; ++column) {
-            backing.at<cv::Vec3b>(row, column) = cv::Vec3b(
-                static_cast<std::uint8_t>(row),
-                static_cast<std::uint8_t>(column),
-                static_cast<std::uint8_t>(row * backing.cols + column));
+            backing.at<cv::Vec3b>(row, column)
+                = cv::Vec3b(static_cast<std::uint8_t>(row), static_cast<std::uint8_t>(column), static_cast<std::uint8_t>(row * backing.cols + column));
         }
     }
     const cv::Mat source = backing(cv::Rect(1, 1, 3, 2));
@@ -62,11 +60,11 @@ TEST_CASE("io::conversion copies non-contiguous matrices row by row")
 
     auto raster = io::conversion::to_raster<glm::u8vec3>(source);
     REQUIRE(raster.has_value());
-    CHECK(raster->pixel({0, 0}) == glm::u8vec3(1, 1, 7));
-    CHECK(raster->pixel({2, 1}) == glm::u8vec3(2, 3, 15));
+    CHECK(raster->pixel({ 0, 0 }) == glm::u8vec3(1, 1, 7));
+    CHECK(raster->pixel({ 2, 1 }) == glm::u8vec3(2, 3, 15));
 
     backing.setTo(cv::Scalar::all(0));
-    CHECK(raster->pixel({0, 0}) == glm::u8vec3(1, 1, 7));
+    CHECK(raster->pixel({ 0, 0 }) == glm::u8vec3(1, 1, 7));
 
     const auto round_trip = io::conversion::to_mat(*raster);
     REQUIRE(round_trip.has_value());
@@ -78,14 +76,14 @@ TEST_CASE("io::conversion reports invalid inputs")
 {
     SECTION("empty matrix")
     {
-        const auto result = io::conversion::to_raster<std::uint8_t>(cv::Mat{});
+        const auto result = io::conversion::to_raster<std::uint8_t>(cv::Mat {});
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == io::conversion::ErrorCode::EmptyInput);
     }
 
     SECTION("multidimensional matrix")
     {
-        const std::array sizes{2, 2, 2};
+        const std::array sizes { 2, 2, 2 };
         const cv::Mat source(static_cast<int>(sizes.size()), sizes.data(), CV_8UC1);
         const auto result = io::conversion::to_raster<std::uint8_t>(source);
         REQUIRE_FALSE(result.has_value());
@@ -97,7 +95,7 @@ TEST_CASE("io::conversion reports invalid inputs")
         const cv::Mat source(2, 2, CV_8UC3);
         const auto result = io::conversion::to_raster<std::uint8_t>(source);
         REQUIRE_FALSE(result.has_value());
-        const io::conversion::Error expected{
+        const io::conversion::Error expected {
             io::conversion::ErrorCode::PixelTypeMismatch,
             CV_8UC1,
             CV_8UC3,
@@ -118,7 +116,7 @@ TEST_CASE("io::conversion reports invalid inputs")
 
     SECTION("empty raster")
     {
-        const auto result = io::conversion::to_mat(radix::Raster<std::uint8_t>{});
+        const auto result = io::conversion::to_mat(radix::Raster<std::uint8_t> {});
         REQUIRE_FALSE(result.has_value());
         CHECK(result.error().code == io::conversion::ErrorCode::EmptyInput);
     }

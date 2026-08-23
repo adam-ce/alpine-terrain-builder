@@ -122,7 +122,7 @@ TEST_CASE("reading")
                         const auto s = std::string("/austria/").length();
                         const auto l = dataset_name.length() - std::string(".tif").length() - s;
                         const auto debug_file = fmt::format("./heights_{}_srs{}_{}.png", test_name, test_srs, dataset_name.substr(s, l));
-                        image::debugOut(heights, debug_file);
+                        image::debug_out(heights, debug_file);
                     }
 
                     const auto heights = reader.read(srs_bounds, 100, 111);
@@ -171,7 +171,7 @@ TEST_CASE("reading")
             const auto ref_reader = DatasetReader(ref_dataset, geodetic_srs, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
             if (ALP_UNITTESTS_DEBUG_IMAGES)
-                image::debugOut(ref_heights, fmt::format("./heights_ref.png"));
+                image::debug_out(ref_heights, fmt::format("./heights_ref.png"));
 
             for (std::string dataset_name : datasets) {
                 const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
@@ -183,12 +183,12 @@ TEST_CASE("reading")
                 const auto l = dataset_name.length() - std::string(".tif").length() - s;
 
                 if (ALP_UNITTESTS_DEBUG_IMAGES) {
-                    image::debugOut(ref_heights, fmt::format("./heights_{}_{}.png", test_name, dataset_name.substr(s, l)));
+                    image::debug_out(ref_heights, fmt::format("./heights_{}_{}.png", test_name, dataset_name.substr(s, l)));
 
                     auto height_diffs = radix::Raster<float>({ render_width, render_height });
                     std::transform(ref_heights.begin(), ref_heights.end(), heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
                     const auto path = fmt::format("./diffs_{}_{}.png", test_name, dataset_name.substr(s, l));
-                    image::debugOut(height_diffs, path);
+                    image::debug_out(height_diffs, path);
                 }
                 auto largest_abs_diff = 0.0;
                 const auto mse = std::transform_reduce(ref_heights.begin(), ref_heights.end(), heights.begin(), 0.0, std::plus<>(), [&largest_abs_diff](auto a, auto b) {
@@ -246,12 +246,12 @@ TEST_CASE("reading")
         fmt::print("low res time: {}; high res time: {}\n", double(low_res_time) / 1000.0, double(high_res_time) / 1000.0);
 
         if (ALP_UNITTESTS_DEBUG_IMAGES) {
-            image::debugOut(low_res_heights, fmt::format("./low_res_heights.png"));
-            image::debugOut(high_res_heights, fmt::format("./high_res_heights.png"));
+            image::debug_out(low_res_heights, fmt::format("./low_res_heights.png"));
+            image::debug_out(high_res_heights, fmt::format("./high_res_heights.png"));
 
             auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
-            image::debugOut(height_diffs, "./diff_low_res_high_res.png");
+            image::debug_out(height_diffs, "./diff_low_res_high_res.png");
         }
         auto largest_abs_diff = 0.0;
         const auto mse = std::transform_reduce(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), 0.0, std::plus<>(), [&largest_abs_diff](auto a, auto b) {
@@ -288,12 +288,12 @@ TEST_CASE("reading")
         REQUIRE(high_res_heights.height() == render_height);
 
         if (ALP_UNITTESTS_DEBUG_IMAGES) {
-            image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
-            image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
+            image::debug_out(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
+            image::debug_out(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
 
             auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
-            image::debugOut(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
+            image::debug_out(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
         }
         auto largest_abs_diff = 0.0;
         const auto mse = std::transform_reduce(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), 0.0, std::plus<>(), [&largest_abs_diff](auto a, auto b) {
@@ -330,12 +330,12 @@ TEST_CASE("reading")
         REQUIRE(high_res_heights.height() == render_height);
 
         if (ALP_UNITTESTS_DEBUG_IMAGES) {
-            image::debugOut(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
-            image::debugOut(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
+            image::debug_out(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
+            image::debug_out(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
 
             auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
-            image::debugOut(height_diffs, "./lowres_ov_with_warping_diff_low_res_high_res.png");
+            image::debug_out(height_diffs, "./lowres_ov_with_warping_diff_low_res_high_res.png");
         }
         auto largest_abs_diff = 0.0;
         const auto mse = std::transform_reduce(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), 0.0, std::plus<>(), [&largest_abs_diff](auto a, auto b) {

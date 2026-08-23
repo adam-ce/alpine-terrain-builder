@@ -10,15 +10,10 @@ namespace store {
 
 struct UnknownLayout {
     std::string id;
-    bool operator==(const UnknownLayout &) const = default;
+    bool operator==(const UnknownLayout&) const = default;
 };
 
-template<typename Key>
-using OpenError = std::variant<
-    IndexFormatError,
-    FilesystemError,
-    UnknownLayout,
-    CodecError,
-    InvalidKey<Key>>;
+template <typename Key>
+using OpenError = std::variant<IndexFormatError, FilesystemError, UnknownLayout, CodecError, InvalidKey<Key>>;
 
 } // namespace store

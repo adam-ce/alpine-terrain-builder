@@ -10,7 +10,8 @@
 
 namespace sf {
 
-inline std::expected<void, FinalizeError> finalize_storage(mesh::storage::Storage &storage) {
+inline std::expected<void, FinalizeError> finalize_storage(mesh::storage::Storage& storage)
+{
     const auto save_result = storage.save_or_create_index();
     if (!save_result.has_value()) {
         return std::unexpected(FinalizeError(save_result.error()));

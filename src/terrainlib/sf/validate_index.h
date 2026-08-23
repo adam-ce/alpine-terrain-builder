@@ -8,11 +8,11 @@
 
 namespace sf {
 
-inline std::expected<void, InvalidTopology> validate_index(
-    const store::Index<octree::StoreTraits> &index) {
-    for (const auto &[key, status] : index) {
+inline std::expected<void, InvalidTopology> validate_index(const store::Index<octree::StoreTraits>& index)
+{
+    for (const auto& [key, status] : index) {
         if (status == store::NodeStatus::Inner) {
-            return std::unexpected(InvalidTopology{key});
+            return std::unexpected(InvalidTopology { key });
         }
     }
     return {};

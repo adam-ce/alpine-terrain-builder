@@ -25,7 +25,7 @@
 #include <opencv2/opencv.hpp>
 #include <stdexcept>
 
-void image::saveImageAsPng(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
+void image::save_image_as_png(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
 {
     auto converted = io::conversion::to_mat(input_image);
     if (!converted) {

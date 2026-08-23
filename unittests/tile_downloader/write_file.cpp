@@ -14,42 +14,38 @@ namespace {
 class TemporaryOutput {
 public:
     explicit TemporaryOutput(std::string_view name)
-        : _path(std::filesystem::temp_directory_path() / name) {
+        : m_path(std::filesystem::temp_directory_path() / name)
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
         std::filesystem::remove(partial_path(), error);
         std::filesystem::remove(pending_path(), error);
     }
 
-    ~TemporaryOutput() {
+    ~TemporaryOutput()
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
         std::filesystem::remove(partial_path(), error);
         std::filesystem::remove(pending_path(), error);
     }
 
-    [[nodiscard]] const std::filesystem::path &path() const {
-        return _path;
-    }
+    [[nodiscard]] const std::filesystem::path& path() const { return m_path; }
 
-    [[nodiscard]] std::filesystem::path partial_path() const {
-        return partial_tile_path(_path);
-    }
+    [[nodiscard]] std::filesystem::path partial_path() const { return partial_tile_path(m_path); }
 
-    [[nodiscard]] std::filesystem::path pending_path() const {
-        return children_pending_tile_path(_path);
-    }
+    [[nodiscard]] std::filesystem::path pending_path() const { return children_pending_tile_path(m_path); }
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
-}
+} // namespace
 
 TEST_CASE("checked file writer persists the complete response")
 {
     const TemporaryOutput output("atb-write-file-success.bin");
-    const std::vector<char> expected{'t', 'i', 'l', 'e'};
+    const std::vector<char> expected { 't', 'i', 'l', 'e' };
 
     write_file_children_pending(output.path(), expected);
 
@@ -59,7 +55,7 @@ TEST_CASE("checked file writer persists the complete response")
 
     std::ifstream input(output.pending_path(), std::ios::binary);
     const auto begin = std::istreambuf_iterator<char>(input);
-    const std::vector<char> actual(begin, std::istreambuf_iterator<char>{});
+    const std::vector<char> actual(begin, std::istreambuf_iterator<char> {});
     CHECK(actual == expected);
 
     mark_tile_children_complete(output.path());
@@ -71,11 +67,9 @@ TEST_CASE("checked file writer preserves the final path when promotion fails")
 {
     const TemporaryOutput output("atb-write-file-promotion-failure");
     REQUIRE(std::filesystem::create_directory(output.path()));
-    write_file_children_pending(output.path(), std::vector<char>{'t', 'i', 'l', 'e'});
+    write_file_children_pending(output.path(), std::vector<char> { 't', 'i', 'l', 'e' });
 
-    CHECK_THROWS_AS(
-        mark_tile_children_complete(output.path()),
-        std::filesystem::filesystem_error);
+    CHECK_THROWS_AS(mark_tile_children_complete(output.path()), std::filesystem::filesystem_error);
 
     CHECK(std::filesystem::is_directory(output.path()));
     CHECK(std::filesystem::exists(output.pending_path()));

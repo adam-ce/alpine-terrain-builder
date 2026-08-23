@@ -11,55 +11,52 @@ namespace {
 class TemporaryPyramid {
 public:
     explicit TemporaryPyramid(std::string_view name)
-        : _path(std::filesystem::temp_directory_path() / name) {
+        : m_path(std::filesystem::temp_directory_path() / name)
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
-        std::filesystem::create_directories(_path);
+        std::filesystem::remove_all(m_path, error);
+        std::filesystem::create_directories(m_path);
     }
 
-    ~TemporaryPyramid() {
+    ~TemporaryPyramid()
+    {
         std::error_code error;
-        std::filesystem::remove_all(_path, error);
+        std::filesystem::remove_all(m_path, error);
     }
 
-    [[nodiscard]] const std::filesystem::path &path() const {
-        return _path;
-    }
+    [[nodiscard]] const std::filesystem::path& path() const { return m_path; }
 
-    [[nodiscard]] std::filesystem::path tile_path(const radix::tile::Id &tile) const {
-        return google_tile_path(_path, tile, ".jpeg");
-    }
+    [[nodiscard]] std::filesystem::path tile_path(const radix::tile::Id& tile) const { return google_tile_path(m_path, tile, ".jpeg"); }
 
-    void create_pending(const radix::tile::Id &tile) const {
+    void create_pending(const radix::tile::Id& tile) const
+    {
         const auto path = tile_path(tile);
         std::filesystem::create_directories(path.parent_path());
-        write_file_children_pending(path, std::vector<char>{'t', 'i', 'l', 'e'});
+        write_file_children_pending(path, std::vector<char> { 't', 'i', 'l', 'e' });
     }
 
-    void create_complete(const radix::tile::Id &tile) const {
+    void create_complete(const radix::tile::Id& tile) const
+    {
         create_pending(tile);
         mark_tile_children_complete(tile_path(tile));
     }
 
 private:
-    std::filesystem::path _path;
+    std::filesystem::path m_path;
 };
 
-const TileUrlBuilder missing_file_url({
-    "file:///definitely-missing-atb-tile/{zoom}/{x}/{y}.jpeg",
-    TileYDirection::Down
-});
+const TileUrlBuilder missing_file_url({ "file:///definitely-missing-atb-tile/{zoom}/{x}/{y}.jpeg", TileYDirection::Down });
 
-}
+} // namespace
 
 TEST_CASE("tile downloader promotes parents after completed children")
 {
     const TemporaryPyramid pyramid("atb-downloader-complete-pyramid");
-    const radix::tile::Id root{0, {0, 0}};
+    const radix::tile::Id root { 0, { 0, 0 } };
     const auto children = root.children();
 
     pyramid.create_pending(root);
-    for (const auto &child : children) {
+    for (const auto& child : children) {
         pyramid.create_pending(child);
     }
 
@@ -69,7 +66,7 @@ TEST_CASE("tile downloader promotes parents after completed children")
     REQUIRE(std::filesystem::exists(pyramid.tile_path(root)));
     CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(root))));
 
-    for (const auto &child : children) {
+    for (const auto& child : children) {
         CHECK(std::filesystem::exists(pyramid.tile_path(child)));
         CHECK_FALSE(std::filesystem::exists(children_pending_tile_path(pyramid.tile_path(child))));
     }
@@ -83,7 +80,7 @@ TEST_CASE("tile downloader promotes parents after completed children")
 TEST_CASE("tile downloader leaves ancestors pending after a child failure")
 {
     const TemporaryPyramid pyramid("atb-downloader-failed-pyramid");
-    const radix::tile::Id root{0, {0, 0}};
+    const radix::tile::Id root { 0, { 0, 0 } };
     const auto children = root.children();
 
     pyramid.create_pending(root);

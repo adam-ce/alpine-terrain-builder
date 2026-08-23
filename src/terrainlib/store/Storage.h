@@ -15,7 +15,7 @@
 
 namespace store {
 
-template<HierarchyTraits Traits, typename NodeData>
+template <HierarchyTraits Traits, typename NodeData>
 class Storage {
 public:
     using Key = typename Traits::Key;
@@ -32,298 +32,273 @@ public:
         std::string codec_selector;
     };
 
-    explicit Storage(RawStorage<Traits, NodeData> raw) : _raw(std::move(raw)) {}
-
-    Storage(
-        RawStorage<Traits, NodeData> raw,
-        Index<Traits> index,
-        Persistence persistence,
-        const bool dirty = false)
-        : _raw(std::move(raw)),
-          _index(std::move(index)),
-          _persistence(std::move(persistence)),
-          _dirty(dirty) {}
-
-    virtual ~Storage() {
-        finalize_displaced_state();
+    explicit Storage(RawStorage<Traits, NodeData> raw)
+        : m_raw(std::move(raw))
+    {
     }
 
-    Storage(const Storage &) = delete;
-    Storage &operator=(const Storage &) = delete;
-
-    Storage(Storage &&other) noexcept
-        : _raw(std::move(other._raw)),
-          _index(std::move(other._index)),
-          _persistence(std::move(other._persistence)),
-          _settings(other._settings),
-          _dirty(std::exchange(other._dirty, false)) {
-        other._index.reset();
-        other._persistence.reset();
+    Storage(RawStorage<Traits, NodeData> raw, Index<Traits> index, Persistence persistence, const bool dirty = false)
+        : m_raw(std::move(raw))
+        , m_index(std::move(index))
+        , m_persistence(std::move(persistence))
+        , m_dirty(dirty)
+    {
     }
 
-    Storage &operator=(Storage &&other) noexcept {
+    virtual ~Storage() { finalize_displaced_state(); }
+
+    Storage(const Storage&) = delete;
+    Storage& operator=(const Storage&) = delete;
+
+    Storage(Storage&& other) noexcept
+        : m_raw(std::move(other.m_raw))
+        , m_index(std::move(other.m_index))
+        , m_persistence(std::move(other.m_persistence))
+        , m_settings(other.m_settings)
+        , m_dirty(std::exchange(other.m_dirty, false))
+    {
+        other.m_index.reset();
+        other.m_persistence.reset();
+    }
+
+    Storage& operator=(Storage&& other) noexcept
+    {
         if (this == &other) {
             return *this;
         }
         finalize_displaced_state();
-        _raw = std::move(other._raw);
-        _index = std::move(other._index);
-        _persistence = std::move(other._persistence);
-        _settings = other._settings;
-        _dirty = std::exchange(other._dirty, false);
-        other._index.reset();
-        other._persistence.reset();
+        m_raw = std::move(other.m_raw);
+        m_index = std::move(other.m_index);
+        m_persistence = std::move(other.m_persistence);
+        m_settings = other.m_settings;
+        m_dirty = std::exchange(other.m_dirty, false);
+        other.m_index.reset();
+        other.m_persistence.reset();
         return *this;
     }
 
-    std::expected<NodeData, LoadError<Key>> load(const Key &key) const {
+    std::expected<NodeData, LoadError<Key>> load(const Key& key) const
+    {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(LoadError<Key>(InvalidKey<Key>{key}));
+            return std::unexpected(LoadError<Key>(InvalidKey<Key> { key }));
         }
-        if (_index.has_value()) {
-            const auto status = _index->get(key);
+        if (m_index.has_value()) {
+            const auto status = m_index->get(key);
             if (!status.has_value()) {
                 return std::unexpected(LoadError<Key>(status.error()));
             }
-            if (!status->has_value()
-                || status->value() == NodeStatus::Virtual) {
-                return std::unexpected(LoadError<Key>(CodecError{
+            if (!status->has_value() || status->value() == NodeStatus::Virtual) {
+                return std::unexpected(LoadError<Key>(CodecError {
                     CodecOperation::Read,
                     CodecErrorCategory::FileNotFound,
                     "node is not physically present in the index",
                 }));
             }
         }
-        return _raw.load(key);
+        return m_raw.load(key);
     }
 
-    std::expected<void, SaveError<Key>> save(const Key &key, const NodeData &data) {
+    std::expected<void, SaveError<Key>> save(const Key& key, const NodeData& data)
+    {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(SaveError<Key>(InvalidKey<Key>{key}));
+            return std::unexpected(SaveError<Key>(InvalidKey<Key> { key }));
         }
         const auto exists = has(key);
         if (!exists.has_value()) {
-            return std::unexpected(std::visit(
-                [](const auto &error) -> SaveError<Key> { return error; },
-                exists.error()));
+            return std::unexpected(std::visit([](const auto& error) -> SaveError<Key> { return error; }, exists.error()));
         }
-        if (exists.value() && !_settings.allow_overwrite) {
-            const auto node_paths = _raw.paths(key).value();
-            return std::unexpected(SaveError<Key>(AlreadyExists{
-                node_paths.empty() ? _raw.layout().node_path(key).path() : node_paths.front(),
+        if (exists.value() && !m_settings.allow_overwrite) {
+            const auto node_paths = m_raw.paths(key).value();
+            return std::unexpected(SaveError<Key>(AlreadyExists {
+                node_paths.empty() ? m_raw.layout().node_path(key).path() : node_paths.front(),
             }));
         }
 
-        const auto result = _raw.save(key, data);
+        const auto result = m_raw.save(key, data);
         if (!result.has_value()) {
             return result;
         }
-        if (_index.has_value()) {
-            const auto added = _index->add(key);
+        if (m_index.has_value()) {
+            const auto added = m_index->add(key);
             if (!added.has_value()) {
                 return std::unexpected(SaveError<Key>(added.error()));
             }
-            _dirty = _dirty || added.value();
+            m_dirty = m_dirty || added.value();
         }
         return {};
     }
 
-    std::expected<void, CopyError<Key>> copy_from(
-        const Key &key,
-        const Storage &source) {
+    std::expected<void, CopyError<Key>> copy_from(const Key& key, const Storage& source)
+    {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(CopyError<Key>(InvalidKey<Key>{key}));
+            return std::unexpected(CopyError<Key>(InvalidKey<Key> { key }));
         }
         const auto exists = has(key);
         if (!exists.has_value()) {
-            return std::unexpected(std::visit(
-                [](const auto &error) -> CopyError<Key> { return error; },
-                exists.error()));
+            return std::unexpected(std::visit([](const auto& error) -> CopyError<Key> { return error; }, exists.error()));
         }
-        if (exists.value() && !_settings.allow_overwrite) {
-            const auto node_paths = _raw.paths(key).value();
-            return std::unexpected(CopyError<Key>(AlreadyExists{
-                node_paths.empty() ? _raw.layout().node_path(key).path() : node_paths.front(),
+        if (exists.value() && !m_settings.allow_overwrite) {
+            const auto node_paths = m_raw.paths(key).value();
+            return std::unexpected(CopyError<Key>(AlreadyExists {
+                node_paths.empty() ? m_raw.layout().node_path(key).path() : node_paths.front(),
             }));
         }
         const auto prepare_target = [&]() -> std::expected<void, CopyError<Key>> {
-            if (!exists.value() || !_index.has_value()) {
+            if (!exists.value() || !m_index.has_value()) {
                 return {};
             }
-            const auto removed = _index->remove(key);
+            const auto removed = m_index->remove(key);
             if (!removed.has_value()) {
                 return std::unexpected(CopyError<Key>(removed.error()));
             }
-            _dirty = _dirty || removed.value();
+            m_dirty = m_dirty || removed.value();
             return {};
         };
 
-        const auto result = _raw.copy_from(key, source._raw, prepare_target);
+        const auto result = m_raw.copy_from(key, source.m_raw, prepare_target);
         if (!result.has_value()) {
             return result;
         }
-        if (_index.has_value()) {
-            const auto added = _index->add(key);
+        if (m_index.has_value()) {
+            const auto added = m_index->add(key);
             if (!added.has_value()) {
                 return std::unexpected(CopyError<Key>(added.error()));
             }
-            _dirty = _dirty || added.value();
+            m_dirty = m_dirty || added.value();
         }
         return {};
     }
 
-    std::expected<bool, FileOperationError<Key>> remove(const Key &key) {
-        const auto removed = _raw.remove(key);
+    std::expected<bool, FileOperationError<Key>> remove(const Key& key)
+    {
+        const auto removed = m_raw.remove(key);
         if (!removed.has_value()) {
             return removed;
         }
-        if (_index.has_value()) {
-            const auto index_removed = _index->remove(key);
+        if (m_index.has_value()) {
+            const auto index_removed = m_index->remove(key);
             if (!index_removed.has_value()) {
                 return std::unexpected(FileOperationError<Key>(index_removed.error()));
             }
-            _dirty = _dirty || index_removed.value();
+            m_dirty = m_dirty || index_removed.value();
         }
         return removed.value();
     }
 
-    std::expected<bool, FileOperationError<Key>> has(const Key &key) const {
+    std::expected<bool, FileOperationError<Key>> has(const Key& key) const
+    {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(FileOperationError<Key>(InvalidKey<Key>{key}));
+            return std::unexpected(FileOperationError<Key>(InvalidKey<Key> { key }));
         }
-        if (!_index.has_value()) {
-            return _raw.has(key);
+        if (!m_index.has_value()) {
+            return m_raw.has(key);
         }
-        const auto status = _index->get(key);
+        const auto status = m_index->get(key);
         if (!status.has_value()) {
             return std::unexpected(FileOperationError<Key>(status.error()));
         }
         return status->has_value() && status->value() != NodeStatus::Virtual;
     }
 
-    std::expected<std::vector<std::filesystem::path>, InvalidKey<Key>> paths(
-        const Key &key) const {
-        return _raw.paths(key);
-    }
+    std::expected<std::vector<std::filesystem::path>, InvalidKey<Key>> paths(const Key& key) const { return m_raw.paths(key); }
 
-    std::expected<std::filesystem::path, InvalidKey<Key>> path_for(
-        const Key &key) const {
+    std::expected<std::filesystem::path, InvalidKey<Key>> path_for(const Key& key) const
+    {
         const auto node_paths = paths(key);
         if (!node_paths.has_value()) {
             return std::unexpected(node_paths.error());
         }
-        return node_paths->empty()
-            ? _raw.layout().node_path(key).path()
-            : node_paths->front();
+        return node_paths->empty() ? m_raw.layout().node_path(key).path() : node_paths->front();
     }
 
-    const std::filesystem::path &base_path() const {
-        return _raw.layout().base_path();
-    }
-    const Layout<Key> &layout() const {
-        return _raw.layout();
-    }
-    const Codec<NodeData> &codec() const {
-        return _raw.codec();
-    }
-    std::optional<std::string_view> codec_selector() const {
-        if (!_persistence.has_value()) {
+    const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }
+    const Layout<Key>& layout() const { return m_raw.layout(); }
+    const Codec<NodeData>& codec() const { return m_raw.codec(); }
+    std::optional<std::string_view> codec_selector() const
+    {
+        if (!m_persistence.has_value()) {
             return std::nullopt;
         }
-        return _persistence->codec_selector;
+        return m_persistence->codec_selector;
     }
 
-    bool is_indexed() const {
-        return _index.has_value();
-    }
-    void ensure_indexed() {
-        if (!_index.has_value()) {
-            _index.emplace();
-            _dirty = true;
+    bool is_indexed() const { return m_index.has_value(); }
+    void ensure_indexed()
+    {
+        if (!m_index.has_value()) {
+            m_index.emplace();
+            m_dirty = true;
         }
     }
 
-    std::optional<std::reference_wrapper<const Index<Traits>>> index() const {
-        if (!_index.has_value()) {
+    std::optional<std::reference_wrapper<const Index<Traits>>> index() const
+    {
+        if (!m_index.has_value()) {
             return std::nullopt;
         }
-        return std::cref(_index.value());
+        return std::cref(m_index.value());
     }
 
-    std::expected<void, IndexFormatError> save_index() const {
-        if (!_dirty) {
+    std::expected<void, IndexFormatError> save_index() const
+    {
+        if (!m_dirty) {
             return {};
         }
-        if (!_index.has_value() || !_persistence.has_value()) {
-            return std::unexpected(IndexFormatError{
+        if (!m_index.has_value() || !m_persistence.has_value()) {
+            return std::unexpected(IndexFormatError {
                 IndexFormatErrorCategory::Write,
                 {},
                 "indexed storage has no persistence configuration",
             });
         }
-        const IndexMetadata<Traits> metadata{
-            _index.value(),
-            _persistence->layout_id,
-            _persistence->payload_class,
-            _persistence->codec_selector,
+        const IndexMetadata<Traits> metadata {
+            m_index.value(),
+            m_persistence->layout_id,
+            m_persistence->payload_class,
+            m_persistence->codec_selector,
         };
-        const auto result = _persistence->format.write(
-            _persistence->index_path,
-            metadata);
+        const auto result = m_persistence->format.write(m_persistence->index_path, metadata);
         if (result.has_value()) {
-            _dirty = false;
+            m_dirty = false;
         }
         return result;
     }
 
-    std::expected<void, IndexFormatError> save_or_create_index() {
-        if (!_index.has_value()) {
-            _index.emplace();
-            _dirty = true;
+    std::expected<void, IndexFormatError> save_or_create_index()
+    {
+        if (!m_index.has_value()) {
+            m_index.emplace();
+            m_dirty = true;
         }
         return save_index();
     }
 
-    const StorageSettings &settings() const {
-        return _settings;
-    }
-    StorageSettings &settings() {
-        return _settings;
-    }
+    const StorageSettings& settings() const { return m_settings; }
+    StorageSettings& settings() { return m_settings; }
 
 protected:
-    Index<Traits> &index_mut() {
-        return _index.value();
-    }
-    const Index<Traits> &index_ref() const {
-        return _index.value();
-    }
-    bool is_index_dirty() const {
-        return _dirty;
-    }
-    void set_index_dirty(const bool dirty = true) const {
-        _dirty = dirty;
-    }
+    Index<Traits>& index_mut() { return m_index.value(); }
+    const Index<Traits>& index_ref() const { return m_index.value(); }
+    bool is_index_dirty() const { return m_dirty; }
+    void set_index_dirty(const bool dirty = true) const { m_dirty = dirty; }
 
 private:
-    void finalize_displaced_state() noexcept {
-        if (!_dirty || !_index.has_value()) {
+    void finalize_displaced_state() noexcept
+    {
+        if (!m_dirty || !m_index.has_value()) {
             return;
         }
         const auto result = save_index();
         if (!result.has_value()) {
-            LOG_ERROR(
-                "Failed to automatically save index {}: {}",
-                result.error().path,
-                result.error().message);
+            LOG_ERROR("Failed to automatically save index {}: {}", result.error().path, result.error().message);
         }
     }
 
-    RawStorage<Traits, NodeData> _raw;
-    std::optional<Index<Traits>> _index;
-    std::optional<Persistence> _persistence;
-    StorageSettings _settings;
-    mutable bool _dirty = false;
+    RawStorage<Traits, NodeData> m_raw;
+    std::optional<Index<Traits>> m_index;
+    std::optional<Persistence> m_persistence;
+    StorageSettings m_settings;
+    mutable bool m_dirty = false;
 };
 
 } // namespace store

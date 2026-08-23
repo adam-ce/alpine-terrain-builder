@@ -18,7 +18,7 @@ This document specifies the logical format and required invariants for the follo
 - the source-attribution table (for correct copyright attribution and data selection)
 
 ## Source-attribution table
-The source attribution table is used in raster-fundamentalis, tile-base, and in abbreviated format in the delivered tiles. 
+The source attribution table is used in raster-fundamentalis, tile-base, and in abbreviated format in the delivered tiles.
 - stores a vector of structs (called Table), each struct describing one source
 - the struct (called Entity) contains:
  - the spatial resolution in pixel-width at the equator (EPSG:3857)
@@ -62,7 +62,7 @@ tile-base is a hierarchy build from raster-fundamentalis, containing all data an
 - should generate tiles of requested resolution and pixel type (vertex|area) on the fly
 - requests by url, e.g.: layer/vertex|area/resolution/z/x/y.ending
 - live in src/tile-server/*
-- the delivery tile format is not yet defined 
+- the delivery tile format is not yet defined
 
 ## serialization / deserialization envelope and versioning
 - `zpp::bits` serialises C++ objects to byte streams and deserialises them again.

@@ -38,7 +38,7 @@ TEST_CASE("tile builder writes radix rasters as PNG images")
     raster.pixel({ 0, 1 }) = { 0, 0, 255 };
     raster.pixel({ 1, 1 }) = { 255, 255, 255 };
 
-    image::saveImageAsPng(raster, output_path.string());
+    image::save_image_as_png(raster, output_path.string());
 
     const auto decoded = cv::imread(output_path.string(), cv::IMREAD_COLOR);
     REQUIRE(decoded.rows == 2);
@@ -53,10 +53,7 @@ TEST_CASE("tile builder writes radix rasters as PNG images")
 
 TEST_CASE("tile builder handles image writer edge cases")
 {
-    SECTION("empty debug raster is rejected")
-    {
-        CHECK_THROWS_AS(image::debugOut(radix::Raster<float> {}, "empty.png"), std::invalid_argument);
-    }
+    SECTION("empty debug raster is rejected") { CHECK_THROWS_AS(image::debug_out(radix::Raster<float> {}, "empty.png"), std::invalid_argument); }
 
     SECTION("constant debug raster is written as black")
     {
@@ -65,7 +62,7 @@ TEST_CASE("tile builder handles image writer edge cases")
 
         radix::Raster<float> raster({ 2, 2 });
         std::ranges::fill(raster, 42.F);
-        image::debugOut(raster, output_path.string());
+        image::debug_out(raster, output_path.string());
 
         const auto decoded = cv::imread(output_path.string(), cv::IMREAD_COLOR);
         REQUIRE(decoded.rows == 2);
@@ -81,6 +78,6 @@ TEST_CASE("tile builder handles image writer edge cases")
         std::filesystem::remove_all(missing_directory);
         const auto output_path = missing_directory / "image.png";
 
-        CHECK_THROWS_AS(image::saveImageAsPng(radix::Raster<glm::u8vec3>({ 1, 1 }), output_path.string()), std::runtime_error);
+        CHECK_THROWS_AS(image::save_image_as_png(radix::Raster<glm::u8vec3>({ 1, 1 }), output_path.string()), std::runtime_error);
     }
 }

@@ -12,8 +12,8 @@
 
 namespace mesh::codec {
 
-inline std::expected<std::unique_ptr<store::Codec<mesh::Simple>>, store::CodecError>
-from_extension(const std::string_view extension) {
+inline std::expected<std::unique_ptr<store::Codec<mesh::Simple>>, store::CodecError> from_extension(const std::string_view extension)
+{
     if (extension == ".sfmesh") {
         return std::make_unique<SfMesh>();
     }
@@ -23,7 +23,7 @@ from_extension(const std::string_view extension) {
     if (extension == ".gltf") {
         return std::make_unique<Gltf>(GltfContainer::Json);
     }
-    return std::unexpected(store::CodecError{
+    return std::unexpected(store::CodecError {
         store::CodecOperation::Resolve,
         store::CodecErrorCategory::UnsupportedCodec,
         "unsupported mesh codec selector: " + std::string(extension),

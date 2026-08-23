@@ -32,7 +32,7 @@ find_package(CGAL REQUIRED)
 include(../cmake/SetupOpenCV.cmake)
 alp_setup_opencv(4.11.0)
 
-alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cgltf.git COMMITISH e035b820ccde6ab20451b612d8033c9b76ea0ce4 DO_NOT_ADD_SUBPROJECT)
+alp_add_git_repository(cgltf URL https://github.com/AlpineMapsOrgDependencies/cgltf.git COMMITISH 1549b07fe059e1917bbdda1f61ec36b5f4d6718a DO_NOT_ADD_SUBPROJECT)
 add_library(cgltf INTERFACE)
 target_include_directories(cgltf SYSTEM INTERFACE ${cgltf_SOURCE_DIR})
 

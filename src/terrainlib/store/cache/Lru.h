@@ -18,7 +18,7 @@ public:
     {
     }
 
-    std::optional<NodeData> get(const Key& key) noexcept override
+    std::optional<NodeData> get(const Key& key) override
     {
         const auto iterator = m_values.find(key);
         if (iterator == m_values.end()) {
@@ -28,7 +28,7 @@ public:
         return iterator->second.first;
     }
 
-    bool put(const Key& key, const NodeData& value) noexcept override
+    bool put(const Key& key, const NodeData& value) override
     {
         const auto iterator = m_values.find(key);
         if (iterator != m_values.end()) {

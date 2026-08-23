@@ -405,6 +405,17 @@ TEST_CASE("copy_from hard-links every matching codec file", "[store][storage][co
         CHECK(std::filesystem::equivalent(source_paths[0], target_paths[0]));
         CHECK(std::filesystem::equivalent(source_paths[1], target_paths[1]));
     }
+
+    SECTION("same storage")
+    {
+        TemporaryDirectory directory("copy-self");
+        auto storage = make_indexed_storage(directory.path());
+        REQUIRE(storage.save(root, 43).has_value());
+        storage.settings().allow_overwrite = true;
+
+        REQUIRE(storage.copy_from(root, storage).has_value());
+        CHECK(storage.load(root).value() == 43);
+    }
 }
 
 TEST_CASE("copy_from re-encodes differing path lists", "[store][storage][copy]")

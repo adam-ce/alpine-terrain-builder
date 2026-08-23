@@ -40,8 +40,8 @@ public:
 
     HttpResponse get(const std::string &url, const ProgressFn &on_progress = {}) const {
         HttpResponse response;
-        WriteContext write_context{&response.body, &this->_write, {}};
-        ProgressContext progress_context{&on_progress, {}};
+        WriteContext write_context = {&response.body, &this->_write, {}};
+        ProgressContext progress_context = {&on_progress, {}};
 
         curl_easy_setopt(this->_curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(this->_curl, CURLOPT_WRITEFUNCTION, write_cb);

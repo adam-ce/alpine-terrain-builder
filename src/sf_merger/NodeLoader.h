@@ -29,7 +29,7 @@ public:
 
     // Try to retrieve or reconstruct node mesh by ID
     // TODO: return const ref instead?
-    std::optional<SimpleMesh> load_node(const octree::Id &id) const noexcept {
+    std::optional<SimpleMesh> load_node(const octree::Id &id) const {
         // Try cache
         if (auto cached = this->_cache.get(id); cached.has_value()) {
             return cached.value();

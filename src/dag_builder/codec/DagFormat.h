@@ -100,7 +100,7 @@ inline NodeMetadata encode_metadata(const dag::NodeMetadata& metadata)
     result.group_assignment = metadata.group_assignment;
     result.groups.reserve(metadata.groups.size());
     for (const dag::Group& group : metadata.groups) {
-        v1::Group encoded_group{
+        v1::Group encoded_group = {
             .children = {},
             .error = group.error,
             .bounds = {
@@ -149,7 +149,7 @@ inline std::expected<dag::NodeMetadata, std::string> decode_metadata(NodeMetadat
     result.group_assignment = std::move(metadata.group_assignment);
     result.groups.reserve(metadata.groups.size());
     for (v1::Group& group : metadata.groups) {
-        dag::Group decoded_group{
+        dag::Group decoded_group = {
             .children = {},
             .error = group.error,
             .bounds = {

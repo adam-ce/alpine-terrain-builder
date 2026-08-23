@@ -35,11 +35,13 @@ ProgressIndicator::ProgressIndicator(size_t n_steps)
 }
 
 void ProgressIndicator::task_finished() {
-    ++m_step;
-    if (m_step > m_n_steps) {
+    const size_t step = ++m_step;
+    if (step > m_n_steps) {
         throw std::runtime_error("Too many steps reported.");
     }
-    m_monitor_condition.notify_all();
+    if (step == m_n_steps) {
+        m_monitor_condition.notify_one();
+    }
 }
 
 std::jthread ProgressIndicator::start_monitoring() const {

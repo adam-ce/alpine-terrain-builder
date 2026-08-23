@@ -3,6 +3,7 @@
 #include <exception>
 #include <filesystem>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "mesh/SimpleMesh.h"
@@ -39,7 +40,7 @@ public:
                 result.error().description(),
             });
         }
-        return result.value();
+        return std::move(result.value());
     }
 
     std::expected<void, store::CodecError> write(const store::NodePath& node_path, const mesh::Simple& mesh) const override

@@ -157,6 +157,9 @@ public:
                 "matching codec probes produced different actual path counts",
             }));
         }
+        if (source_paths == target_paths) {
+            return {};
+        }
         const auto prepared = before_modify();
         if (!prepared.has_value()) {
             return prepared;

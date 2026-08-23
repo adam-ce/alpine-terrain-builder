@@ -165,7 +165,8 @@ uint64_t point_count(const OGRGeometry &geometry) {
     const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType());
     if (geometry_type == wkbPolygon) {
         const OGRPolygon *polygon = geometry.toPolygon();
-        uint64_t count = polygon->getExteriorRing()->getNumPoints();
+        const OGRLinearRing *exterior_ring = polygon->getExteriorRing();
+        uint64_t count = exterior_ring ? exterior_ring->getNumPoints() : 0;
         for (int i = 0; i < polygon->getNumInteriorRings(); ++i) {
             count += polygon->getInteriorRing(i)->getNumPoints();
         }
@@ -354,7 +355,10 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_data
     MultipolygonWithHoles2 polygons;
     for (auto &&feature_layer_pair : dataset->GetFeatures()) {
         OGRGeometry *geometry = feature_layer_pair.feature->GetGeometryRef();
-        DEBUG_ASSERT(geometry);
+        if (!geometry) {
+            LOG_ERROR("Mask feature has no geometry");
+            return std::unexpected(LoadErrorKind::InvalidGeometry);
+        }
 
         const uint64_t original_point_count = point_count(*geometry);
         std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);

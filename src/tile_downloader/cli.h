@@ -11,8 +11,8 @@
 namespace cli {
 
 struct Args {
-    std::optional<TileDownloadProvider> provider;
-    std::optional<std::string> url_pattern;
+    std::optional<TileDownloadProvider> provider = std::nullopt;
+    std::optional<std::string> url_pattern = std::nullopt;
     unsigned int zoom;
     unsigned int x;
     unsigned int y;

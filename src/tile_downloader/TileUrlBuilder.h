@@ -10,12 +10,12 @@
 
 enum class TileDownloadProvider {
     Basemap,
-    Gataki
+    Gataki,
 };
 
 enum class TileYDirection {
     Down,
-    Up
+    Up,
 };
 
 struct TileProviderConfig {

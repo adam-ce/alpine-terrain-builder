@@ -296,7 +296,7 @@ private:
 
     RawStorage<Traits, NodeData> m_raw;
     std::optional<Index<Traits>> m_index;
-    std::optional<Persistence> m_persistence;
+    std::optional<Persistence> m_persistence = std::nullopt;
     StorageSettings m_settings;
     mutable bool m_dirty = false;
 };

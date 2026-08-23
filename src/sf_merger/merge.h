@@ -95,7 +95,7 @@ public:
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
                     auto mesh_opt = this->_left.load_node(id);
                     if (mesh_opt.has_value()) {
-                        const auto write_result = this->_output.write_node(id, mesh_opt.value());
+                        const auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
                             return std::unexpected(sf::ProcessingError(write_result.error()));
                         }
@@ -103,7 +103,7 @@ public:
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
                     auto mesh_opt = this->_right.load_node(id);
                     if (mesh_opt.has_value()) {
-                        const auto write_result = this->_output.write_node(id, mesh_opt.value());
+                        const auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
                             return std::unexpected(sf::ProcessingError(write_result.error()));
                         }

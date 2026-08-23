@@ -15,8 +15,8 @@
 namespace octree::storage {
 
 struct OpenOptions {
-    std::optional<store::PathMapping<Id>> default_mapping;
-    std::optional<std::string> preferred_extension;
+    std::optional<store::PathMapping<Id>> default_mapping = std::nullopt;
+    std::optional<std::string> preferred_extension = std::nullopt;
 };
 
 template <typename NodeData, typename CodecResolver>

@@ -34,9 +34,9 @@ DTO, and mesh-opening compatibility functions.
 A legacy 3D mesh dataset is opened through the 3D adapter:
 
 ```cpp
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 
-auto opened = octree::open_folder_indexed(dataset_path);
+auto opened = mesh::storage::open_folder_indexed(dataset_path);
 if (!opened.has_value()) {
     return std::unexpected(opened.error());
 }

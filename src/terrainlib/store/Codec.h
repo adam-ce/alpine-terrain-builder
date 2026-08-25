@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string_view>
 #include <vector>
 
 #include <expected>
@@ -9,6 +10,17 @@
 #include "store/NodePath.h"
 
 namespace store {
+
+namespace codec {
+
+inline std::filesystem::path append_extension(const NodePath& node_path, const std::string_view extension)
+{
+    std::filesystem::path result = node_path.path();
+    result += extension;
+    return result;
+}
+
+} // namespace codec
 
 template <typename NodeData>
 class Codec {

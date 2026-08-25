@@ -5,7 +5,7 @@
 #include "cli.h"
 #include "build.h"
 #include "log.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "storage.h"
 #include "store/describe_error.h"
 #include "sf/Error.h"
@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
     Log::init(args.log_level);
 
     try {
-        auto input_result = octree::open_folder_indexed(args.input_path);
+        auto input_result = mesh::storage::open_folder_indexed(args.input_path);
         if (!input_result.has_value()) {
             LOG_ERROR(
                 "Failed to open input dataset {}: {}",

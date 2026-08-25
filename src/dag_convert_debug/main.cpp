@@ -7,7 +7,7 @@
 #include "log.h"
 #include "mesh/io.h"
 #include "mesh/storage.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "ProgressIndicator.h"
 #include "storage.h"
 #include "utils.h"
@@ -48,9 +48,9 @@ void export_storage(const cli::Args &args) {
     }
     const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
 
-    octree::OpenOptions options;
+    mesh::storage::OpenOptions options;
     options.preferred_extension = ".glb";
-    auto output_result = octree::open_folder(
+    auto output_result = mesh::storage::open_folder(
         args.output_path,
         std::move(options));
     if (!output_result.has_value()) {

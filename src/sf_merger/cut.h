@@ -9,7 +9,6 @@
 #include "mask.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"
-#include "octree/storage/open.h"
 #include "octree/Space.h"
 #include "utils.h"
 #include "containers/Cow.h"
@@ -155,10 +154,10 @@ inline std::expected<void, sf::ProcessingError> cut_dataset(
     LOG_TRACE("Creating output dataset at {}", output_path);
     std::filesystem::create_directories(output_path);
 
-    octree::OpenOptions options;
+    mesh::storage::OpenOptions options;
     options.default_mapping = octree::store_layout::level_and_coordinate_directories();
     options.preferred_extension = ".glb";
-    auto output_result = octree::open_folder_indexed(output_path, std::move(options));
+    auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
     if (!output_result.has_value()) {
         return std::unexpected(sf::ProcessingError(output_result.error()));
     }

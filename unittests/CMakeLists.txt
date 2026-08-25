@@ -15,6 +15,7 @@ endfunction()
 add_executable(unittests_terrainlib
     catch2_helpers.h
     opencv_helpers.h
+    temporary_directory.h
 
     terrainlib/convert.cpp
     terrainlib/cow.cpp
@@ -100,6 +101,7 @@ if(TARGET sfbuilderlib)
 
     add_executable(unittests_sfbuilder_finalization
         catch2_helpers.h
+        temporary_directory.h
         sf_builder/storage_finalization.cpp
     )
     target_link_libraries(
@@ -125,6 +127,7 @@ endif()
 if(TARGET dagbuilderlib)
     add_executable(unittests_dagbuilder
         catch2_helpers.h
+        temporary_directory.h
         dag_builder/bake_cluster_texture.cpp
         dag_builder/correspondence.cpp
         dag_builder/reprojection.cpp
@@ -145,6 +148,7 @@ endif()
 if(TARGET sfmergerlib)
     add_executable(unittests_sfmerger
         catch2_helpers.h
+        temporary_directory.h
         sf_merger/mask.cpp
         sf_merger/sphere_projector.cpp
         sf_merger/storage_boundaries.cpp

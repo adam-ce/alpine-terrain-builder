@@ -26,7 +26,6 @@ add_library(dagbuilderlib
     texture_reuse.h
     texture_sizing.h
     texturing.h
-    thread_safe_storage.h
     utils.h
     validate.h
     vertex_lock.h
@@ -44,7 +43,6 @@ add_library(dagbuilderlib
 
     codec/Dag.h
     codec/DagFormat.h
-    codec/MetadataView.h
     codec/from_extension.h
 
     merge/clusterings.h merge/clusterings.cpp

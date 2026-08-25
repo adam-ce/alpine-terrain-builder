@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cstdint>
-#include <mutex>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -26,7 +25,7 @@
 #include "octree/IdRect.h"
 #include "octree/OddLevelShifted.h"
 #include "octree/Space.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "store/traverse.h"
 #include "ProgressIndicator.h"
 #include "partition.h"
@@ -34,7 +33,7 @@
 #include "slice.h"
 #include "range_utils.h"
 #include "storage.h"
-#include "thread_safe_storage.h"
+#include "store/ThreadSafeStorage.h"
 #include "store/describe_error.h"
 #include "utils.h"
 #include "vertex_lock.h"
@@ -154,7 +153,7 @@ std::vector<Clustering> load_input_clusters(
 // Dependencies shared across the whole dag building pipeline.
 struct BuildContext {
     const mesh::storage::IndexedStorage &input_storage;
-    ThreadSafeStorage<dag::storage::IndexedStorage> output_storage;
+    store::ThreadSafeStorage<dag::storage::IndexedStorage> output_storage;
     const BuildOptions &options;
     const octree::Space &space;
     const octree::OddLevelShifted &shifted_space;
@@ -520,12 +519,11 @@ std::unordered_set<octree::Id> build_level(
     }
 
     // Initialize debug storage if requested (contains .glb meshes)
-    std::optional<mesh::storage::Storage> debug_storage = std::nullopt;
-    std::mutex debug_storage_mutex;
+    std::optional<store::ThreadSafeStorage<mesh::storage::Storage>> debug_storage = std::nullopt;
     if (ctx.options.write_debug_meshes) {
-        octree::OpenOptions options;
+        mesh::storage::OpenOptions options;
         options.preferred_extension = ".glb";
-        auto debug_result = octree::open_folder(
+        auto debug_result = mesh::storage::open_folder(
             ctx.output_storage.base_path().string() + "-debug",
             std::move(options));
         if (!debug_result.has_value()) {
@@ -533,7 +531,7 @@ std::unordered_set<octree::Id> build_level(
                 "Failed to open debug mesh storage: {}",
                 store::describe_error(debug_result.error()));
         }
-        debug_storage = std::move(debug_result.value());
+        debug_storage.emplace(std::move(debug_result.value()));
     }
 
     tbb::concurrent_vector<octree::Id> saved_ids;
@@ -556,10 +554,7 @@ std::unordered_set<octree::Id> build_level(
             if (save_result) {
                 if (debug_storage) {
                     const auto debug_mesh = clustering_to_mesh(result->clustering);
-                    const auto debug_save_result = [&] {
-                        std::scoped_lock lock(debug_storage_mutex);
-                        return debug_storage->save(target, debug_mesh);
-                    }();
+                    const auto debug_save_result = debug_storage->save(target, debug_mesh);
                     if (!debug_save_result.has_value()) {
                         LOG_ERROR_AND_EXIT(
                             "Failed to save debug mesh for node {}: {}",
@@ -634,7 +629,7 @@ std::expected<void, sf::InvalidTopology> build_levels(
         }
     }
 
-    BuildContext ctx{input_storage, ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
+    BuildContext ctx{input_storage, store::ThreadSafeStorage(std::move(output_storage)), options, space, shifted_space, root_bounds};
 
     for (uint32_t level = range.end; level-- > range.start;) {
         prev_level_built = build_level(

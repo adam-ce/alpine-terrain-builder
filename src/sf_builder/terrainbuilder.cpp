@@ -5,7 +5,6 @@
 #include <functional>
 #include <iomanip>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -42,8 +41,8 @@
 
 #include "octree/Id.h"
 #include "octree/Space.h"
-#include "octree/storage/open.h"
 #include "octree/utils.h"
+#include "store/ThreadSafeStorage.h"
 #include "store/describe_error.h"
 #include "sf/finalize_storage.h"
 
@@ -174,10 +173,6 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-std::expected<void, sf::FinalizeError> finalize_storage(mesh::storage::Storage &storage) {
-    return sf::finalize_storage(storage);
-}
-
 std::expected<void, sf::FinalizeError> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
@@ -195,9 +190,9 @@ std::expected<void, sf::FinalizeError> build_all_patches(
         LOG_ERROR_AND_EXIT("Output base path {} exists but is not a directory", output_base_path);
     }
 
-    octree::OpenOptions open_options;
+    mesh::storage::OpenOptions open_options;
     open_options.preferred_extension = output_format;
-    auto storage_result = octree::open_folder(
+    auto storage_result = mesh::storage::open_folder(
         output_base_path,
         std::move(open_options));
     if (!storage_result.has_value()) {
@@ -206,9 +201,9 @@ std::expected<void, sf::FinalizeError> build_all_patches(
             output_base_path,
             store::describe_error(storage_result.error()));
     }
-    mesh::storage::Storage storage = std::move(storage_result.value());
-    storage.settings().allow_overwrite = overwrite_existing;
-    std::mutex storage_mutex;
+    mesh::storage::Storage raw_storage = std::move(storage_result.value());
+    raw_storage.settings().allow_overwrite = overwrite_existing;
+    store::ThreadSafeStorage<mesh::storage::Storage> storage(std::move(raw_storage));
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d(true);
@@ -293,10 +288,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
     tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        const auto already_exists = [&] {
-            std::scoped_lock lock(storage_mutex);
-            return storage.has(node);
-        }();
+        const auto already_exists = storage.has(node);
         if (!already_exists.has_value()) {
             LOG_ERROR(
                 "Failed to inspect node {}: {}",
@@ -328,10 +320,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
         if (mesh_result.has_value()) {
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
-            const auto save_result = [&] {
-                std::scoped_lock lock(storage_mutex);
-                return storage.save(node, mesh);
-            }();
+            const auto save_result = storage.save(node, mesh);
             if (!save_result.has_value()) {
                 LOG_ERROR(
                     "Failed to save mesh for node {}: {}",
@@ -358,6 +347,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
         LOG_ERROR_AND_EXIT("Failed to build all terrain patches");
     }
 
-    return finalize_storage(storage);
+    auto finalized_storage = std::move(storage).release();
+    return sf::finalize_storage(finalized_storage);
 }
 }

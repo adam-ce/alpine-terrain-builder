@@ -11,9 +11,12 @@
 #include "log.h"
 #include "store/IndexFormat.h"
 #include "store/RawStorage.h"
-#include "store/StorageSettings.h"
 
 namespace store {
+
+struct StorageSettings {
+    bool allow_overwrite = false;
+};
 
 template <HierarchyTraits Traits, typename NodeData>
 class Storage {

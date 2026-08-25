@@ -7,6 +7,7 @@
 #include "cut.h"
 #include "log.h"
 #include "mask.h"
+#include "mesh/storage.h"
 #include "merge.h"
 #include "optional_utils.h"
 #include "earth.h"
@@ -35,7 +36,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
 
 void run(const cli::MergeArgs& args) {
     LOG_TRACE("Loading base dataset from {}", args.base_path);
-    auto base_result = octree::open_folder_indexed(args.base_path);
+    auto base_result = mesh::storage::open_folder_indexed(args.base_path);
     if (!base_result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open base dataset {}: {}",
@@ -45,7 +46,7 @@ void run(const cli::MergeArgs& args) {
     mesh::storage::IndexedStorage base_dataset = std::move(base_result.value());
 
     LOG_TRACE("Loading new dataset from {}", args.new_path);
-    auto new_result = octree::open_folder_indexed(args.new_path);
+    auto new_result = mesh::storage::open_folder_indexed(args.new_path);
     if (!new_result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open new dataset {}: {}",
@@ -56,10 +57,10 @@ void run(const cli::MergeArgs& args) {
 
     LOG_TRACE("Creating output dataset at {}", args.output_path);
     std::filesystem::create_directories(args.output_path);
-    octree::OpenOptions options;
+    mesh::storage::OpenOptions options;
     options.default_mapping = base_dataset.layout().mapping();
     options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".sfmesh"));
-    auto output_result = octree::open_folder(args.output_path, std::move(options));
+    auto output_result = mesh::storage::open_folder(args.output_path, std::move(options));
     if (!output_result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",
@@ -82,7 +83,7 @@ void run(const cli::MergeArgs& args) {
 
 void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
-    auto input_result = octree::open_folder_indexed(args.input_path);
+    auto input_result = mesh::storage::open_folder_indexed(args.input_path);
     if (!input_result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open input dataset {}: {}",

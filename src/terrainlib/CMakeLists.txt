@@ -135,9 +135,7 @@ add_library(terrainlib
     octree/OddLevelShifted.h octree/OddLevelShifted.cpp
     octree/Space.h octree/Space.cpp
     octree/StoreTraits.h
-    octree/storage/Format.h
     octree/storage/IndexFile.h
-    octree/storage/open.h
     octree/storage/open_runtime.h
     octree/store_layout/Flat.h
     octree/store_layout/LevelAndCoordinateDirectories.h
@@ -191,12 +189,11 @@ add_library(terrainlib
     store/RawStorage.h
     store/Storage.h
     store/StorageError.h
-    store/StorageSettings.h
+    store/ThreadSafeStorage.h
     store/Traits.h
     store/cache/Dummy.h
     store/cache/Interface.h
     store/cache/Lru.h
-    store/codec/Path.h
     store/describe_error.h
     store/open.h
     store/traverse.h

@@ -1,5 +1,4 @@
 #include <atomic>
-#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <optional>
@@ -16,29 +15,11 @@
 #include "raster_store/StoreTraits.h"
 #include "store/IndexedStorage.h"
 #include "string_utils.h"
+#include "../temporary_directory.h"
 
 namespace {
 
-class TemporaryDirectory {
-public:
-    explicit TemporaryDirectory(const std::string_view label)
-    {
-        static std::atomic_uint64_t counter = 0;
-        const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = std::filesystem::temp_directory_path()
-            / ("atb-store-storage-" + std::string(label) + "-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(m_path));
-    }
-    ~TemporaryDirectory()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(m_path, error);
-    }
-    const std::filesystem::path& path() const { return m_path; }
-
-private:
-    std::filesystem::path m_path;
-};
+using test::TemporaryDirectory;
 
 store::NodePath tile_to_path(const radix::tile::Id& key)
 {

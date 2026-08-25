@@ -1,6 +1,4 @@
 #include <array>
-#include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <limits>
 #include <memory>
@@ -15,33 +13,12 @@
 #include "mesh/codec/from_extension.h"
 #include "mesh/storage.h"
 #include "octree/storage/IndexFile.h"
-#include "octree/storage/open.h"
 #include "octree/store_layout/Mappings.h"
+#include "../temporary_directory.h"
 
 namespace {
 
-class TemporaryDirectory {
-public:
-    explicit TemporaryDirectory(const std::string_view label)
-    {
-        static std::atomic_uint64_t counter = 0;
-        const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = std::filesystem::temp_directory_path()
-            / ("atb-raster-store-" + std::string(label) + "-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(m_path));
-    }
-
-    ~TemporaryDirectory()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(m_path, error);
-    }
-
-    const std::filesystem::path& path() const { return m_path; }
-
-private:
-    std::filesystem::path m_path;
-};
+using test::TemporaryDirectory;
 
 mesh::Simple triangle_mesh(const double offset)
 {
@@ -157,12 +134,12 @@ TEST_CASE("storage supports enabled overwrites")
 TEST_CASE("folder opening persists and reopens metadata-driven storage")
 {
     TemporaryDirectory directory("folder-open");
-    octree::OpenOptions options;
+    mesh::storage::OpenOptions options;
     options.default_mapping = octree::store_layout::flat();
     options.preferred_extension = ".sfmesh";
 
     {
-        auto storage_result = octree::open_folder(directory.path(), std::move(options));
+        auto storage_result = mesh::storage::open_folder(directory.path(), std::move(options));
         REQUIRE(storage_result.has_value());
         auto storage = std::move(storage_result.value());
         CHECK(storage.is_indexed());
@@ -173,7 +150,7 @@ TEST_CASE("folder opening persists and reopens metadata-driven storage")
     }
 
     {
-        auto storage_result = octree::open_folder_indexed(directory.path());
+        auto storage_result = mesh::storage::open_folder_indexed(directory.path());
         REQUIRE(storage_result.has_value());
         const auto storage = std::move(storage_result.value());
         CHECK(storage.is_indexed());
@@ -181,7 +158,7 @@ TEST_CASE("folder opening persists and reopens metadata-driven storage")
         CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storeindex"));
     }
 
-    const auto reopened = octree::open_index(directory.path() / "octree.storeindex");
+    const auto reopened = mesh::storage::open_index(directory.path() / "octree.storeindex");
     REQUIRE(reopened.has_value());
     CHECK(reopened->has(octree::Id::root()).value());
 
@@ -220,7 +197,7 @@ TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store]
     };
     REQUIRE(octree::storage::write_index_file(index_path, index_file).has_value());
 
-    const auto result = octree::open_index(index_path);
+    const auto result = mesh::storage::open_index(index_path);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(std::holds_alternative<store::CodecError>(result.error()));
     CHECK(std::get<store::CodecError>(result.error()).category == store::CodecErrorCategory::UnsupportedCodec);
@@ -239,7 +216,7 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     };
     REQUIRE(octree::storage::write_index_file(index_path, index_file).has_value());
 
-    const auto unknown_layout = octree::open_folder_indexed(directory.path());
+    const auto unknown_layout = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(unknown_layout.has_value());
     REQUIRE(std::holds_alternative<store::UnknownLayout>(unknown_layout.error()));
     CHECK(std::get<store::UnknownLayout>(unknown_layout.error()).id == "unknown-layout");
@@ -247,14 +224,14 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     index_file.layout_id = "flat";
     index_file.codec_selector = ".unknown";
     REQUIRE(octree::storage::write_index_file(index_path, index_file).has_value());
-    const auto unknown_codec = octree::open_folder_indexed(directory.path());
+    const auto unknown_codec = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(unknown_codec.has_value());
     REQUIRE(std::holds_alternative<store::CodecError>(unknown_codec.error()));
     CHECK(std::get<store::CodecError>(unknown_codec.error()).category == store::CodecErrorCategory::UnsupportedCodec);
 
     const std::array<uint8_t, 3> malformed_bytes { 0xff, 0x00, 0x01 };
     REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
-    const auto malformed = octree::open_folder_indexed(directory.path());
+    const auto malformed = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(malformed.has_value());
     REQUIRE(std::holds_alternative<store::IndexFormatError>(malformed.error()));
     CHECK(std::get<store::IndexFormatError>(malformed.error()).category == store::IndexFormatErrorCategory::Malformed);

@@ -1,37 +1,15 @@
-#include <atomic>
-#include <chrono>
 #include <filesystem>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "cut.h"
 #include "merge.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
+#include "../temporary_directory.h"
 
 namespace {
 
-class TemporaryDirectory {
-public:
-    explicit TemporaryDirectory(const std::string_view label)
-    {
-        static std::atomic_uint64_t counter = 0;
-        const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = std::filesystem::temp_directory_path()
-            / ("atb-sfmerger-" + std::string(label) + "-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(m_path));
-    }
-
-    ~TemporaryDirectory()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(m_path, error);
-    }
-
-    const std::filesystem::path& path() const { return m_path; }
-
-private:
-    std::filesystem::path m_path;
-};
+using test::TemporaryDirectory;
 
 mesh::Simple triangle(const double x_offset = 0.0)
 {
@@ -74,14 +52,14 @@ mesh::Simple clipping_box()
 
 mesh::storage::IndexedStorage indexed_storage(const std::filesystem::path& path)
 {
-    auto result = octree::open_folder_indexed(path);
+    auto result = mesh::storage::open_folder_indexed(path);
     REQUIRE(result.has_value());
     return std::move(result.value());
 }
 
 mesh::storage::Storage unindexed_storage(const std::filesystem::path& path)
 {
-    auto result = octree::open_folder(path);
+    auto result = mesh::storage::open_folder(path);
     REQUIRE(result.has_value());
     return std::move(result.value());
 }

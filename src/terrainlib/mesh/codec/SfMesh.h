@@ -7,7 +7,6 @@
 #include "mesh/SimpleMesh.h"
 #include "mesh/codec/SfMeshFormat.h"
 #include "store/Codec.h"
-#include "store/codec/Path.h"
 
 namespace mesh::codec {
 
@@ -22,11 +21,9 @@ public:
     {
         auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(paths(node_path).front());
         if (!payload) {
-            const bool missing
-                = std::holds_alternative<::io::Error>(payload.error()) && std::get<::io::Error>(payload.error()) == ::io::Error(::io::Error::OpenFile);
             return std::unexpected(store::CodecError {
                 store::CodecOperation::Read,
-                missing ? store::CodecErrorCategory::FileNotFound : store::CodecErrorCategory::InvalidData,
+                ::io::envelope::is_file_not_found(payload.error()) ? store::CodecErrorCategory::FileNotFound : store::CodecErrorCategory::InvalidData,
                 ::io::envelope::describe_error(payload.error()),
             });
         }

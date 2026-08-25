@@ -1,5 +1,4 @@
 #include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <future>
 #include <string>
@@ -11,29 +10,11 @@
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
+#include "../temporary_directory.h"
 
 namespace {
 
-class TemporaryDirectory {
-public:
-    explicit TemporaryDirectory(const std::string_view label)
-    {
-        static std::atomic_uint64_t counter = 0;
-        const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = std::filesystem::temp_directory_path()
-            / ("atb-store-codec-" + std::string(label) + "-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(m_path));
-    }
-    ~TemporaryDirectory()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(m_path, error);
-    }
-    const std::filesystem::path& path() const { return m_path; }
-
-private:
-    std::filesystem::path m_path;
-};
+using test::TemporaryDirectory;
 
 class MultiFileCodec final : public store::Codec<int> {
 public:

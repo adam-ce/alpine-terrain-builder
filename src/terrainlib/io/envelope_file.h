@@ -17,6 +17,12 @@ namespace io::envelope {
 
 using FileError = std::variant<::io::Error, Error>;
 
+inline bool is_file_not_found(const FileError& error)
+{
+    const auto* io_error = std::get_if<::io::Error>(&error);
+    return io_error != nullptr && *io_error == ::io::Error(::io::Error::OpenFile);
+}
+
 inline std::string describe_error(const Error& error) { return "envelope error " + std::to_string(static_cast<unsigned>(error.code)); }
 
 inline std::string describe_error(const FileError& error)

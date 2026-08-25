@@ -7,7 +7,6 @@
 #include <expected>
 
 #include "codec/Dag.h"
-#include "codec/MetadataView.h"
 #include "dag_node.h"
 
 namespace dag::codec {

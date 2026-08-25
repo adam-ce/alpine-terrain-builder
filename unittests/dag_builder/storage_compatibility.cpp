@@ -1,5 +1,3 @@
-#include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <future>
 #include <limits>
@@ -10,31 +8,14 @@
 #include "codec/Dag.h"
 #include "dag_node.h"
 #include "mesh/SimpleMesh.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "storage.h"
-#include "thread_safe_storage.h"
+#include "store/ThreadSafeStorage.h"
+#include "../temporary_directory.h"
 
 namespace {
 
-class TemporaryDirectory {
-public:
-    TemporaryDirectory()
-    {
-        static std::atomic_uint64_t counter = 0;
-        const auto timestamp = std::chrono::steady_clock::now().time_since_epoch().count();
-        m_path = std::filesystem::temp_directory_path() / ("atb-dag-codec-" + std::to_string(timestamp) + "-" + std::to_string(counter++));
-        REQUIRE(std::filesystem::create_directories(m_path));
-    }
-    ~TemporaryDirectory()
-    {
-        std::error_code error;
-        std::filesystem::remove_all(m_path, error);
-    }
-    const std::filesystem::path& path() const { return m_path; }
-
-private:
-    std::filesystem::path m_path;
-};
+using test::TemporaryDirectory;
 
 dag::ClusterBatch sample_batch()
 {
@@ -167,7 +148,7 @@ TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[s
     TemporaryDirectory output;
     auto storage_result = dag::storage::open_folder_indexed(output.path());
     REQUIRE(storage_result.has_value());
-    dag::ThreadSafeStorage synchronized(std::move(storage_result.value()));
+    store::ThreadSafeStorage synchronized(std::move(storage_result.value()));
     REQUIRE(synchronized.save(octree::Id::root(), batch).has_value());
 
     auto released = std::move(synchronized).release();
@@ -220,7 +201,7 @@ TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf
 {
     TemporaryDirectory input_directory;
     TemporaryDirectory output_directory;
-    auto input_result = octree::open_folder_indexed(input_directory.path());
+    auto input_result = mesh::storage::open_folder_indexed(input_directory.path());
     REQUIRE(input_result.has_value());
     auto input = std::move(input_result.value());
     const octree::Id root = octree::Id::root();

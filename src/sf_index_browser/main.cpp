@@ -14,7 +14,7 @@
 #include "log.h"
 #include "octree/Id.h"
 #include "mesh/storage.h"
-#include "octree/storage/open.h"
+#include "mesh/storage.h"
 #include "cli.h"
 #include "store/describe_error.h"
 #include "store/NodeStatusOrMissing.h"
@@ -191,8 +191,8 @@ const octree::Id find_deepest_root(
 
 mesh::storage::IndexedStorage open_path_indexed(const std::filesystem::path& path) {
     auto result = std::filesystem::is_directory(path)
-        ? octree::open_folder_indexed(path)
-        : octree::open_index(path);
+        ? mesh::storage::open_folder_indexed(path)
+        : mesh::storage::open_index(path);
     if (!result.has_value()) {
         LOG_ERROR_AND_EXIT(
             "Failed to open dataset {}: {}",

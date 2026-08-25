@@ -31,8 +31,6 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-std::expected<void, sf::FinalizeError> finalize_storage(mesh::storage::Storage &storage);
-
 std::expected<void, sf::FinalizeError> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,

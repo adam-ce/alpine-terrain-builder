@@ -55,7 +55,7 @@ TEST_CASE("runtime DAG envelope codec is reentrant")
     std::vector<std::future<bool>> operations;
     for (int index = 0; index < 8; ++index) {
         operations.push_back(std::async(std::launch::async, [&codec, &batch, &output, index] {
-            const store::NodePath path(output.path() / std::to_string(index) / "node");
+            const std::filesystem::path path(output.path() / std::to_string(index) / "node");
             if (!codec.write(path, batch).has_value()) {
                 return false;
             }
@@ -72,7 +72,7 @@ TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
 {
     TemporaryDirectory output;
     dag::codec::Dag codec;
-    const store::NodePath node_path(output.path() / "node");
+    const std::filesystem::path node_path(output.path() / "node");
     const auto node_paths = codec.paths(node_path);
 
     SECTION("write")
@@ -126,12 +126,12 @@ TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[stor
 {
     const auto batch_codec = dag::codec::from_extension(".dag");
     REQUIRE(batch_codec.has_value());
-    CHECK(batch_codec.value()->paths(store::NodePath("node")) == std::vector<std::filesystem::path> { "node.dag", "node.dagmeta" });
+    CHECK(batch_codec.value()->paths("node") == std::vector<std::filesystem::path> { "node.dag", "node.dagmeta" });
 
     const auto metadata_codec = dag::codec::metadata_from_extension(".dag");
     REQUIRE(metadata_codec.has_value());
-    CHECK(metadata_codec.value()->paths(store::NodePath("node")) == std::vector<std::filesystem::path> { "node.dagmeta" });
-    const auto write_result = metadata_codec.value()->write(store::NodePath("node"), dag::NodeMetadata {});
+    CHECK(metadata_codec.value()->paths("node") == std::vector<std::filesystem::path> { "node.dagmeta" });
+    const auto write_result = metadata_codec.value()->write("node", dag::NodeMetadata {});
     REQUIRE_FALSE(write_result.has_value());
     CHECK(write_result.error().operation == store::CodecOperation::Write);
     CHECK(write_result.error().category == store::CodecErrorCategory::UnsupportedOperation);

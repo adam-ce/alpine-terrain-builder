@@ -174,7 +174,7 @@ TEST_CASE("mesh codec resolver dispatches every supported selector", "[store][op
     for (const std::string extension : { ".sfmesh", ".glb", ".gltf" }) {
         const auto codec = mesh::codec::from_extension(extension);
         REQUIRE(codec.has_value());
-        const auto paths = codec.value()->paths(store::NodePath("node"));
+        const auto paths = codec.value()->paths("node");
         REQUIRE_FALSE(paths.empty());
         CHECK(paths.front().extension() == extension);
     }

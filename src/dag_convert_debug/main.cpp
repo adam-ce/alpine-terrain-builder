@@ -23,7 +23,7 @@ void export_node(const cli::Args &args) {
     std::filesystem::path node_path = args.input_path;
     node_path.replace_extension();
     const dag::codec::Dag codec;
-    const auto load_result = codec.read(store::NodePath(node_path));
+    const auto load_result = codec.read(node_path);
     if (!load_result.has_value()) {
         LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().message);
         return;

@@ -21,18 +21,17 @@ namespace {
 
 using test::TemporaryDirectory;
 
-store::NodePath tile_to_path(const radix::tile::Id& key)
+std::filesystem::path tile_to_path(const radix::tile::Id& key)
 {
-    return store::NodePath(std::to_string(key.zoom_level) + "/" + std::to_string(key.coords.x) + "/" + std::to_string(key.coords.y));
+    return std::to_string(key.zoom_level) + "/" + std::to_string(key.coords.x) + "/" + std::to_string(key.coords.y);
 }
 
-std::optional<radix::tile::Id> path_to_tile(const store::NodePath& node_path)
+std::optional<radix::tile::Id> path_to_tile(const std::filesystem::path& node_path)
 {
-    const std::filesystem::path& path = node_path.path();
-    if (path.is_absolute() || std::distance(path.begin(), path.end()) != 3) {
+    if (node_path.is_absolute() || std::distance(node_path.begin(), node_path.end()) != 3) {
         return std::nullopt;
     }
-    auto part = path.begin();
+    auto part = node_path.begin();
     const auto zoom = from_chars<unsigned>(part->string());
     ++part;
     const auto x = from_chars<uint32_t>(part->string());
@@ -90,16 +89,14 @@ std::expected<void, store::CodecError> write_int(const int value, const std::fil
 
 class IntCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        std::filesystem::path path = node_path.path();
-        path += ".data";
-        return { path };
+        return { add_extension(node_path, ".data") };
     }
 
-    std::expected<int, store::CodecError> read(const store::NodePath& node_path) const override { return read_int(paths(node_path).front()); }
+    std::expected<int, store::CodecError> read(const std::filesystem::path& node_path) const override { return read_int(paths(node_path).front()); }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const int& value) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const int& value) const override
     {
         return write_int(value, paths(node_path).front());
     }
@@ -114,16 +111,12 @@ store::Storage<Traits, int> make_storage(const std::filesystem::path& path)
 
 class MultiFileCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        std::filesystem::path first = node_path.path();
-        std::filesystem::path second = node_path.path();
-        first += ".data";
-        second += ".metadata";
-        return { first, second };
+        return { add_extension(node_path, ".data"), add_extension(node_path, ".metadata") };
     }
 
-    std::expected<int, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<int, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         const auto value = read_int(paths(node_path).front());
         if (!value) {
@@ -136,7 +129,7 @@ public:
         return value.value();
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const int& value) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const int& value) const override
     {
         const auto node_paths = paths(node_path);
         if (!write_int(value, node_paths[0]) || !write_int(value + 1, node_paths[1])) {
@@ -157,14 +150,12 @@ public:
     {
     }
 
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        std::filesystem::path path = node_path.path();
-        path += extension;
-        return { path };
+        return { add_extension(node_path, extension) };
     }
 
-    std::expected<int, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<int, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         if (fail_read) {
             return std::unexpected(store::CodecError {
@@ -184,7 +175,7 @@ public:
         return value.value();
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const int& value) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const int& value) const override
     {
         if (fail_write) {
             return std::unexpected(store::CodecError {

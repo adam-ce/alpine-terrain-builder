@@ -181,7 +181,6 @@ add_library(terrainlib
     store/IndexedStorage.h
     store/InvalidKey.h
     store/Layout.h
-    store/NodePath.h
     store/NodeStatus.h
     store/NodeStatusOrMissing.h
     store/OpenError.h

@@ -8,21 +8,19 @@
 #include <fmt/format.h>
 
 #include "octree/Id.h"
-#include "store/NodePath.h"
 #include "string_utils.h"
 
 namespace octree::store_layout {
 
-inline store::NodePath flat_key_to_node_path(const Id& id) { return store::NodePath(fmt::format("{}-{}", id.level(), id.index_on_level())); }
+inline std::filesystem::path flat_key_to_node_path(const Id& id) { return fmt::format("{}-{}", id.level(), id.index_on_level()); }
 
-inline std::optional<Id> flat_node_path_to_key(const store::NodePath& node_path)
+inline std::optional<Id> flat_node_path_to_key(const std::filesystem::path& node_path)
 {
-    const std::filesystem::path& path = node_path.path();
-    if (path.empty() || path.is_absolute() || path.has_parent_path() || path.has_extension()) {
+    if (node_path.empty() || node_path.is_absolute() || node_path.has_parent_path() || node_path.has_extension()) {
         return std::nullopt;
     }
 
-    const std::string text = path.string();
+    const std::string text = node_path.string();
     const size_t separator = text.find('-');
     if (separator == std::string::npos || separator != text.rfind('-')) {
         return std::nullopt;

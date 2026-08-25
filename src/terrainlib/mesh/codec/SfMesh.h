@@ -12,12 +12,12 @@ namespace mesh::codec {
 
 class SfMesh final : public store::Codec<mesh::Simple> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        return { store::codec::append_extension(node_path, ".sfmesh") };
+        return { add_extension(node_path, ".sfmesh") };
     }
 
-    std::expected<mesh::Simple, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<mesh::Simple, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(paths(node_path).front());
         if (!payload) {
@@ -45,12 +45,12 @@ public:
         return std::move(*decoded);
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const mesh::Simple& mesh) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         return write(node_path, mesh, {});
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
     {
         auto payload = mesh::sf::encode_payload(mesh, options);
         if (!payload) {

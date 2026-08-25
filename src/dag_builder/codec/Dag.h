@@ -34,15 +34,15 @@ inline std::expected<void, store::CodecError> validate_batch(const dag::ClusterB
 
 class Dag final : public store::Codec<dag::ClusterBatch> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
         return {
-            store::codec::append_extension(node_path, ".dag"),
-            store::codec::append_extension(node_path, ".dagmeta"),
+            add_extension(node_path, ".dag"),
+            add_extension(node_path, ".dagmeta"),
         };
     }
 
-    std::expected<dag::ClusterBatch, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<dag::ClusterBatch, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         const auto node_paths = paths(node_path);
         auto clustering_payload = io::envelope::read_from_path<dag::format::ClusteringSchema>(node_paths[0]);
@@ -79,7 +79,7 @@ public:
         return batch;
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const dag::ClusterBatch& batch) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const override
     {
         if (auto valid = validate_batch(batch, store::CodecOperation::Write); !valid) {
             return valid;
@@ -122,12 +122,12 @@ public:
 
 class MetadataView final : public store::Codec<dag::NodeMetadata> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        return { store::codec::append_extension(node_path, ".dagmeta") };
+        return { add_extension(node_path, ".dagmeta") };
     }
 
-    std::expected<dag::NodeMetadata, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<dag::NodeMetadata, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         auto payload = io::envelope::read_from_path<dag::format::MetadataSchema>(paths(node_path).front());
         if (!payload) {

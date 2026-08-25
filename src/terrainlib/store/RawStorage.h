@@ -131,7 +131,7 @@ public:
             return std::unexpected(CopyError<Key>(MissingSource<Key> { key }));
         }
 
-        const NodePath probe("__codec_probe__/node");
+        const std::filesystem::path probe("__codec_probe__/node");
         if (m_codec->paths(probe) != source.m_codec->paths(probe)) {
             const auto loaded = source.m_codec->read(source.m_layout.node_path(key));
             if (!loaded.has_value()) {

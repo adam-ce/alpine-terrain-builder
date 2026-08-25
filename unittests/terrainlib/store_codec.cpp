@@ -18,25 +18,19 @@ using test::TemporaryDirectory;
 
 class MultiFileCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        std::filesystem::path data = node_path.path();
-        std::filesystem::path metadata = node_path.path();
-        data += ".data";
-        metadata += ".metadata";
-        return { data, metadata };
+        return { add_extension(node_path, ".data"), add_extension(node_path, ".metadata") };
     }
 };
 
 class WriteOnlyCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        std::filesystem::path path = node_path.path();
-        path += ".out";
-        return { path };
+        return { add_extension(node_path, ".out") };
     }
-    std::expected<void, store::CodecError> write(const store::NodePath&, const int&) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path&, const int&) const override
     {
         ++writes;
         return {};
@@ -56,7 +50,7 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
     std::vector<std::future<bool>> writes;
     for (int index = 0; index < 4; ++index) {
         writes.push_back(std::async(std::launch::async,
-            [&codec, base, index] { return codec.write(store::NodePath(base / std::to_string(index) / "node"), triangle_mesh(index)).has_value(); }));
+            [&codec, base, index] { return codec.write(base / std::to_string(index) / "node", triangle_mesh(index)).has_value(); }));
     }
     for (auto& write : writes) {
         REQUIRE(write.get());
@@ -65,7 +59,7 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
     std::vector<std::future<bool>> reads;
     for (int index = 0; index < 4; ++index) {
         reads.push_back(std::async(std::launch::async, [&codec, base, index] {
-            const auto result = codec.read(store::NodePath(base / std::to_string(index) / "node"));
+            const auto result = codec.read(base / std::to_string(index) / "node");
             return result.has_value() && result->face_count() == 1;
         }));
     }
@@ -79,7 +73,7 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
 TEST_CASE("runtime codec defaults report unsupported operations", "[store][codec]")
 {
     MultiFileCodec codec;
-    const store::NodePath path("12/34/56/78");
+    const std::filesystem::path path("12/34/56/78");
     CHECK(codec.paths(path)
         == std::vector<std::filesystem::path> {
             "12/34/56/78.data",
@@ -100,9 +94,9 @@ TEST_CASE("runtime codec defaults report unsupported operations", "[store][codec
 TEST_CASE("runtime write-only codec remains explicitly unreadable", "[store][codec]")
 {
     WriteOnlyCodec codec;
-    REQUIRE(codec.write(store::NodePath("node"), 42).has_value());
+    REQUIRE(codec.write("node", 42).has_value());
     CHECK(codec.writes == 1);
-    const auto read = codec.read(store::NodePath("node"));
+    const auto read = codec.read("node");
     REQUIRE_FALSE(read.has_value());
     CHECK(read.error().category == store::CodecErrorCategory::UnsupportedOperation);
 }
@@ -120,7 +114,7 @@ TEST_CASE("runtime glTF codec converts writer exceptions", "[store][codec]")
 {
     TemporaryDirectory directory("gltf-error");
     mesh::codec::Gltf codec(mesh::codec::GltfContainer::Binary);
-    const store::NodePath node_path(directory.path() / "blocked");
+    const std::filesystem::path node_path(directory.path() / "blocked");
     REQUIRE(std::filesystem::create_directory(codec.paths(node_path).front()));
 
     const auto result = codec.write(node_path, triangle_mesh(0.0));

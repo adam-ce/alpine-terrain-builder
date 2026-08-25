@@ -7,36 +7,31 @@
 #include <expected>
 
 #include "store/CodecError.h"
-#include "store/NodePath.h"
 
 namespace store {
-
-namespace codec {
-
-inline std::filesystem::path append_extension(const NodePath& node_path, const std::string_view extension)
-{
-    std::filesystem::path result = node_path.path();
-    result += extension;
-    return result;
-}
-
-} // namespace codec
 
 template <typename NodeData>
 class Codec {
 public:
     virtual ~Codec() = default;
 
-    virtual std::vector<std::filesystem::path> paths(const NodePath& node_path) const = 0;
+    virtual std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const = 0;
 
-    virtual std::expected<NodeData, CodecError> read(const NodePath&) const
+    virtual std::expected<NodeData, CodecError> read(const std::filesystem::path&) const
     {
         return std::unexpected(CodecError::unsupported_operation(CodecOperation::Read, "read"));
     }
 
-    virtual std::expected<void, CodecError> write(const NodePath&, const NodeData&) const
+    virtual std::expected<void, CodecError> write(const std::filesystem::path&, const NodeData&) const
     {
         return std::unexpected(CodecError::unsupported_operation(CodecOperation::Write, "write"));
+    }
+
+protected:
+    static std::filesystem::path add_extension(std::filesystem::path path, const std::string_view extension)
+    {
+        path += extension;
+        return path;
     }
 };
 

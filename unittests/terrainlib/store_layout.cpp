@@ -15,8 +15,8 @@ TEST_CASE("extensionless octree mappings preserve physical paths", "[store][layo
     SECTION("flat")
     {
         const store::Layout layout(dataset / "sf-flat", octree::store_layout::flat());
-        const store::NodePath node_path = layout.node_path(octree::Id::root());
-        CHECK(node_path.path() == dataset / "sf-flat/0-0");
+        const std::filesystem::path node_path = layout.node_path(octree::Id::root());
+        CHECK(node_path == dataset / "sf-flat/0-0");
         CHECK(sfmesh.paths(node_path) == std::vector { dataset / "sf-flat/0-0.sfmesh" });
         CHECK(layout.key_from_node_path(node_path) == octree::Id::root());
     }
@@ -46,20 +46,20 @@ TEST_CASE("octree mapping lookup is explicit", "[store][layout]")
 TEST_CASE("extensionless octree mappings validate complete paths", "[store][layout]")
 {
     const auto flat = octree::store_layout::flat();
-    CHECK_FALSE(flat.node_path_to_key(store::NodePath("1-2.sfmesh")).has_value());
-    CHECK_FALSE(flat.node_path_to_key(store::NodePath("nested/1-2")).has_value());
-    CHECK_FALSE(flat.node_path_to_key(store::NodePath("1-2-extra")).has_value());
+    CHECK_FALSE(flat.node_path_to_key("1-2.sfmesh").has_value());
+    CHECK_FALSE(flat.node_path_to_key("nested/1-2").has_value());
+    CHECK_FALSE(flat.node_path_to_key("1-2-extra").has_value());
 
     const auto coordinates = octree::store_layout::level_and_coordinate_directories();
-    CHECK_FALSE(coordinates.node_path_to_key(store::NodePath("1/0/0/0.sfmesh")).has_value());
-    CHECK_FALSE(coordinates.node_path_to_key(store::NodePath("1/0/0")).has_value());
-    CHECK_FALSE(coordinates.node_path_to_key(store::NodePath("1/0/0/0/extra")).has_value());
-    CHECK_FALSE(coordinates.node_path_to_key(store::NodePath("22/0/0/0")).has_value());
+    CHECK_FALSE(coordinates.node_path_to_key("1/0/0/0.sfmesh").has_value());
+    CHECK_FALSE(coordinates.node_path_to_key("1/0/0").has_value());
+    CHECK_FALSE(coordinates.node_path_to_key("1/0/0/0/extra").has_value());
+    CHECK_FALSE(coordinates.node_path_to_key("22/0/0/0").has_value());
 }
 
 TEST_CASE("runtime mesh codecs own their filename endings", "[store][layout][codec]")
 {
-    const store::NodePath path("12/34/56/78");
+    const std::filesystem::path path("12/34/56/78");
     mesh::codec::SfMesh sfmesh;
     mesh::codec::Gltf binary(mesh::codec::GltfContainer::Binary);
     mesh::codec::Gltf json(mesh::codec::GltfContainer::Json);

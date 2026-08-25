@@ -4,7 +4,6 @@
 #include <optional>
 #include <utility>
 
-#include "store/NodePath.h"
 #include "store/PathMapping.h"
 
 namespace store {
@@ -18,16 +17,16 @@ public:
     {
     }
 
-    NodePath node_path(const Key& key) const { return NodePath(m_base_path / m_mapping.key_to_node_path(key).path()); }
+    std::filesystem::path node_path(const Key& key) const { return m_base_path / m_mapping.key_to_node_path(key); }
 
-    std::optional<Key> key_from_node_path(const NodePath& node_path) const
+    std::optional<Key> key_from_node_path(const std::filesystem::path& node_path) const
     {
         std::error_code error;
-        const std::filesystem::path relative = std::filesystem::relative(node_path.path(), m_base_path, error);
+        const std::filesystem::path relative = std::filesystem::relative(node_path, m_base_path, error);
         if (error || relative.empty() || relative.is_absolute()) {
             return std::nullopt;
         }
-        return m_mapping.node_path_to_key(NodePath(relative));
+        return m_mapping.node_path_to_key(relative);
     }
 
     const std::filesystem::path& base_path() const { return m_base_path; }

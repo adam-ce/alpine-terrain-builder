@@ -24,12 +24,12 @@ public:
     {
     }
 
-    std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
     {
-        return { store::codec::append_extension(node_path, m_container == GltfContainer::Binary ? ".glb" : ".gltf") };
+        return { add_extension(node_path, m_container == GltfContainer::Binary ? ".glb" : ".gltf") };
     }
 
-    std::expected<mesh::Simple, store::CodecError> read(const store::NodePath& node_path) const override
+    std::expected<mesh::Simple, store::CodecError> read(const std::filesystem::path& node_path) const override
     {
         const auto result = mesh::io::gltf::load_from_path(paths(node_path).front());
         if (!result.has_value()) {
@@ -42,7 +42,7 @@ public:
         return std::move(result.value());
     }
 
-    std::expected<void, store::CodecError> write(const store::NodePath& node_path, const mesh::Simple& mesh) const override
+    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         try {
             const auto result = mesh::io::gltf::save_to_path(mesh, paths(node_path).front());

@@ -16,7 +16,7 @@ std::expected<SimpleMesh, LoadMeshError> load_from_path(
         std::filesystem::path node_path = path;
         node_path.replace_extension();
         const mesh::codec::SfMesh codec;
-        auto result = codec.read(store::NodePath(node_path));
+        auto result = codec.read(node_path);
         if (!result) {
             return std::unexpected(LoadMeshErrorKind::InvalidFormat);
         }
@@ -41,10 +41,7 @@ std::expected<void, SaveMeshError> save_to_path(
         std::filesystem::path node_path = path;
         node_path.replace_extension();
         const mesh::codec::SfMesh codec;
-        auto result = codec.write(
-            store::NodePath(node_path),
-            mesh,
-            mesh::EncodeOptions{.texture_format = options.texture_format});
+        auto result = codec.write(node_path, mesh, mesh::EncodeOptions{.texture_format = options.texture_format});
         if (!result) {
             return std::unexpected(SaveMeshErrorKind::WriteFile);
         }

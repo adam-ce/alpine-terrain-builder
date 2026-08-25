@@ -113,7 +113,7 @@ public:
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
             return std::unexpected(SaveError<Key>(AlreadyExists {
-                node_paths.empty() ? m_raw.layout().node_path(key).path() : node_paths.front(),
+                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front(),
             }));
         }
 
@@ -143,7 +143,7 @@ public:
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
             return std::unexpected(CopyError<Key>(AlreadyExists {
-                node_paths.empty() ? m_raw.layout().node_path(key).path() : node_paths.front(),
+                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front(),
             }));
         }
         const auto prepare_target = [&]() -> std::expected<void, CopyError<Key>> {
@@ -211,7 +211,7 @@ public:
         if (!node_paths.has_value()) {
             return std::unexpected(node_paths.error());
         }
-        return node_paths->empty() ? m_raw.layout().node_path(key).path() : node_paths->front();
+        return node_paths->empty() ? m_raw.layout().node_path(key) : node_paths->front();
     }
 
     const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }

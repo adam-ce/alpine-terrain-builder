@@ -22,6 +22,18 @@ inline store::CodecError file_error(const store::CodecOperation operation, const
     };
 }
 
+inline std::expected<void, store::CodecError> validate_batch(const dag::ClusterBatch& batch, const store::CodecOperation operation)
+{
+    if (batch.metadata.group_assignment.size() != batch.clustering.clusters.size()) {
+        return std::unexpected(store::CodecError {
+            operation,
+            operation == store::CodecOperation::Read ? store::CodecErrorCategory::InvalidData : store::CodecErrorCategory::Domain,
+            "DAG metadata group-assignment count does not match clustering cluster count",
+        });
+    }
+    return {};
+}
+
 class Dag final : public store::Codec<dag::ClusterBatch> {
 public:
     std::vector<std::filesystem::path> paths(const store::NodePath& node_path) const override
@@ -59,14 +71,21 @@ public:
                 metadata.error(),
             });
         }
-        return dag::ClusterBatch {
+        dag::ClusterBatch batch {
             .metadata = std::move(*metadata),
             .clustering = std::move(*clustering),
         };
+        if (auto valid = validate_batch(batch, store::CodecOperation::Read); !valid) {
+            return std::unexpected(valid.error());
+        }
+        return batch;
     }
 
     std::expected<void, store::CodecError> write(const store::NodePath& node_path, const dag::ClusterBatch& batch) const override
     {
+        if (auto valid = validate_batch(batch, store::CodecOperation::Write); !valid) {
+            return valid;
+        }
         auto clustering = dag::format::encode_clustering(batch.clustering);
         if (!clustering) {
             return std::unexpected(store::CodecError {

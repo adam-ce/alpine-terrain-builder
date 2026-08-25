@@ -87,6 +87,43 @@ TEST_CASE("runtime DAG envelope codec is reentrant")
     }
 }
 
+TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
+{
+    TemporaryDirectory output;
+    dag::codec::Dag codec;
+    const store::NodePath node_path(output.path() / "node");
+    const auto node_paths = codec.paths(node_path);
+
+    SECTION("write")
+    {
+        auto batch = sample_batch();
+        batch.metadata.group_assignment.clear();
+
+        const auto result = codec.write(node_path, batch);
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().operation == store::CodecOperation::Write);
+        CHECK(result.error().category == store::CodecErrorCategory::Domain);
+        CHECK_FALSE(std::filesystem::exists(node_paths[0]));
+        CHECK_FALSE(std::filesystem::exists(node_paths[1]));
+    }
+
+    SECTION("read")
+    {
+        REQUIRE(codec.write(node_path, sample_batch()).has_value());
+        dag::NodeMetadata metadata = sample_batch().metadata;
+        metadata.group_assignment.clear();
+        const auto encoded_metadata = dag::format::encode_metadata(metadata);
+        REQUIRE(io::envelope::write_to_path<dag::format::MetadataSchema>(encoded_metadata, node_paths[1]).has_value());
+
+        const auto result = codec.read(node_path);
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().operation == store::CodecOperation::Read);
+        CHECK(result.error().category == store::CodecErrorCategory::InvalidData);
+    }
+}
+
 TEST_CASE("versioned DAG payload validation is free-standing")
 {
     dag::format::NodeMetadata invalid_metadata {

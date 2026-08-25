@@ -1,4 +1,5 @@
 #include <fstream>
+#include <system_error>
 
 #include "io/bytes.h"
 #include "io/utils.h"
@@ -10,7 +11,11 @@ std::expected<void, Error> write_bytes_to_path(const std::span<const uint8_t> by
     LOG_TRACE("Writing bytes to path {}", path);
 
     if (make_dirs) {
-        utils::create_parent_directories(path);
+        const std::error_code error = utils::create_parent_directories(path);
+        if (error) {
+            LOG_ERROR("Failed to create parent directories for {}: {}", path, error.message());
+            return std::unexpected(Error::CreateDirectories);
+        }
     }
     
     std::ofstream file(path, std::ios::binary);

@@ -280,6 +280,17 @@ store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
 
 } // namespace
 
+TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
+{
+    TemporaryDirectory directory("write-parent-error");
+    const std::filesystem::path blocker = directory.path() / "blocker";
+    REQUIRE(write_int(1, blocker).has_value());
+
+    const auto result = io::write_bytes_to_path(std::span<const uint8_t> {}, blocker / "payload");
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error() == io::Error(io::Error::CreateDirectories));
+}
+
 TEMPLATE_TEST_CASE("shared raw storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
 {
     using Traits = TestType;

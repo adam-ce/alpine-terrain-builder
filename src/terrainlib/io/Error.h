@@ -13,7 +13,8 @@ public:
         WriteBytes,
         DetermineSize,
         ReadBytes,
-        OutOfMemory
+        OutOfMemory,
+        CreateDirectories,
     };
 
     Error() = default;
@@ -65,6 +66,9 @@ struct fmt::formatter<io::Error> {
             break;
         case io::Error::Value::OutOfMemory:
             name = "OutOfMemory";
+            break;
+        case io::Error::Value::CreateDirectories:
+            name = "CreateDirectories";
             break;
         default:
             UNREACHABLE();

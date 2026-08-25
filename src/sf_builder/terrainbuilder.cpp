@@ -5,6 +5,7 @@
 #include <functional>
 #include <iomanip>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -207,6 +208,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
     }
     mesh::storage::Storage storage = std::move(storage_result.value());
     storage.settings().allow_overwrite = overwrite_existing;
+    std::mutex storage_mutex;
 
     const auto dataset_srs = dataset.srs();
     const auto dataset_bounds = dataset.bounds3d(true);
@@ -291,7 +293,10 @@ std::expected<void, sf::FinalizeError> build_all_patches(
     tbb::task_group_context context;
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
-        const auto already_exists = storage.has(node);
+        const auto already_exists = [&] {
+            std::scoped_lock lock(storage_mutex);
+            return storage.has(node);
+        }();
         if (!already_exists.has_value()) {
             LOG_ERROR(
                 "Failed to inspect node {}: {}",
@@ -323,7 +328,10 @@ std::expected<void, sf::FinalizeError> build_all_patches(
         if (mesh_result.has_value()) {
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
-            const auto save_result = storage.save(node, mesh);
+            const auto save_result = [&] {
+                std::scoped_lock lock(storage_mutex);
+                return storage.save(node, mesh);
+            }();
             if (!save_result.has_value()) {
                 LOG_ERROR(
                     "Failed to save mesh for node {}: {}",

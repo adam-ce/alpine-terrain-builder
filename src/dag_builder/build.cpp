@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -520,6 +521,7 @@ std::unordered_set<octree::Id> build_level(
 
     // Initialize debug storage if requested (contains .glb meshes)
     std::optional<mesh::storage::Storage> debug_storage = std::nullopt;
+    std::mutex debug_storage_mutex;
     if (ctx.options.write_debug_meshes) {
         octree::OpenOptions options;
         options.preferred_extension = ".glb";
@@ -553,7 +555,11 @@ std::unordered_set<octree::Id> build_level(
             const auto save_result = ctx.output_storage.save(target, *result);
             if (save_result) {
                 if (debug_storage) {
-                    const auto debug_save_result = debug_storage->save(target, clustering_to_mesh(result->clustering));
+                    const auto debug_mesh = clustering_to_mesh(result->clustering);
+                    const auto debug_save_result = [&] {
+                        std::scoped_lock lock(debug_storage_mutex);
+                        return debug_storage->save(target, debug_mesh);
+                    }();
                     if (!debug_save_result.has_value()) {
                         LOG_ERROR_AND_EXIT(
                             "Failed to save debug mesh for node {}: {}",

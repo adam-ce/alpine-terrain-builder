@@ -13,29 +13,33 @@ Args parse(int argc, const char *const *argv) {
 
     Args args;
 
-    app.add_option("--provider", args.provider, "Tile provider (basemap or gataki)")
-        ->required()
-        ->check(CLI::IsMember({"basemap", "gataki"}, CLI::ignore_case));
+    const std::map<std::string, TileDownloadProvider> provider_map{
+        {"basemap", TileDownloadProvider::Basemap},
+        {"gataki", TileDownloadProvider::Gataki}};
+    auto* source_group = app.add_option_group("Tile source");
+    source_group->add_option("--provider", args.provider, "Configured tile provider (basemap or gataki)")
+        ->transform(CLI::CheckedTransformer(provider_map, CLI::ignore_case));
+    auto* url_option = source_group->add_option("--url", args.url_pattern, "Custom tile URL pattern containing {zoom}, {x}, and {y}");
+    source_group->require_option(1);
 
     app.add_option("--zoom", args.zoom, "Root tile zoom level")->required();
-    app.add_option("--x,--row", args.x, "Root tile x coordinate")->required();
-    app.add_option("--y,--col", args.y, "Root tile y coordinate")->required();
+    app.add_option("--x,--col", args.x, "Root tile x/column in Google/Mapbox coordinates")->required();
+    app.add_option("--y,--row", args.y, "Root tile y/row in Google/Mapbox coordinates")->required();
 
-    const std::map<std::string, radix::tile::Scheme> scheme_map{
-        {"slippymap", radix::tile::Scheme::SlippyMap},
-        {"google", radix::tile::Scheme::SlippyMap},
-        {"xyz", radix::tile::Scheme::SlippyMap},
-        {"tms", radix::tile::Scheme::Tms}};
-    args.scheme = radix::tile::Scheme::SlippyMap;
-    app.add_option("--scheme", args.scheme, "Tile scheme")
-        ->default_val(radix::tile::Scheme::SlippyMap)
-        ->transform(CLI::CheckedTransformer(scheme_map, CLI::ignore_case));
+    const std::map<std::string, TileYDirection> y_direction_map{
+        {"down", TileYDirection::Down},
+        {"up", TileYDirection::Up}};
+    args.url_y_direction = TileYDirection::Down;
+    app.add_option("--url-y-direction", args.url_y_direction, "Custom URL y direction: down (Google/Mapbox) or up (legacy TMS)")
+        ->default_str("down")
+        ->needs(url_option)
+        ->transform(CLI::CheckedTransformer(y_direction_map, CLI::ignore_case));
 
     args.srs = 3857;
     app.add_option("--srs", args.srs, "Spatial reference system EPSG code")->default_val(3857);
 
-    args.output = "tiles/{zoom}/{y}/{x}.{ext}";
-    app.add_option("--output", args.output, "Output path template")->default_val(args.output);
+    args.output = "tiles";
+    app.add_option("--output", args.output, "Output directory; files use Google/Mapbox zoom/x/y.jpeg layout")->default_val(args.output.string());
 
     const std::map<std::string, spdlog::level::level_enum> log_level_names{
         {"off", spdlog::level::off},
@@ -50,17 +54,7 @@ Args parse(int argc, const char *const *argv) {
         ->transform(CLI::CheckedTransformer(log_level_names, CLI::ignore_case))
         ->default_val(spdlog::level::info);
 
-    args.early_skip = true;
-    app.add_option("--early-skip", args.early_skip, "Resume optimization: skip completed subtrees")
-        ->default_val(true);
-
     app.add_option("--max-zoom-level", args.max_zoom_level, "Maximum zoom level to descend to");
-
-    args.layer = "bmaporthofoto30cm";
-    app.add_option("--layer", args.layer, "Basemap layer name")->default_val(args.layer);
-
-    args.style = "normal";
-    app.add_option("--style", args.style, "Basemap style")->default_val(args.style);
 
     try {
         app.parse(argc, argv);

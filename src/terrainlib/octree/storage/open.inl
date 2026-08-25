@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "io/serialize.h"
 #include "log.h"
@@ -19,13 +19,13 @@
 namespace octree {
 
 template <typename T, CodecFor<T> Codec>
-tl::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path) {
+std::expected<IndexedStorage_<T, Codec>, io::Error> open_index(const std::filesystem::path &index_path) {
     LOG_TRACE("Opening storage index {}", index_path);
 
     const auto result = io::read_from_path<disk::v1::IndexFile>(index_path);
     if (!result.has_value()) {
         LOG_TRACE("Failed to open storage index due to {}", result.error());
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
     auto index_file = result.value();
     LOG_TRACE("Successfully read storage index with {} entries.", index_file.map.size());
@@ -93,7 +93,10 @@ Storage_<T, Codec> open_folder(
     IndexMap map;
     helpers::update_index_map(map, layout);
     if (!map.empty()) {
-        helpers::save_index_map(map, layout);
+        const auto save_result = helpers::save_index_map(map, layout);
+        if (!save_result.has_value()) {
+            LOG_ERROR_AND_EXIT("Failed to create storage index in {}: {}", base_path, save_result.error());
+        }
     }
     return Storage_<T, Codec>(RawStorage_<T, Codec>(std::move(layout)), std::move(map));
 }

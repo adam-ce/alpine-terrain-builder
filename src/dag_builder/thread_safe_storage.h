@@ -4,7 +4,7 @@
 #include <shared_mutex>
 #include <type_traits>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "octree/Id.h"
 
@@ -33,7 +33,7 @@ public:
         return std::move(this->_storage);
     }
 
-    tl::expected<value_type, load_error> load(const octree::Id &id) const {
+    std::expected<value_type, load_error> load(const octree::Id &id) const {
         std::shared_lock lock(this->_mutex);
         return this->_storage.load(id);
     }
@@ -47,7 +47,7 @@ public:
         return this->_storage.base_path();
     }
 
-    tl::expected<void, save_error> save(const octree::Id &id, const value_type &value) const {
+    std::expected<void, save_error> save(const octree::Id &id, const value_type &value) const {
         std::unique_lock lock(this->_mutex);
         return this->_storage.save(id, value);
     }

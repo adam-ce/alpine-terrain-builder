@@ -44,14 +44,14 @@ TEST_CASE("transcode roundtrip") {
     mesh.texture = cv::Mat3b(100, 100);
     cv::randu(*mesh.texture, cv::Scalar(0, 0, 0), cv::Scalar(256, 256, 256));
 
-    const tl::expected<mesh::Encoded, mesh::EncodeError> encode_result =
+    const std::expected<mesh::Encoded, mesh::EncodeError> encode_result =
         mesh::encode(mesh, mesh::EncodeOptions{.texture_format = ".png"});
     if (!encode_result.has_value()) {
         FAIL(encode_result.error());
     }
     const mesh::Encoded encoded = encode_result.value();
 
-    const tl::expected<mesh::Simple, mesh::DecodeError> decode_result =
+    const std::expected<mesh::Simple, mesh::DecodeError> decode_result =
         mesh::decode(encoded, mesh::DecodeOptions{});
     if (!decode_result.has_value()) {
         FAIL(decode_result.error());
@@ -90,10 +90,10 @@ TEST_CASE("io roundtrip") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
@@ -133,10 +133,10 @@ TEST_CASE("io roundtrip high precision") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"});
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
@@ -176,10 +176,10 @@ TEST_CASE("io roundtrip no texture") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path);
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }
@@ -213,10 +213,10 @@ TEST_CASE("io roundtrip no texture and uvs") {
             std::filesystem::remove(mesh_path);
             CHECK(!std::filesystem::exists(mesh_path));
 
-            mesh::io::save_to_path(mesh, mesh_path);
+            REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const tl::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
                 FAIL(result.error().description());
             }

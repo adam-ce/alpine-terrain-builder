@@ -3,6 +3,7 @@
 #include <cmath>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include <gdal_priv.h>
@@ -91,7 +92,9 @@ namespace {
 enum class LoadErrorKind {
     UnsupportedFormat,
     FileNotFound,
-    EmptySource
+    EmptySource,
+    InvalidGeometry,
+    UnsupportedSpatialReference
 };
 
 class LoadError {
@@ -118,6 +121,10 @@ public:
             return "file not found";
         case LoadErrorKind::EmptySource:
             return "empty input source";
+        case LoadErrorKind::InvalidGeometry:
+            return "invalid geometry";
+        case LoadErrorKind::UnsupportedSpatialReference:
+            return "unsupported spatial reference";
         default:
             return "unknown error";
         }
@@ -132,6 +139,58 @@ private:
 };
 
 namespace {
+constexpr double simplification_tolerance_metres = 0.1;
+
+std::optional<double> simplification_tolerance(const OGRSpatialReference &srs) {
+    if (srs.IsProjected()) {
+        const double metres_per_unit = srs.GetLinearUnits();
+        if (metres_per_unit > 0) {
+            return simplification_tolerance_metres / metres_per_unit;
+        }
+    }
+
+    if (srs.IsGeographic()) {
+        OGRErr error = OGRERR_NONE;
+        const double semi_major_axis_metres = srs.GetSemiMajor(&error);
+        const double radians_per_unit = srs.GetAngularUnits();
+        if (error == OGRERR_NONE && semi_major_axis_metres > 0 && radians_per_unit > 0) {
+            return simplification_tolerance_metres / semi_major_axis_metres / radians_per_unit;
+        }
+    }
+
+    return std::nullopt;
+}
+
+uint64_t point_count(const OGRGeometry &geometry) {
+    const OGRwkbGeometryType geometry_type = wkbFlatten(geometry.getGeometryType());
+    if (geometry_type == wkbPolygon) {
+        const OGRPolygon *polygon = geometry.toPolygon();
+        uint64_t count = polygon->getExteriorRing()->getNumPoints();
+        for (int i = 0; i < polygon->getNumInteriorRings(); ++i) {
+            count += polygon->getInteriorRing(i)->getNumPoints();
+        }
+        return count;
+    }
+
+    if (geometry_type == wkbMultiPolygon || geometry_type == wkbGeometryCollection) {
+        const OGRGeometryCollection *collection = geometry.toGeometryCollection();
+        uint64_t count = 0;
+        for (int i = 0; i < collection->getNumGeometries(); ++i) {
+            count += point_count(*collection->getGeometryRef(i));
+        }
+        return count;
+    }
+
+    return 0;
+}
+
+std::unique_ptr<OGRGeometry> simplify_geometry(
+    const OGRGeometry &geometry,
+    const double tolerance
+) {
+    return std::unique_ptr<OGRGeometry>(geometry.SimplifyPreserveTopology(tolerance));
+}
+
 std::optional<Polygon2> convert_ring(const OGRLinearRing &ring, bool is_outer) {
     uint32_t num_points = ring.getNumPoints();
     if (ring.get_IsClosed()) {
@@ -272,20 +331,8 @@ glm::dvec2 calculate_radius_range(const std::span<const SimpleMesh3d> meshes) {
 
 } // namespace
 
-inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_dataset(Dataset& mask_dataset) {
+inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_dataset(Dataset& mask_dataset) {
     GDALDataset *dataset = mask_dataset.gdalDataset();
-
-    MultipolygonWithHoles2 polygons;
-    for (auto &&feature_layer_pair : dataset->GetFeatures()) {
-        OGRGeometry *geometry = feature_layer_pair.feature->GetGeometryRef();
-        DEBUG_ASSERT(geometry);
-        process_geometry(*geometry, polygons);
-    }
-
-    if (polygons.is_empty()) {
-        LOG_ERROR("No valid polygons found in mask dataset '{}'", mask_dataset.name());
-        return tl::unexpected(LoadErrorKind::EmptySource);
-    }
 
     OGRSpatialReference srs;
     // TODO: remove this try catch
@@ -295,6 +342,35 @@ inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_datas
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
         srs = srs::wgs84();
         // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);
+    }
+
+    const std::optional<double> tolerance = simplification_tolerance(srs);
+    if (!tolerance) {
+        LOG_ERROR("Cannot express the {} m mask simplification tolerance in the source SRS",
+            simplification_tolerance_metres);
+        return std::unexpected(LoadErrorKind::UnsupportedSpatialReference);
+    }
+
+    MultipolygonWithHoles2 polygons;
+    for (auto &&feature_layer_pair : dataset->GetFeatures()) {
+        OGRGeometry *geometry = feature_layer_pair.feature->GetGeometryRef();
+        DEBUG_ASSERT(geometry);
+
+        const uint64_t original_point_count = point_count(*geometry);
+        std::unique_ptr<OGRGeometry> simplified = simplify_geometry(*geometry, *tolerance);
+        if (!simplified || simplified->IsEmpty() || !simplified->IsValid()) {
+            LOG_ERROR("Failed to simplify mask geometry while preserving its topology");
+            return std::unexpected(LoadErrorKind::InvalidGeometry);
+        }
+
+        LOG_DEBUG("Simplified mask with {} m tolerance from {} to {} points",
+            simplification_tolerance_metres, original_point_count, point_count(*simplified));
+        process_geometry(*simplified, polygons);
+    }
+
+    if (polygons.is_empty()) {
+        LOG_ERROR("No valid polygons found in mask dataset '{}'", mask_dataset.name());
+        return std::unexpected(LoadErrorKind::EmptySource);
     }
 
     return ReferencedPolygonMask{.polygons = std::move(polygons), .srs = std::move(srs)};
@@ -472,25 +548,25 @@ inline MeshMask extrude(
     return extrude(mask, padded_radius_range);
 }
 
-inline tl::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
+inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path(const std::filesystem::path &path) {
     if (!std::filesystem::exists(path)) {
         LOG_ERROR("Mask file does not exist: {}", path);
-        return tl::unexpected(LoadErrorKind::FileNotFound);
+        return std::unexpected(LoadErrorKind::FileNotFound);
     }
 
     auto ds_opt = Dataset::open_vector(path);
     if (!ds_opt.has_value()) {
         LOG_ERROR("Failed to load mask datset: {}", path);
-        return tl::unexpected(LoadErrorKind::FileNotFound);
+        return std::unexpected(LoadErrorKind::FileNotFound);
     }
     Dataset dataset = std::move(ds_opt.value());
     return load_referenced_from_dataset(dataset);
 }
 
-inline tl::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
+inline std::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     auto ref_mask_res = load_referenced_from_path(path);
     if (!ref_mask_res.has_value()) {
-        return tl::unexpected(ref_mask_res.error());
+        return std::unexpected(ref_mask_res.error());
     }
     ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());
     SpherePolygonMask sphere_polygon_mask = project_onto_sphere(std::move(ref_polygon_mask), radius_range.x);

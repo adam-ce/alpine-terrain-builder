@@ -70,7 +70,6 @@ radix::geometry::Aabb3d parse_bounds_from_values(const std::vector<double> &data
 
 radix::geometry::Aabb3d parse_bounds_from_tile(
     const std::vector<uint32_t> &data,
-    radix::tile::Scheme scheme,
     const OGRSpatialReference &srs) {
 
     // Determine the correct Grid type based on SRS
@@ -87,7 +86,7 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
 
     const uint32_t zoom_level = data[0];
     const glm::uvec2 tile_coords(data[1], data[2]);
-    const radix::tile::Id target_tile(zoom_level, tile_coords, scheme);
+    const radix::tile::Id target_tile(zoom_level, tile_coords);
 
     return extend_bounds_to_3d(grid->srsBounds(target_tile, false));
 }
@@ -118,7 +117,6 @@ radix::geometry::Aabb3d parse_target_bounds(
     const std::vector<double> &bounds_data,
     const std::vector<uint64_t> &node_data,
     const std::vector<uint32_t> &tile_data,
-    radix::tile::Scheme tile_scheme,
     OGRSpatialReference &srs) {
 
     if (!bounds_data.empty()) {
@@ -126,7 +124,7 @@ radix::geometry::Aabb3d parse_target_bounds(
     }
 
     if (!tile_data.empty()) {
-        return parse_bounds_from_tile(tile_data, tile_scheme, srs);
+        return parse_bounds_from_tile(tile_data, srs);
     }
 
     if (!node_data.empty()) {
@@ -223,7 +221,6 @@ int run(std::span<char *> args) {
     std::vector<uint32_t> target_tile_data;
     std::vector<uint64_t> target_node_data;
     std::string target_srs_input;
-    radix::tile::Scheme target_tile_scheme;
 
     auto *target = single->add_option_group("target");
     target->add_option("--bounds", target_bounds_data, "Target bounds for the reference mesh as \"{xmin} {width} {ymin} {height} [{zmin} {depth}]\"")
@@ -236,15 +233,6 @@ int run(std::span<char *> args) {
 
     single->add_option("--output", output_path, "Output path were the mesh is written to (.terrain, .gltf or .glb)")
         ->required();
-
-    std::map<std::string, radix::tile::Scheme> scheme_str_map{
-        {"slippymap", radix::tile::Scheme::SlippyMap},
-        {"google", radix::tile::Scheme::SlippyMap},
-        {"tms", radix::tile::Scheme::Tms}};
-    single->add_option("--scheme", target_tile_scheme, "Tile scheme")
-        ->default_val(radix::tile::Scheme::SlippyMap)
-        ->needs("--tile")
-        ->transform(CLI::CheckedTransformer(scheme_str_map, CLI::ignore_case));
 
     single->add_option("--srs", target_srs_input, "EPSG code of the srs of the target bounds or id");
     single->callback([&]() {
@@ -290,14 +278,14 @@ int run(std::span<char *> args) {
 
     std::unique_ptr<TileProvider> tile_provider;
     if (texture_base_path.has_value()) {
-        BasemapSchemeTilePathProvider basemap_provider(texture_base_path.value());
+        GoogleMapboxTilePathProvider basemap_provider(texture_base_path.value());
         if (min_texture_level.has_value() || max_texture_level.has_value()) {
-            tile_provider = std::make_unique<ZoomRangeTileProvider<BasemapSchemeTilePathProvider>>(
+            tile_provider = std::make_unique<ZoomRangeTileProvider<GoogleMapboxTilePathProvider>>(
                 std::move(basemap_provider),
                 min_texture_level,
                 max_texture_level);
         } else {
-            tile_provider = std::make_unique<BasemapSchemeTilePathProvider>(std::move(basemap_provider));
+            tile_provider = std::make_unique<GoogleMapboxTilePathProvider>(std::move(basemap_provider));
         }
     }
 
@@ -307,7 +295,6 @@ int run(std::span<char *> args) {
             target_bounds_data,
             target_node_data,
             target_tile_data,
-            target_tile_scheme,
             target_srs);
 
         terrainbuilder::build_and_save_patch(

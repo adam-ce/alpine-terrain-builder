@@ -25,7 +25,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-#include "Image.h"
+#include <radix/raster.h>
 #include "ParallelTileGenerator.h"
 #include <radix/tile.h>
 #include "ctb/Grid.hpp"
@@ -38,13 +38,12 @@ public:
         : ParallelTileWriterInterface(border, "png")
     {
     }
-    void write(const std::string& base_path, const radix::tile::Descriptor& tile, const HeightData& heights) const override;
+    void write(const std::string& base_path, const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const override;
 };
 [[nodiscard]] ParallelTileGenerator make_generator(
     const std::string& input_data_path,
     const std::string& output_data_path,
     ctb::Grid::Srs srs,
-    radix::tile::Scheme tiling_scheme,
     radix::tile::Border border,
     unsigned grid_resolution = 256);
 };

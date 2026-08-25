@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <variant>
 
 #include <curl/curl.h>
@@ -19,6 +20,7 @@
 
 struct TileResult {
     struct Downloaded {};
+    struct ChildrenPending {};
     struct Skipped {};
     struct Absent {};
     struct HttpError { long status_code; };
@@ -26,18 +28,17 @@ struct TileResult {
     struct CurlError { CURLcode code; };
     struct TimedOut {};
 
-    using Status = std::variant<Downloaded, Skipped, Absent, HttpError, BadContentType, CurlError, TimedOut>;
+    using Status = std::variant<Downloaded, ChildrenPending, Skipped, Absent, HttpError, BadContentType, CurlError, TimedOut>;
 };
 
 class TileLogger {
 public:
+    class Session;
+
     explicit TileLogger(unsigned root_zoom_level)
         : _root_zoom_level(root_zoom_level), _progress(PROGRESS_RESOLUTION) {}
 
-    // Starts the progress display; pair with a call to finish().
-    void start() {
-        this->_progress_thread = this->_progress.start_monitoring();
-    }
+    [[nodiscard]] Session start();
 
     // The tile turned out not to exist (or errored out), so its branch stops here.
     void missing(const radix::tile::Id &tile) {
@@ -64,9 +65,20 @@ public:
         }, status);
     }
 
-    // Fills in any steps still missing due to floating point rounding, so the
-    // progress indicator reaches its total, then joins the thread started by start().
-    void finish() {
+private:
+    static constexpr size_t PROGRESS_RESOLUTION = 10'000;
+
+    unsigned _root_zoom_level;
+    ProgressIndicator _progress;
+    std::jthread _progress_thread;
+    size_t _steps_done = 0;
+    std::map<unsigned, uint32_t> _level_counts;
+
+    void start_monitoring() {
+        this->_progress_thread = this->_progress.start_monitoring();
+    }
+
+    void finish_monitoring() {
         while (this->_steps_done < PROGRESS_RESOLUTION) {
             this->_progress.task_finished();
             this->_steps_done++;
@@ -76,14 +88,18 @@ public:
         }
     }
 
-private:
-    static constexpr size_t PROGRESS_RESOLUTION = 10'000;
+    void cancel_monitoring() noexcept {
+        if (!this->_progress_thread.joinable()) {
+            return;
+        }
 
-    unsigned _root_zoom_level;
-    ProgressIndicator _progress;
-    std::jthread _progress_thread;
-    size_t _steps_done = 0;
-    std::map<unsigned, uint32_t> _level_counts;
+        this->_progress_thread.request_stop();
+        try {
+            this->_progress_thread.join();
+        } catch (...) {
+            // Session cleanup must not replace the active exception.
+        }
+    }
 
     static std::string format(const radix::tile::Id &tile) {
         return fmt::format("Tile[Zoom={}, X={}, Y={}]", tile.zoom_level, tile.coords.x, tile.coords.y);
@@ -114,3 +130,37 @@ private:
         }
     }
 };
+
+class TileLogger::Session {
+public:
+    explicit Session(TileLogger &logger)
+        : _logger(&logger) {
+        this->_logger->start_monitoring();
+    }
+
+    Session(const Session &) = delete;
+    Session &operator=(const Session &) = delete;
+
+    Session(Session &&other) noexcept
+        : _logger(std::exchange(other._logger, nullptr)) {}
+
+    Session &operator=(Session &&) = delete;
+
+    ~Session() {
+        if (this->_logger) {
+            this->_logger->cancel_monitoring();
+        }
+    }
+
+    void finish() {
+        this->_logger->finish_monitoring();
+        this->_logger = nullptr;
+    }
+
+private:
+    TileLogger *_logger;
+};
+
+inline TileLogger::Session TileLogger::start() {
+    return Session(*this);
+}

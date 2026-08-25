@@ -29,11 +29,9 @@ class TileHeightsGenerator
 {
     std::string m_input_data_path;
     ctb::Grid::Srs m_srs;
-    radix::tile::Scheme m_scheme;
     radix::tile::Border m_border;
     std::filesystem::path m_output_path;
 public:
-    TileHeightsGenerator(std::string  input_data_path, ctb::Grid::Srs srs, radix::tile::Scheme scheme, radix::tile::Border border, std::filesystem::path output_path);
+    TileHeightsGenerator(std::string input_data_path, ctb::Grid::Srs srs, radix::tile::Border border, std::filesystem::path output_path);
     void run(unsigned max_zoom_level) const;
 };
-

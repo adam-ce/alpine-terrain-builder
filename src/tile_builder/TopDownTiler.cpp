@@ -18,15 +18,14 @@
 
 #include "TopDownTiler.h"
 
-TopDownTiler::TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme)
-    : Tiler(grid, bounds, border, scheme)
+TopDownTiler::TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border)
+    : Tiler(grid, bounds, border)
 {
 }
 
 std::vector<radix::tile::Descriptor> TopDownTiler::generateTiles(const radix::tile::Id& parent_id) const
 {
-    assert(parent_id.scheme == scheme());
-    const auto tile_ids = parent_id.to(scheme()).children();
+    const auto tile_ids = parent_id.children();
     std::vector<radix::tile::Descriptor> tiles;
     for (const auto& tile_id : tile_ids) {
         radix::tile::Descriptor t = tile_for(tile_id);

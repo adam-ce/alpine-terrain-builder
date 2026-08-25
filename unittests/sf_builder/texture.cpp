@@ -34,7 +34,7 @@
 
 TEST_CASE("estimate_zoom_level", "[terrainbuilder]") {
     const ctb::Grid grid = ctb::GlobalMercator();
-    const radix::tile::Id tile(20, glm::uvec2(0, 1), radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id tile(20, glm::uvec2(0, 1));
     const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
     const radix::tile::SrsBounds shifted_bounds(tile_bounds.min + glm::dvec2(-100, 420), tile_bounds.max + glm::dvec2(-100, 420));
 
@@ -67,11 +67,11 @@ public:
 };
 
 TEST_CASE("texture assembler takes root tile if only available ", "[terrainbuilder]") {
-    const radix::tile::Id root_tile(3, glm::uvec2(5, 4), radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(3, glm::uvec2(5, 4));
     const std::set<radix::tile::Id> available_tiles = {
-        {3, {5, 4}, radix::tile::Scheme::SlippyMap}};
+        {3, {5, 4}}};
     const std::set<radix::tile::Id> expected_tiles = {
-        {3, {5, 4}, radix::tile::Scheme::SlippyMap}};
+        {3, {5, 4}}};
 
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
@@ -88,18 +88,18 @@ TEST_CASE("texture assembler takes root tile if only available ", "[terrainbuild
 }
 
 TEST_CASE("texture assembler ignores parent if all children are present", "[terrainbuilder]") {
-    const radix::tile::Id root_tile(3, glm::uvec2(5, 4), radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(3, glm::uvec2(5, 4));
     const std::set<radix::tile::Id> available_tiles = {
-        {3, {5, 4}, radix::tile::Scheme::SlippyMap},
-        {4, {10, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {10, 9}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 9}, radix::tile::Scheme::SlippyMap}};
+        {3, {5, 4}},
+        {4, {10, 8}},
+        {4, {11, 8}},
+        {4, {10, 9}},
+        {4, {11, 9}}};
     const std::set<radix::tile::Id> expected_tiles = {
-        {4, {10, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {10, 9}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 9}, radix::tile::Scheme::SlippyMap}};
+        {4, {10, 8}},
+        {4, {11, 8}},
+        {4, {10, 9}},
+        {4, {11, 9}}};
 
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
@@ -116,15 +116,15 @@ TEST_CASE("texture assembler ignores parent if all children are present", "[terr
 }
 
 TEST_CASE("texture assembler considers max zoom level", "[terrainbuilder]") {
-    const radix::tile::Id root_tile(3, glm::uvec2(5, 4), radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(3, glm::uvec2(5, 4));
     const std::set<radix::tile::Id> available_tiles = {
-        {3, {5, 4}, radix::tile::Scheme::SlippyMap},
-        {4, {10, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 8}, radix::tile::Scheme::SlippyMap},
-        {4, {10, 9}, radix::tile::Scheme::SlippyMap},
-        {4, {11, 9}, radix::tile::Scheme::SlippyMap}};
+        {3, {5, 4}},
+        {4, {10, 8}},
+        {4, {11, 8}},
+        {4, {10, 9}},
+        {4, {11, 9}}};
     const std::set<radix::tile::Id> expected_tiles = {
-        {3, {5, 4}, radix::tile::Scheme::SlippyMap}};
+        {3, {5, 4}}};
 
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
 
@@ -143,29 +143,29 @@ TEST_CASE("texture assembler considers max zoom level", "[terrainbuilder]") {
 
 TEST_CASE("texture assembler works for arbitrary bounds", "[terrainbuilder]") {
     const std::set<radix::tile::Id> available_tiles = {
-        // {21, {1048576, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048577, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048578, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048579, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048580, 1048576}, radix::tile::Scheme::Tms},
-        // {21, {1048581, 1048576}, radix::tile::Scheme::Tms},
-        {20, {524288, 524288}, radix::tile::Scheme::Tms},
-        {20, {524289, 524288}, radix::tile::Scheme::Tms},
-        {20, {524290, 524288}, radix::tile::Scheme::Tms},
-        // {19, {262144, 262144}, radix::tile::Scheme::Tms},
-        {19, {262145, 262144}, radix::tile::Scheme::Tms}};
+        // {21, {1048576, 1048575}},
+        {21, {1048577, 1048575}},
+        {21, {1048578, 1048575}},
+        {21, {1048579, 1048575}},
+        {21, {1048580, 1048575}},
+        // {21, {1048581, 1048575}},
+        {20, {524288, 524287}},
+        {20, {524289, 524287}},
+        {20, {524290, 524287}},
+        // {19, {262144, 262143}},
+        {19, {262145, 262143}}};
     const std::set<radix::tile::Id> expected_tiles = {
-        // {21, {1048576, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048577, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048578, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048579, 1048576}, radix::tile::Scheme::Tms},
-        {21, {1048580, 1048576}, radix::tile::Scheme::Tms},
-        // {21, {1048581, 1048576}, radix::tile::Scheme::Tms},
-        {20, {524288, 524288}, radix::tile::Scheme::Tms},
-        // {20, {524289, 524288}, radix::tile::Scheme::Tms},
-        {20, {524290, 524288}, radix::tile::Scheme::Tms},
-        // {19, {262144, 262144}, radix::tile::Scheme::Tms},
-        // {19, {262145, 262144}, radix::tile::Scheme::Tms}
+        // {21, {1048576, 1048575}},
+        {21, {1048577, 1048575}},
+        {21, {1048578, 1048575}},
+        {21, {1048579, 1048575}},
+        {21, {1048580, 1048575}},
+        // {21, {1048581, 1048575}},
+        {20, {524288, 524287}},
+        // {20, {524289, 524287}},
+        {20, {524290, 524287}},
+        // {19, {262144, 262143}},
+        // {19, {262145, 262143}}
     };
 
     const AvailabilityListEmptyTileProvider tile_provider(available_tiles);
@@ -208,7 +208,7 @@ TEST_CASE("texture assembler does not fail if there are not tiles", "[terrainbui
 
 TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
     const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher> tiles_to_texture = {
-        {radix::tile::Id(0, {0, 0}, radix::tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
+        {radix::tile::Id(0, {0, 0}), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
     };
     std::vector<radix::tile::Id> tiles_to_splatter;
     std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
@@ -217,7 +217,7 @@ TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
     const StaticTileProvider tile_provider(tiles_to_texture);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
@@ -234,8 +234,8 @@ TEST_CASE("texture assembler assembles single tile", "[terrainbuilder]") {
 
 TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
     const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher> tiles_to_texture = {
-        {radix::tile::Id(1, {0, 0}, radix::tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
-        {radix::tile::Id(1, {0, 1}, radix::tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 255, 0))},
+        {radix::tile::Id(1, {0, 0}), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 0, 255))},
+        {radix::tile::Id(1, {0, 1}), cv::Mat(1, 1, CV_8UC3, cv::Vec3b(0, 255, 0))},
     };
     std::vector<radix::tile::Id> tiles_to_splatter;
     std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
@@ -244,7 +244,7 @@ TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
     const StaticTileProvider tile_provider(tiles_to_texture);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
@@ -262,9 +262,9 @@ TEST_CASE("texture assembler assembles two tiles", "[terrainbuilder]") {
 
 TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]") {
     const std::unordered_map<radix::tile::Id, cv::Mat, radix::tile::Id::Hasher> tiles_to_texture = {
-        {radix::tile::Id(0, {0, 0}, radix::tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC1, uint8_t(1))},
-        {radix::tile::Id(1, {0, 1}, radix::tile::Scheme::Tms), cv::Mat(1, 1, CV_8UC1, uint8_t(2))},
-        {radix::tile::Id(1, {0, 1}, radix::tile::Scheme::SlippyMap), cv::Mat(1, 1, CV_8UC1, uint8_t(3))},
+        {radix::tile::Id(0, {0, 0}), cv::Mat(1, 1, CV_8UC1, uint8_t(1))},
+        {radix::tile::Id(1, {0, 0}), cv::Mat(1, 1, CV_8UC1, uint8_t(2))},
+        {radix::tile::Id(1, {0, 1}), cv::Mat(1, 1, CV_8UC1, uint8_t(3))},
     };
     std::vector<radix::tile::Id> tiles_to_splatter;
     std::transform(tiles_to_texture.begin(), tiles_to_texture.end(), std::back_inserter(tiles_to_splatter),
@@ -275,7 +275,7 @@ TEST_CASE("texture assembler correct order of texture writes", "[terrainbuilder]
     const StaticTileProvider tile_provider(tiles_to_texture);
 
     const ctb::Grid grid = ctb::GlobalMercator();
-    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(0, {0, 0});
     cv::Mat assembled_texture = terrainbuilder::splatter_tiles_to_texture(
         root_tile,
         grid,
@@ -351,7 +351,7 @@ TEST_CASE("texture assembler reports the content region", "[terrainbuilder]") {
         tile_image.row(row).setTo(uint8_t(row));
     }
 
-    const radix::tile::Id root_tile(0, {0, 0}, radix::tile::Scheme::SlippyMap);
+    const radix::tile::Id root_tile(0, {0, 0});
     const StaticTileProvider tile_provider({{root_tile, tile_image}});
     const std::vector<radix::tile::Id> tiles_to_splatter = {root_tile};
 

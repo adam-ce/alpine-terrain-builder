@@ -7,6 +7,7 @@ add_library(terrainlib
     ctb/types.hpp
 
     io/bytes.cpp
+    io/compression.cpp
     io/utils.cpp
 
     mesh/connectivity/adjacency.cpp
@@ -53,6 +54,7 @@ add_library(terrainlib
     init.cpp
     log.cpp
     ProgressIndicator.cpp
+    tile_path.h
 )
 
 target_compile_features(terrainlib PUBLIC cxx_std_23)
@@ -74,9 +76,9 @@ target_link_libraries(terrainlib PUBLIC
     spdlog
     fmt
     zpp_bits
+    zstd::libzstd_static
     cgltf
     TBB::tbb
-    tl_expected
     opencv_core
     opencv_imgproc
     opencv_imgcodecs

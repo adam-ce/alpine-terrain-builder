@@ -14,7 +14,7 @@
 #include <radix/geometry.h>
 
 #include "log.h"
-#include "raster.h"
+#include <radix/raster.h>
 
 namespace terrainbuilder {
 
@@ -53,7 +53,7 @@ public:
     }
 
     // TODO: support reading other data types
-    std::optional<raster::HeightMap> read_data_in_pixel_bounds(const radix::geometry::Aabb2i& bounds) {
+    std::optional<radix::Raster<float>> read_data_in_pixel_bounds(const radix::geometry::Aabb2i& bounds) {
         DEBUG_ASSERT(glm::all(glm::greaterThanEqual(bounds.min, glm::ivec2(0))));
         DEBUG_ASSERT(glm::all(glm::greaterThanEqual(bounds.max, glm::ivec2(0))));
         DEBUG_ASSERT(glm::all(glm::lessThan(bounds.min, glm::ivec2(this->dataset_size()))));
@@ -63,7 +63,7 @@ public:
         GDALRasterBand *height_band = this->dataset->GetRasterBand(1); // non-owning pointer
 
         // Initialize the HeightData for reading
-        raster::HeightMap height_data(bounds.width(), bounds.height());
+        radix::Raster<float> height_data(glm::uvec2(bounds.width(), bounds.height()));
         if (bounds.width() == 0 || bounds.height() == 0) {
             LOG_WARN("Target dataset bounds are empty");
             return height_data;
@@ -72,7 +72,7 @@ public:
         // Read data from the heights band into heights_data
         const int32_t read_result = height_band->RasterIO(
             GF_Read, bounds.min.x, bounds.min.y, bounds.width(), bounds.height(),
-            static_cast<void *>(height_data.data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
+            static_cast<void*>(height_data.buffer().data()), bounds.width(), bounds.height(), GDT_Float32, 0, 0);
 
         if (read_result != CE_None) {
             const char * message = CPLGetLastErrorMsg();
@@ -82,7 +82,7 @@ public:
 
         return height_data;
     }
-    std::optional<raster::HeightMap> read_data_in_pixel_bounds_clamped(radix::geometry::Aabb2i &bounds) {
+    std::optional<radix::Raster<float>> read_data_in_pixel_bounds_clamped(radix::geometry::Aabb2i &bounds) {
         const auto original_bounds = bounds;
 
         const glm::ivec2 max_in_bounds = glm::ivec2(this->dataset_size()) - glm::ivec2(1);
@@ -97,13 +97,13 @@ public:
 
         if (bounds.width() == 0 || bounds.height() == 0) {
             LOG_WARN("Target dataset bounds are empty (clamped)");
-            return raster::HeightMap(0, 0);
+            return radix::Raster<float>();
         }
 
         return this->read_data_in_pixel_bounds(bounds);
     }
 
-    std::optional<raster::HeightMap> read_data_in_srs_bounds(const radix::tile::SrsBounds &bounds) {
+    std::optional<radix::Raster<float>> read_data_in_srs_bounds(const radix::tile::SrsBounds &bounds) {
         // Transform the SrsBounds to pixel space
         radix::geometry::Aabb2i pixel_bounds = this->transform_srs_bounds_to_pixel_bounds(bounds);
 

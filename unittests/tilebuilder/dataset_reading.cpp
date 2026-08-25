@@ -27,6 +27,7 @@
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
+#include "image_writer.h"
 #include "srs.h"
 
 using namespace radix;
@@ -184,7 +185,7 @@ TEST_CASE("reading")
                 if (ALP_UNITTESTS_DEBUG_IMAGES) {
                     image::debugOut(ref_heights, fmt::format("./heights_{}_{}.png", test_name, dataset_name.substr(s, l)));
 
-                    auto height_diffs = HeightData(render_width, render_height);
+                    auto height_diffs = radix::Raster<float>({ render_width, render_height });
                     std::transform(ref_heights.begin(), ref_heights.end(), heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
                     const auto path = fmt::format("./diffs_{}_{}.png", test_name, dataset_name.substr(s, l));
                     image::debugOut(height_diffs, path);
@@ -194,7 +195,7 @@ TEST_CASE("reading")
                     const auto t = std::abs(double(a) - double(b));
                     largest_abs_diff = std::max(t, largest_abs_diff);
                     return t * t;
-                }) / double(ref_heights.size());
+                }) / double(ref_heights.buffer_length());
                 //        fmt::print("{} | {};  mse: {}, largest_abs_diff: {}\n", test_name, dataset_name.substr(s, l), mse, largest_abs_diff);
                 CHECK(largest_abs_diff < double(max_abs_diff));
                 CHECK(mse < max_mse);
@@ -248,7 +249,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./diff_low_res_high_res.png");
         }
@@ -257,7 +258,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("mse: {}, largest_abs_diff: {}\n", mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
@@ -290,7 +291,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./ov_with_warping_high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./ov_with_warping_diff_low_res_high_res.png");
         }
@@ -299,7 +300,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("mse: {}, largest_abs_diff: {}\n", mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);
@@ -332,7 +333,7 @@ TEST_CASE("reading")
             image::debugOut(low_res_heights, fmt::format("./lowres_ov_with_warping_low_res_heights.png"));
             image::debugOut(high_res_heights, fmt::format("./lowres_ov_with_warping_high_res_heights.png"));
 
-            auto height_diffs = HeightData(render_width, render_height);
+            auto height_diffs = radix::Raster<float>({ render_width, render_height });
             std::transform(low_res_heights.begin(), low_res_heights.end(), high_res_heights.begin(), height_diffs.begin(), [](auto a, auto b) { return std::abs(a - b); });
             image::debugOut(height_diffs, "./lowres_ov_with_warping_diff_low_res_high_res.png");
         }
@@ -341,7 +342,7 @@ TEST_CASE("reading")
             const auto t = std::abs(double(a) - double(b));
             largest_abs_diff = std::max(t, largest_abs_diff);
             return t * t;
-        }) / double(low_res_heights.size());
+        }) / double(low_res_heights.buffer_length());
         //    fmt::print("render w/h: {}/{}, mse: {}, largest_abs_diff: {}\n", render_width, render_height, mse, largest_abs_diff);
         CHECK(largest_abs_diff < double(max_abs_diff));
         CHECK(mse < max_mse);

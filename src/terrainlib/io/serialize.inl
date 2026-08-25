@@ -9,7 +9,7 @@
 namespace io {
 
 template <typename T>
-tl::expected<std::vector<uint8_t>, Error> write_to_bytes(const T &value) {
+std::expected<std::vector<uint8_t>, Error> write_to_bytes(const T &value) {
     std::vector<uint8_t> data;
     zpp::bits::out out(data);
     const auto result = out(value);
@@ -21,11 +21,11 @@ tl::expected<std::vector<uint8_t>, Error> write_to_bytes(const T &value) {
         case std::errc::no_buffer_space:     // growing buffer would grow beyond the allocation limits or overflow.
         case std::errc::message_size:        // message size is beyond the user defined allocation limits.
         case std::errc::result_out_of_range: // attempting to write or read from a too short buffer.
-            return tl::unexpected(Error::OutOfMemory);
+            return std::unexpected(Error::OutOfMemory);
         case std::errc::value_too_large:  // varint (variable length integer) encoding is beyond the representation limits.
         case std::errc::bad_message:      // attempt to read a variant of unrecognized type.
         case std::errc::invalid_argument: // attempting to serialize null pointer or a value-less variant.
-            return tl::unexpected(Error::Serialize);
+            return std::unexpected(Error::Serialize);
         case std::errc::protocol_error: // attempt to deserialize an invalid protocol message.
         case std::errc::not_supported:  // attempt to call an RPC that is not listed as supported.
             UNREACHABLE();
@@ -37,7 +37,7 @@ tl::expected<std::vector<uint8_t>, Error> write_to_bytes(const T &value) {
 }
 
 template <typename T>
-tl::expected<T, Error> read_from_bytes(const std::span<const uint8_t> bytes) {
+std::expected<T, Error> read_from_bytes(const std::span<const uint8_t> bytes) {
     zpp::bits::in in(bytes);
     T value;
     const auto result = in(value);
@@ -49,11 +49,11 @@ tl::expected<T, Error> read_from_bytes(const std::span<const uint8_t> bytes) {
         case std::errc::no_buffer_space:     // growing buffer would grow beyond the allocation limits or overflow.
         case std::errc::message_size:        // message size is beyond the user defined allocation limits.
         case std::errc::result_out_of_range: // attempting to write or read from a too short buffer.
-            return tl::unexpected(Error::OutOfMemory);
+            return std::unexpected(Error::OutOfMemory);
         case std::errc::value_too_large:  // varint (variable length integer) encoding is beyond the representation limits.
         case std::errc::bad_message:      // attempt to read a variant of unrecognized type.
         case std::errc::invalid_argument: // attempting to serialize null pointer or a value-less variant.
-            return tl::unexpected(Error::Deserialize);
+            return std::unexpected(Error::Deserialize);
         case std::errc::protocol_error: // attempt to deserialize an invalid protocol message.
         case std::errc::not_supported:  // attempt to call an RPC that is not listed as supported.
             UNREACHABLE();
@@ -65,20 +65,20 @@ tl::expected<T, Error> read_from_bytes(const std::span<const uint8_t> bytes) {
 }
 
 template <typename T>
-tl::expected<T, Error> read_from_path(const std::filesystem::path &path) {
+std::expected<T, Error> read_from_path(const std::filesystem::path &path) {
     const auto result = read_bytes_from_path(path);
     if (!result.has_value()) {
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
     const std::vector<uint8_t> bytes = result.value();
     return read_from_bytes<T>(bytes);
 }
 
 template <typename T>
-tl::expected<void, Error> write_to_path(const T &value, const std::filesystem::path &path, bool make_dirs) {
+std::expected<void, Error> write_to_path(const T &value, const std::filesystem::path &path, bool make_dirs) {
     const auto result = write_to_bytes(value);
     if (!result.has_value()) {
-        return tl::unexpected(result.error());
+        return std::unexpected(result.error());
     }
 
     const std::vector<uint8_t> bytes = result.value();

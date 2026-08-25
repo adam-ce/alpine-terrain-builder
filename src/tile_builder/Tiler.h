@@ -25,9 +25,8 @@
 class Tiler
 {
 public:
-    Tiler(ctb::Grid  grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme);
+    Tiler(ctb::Grid grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border);
 
-    [[nodiscard]] radix::tile::Scheme scheme() const;
     [[nodiscard]] const radix::tile::SrsBounds& bounds() const;
     void setBounds(const radix::tile::SrsBounds& newBounds);
     [[nodiscard]] radix::tile::Descriptor tile_for(const radix::tile::Id& tile_id) const;
@@ -43,6 +42,4 @@ private:
     const ctb::Grid m_grid;
     radix::tile::SrsBounds m_bounds;
     const radix::tile::Border m_border_south_east;
-    const radix::tile::Scheme m_scheme;
 };
-

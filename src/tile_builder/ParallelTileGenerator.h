@@ -22,7 +22,7 @@
 #include <memory>
 #include <string>
 
-#include "Image.h"
+#include <radix/raster.h>
 #include "ParallelTiler.h"
 #include "ctb/Grid.hpp"
 #include "ctb/types.hpp"
@@ -41,7 +41,7 @@ class ParallelTileGenerator {
 public:
     ParallelTileGenerator(const std::string& input_data_path, const ctb::Grid& grid, const ParallelTiler& tiler, std::unique_ptr<ParallelTileWriterInterface> tile_writer, const std::string& output_data_path);
     [[nodiscard]] static ParallelTileGenerator make(const std::string& input_data_path,
-        ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme,
+        ctb::Grid::Srs srs,
         std::unique_ptr<ParallelTileWriterInterface> tile_writer,
         const std::string& output_data_path,
         unsigned grid_resolution = 256);
@@ -49,7 +49,7 @@ public:
     void setWarnOnMissingOverviews(bool flag) { m_warn_on_missing_overviews = flag; }
     [[nodiscard]] const ParallelTiler& tiler() const;
     [[nodiscard]] const ctb::Grid& grid() const;
-    void write(const radix::tile::Descriptor& tile, const HeightData& heights) const;
+    void write(const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const;
     void process(const std::pair<ctb::i_zoom, ctb::i_zoom>& zoom_range, bool progress_bar_on_console = false, bool generate_world_wide_tiles = false) const;
 };
 
@@ -68,7 +68,7 @@ public:
     virtual ~ParallelTileWriterInterface() = default;
     ParallelTileWriterInterface& operator=(const ParallelTileWriterInterface&) = default;
     ParallelTileWriterInterface& operator=(ParallelTileWriterInterface&&) = default;
-    virtual void write(const std::string& file_path, const radix::tile::Descriptor& tile, const HeightData& heights) const = 0;
+    virtual void write(const std::string& file_path, const radix::tile::Descriptor& tile, const radix::Raster<float>& heights) const = 0;
     [[nodiscard]] radix::tile::Border formatRequiresBorder() const;
     [[nodiscard]] const std::string& formatFileEnding() const;
 };

@@ -39,6 +39,7 @@ void ProgressIndicator::task_finished() {
     if (m_step > m_n_steps) {
         throw std::runtime_error("Too many steps reported.");
     }
+    m_monitor_condition.notify_all();
 }
 
 std::jthread ProgressIndicator::start_monitoring() const {
@@ -50,19 +51,30 @@ std::jthread ProgressIndicator::start_monitoring() const {
     };
 
     const auto t0 = std::chrono::steady_clock::now();
-    std::jthread thread([=, this]() {
-        const auto delta_t = 500ms;
-        auto v_t_minus_1 = this->m_step.load();
-        do {
-            auto v_t = this->m_step.load();
-            const auto delta_v = v_t - v_t_minus_1;
-            v_t_minus_1 = v_t;
-            print(delta_v, delta_t);
-            std::this_thread::sleep_for(delta_t);
-        } while (this->m_step < this->m_n_steps);
-        const auto t1 = std::chrono::steady_clock::now();
-        print(this->m_n_steps, std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0));
-        std::cout << std::endl;
+    std::jthread thread([=, this](std::stop_token stop_token) noexcept {
+        try {
+            const auto delta_t = 500ms;
+            auto v_t_minus_1 = this->m_step.load();
+            while (!stop_token.stop_requested() && this->m_step < this->m_n_steps) {
+                const auto v_t = this->m_step.load();
+                const auto delta_v = v_t - v_t_minus_1;
+                v_t_minus_1 = v_t;
+                print(delta_v, delta_t);
+
+                std::unique_lock lock(this->m_monitor_mutex);
+                this->m_monitor_condition.wait_for(
+                    lock, stop_token, delta_t, [this]() { return this->m_step >= this->m_n_steps; });
+            }
+
+            if (!stop_token.stop_requested()) {
+                const auto t1 = std::chrono::steady_clock::now();
+                print(this->m_n_steps, std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0));
+                std::cout << std::endl;
+            }
+        } catch (...) {
+            // Console output and formatting must not terminate the process from
+            // inside the monitoring thread.
+        }
     });
     return thread;
 }

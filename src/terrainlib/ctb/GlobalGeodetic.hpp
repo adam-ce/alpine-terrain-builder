@@ -28,10 +28,11 @@
 namespace ctb {
 
 /**
- * @brief An implementation of the TMS Global Geodetic Profile
+ * @brief An implementation of the global Geodetic grid profile
  *
  * This class models the [Tile Mapping Service Global Geodetic
  * Profile](http://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic).
+ * Its public tile identifiers use Google/Mapbox/XYZ coordinates.
  */
 class GlobalGeodetic : public Grid {
 public:
@@ -42,7 +43,7 @@ public:
                cSRS,
                4326,
                // global geodetic has 2 root tiles: https://wiki.osgeo.org/wiki/Tile_Map_Service_Specification#global-geodetic
-               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}, radix::tile::Scheme::Tms}, radix::tile::Id{0, {1, 0}, radix::tile::Scheme::Tms}},
+               std::vector<radix::tile::Id>{radix::tile::Id{0, {0, 0}}, radix::tile::Id{0, {1, 0}}},
                2) {
     }
 

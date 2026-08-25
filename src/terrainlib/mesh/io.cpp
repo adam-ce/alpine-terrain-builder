@@ -6,7 +6,7 @@
 
 namespace mesh::io {
 
-tl::expected<SimpleMesh, LoadMeshError> load_from_path(
+std::expected<SimpleMesh, LoadMeshError> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions& options) {
     const std::filesystem::path extension = path.extension();
@@ -15,11 +15,11 @@ tl::expected<SimpleMesh, LoadMeshError> load_from_path(
     } else if (extension == ".terrain") {
         return terrain::load_from_path(path, options);
     } else {
-        return tl::unexpected(LoadMeshErrorKind::UnsupportedFormat);
+        return std::unexpected(LoadMeshErrorKind::UnsupportedFormat);
     }
 }
 
-tl::expected<void, SaveMeshError> save_to_path(
+std::expected<void, SaveMeshError> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions &options) {
@@ -33,7 +33,7 @@ tl::expected<void, SaveMeshError> save_to_path(
     } else if (extension == ".terrain") {
         return terrain::save_to_path(mesh, path, options);
     } else {
-        return tl::unexpected(SaveMeshErrorKind::UnsupportedFormat);
+        return std::unexpected(SaveMeshErrorKind::UnsupportedFormat);
     }
 }
 

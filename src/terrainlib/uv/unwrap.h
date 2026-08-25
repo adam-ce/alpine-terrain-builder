@@ -2,7 +2,7 @@
 
 #include <span>
 #include <vector>
-#include <tl/expected.hpp>
+#include <expected>
 #include <glm/glm.hpp>
 #include <opencv2/opencv.hpp>
 
@@ -57,13 +57,13 @@ struct Map {
 inline constexpr Algorithm DEFAULT_ALGORITHM = Algorithm::TutteBarycentricMapping;
 inline constexpr Border DEFAULT_BORDER = Border::Circle;
 
-tl::expected<Map, UnwrapError> unwrap(
+std::expected<Map, UnwrapError> unwrap(
     const std::span<const glm::uvec3> triangles,
     const std::span<const glm::dvec3> positions,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER);
 
-inline tl::expected<Map, UnwrapError> unwrap(
+inline std::expected<Map, UnwrapError> unwrap(
     const std::vector<glm::uvec3>& triangles,
     const std::vector<glm::dvec3>& positions,
     Algorithm algorithm = DEFAULT_ALGORITHM,
@@ -75,7 +75,7 @@ inline tl::expected<Map, UnwrapError> unwrap(
         border);
 }
 
-inline tl::expected<Map, UnwrapError> unwrap(
+inline std::expected<Map, UnwrapError> unwrap(
     const mesh::View &mesh,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER) {
@@ -86,7 +86,7 @@ inline tl::expected<Map, UnwrapError> unwrap(
         border);
 }
 
-inline tl::expected<Map, UnwrapError> unwrap(
+inline std::expected<Map, UnwrapError> unwrap(
     const mesh::Simple &mesh,
     Algorithm algorithm = DEFAULT_ALGORITHM,
     Border border = DEFAULT_BORDER) {

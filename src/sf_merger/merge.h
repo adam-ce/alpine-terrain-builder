@@ -177,5 +177,8 @@ inline void merge_datasets(
         merger.merge_root();
     }
 
-    output_dataset.save_or_create_index();
+    const auto index_result = output_dataset.save_or_create_index();
+    if (!index_result.has_value()) {
+        LOG_ERROR_AND_EXIT("Failed to save output index in {}: {}", output_dataset.base_path(), index_result.error());
+    }
 }

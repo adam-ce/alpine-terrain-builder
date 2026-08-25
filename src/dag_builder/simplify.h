@@ -264,7 +264,7 @@ inline Clustering simplify(
                 uvs[new_index] = original_cluster.uvs[original_index];
             }
         }
-        
+
         // Make error absolute and combine with the input cluster's error
         const double absolute_error = result.relative_error * max_extents;
         const double combined_error = detail::combine_error(options.error_mode, original_cluster.absolute_error, absolute_error);

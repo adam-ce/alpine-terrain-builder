@@ -25,18 +25,18 @@
 #include <fmt/core.h>
 #include <memory>
 
-#include "Image.h"
 #include "ParallelTileGenerator.h"
 #include "ctb/Grid.hpp"
+#include "image_writer.h"
+#include <radix/raster.h>
 #include <radix/height_encoding.h>
 
-ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, radix::tile::Scheme tiling_scheme, radix::tile::Border border, unsigned grid_resolution)
+ParallelTileGenerator alpine_raster::make_generator(const std::string& input_data_path, const std::string& output_data_path, ctb::Grid::Srs srs, radix::tile::Border border, unsigned grid_resolution)
 {
-    return ParallelTileGenerator::make(input_data_path, srs, tiling_scheme, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
+    return ParallelTileGenerator::make(input_data_path, srs, std::make_unique<alpine_raster::TileWriter>(border), output_data_path, grid_resolution);
 }
 
-void alpine_raster::TileWriter::write(const std::string& file_path, const radix::tile::Descriptor&, const HeightData& heights) const
+void alpine_raster::TileWriter::write(const std::string& file_path, const radix::tile::Descriptor&, const radix::Raster<float>& heights) const
 {
-    image::saveImageAsPng(image::transformImage(heights, radix::height_encoding::to_rgb),
-                          file_path);
+    image::saveImageAsPng(radix::raster::transform(heights, radix::height_encoding::to_rgb), file_path);
 }

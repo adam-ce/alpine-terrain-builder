@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include <tl/expected.hpp>
+#include <expected>
 
 #include "mesh/io.h"
 #include "octree/Id.h"
@@ -143,13 +143,13 @@ public:
         }
     }
 
-    tl::expected<value_type, load_error> load(const Id &id) const noexcept {
+    std::expected<value_type, load_error> load(const Id &id) const noexcept {
         if (const auto value_opt = this->_cache.get(id)) {
             return value_opt.value();
         }
 
         if (!this->_index.contains(id, true)) {
-            return tl::unexpected(Codec::file_not_found());
+            return std::unexpected(Codec::file_not_found());
         }
 
         const auto result = this->_inner.load(id);
@@ -159,7 +159,7 @@ public:
         return result;
     }
 
-    tl::expected<void, save_error> save(const Id &id, const value_type &value) noexcept {
+    std::expected<void, save_error> save(const Id &id, const value_type &value) noexcept {
         if (this->check_overwrite(id)) {
             LOG_ERROR_AND_EXIT("tried to overwrite value when not allowed");
         }
@@ -172,9 +172,9 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyError> copy_from(const Id &id, const Storage_<T, Codec> &source) noexcept {
+    std::expected<void, CopyError> copy_from(const Id &id, const Storage_<T, Codec> &source) noexcept {
         if (!source._index.contains(id, true)) {
-            return tl::unexpected(CopyErrorKind::FileNotFound);
+            return std::unexpected(CopyErrorKind::FileNotFound);
         }
 
         if (this->check_overwrite(id)) {
@@ -189,7 +189,7 @@ public:
         return result;
     }
 
-    tl::expected<void, CopyError> copy_to(const Id &id, Storage_<T, Codec> &target) const noexcept {
+    std::expected<void, CopyError> copy_to(const Id &id, Storage_<T, Codec> &target) const noexcept {
         return target.copy_from(id, *this);
     }
 
@@ -252,7 +252,7 @@ public:
         }
     }
 
-    tl::expected<void, io::Error> save_or_create_index() noexcept {
+    std::expected<void, io::Error> save_or_create_index() noexcept {
         if (this->is_indexed() && !this->_index.dirty) {
             return {};
         }

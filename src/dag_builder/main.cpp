@@ -44,7 +44,11 @@ int main(int argc, char **argv) {
         }
 
         dag::build_levels(input_storage, output_storage, options, args.level_range);
-        output_storage.save_index();
+        const auto index_result = output_storage.save_index();
+        if (!index_result.has_value()) {
+            LOG_ERROR("Failed to save output index in {}: {}", args.output_path, index_result.error());
+            return EXIT_FAILURE;
+        }
 
         return EXIT_SUCCESS;
     } catch (const std::exception &e) {

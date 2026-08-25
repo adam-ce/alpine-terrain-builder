@@ -24,7 +24,7 @@
 
 class TopDownTiler : public Tiler {
 public:
-    TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border, radix::tile::Scheme scheme);
+    TopDownTiler(const ctb::Grid& grid, const radix::tile::SrsBounds& bounds, radix::tile::Border border);
 
     [[nodiscard]] std::vector<radix::tile::Descriptor> generateTiles(const radix::tile::Id& parent_id) const;
 };

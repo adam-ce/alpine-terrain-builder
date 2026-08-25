@@ -11,6 +11,9 @@
 namespace octree::cache {
 
 // TODO: UNTESTED
+// Do not use this cache for NodeLoader's ancestor lookup until cached ancestors
+// are clipped to the requested node bounds. NodeLoader currently returns a
+// cached ancestor unchanged, producing incorrect geometry for child requests.
 template <typename Key, typename Value>
 class Lru_ : public ICache {
 public:

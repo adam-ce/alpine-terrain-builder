@@ -30,7 +30,7 @@ TEST_CASE("TileHeightsGenerator")
     constexpr auto file_name = "height_data.atb";
 
     SECTION("mercator") {
-        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
+        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::SphericalMercator, radix::tile::Border::Yes, base_path / file_name);
         generator.run(8);
 
         const auto heights = TileHeights::read_from(base_path / file_name);
@@ -41,7 +41,7 @@ TEST_CASE("TileHeightsGenerator")
         }
 
         {
-            auto [min, max] = heights.query({ 8, { 138, 166 } }); // part of styria, lower and upper austria (https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#8/15.69/47.75)
+            auto [min, max] = heights.query({ 8, { 138, 89 } }); // part of styria, lower and upper austria (https://www.maptiler.com/google-maps-coordinates-tile-bounds-projection/#8/15.69/47.75)
             CHECK(min > 300);
             CHECK(min < 400);
             CHECK(max > 1500);
@@ -50,7 +50,7 @@ TEST_CASE("TileHeightsGenerator")
     }
 
     SECTION("geodetic") {
-        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::WGS84, radix::tile::Scheme::Tms, radix::tile::Border::Yes, base_path / file_name);
+        const auto generator = TileHeightsGenerator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", ctb::Grid::Srs::WGS84, radix::tile::Border::Yes, base_path / file_name);
         generator.run(8);
 
         const auto heights = TileHeights::read_from(base_path / file_name);
@@ -61,7 +61,7 @@ TEST_CASE("TileHeightsGenerator")
         }
 
         {
-            auto [min, max] = heights.query({ 8, { 270, 194 } }); // can't check the address easily, because there is no web service showing geodetic tile names.
+            auto [min, max] = heights.query({ 8, { 270, 61 } }); // can't check the address easily, because there is no web service showing geodetic tile names.
             CHECK(min > 500);
             CHECK(min < 700);
             CHECK(max > 3600);

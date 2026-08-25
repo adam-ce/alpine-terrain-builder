@@ -91,7 +91,7 @@ jobs:
         wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
         echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-23 main" | sudo tee /etc/apt/sources.list.d/llvm-23.list
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends clang-23 lld-23 libclang-rt-23-dev
+        sudo apt-get install -y --no-install-recommends clang-23 lld-23 llvm-23 libclang-rt-23-dev
 
     - name: Install GCC ${{ matrix.cxx }}
       if: matrix.cxx == 'g++-16'
@@ -186,6 +186,9 @@ jobs:
         export PROJ_DATA="${{ github.workspace }}/build/alp_external/proj/share/proj"
         export PROJ_LIB="${PROJ_DATA}"
         export GDAL_DATA="${{ github.workspace }}/build/alp_external/gdal/share/gdal"
+        if [[ "${{ matrix.sanitizer }}" == "asan" ]]; then
+          export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23
+        fi
         if [[ "${{ matrix.sanitizer }}" == "tsan" ]]; then
           export TSAN_OPTIONS="suppressions=${{ github.workspace }}/extern/tbb/cmake/suppressions/tsan.suppressions"
         fi

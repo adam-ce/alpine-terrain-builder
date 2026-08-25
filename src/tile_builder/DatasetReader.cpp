@@ -29,7 +29,7 @@
 
 #include "Dataset.h"
 #include "Exception.h"
-#include "Image.h"
+#include <radix/raster.h>
 #include "ctb/types.hpp"
 #include "log.h"
 
@@ -185,12 +185,12 @@ DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRS
         throw Exception(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));
 }
 
-HeightData DatasetReader::read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
+radix::Raster<float> DatasetReader::read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
 {
     return readFrom(m_dataset, bounds, width, height);
 }
 
-HeightData DatasetReader::readWithOverviews(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
+radix::Raster<float> DatasetReader::readWithOverviews(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
 {
 #ifdef ALP_ENABLE_OVERVIEW_READING
     auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
@@ -202,7 +202,7 @@ HeightData DatasetReader::readWithOverviews(const radix::tile::SrsBounds& bounds
 #endif
 }
 
-HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
+radix::Raster<float> DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
 {
     // if we have performance problems with the warping, it'd still be possible to approximate the warping operation with a linear transform (mostly when zoomed in / on higher zoom levels).
     // CTB does this in GDALTiler.cpp around line 375 ("// Decide if we are doing an approximate or exact transformation").
@@ -212,9 +212,9 @@ HeightData DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_datase
     auto warped_dataset = Dataset(static_cast<GDALDataset*>(GDALCreateWarpedVRT(source_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warp_options.first.get())));
 
     auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1); // non-owning pointer
-    auto heights_data = HeightData(width, height);
+    auto heights_data = radix::Raster<float>({ width, height });
     if (heights_band->RasterIO(GF_Read, 0, 0, int(width), int(height),
-            static_cast<void*>(heights_data.data()), int(width), int(height), GDT_Float32, 0, 0)
+            static_cast<void*>(heights_data.buffer().data()), int(width), int(height), GDT_Float32, 0, 0)
         != CE_None)
         throw Exception("couldn't read data");
 

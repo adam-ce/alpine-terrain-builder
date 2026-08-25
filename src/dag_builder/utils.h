@@ -147,7 +147,7 @@ inline mesh::Simple manifold_clustering_to_mesh(const Clustering &clustering, co
             mesh.triangles.push_back(local_triangle + base_vertex);
         }
     }
-    
+
     DEBUG_ASSERT(mesh::is_manifold(mesh));
 
     if (debug_texture) {

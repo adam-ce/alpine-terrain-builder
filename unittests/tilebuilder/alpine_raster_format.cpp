@@ -24,7 +24,7 @@
 #include <fmt/core.h>
 #include <numeric>
 
-#include "Image.h"
+#include <radix/raster.h>
 #include "alpine_raster.h"
 #include "ctb/Grid.hpp"
 
@@ -41,15 +41,15 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("raste write")
     {
-        const auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, radix::tile::Border::Yes);
-        generator.write(radix::tile::Descriptor { {0, glm::uvec2(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        const auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Border::Yes);
+        generator.write(radix::tile::Descriptor { {0, glm::uvec2(0, 0)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, radix::Raster<float>({ 257, 257 }));
         CHECK(std::filesystem::exists("./unittest_tiles/0/0/0.png"));
 
-        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, radix::Raster<float>({ 257, 257 }));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // check that a second write doesn't crash
-        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, HeightData(257, 257));
+        generator.write(radix::tile::Descriptor { {1, glm::uvec2(2, 3)}, {}, int(ctb::Grid::Srs::SphericalMercator), 256, 257 }, radix::Raster<float>({ 257, 257 }));
         CHECK(std::filesystem::exists("./unittest_tiles/1/2/3.png"));
 
         // in the best case, we would read back the data and check it. but that's too much work for now.
@@ -58,7 +58,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 
     SECTION("process all tiles")
     {
-        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 0, 7 });
         const auto tiles = generator.tiler().generateTiles({ 0, 7 });
@@ -71,7 +71,7 @@ TEMPLATE_TEST_CASE("alpine raster format, border ", "", std::true_type, std::fal
 #if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
     SECTION("process all tiles with max zoom")
     {
-        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, radix::tile::Scheme::Tms, testTypeValue2Border(TestType::value));
+        auto generator = alpine_raster::make_generator(ALP_TEST_DATA_DIR "/austria/at_mgi.tif", "./unittest_tiles/", ctb::Grid::Srs::SphericalMercator, testTypeValue2Border(TestType::value));
         generator.setWarnOnMissingOverviews(false);
         generator.process({ 4, 8 });
         const auto tiles = generator.tiler().generateTiles({ 4, 8 });

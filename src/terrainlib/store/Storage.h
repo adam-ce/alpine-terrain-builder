@@ -24,8 +24,8 @@ public:
     using Key = typename Traits::Key;
     using key_type = Key;
     using value_type = NodeData;
-    using load_error = LoadError<Key>;
-    using save_error = SaveError<Key>;
+    using load_error = ::Error;
+    using save_error = ::Error;
 
     struct Persistence {
         IndexFormat<Traits> format;
@@ -80,41 +80,38 @@ public:
         return *this;
     }
 
-    std::expected<NodeData, LoadError<Key>> load(const Key& key) const
+    std::expected<NodeData, ::Error> load(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(LoadError<Key>(InvalidKey<Key> { key }));
+            return std::unexpected(invalid_key_error(key));
         }
         if (m_index.has_value()) {
             const auto status = m_index->get(key);
             if (!status.has_value()) {
-                return std::unexpected(LoadError<Key>(status.error()));
+                return std::unexpected(status.error());
             }
             if (!status->has_value() || status->value() == NodeStatus::Virtual) {
-                return std::unexpected(LoadError<Key>(CodecError {
-                    CodecOperation::Read,
-                    CodecErrorCategory::FileNotFound,
-                    "node is not physically present in the index",
-                }));
+                return std::unexpected(
+                    ::Error::make(::Error::Code::NotFound, "node " + key_to_string(key) + " is not physically present in the index"));
             }
         }
         return m_raw.load(key);
     }
 
-    std::expected<void, SaveError<Key>> save(const Key& key, const NodeData& data)
+    std::expected<void, ::Error> save(const Key& key, const NodeData& data)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(SaveError<Key>(InvalidKey<Key> { key }));
+            return std::unexpected(invalid_key_error(key));
         }
         const auto exists = has(key);
         if (!exists.has_value()) {
-            return std::unexpected(std::visit([](const auto& error) -> SaveError<Key> { return error; }, exists.error()));
+            return std::unexpected(exists.error());
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
-            return std::unexpected(SaveError<Key>(AlreadyExists {
-                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front(),
-            }));
+            return std::unexpected(::Error::make(::Error::Code::AlreadyExists,
+                "save node to",
+                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front()));
         }
 
         const auto result = m_raw.save(key, data);
@@ -124,35 +121,35 @@ public:
         if (m_index.has_value()) {
             const auto added = m_index->add(key);
             if (!added.has_value()) {
-                return std::unexpected(SaveError<Key>(added.error()));
+                return std::unexpected(added.error());
             }
             m_dirty = m_dirty || added.value();
         }
         return {};
     }
 
-    std::expected<void, CopyError<Key>> copy_from(const Key& key, const Storage& source)
+    std::expected<void, ::Error> copy_from(const Key& key, const Storage& source)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(CopyError<Key>(InvalidKey<Key> { key }));
+            return std::unexpected(invalid_key_error(key));
         }
         const auto exists = has(key);
         if (!exists.has_value()) {
-            return std::unexpected(std::visit([](const auto& error) -> CopyError<Key> { return error; }, exists.error()));
+            return std::unexpected(exists.error());
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
-            return std::unexpected(CopyError<Key>(AlreadyExists {
-                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front(),
-            }));
+            return std::unexpected(::Error::make(::Error::Code::AlreadyExists,
+                "copy node to",
+                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front()));
         }
-        const auto prepare_target = [&]() -> std::expected<void, CopyError<Key>> {
+        const auto prepare_target = [&]() -> std::expected<void, ::Error> {
             if (!exists.value() || !m_index.has_value()) {
                 return {};
             }
             const auto removed = m_index->remove(key);
             if (!removed.has_value()) {
-                return std::unexpected(CopyError<Key>(removed.error()));
+                return std::unexpected(removed.error());
             }
             m_dirty = m_dirty || removed.value();
             return {};
@@ -165,14 +162,14 @@ public:
         if (m_index.has_value()) {
             const auto added = m_index->add(key);
             if (!added.has_value()) {
-                return std::unexpected(CopyError<Key>(added.error()));
+                return std::unexpected(added.error());
             }
             m_dirty = m_dirty || added.value();
         }
         return {};
     }
 
-    std::expected<bool, FileOperationError<Key>> remove(const Key& key)
+    std::expected<bool, ::Error> remove(const Key& key)
     {
         const auto removed = m_raw.remove(key);
         if (!removed.has_value()) {
@@ -181,31 +178,31 @@ public:
         if (m_index.has_value()) {
             const auto index_removed = m_index->remove(key);
             if (!index_removed.has_value()) {
-                return std::unexpected(FileOperationError<Key>(index_removed.error()));
+                return std::unexpected(index_removed.error());
             }
             m_dirty = m_dirty || index_removed.value();
         }
         return removed.value();
     }
 
-    std::expected<bool, FileOperationError<Key>> has(const Key& key) const
+    std::expected<bool, ::Error> has(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(FileOperationError<Key>(InvalidKey<Key> { key }));
+            return std::unexpected(invalid_key_error(key));
         }
         if (!m_index.has_value()) {
             return m_raw.has(key);
         }
         const auto status = m_index->get(key);
         if (!status.has_value()) {
-            return std::unexpected(FileOperationError<Key>(status.error()));
+            return std::unexpected(status.error());
         }
         return status->has_value() && status->value() != NodeStatus::Virtual;
     }
 
-    std::expected<std::vector<std::filesystem::path>, InvalidKey<Key>> paths(const Key& key) const { return m_raw.paths(key); }
+    std::expected<std::vector<std::filesystem::path>, ::Error> paths(const Key& key) const { return m_raw.paths(key); }
 
-    std::expected<std::filesystem::path, InvalidKey<Key>> path_for(const Key& key) const
+    std::expected<std::filesystem::path, ::Error> path_for(const Key& key) const
     {
         const auto node_paths = paths(key);
         if (!node_paths.has_value()) {
@@ -242,17 +239,13 @@ public:
         return std::cref(m_index.value());
     }
 
-    std::expected<void, IndexFormatError> save_index() const
+    std::expected<void, ::Error> save_index() const
     {
         if (!m_dirty) {
             return {};
         }
         if (!m_index.has_value() || !m_persistence.has_value()) {
-            return std::unexpected(IndexFormatError {
-                IndexFormatErrorCategory::Write,
-                {},
-                "indexed storage has no persistence configuration",
-            });
+            return std::unexpected(::Error::make(::Error::Code::Internal, "indexed storage has no persistence configuration"));
         }
         const IndexMetadata<Traits> metadata {
             m_index.value(),
@@ -267,7 +260,7 @@ public:
         return result;
     }
 
-    std::expected<void, IndexFormatError> save_or_create_index()
+    std::expected<void, ::Error> save_or_create_index()
     {
         if (!m_index.has_value()) {
             m_index.emplace();
@@ -286,6 +279,11 @@ protected:
     void set_index_dirty(const bool dirty = true) const { m_dirty = dirty; }
 
 private:
+    static ::Error invalid_key_error(const Key& key)
+    {
+        return ::Error::make(::Error::Code::InvalidInput, "invalid hierarchy key " + key_to_string(key));
+    }
+
     void finalize_displaced_state() noexcept
     {
         if (!m_dirty || !m_index.has_value()) {
@@ -293,7 +291,7 @@ private:
         }
         const auto result = save_index();
         if (!result.has_value()) {
-            LOG_ERROR("Failed to automatically save index {}: {}", result.error().path, result.error().message);
+            LOG_ERROR("Failed to automatically save index: {}", result.error().to_string());
         }
     }
 

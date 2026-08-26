@@ -16,7 +16,6 @@
 #include "mesh/storage.h"
 #include "mesh/storage.h"
 #include "cli.h"
-#include "store/describe_error.h"
 #include "store/NodeStatusOrMissing.h"
 
 namespace {
@@ -87,7 +86,7 @@ public:
                 const auto &mesh = result.value();
                 entry = MeshNode{parent.id, mesh.vertex_count(), mesh.face_count()};
             } else {
-                entry = ErrorNode{parent.id, store::describe_error(result.error())};
+                entry = ErrorNode{parent.id, result.error().to_string()};
             }
             it++;
             it = this->_view.emplace(it, entry);
@@ -197,7 +196,7 @@ mesh::storage::IndexedStorage open_path_indexed(const std::filesystem::path& pat
         LOG_ERROR_AND_EXIT(
             "Failed to open dataset {}: {}",
             path,
-            store::describe_error(result.error()));
+            result.error().to_string());
     }
     return std::move(result.value());
 }

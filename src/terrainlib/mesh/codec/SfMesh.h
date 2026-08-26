@@ -17,63 +17,39 @@ public:
         return { add_extension(node_path, ".sfmesh") };
     }
 
-    std::expected<mesh::Simple, store::CodecError> read(const std::filesystem::path& node_path) const override
+    std::expected<mesh::Simple, ::Error> read(const std::filesystem::path& node_path) const override
     {
         auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(paths(node_path).front());
         if (!payload) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Read,
-                ::io::envelope::is_file_not_found(payload.error()) ? store::CodecErrorCategory::FileNotFound : store::CodecErrorCategory::InvalidData,
-                ::io::envelope::describe_error(payload.error()),
-            });
+            return std::unexpected(std::move(payload).error().with_context("read SF mesh"));
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Read,
-                store::CodecErrorCategory::InvalidData,
-                valid.error(),
-            });
+            return std::unexpected(::Error::make(::Error::Code::CorruptData, valid.error()));
         }
         auto decoded = mesh::sf::decode_payload(std::move(*payload));
         if (!decoded) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Read,
-                store::CodecErrorCategory::InvalidData,
-                "could not decode SF mesh payload",
-            });
+            return std::unexpected(::Error::make(::Error::Code::CorruptData, "could not decode SF mesh payload"));
         }
         return std::move(*decoded);
     }
 
-    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
+    std::expected<void, ::Error> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         return write(node_path, mesh, {});
     }
 
-    std::expected<void, store::CodecError> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
+    std::expected<void, ::Error> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
     {
         auto payload = mesh::sf::encode_payload(mesh, options);
         if (!payload) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Write,
-                store::CodecErrorCategory::Domain,
-                "could not encode SF mesh payload",
-            });
+            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "could not encode SF mesh payload"));
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Write,
-                store::CodecErrorCategory::Domain,
-                valid.error(),
-            });
+            return std::unexpected(::Error::make(::Error::Code::InvalidInput, valid.error()));
         }
         auto result = ::io::envelope::write_to_path<mesh::sf::Schema>(*payload, paths(node_path).front());
         if (!result) {
-            return std::unexpected(store::CodecError {
-                store::CodecOperation::Write,
-                store::CodecErrorCategory::Io,
-                ::io::envelope::describe_error(result.error()),
-            });
+            return std::unexpected(std::move(result).error().with_context("write SF mesh"));
         }
         return {};
     }

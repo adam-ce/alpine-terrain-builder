@@ -16,8 +16,7 @@
 #include "mesh/storage.h"
 #include "store/NodeStatusOrMissing.h"
 #include "store/cache/Dummy.h"
-#include "store/describe_error.h"
-#include "sf/Error.h"
+#include "Error.h"
 #include "sf/finalize_storage.h"
 #include "sf/validate_index.h"
 
@@ -38,7 +37,7 @@ public:
     using Status = store::NodeStatusOrMissing;
     using Context = Visitor::Context;
     using Result = merge::Result<Context>;
-    using Expected = std::expected<void, sf::ProcessingError>;
+    using Expected = std::expected<void, ::Error>;
 
     Merger(
         Visitor& visitor,
@@ -68,7 +67,7 @@ public:
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
         const auto has_result = this->_output.has_node(id);
         if (!has_result.has_value()) {
-            return std::unexpected(sf::ProcessingError(has_result.error()));
+            return std::unexpected(has_result.error());
         }
         if (has_result.value()) {
             LOG_DEBUG("[{}] Already merged, skipping...", id);
@@ -97,7 +96,7 @@ public:
                     if (mesh_opt.has_value()) {
                         const auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
-                            return std::unexpected(sf::ProcessingError(write_result.error()));
+                            return std::unexpected(write_result.error());
                         }
                     }
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
@@ -105,7 +104,7 @@ public:
                     if (mesh_opt.has_value()) {
                         const auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
-                            return std::unexpected(sf::ProcessingError(write_result.error()));
+                            return std::unexpected(write_result.error());
                         }
                     }
                 } else {
@@ -113,7 +112,7 @@ public:
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right);
                     if (!copy_result.has_value()) {
-                        return std::unexpected(sf::ProcessingError(copy_result.error()));
+                        return std::unexpected(copy_result.error());
                     }
                 }
                 return {};
@@ -121,7 +120,7 @@ public:
                 LOG_DEBUG("[{}] was merged", id);
                 const auto write_result = this->_output.write_node(id, result.mesh);
                 if (!write_result.has_value()) {
-                    return std::unexpected(sf::ProcessingError(write_result.error()));
+                    return std::unexpected(write_result.error());
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
@@ -182,7 +181,7 @@ private:
     NodeWriter _output;
 };
 
-inline std::expected<void, sf::ProcessingError> merge_datasets(
+inline std::expected<void, ::Error> merge_datasets(
     const mesh::storage::IndexedStorage &left_dataset,
     const mesh::storage::IndexedStorage &right_dataset,
     mesh::storage::Storage &output_dataset,
@@ -190,7 +189,7 @@ inline std::expected<void, sf::ProcessingError> merge_datasets(
     for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
         const auto validation = sf::validate_index(input->index());
         if (!validation.has_value()) {
-            return std::unexpected(sf::ProcessingError(validation.error()));
+            return std::unexpected(validation.error());
         }
     }
 
@@ -223,9 +222,7 @@ inline std::expected<void, sf::ProcessingError> merge_datasets(
 
     const auto finalization = sf::finalize_storage(output_dataset);
     if (!finalization.has_value()) {
-        return std::unexpected(std::visit(
-            [](const auto &error) -> sf::ProcessingError { return error; },
-            finalization.error()));
+        return std::unexpected(finalization.error());
     }
     return {};
 }

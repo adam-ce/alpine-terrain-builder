@@ -40,8 +40,8 @@ TEST_CASE("SF builder finalization retains an invalid written index for diagnosi
 
     const auto finalized = sf::finalize_storage(storage);
     REQUIRE_FALSE(finalized.has_value());
-    REQUIRE(std::holds_alternative<sf::InvalidTopology>(finalized.error()));
-    CHECK(std::get<sf::InvalidTopology>(finalized.error()).key == root);
+    CHECK(finalized.error().code() == ::Error::Code::CorruptData);
+    CHECK(finalized.error().to_string().contains(root.to_string()));
     CHECK(std::filesystem::is_regular_file(directory.path() / "octree.storeindex"));
 
     auto reopened = mesh::storage::open_index(directory.path() / "octree.storeindex");

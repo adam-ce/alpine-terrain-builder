@@ -71,10 +71,10 @@ TEST_CASE("shared index rejects invalid keys", "[store][index][raster]")
     store::Index<Traits> index;
     const Key invalid { 4, { 16, 0 } };
 
-    CHECK(index.get(invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
-    CHECK(index.add(invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
-    CHECK(index.remove(invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
-    CHECK(index.is_present(invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
-    CHECK(index.is_absent(invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
-    CHECK(index.is(store::NodeStatus::Leaf, invalid) == std::unexpected(store::InvalidKey<Key> { invalid }));
+    CHECK(index.get(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(index.add(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(index.remove(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(index.is_present(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(index.is_absent(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(index.is(store::NodeStatus::Leaf, invalid).error().code() == ::Error::Code::InvalidInput);
 }

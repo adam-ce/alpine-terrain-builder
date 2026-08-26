@@ -11,8 +11,6 @@
 #include "merge.h"
 #include "optional_utils.h"
 #include "earth.h"
-#include "store/describe_error.h"
-#include "sf/Error.h"
 
 std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) {
@@ -41,7 +39,7 @@ void run(const cli::MergeArgs& args) {
         LOG_ERROR_AND_EXIT(
             "Failed to open base dataset {}: {}",
             args.base_path,
-            store::describe_error(base_result.error()));
+            base_result.error().to_string());
     }
     mesh::storage::IndexedStorage base_dataset = std::move(base_result.value());
 
@@ -51,7 +49,7 @@ void run(const cli::MergeArgs& args) {
         LOG_ERROR_AND_EXIT(
             "Failed to open new dataset {}: {}",
             args.new_path,
-            store::describe_error(new_result.error()));
+            new_result.error().to_string());
     }
     mesh::storage::IndexedStorage new_dataset = std::move(new_result.value());
 
@@ -65,7 +63,7 @@ void run(const cli::MergeArgs& args) {
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",
             args.output_path,
-            store::describe_error(output_result.error()));
+            output_result.error().to_string());
     }
     mesh::storage::Storage output_dataset = std::move(output_result.value());
 
@@ -77,7 +75,7 @@ void run(const cli::MergeArgs& args) {
         output_dataset,
         mask);
     if (!merge_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to merge datasets: {}", sf::describe_error(merge_result.error()));
+        LOG_ERROR_AND_EXIT("Failed to merge datasets: {}", merge_result.error().to_string());
     }
 }
 
@@ -88,7 +86,7 @@ void run(const cli::CutArgs& args) {
         LOG_ERROR_AND_EXIT(
             "Failed to open input dataset {}: {}",
             args.input_path,
-            store::describe_error(input_result.error()));
+            input_result.error().to_string());
     }
     const mesh::storage::IndexedStorage input_dataset = std::move(input_result.value());
     const MeshMask mask = DEBUG_ASSERT_VAL(load_mask_from_path(args.mask_path)).value();
@@ -98,7 +96,7 @@ void run(const cli::CutArgs& args) {
         args.output_path,
         args.keep_inside);
     if (!cut_result.has_value()) {
-        LOG_ERROR_AND_EXIT("Failed to cut dataset: {}", sf::describe_error(cut_result.error()));
+        LOG_ERROR_AND_EXIT("Failed to cut dataset: {}", cut_result.error().to_string());
     }
 }
 

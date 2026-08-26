@@ -22,17 +22,15 @@ struct AlwaysRefine {
 };
 
 template <HierarchyTraits Traits, typename VisitFn, typename RefineFn = AlwaysRefine>
-std::expected<void, InvalidKey<typename Traits::Key>> traverse(const Index<Traits>& index,
+std::expected<void, ::Error> traverse(const Index<Traits>& index,
     VisitFn&& visit,
     RefineFn&& refine = {},
     const typename Traits::Key& root = Traits::root(),
     const TraversalOrder order = TraversalOrder::DepthFirst)
 {
     using Key = typename Traits::Key;
-    using Error = InvalidKey<Key>;
-
     if (!Traits::is_valid(root)) {
-        return std::unexpected(Error { root });
+        return std::unexpected(::Error::make(::Error::Code::InvalidInput, "invalid hierarchy key " + key_to_string(root)));
     }
     const auto root_status = index.get(root);
     if (!root_status.has_value()) {
@@ -43,8 +41,8 @@ std::expected<void, InvalidKey<typename Traits::Key>> traverse(const Index<Trait
     }
 
     if (order == TraversalOrder::DepthFirst) {
-        std::function<std::expected<void, Error>(const Key&)> depth_first;
-        depth_first = [&](const Key& current) -> std::expected<void, Error> {
+        std::function<std::expected<void, ::Error>(const Key&)> depth_first;
+        depth_first = [&](const Key& current) -> std::expected<void, ::Error> {
             const auto status = index.get(current);
             if (!status.has_value()) {
                 return std::unexpected(status.error());

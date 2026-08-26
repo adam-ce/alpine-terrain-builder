@@ -1,12 +1,10 @@
 #pragma once
 
-#include <concepts>
 #include <cstdint>
 #include <filesystem>
 #include <span>
 #include <string>
-#include <type_traits>
-#include <variant>
+#include <utility>
 
 #include <expected>
 
@@ -15,48 +13,24 @@
 
 namespace io::envelope {
 
-using FileError = std::variant<::io::Error, Error>;
-
-inline bool is_file_not_found(const FileError& error)
-{
-    const auto* io_error = std::get_if<::io::Error>(&error);
-    return io_error != nullptr && *io_error == ::io::Error(::io::Error::OpenFile);
-}
-
-inline std::string describe_error(const Error& error) { return "envelope error " + std::to_string(static_cast<unsigned>(error.code)); }
-
-inline std::string describe_error(const FileError& error)
-{
-    return std::visit(
-        [](const auto& value) -> std::string {
-            using Value = std::remove_cvref_t<decltype(value)>;
-            if constexpr (std::same_as<Value, ::io::Error>) {
-                return value.to_string();
-            } else {
-                return describe_error(value);
-            }
-        },
-        error);
-}
-
 template <typename Schema>
-std::expected<typename Schema::latest_type, FileError> read_from_path(
+std::expected<typename Schema::latest_type, ::Error> read_from_path(
     const std::filesystem::path& path, const std::size_t max_decompressed_size = default_max_decompressed_size)
 {
     auto file_bytes = ::io::read_bytes_from_path(path);
     if (!file_bytes) {
-        return std::unexpected(FileError { file_bytes.error() });
+        return std::unexpected(std::move(file_bytes.error()).with_context("reading envelope file \"" + path.string() + "\""));
     }
     const auto bytes = std::as_bytes(std::span { *file_bytes });
     auto result = deserialize<Schema>(bytes, max_decompressed_size);
     if (!result) {
-        return std::unexpected(FileError { result.error() });
+        return std::unexpected(std::move(result.error()).with_context("decoding envelope file \"" + path.string() + "\""));
     }
     return std::move(*result);
 }
 
 template <typename Schema>
-std::expected<void, FileError> write_to_path(const typename Schema::latest_type& payload,
+std::expected<void, ::Error> write_to_path(const typename Schema::latest_type& payload,
     const std::filesystem::path& path,
     const bool make_dirs = true,
     const CompressionAlgorithm compression_algorithm = CompressionAlgorithm::ZstdDefaultCompressionWithChecksum,
@@ -64,7 +38,7 @@ std::expected<void, FileError> write_to_path(const typename Schema::latest_type&
 {
     auto serialized = serialize<Schema>(payload, compression_algorithm, checksum_algorithm);
     if (!serialized) {
-        return std::unexpected(FileError { serialized.error() });
+        return std::unexpected(std::move(serialized.error()).with_context("encoding envelope file \"" + path.string() + "\""));
     }
     const auto bytes = std::span<const std::uint8_t> {
         reinterpret_cast<const std::uint8_t*>(serialized->data()),
@@ -72,7 +46,7 @@ std::expected<void, FileError> write_to_path(const typename Schema::latest_type&
     };
     auto result = ::io::write_bytes_to_path(bytes, path, make_dirs);
     if (!result) {
-        return std::unexpected(FileError { result.error() });
+        return std::unexpected(std::move(result.error()).with_context("writing envelope file \"" + path.string() + "\""));
     }
     return {};
 }

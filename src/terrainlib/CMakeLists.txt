@@ -1,4 +1,5 @@
 add_library(terrainlib
+    Error.h Error.cpp
     Dataset.h Dataset.cpp
     ImageKey.h
     ProgressIndicator.h ProgressIndicator.cpp
@@ -53,7 +54,6 @@ add_library(terrainlib
     geometry/Rect.h
     geometry/geometry.h
 
-    io/Error.h
     io/bytes.h io/bytes.cpp
     io/compression.h io/compression.cpp
     io/conversion.h
@@ -159,8 +159,6 @@ add_library(terrainlib
 
     raster_store/StoreTraits.h
 
-    sf/Error.h
-    sf/InvalidTopology.h
     sf/finalize_storage.h
     sf/validate_index.h
 
@@ -175,24 +173,19 @@ add_library(terrainlib
     spatial_lookup/SpatialLookup.h
 
     store/Codec.h
-    store/CodecError.h
     store/Index.h
     store/IndexFormat.h
     store/IndexedStorage.h
-    store/InvalidKey.h
     store/NodeStatus.h
     store/NodeStatusOrMissing.h
-    store/OpenError.h
     store/path_layout.h
     store/RawStorage.h
     store/Storage.h
-    store/StorageError.h
     store/ThreadSafeStorage.h
     store/Traits.h
     store/cache/Dummy.h
     store/cache/Interface.h
     store/cache/Lru.h
-    store/describe_error.h
     store/open.h
     store/traverse.h
 

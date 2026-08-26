@@ -2,46 +2,42 @@
 
 #include <filesystem>
 #include <memory>
+#include <string_view>
 #include <utility>
 
 #include <expected>
 
 #include "store/IndexedStorage.h"
-#include "store/OpenError.h"
 
 namespace store {
 
 template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
-std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>> open_index(
+std::expected<IndexedStorage<Traits, NodeData>, ::Error> open_index(
     const std::filesystem::path& index_path, const IndexFormat<Traits> format, const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
 {
     using Key = typename Traits::Key;
     const auto metadata_result = format.read(index_path);
     if (!metadata_result.has_value()) {
-        return std::unexpected(OpenError<Key>(metadata_result.error()));
+        return std::unexpected(metadata_result.error());
     }
     IndexMetadata<Traits> metadata = std::move(metadata_result.value());
     if (metadata.payload_class != expected_payload_class) {
-        return std::unexpected(OpenError<Key>(CodecError {
-            CodecOperation::Resolve,
-            CodecErrorCategory::UnsupportedCodec,
-            "unexpected payload class: " + metadata.payload_class,
-        }));
+        return std::unexpected(::Error::make(::Error::Code::Unsupported, "unexpected payload class: " + metadata.payload_class));
     }
     for (const auto& [key, status] : metadata.index) {
         static_cast<void>(status);
         if (!Traits::is_valid(key)) {
-            return std::unexpected(OpenError<Key>(InvalidKey<Key> { key }));
+            return std::unexpected(::Error::make(::Error::Code::CorruptData, "index contains invalid hierarchy key " + key_to_string(key)));
         }
     }
 
     const auto mapping = format.mapping_from_id(metadata.layout_id);
     if (!mapping.has_value()) {
-        return std::unexpected(OpenError<Key>(UnknownLayout { metadata.layout_id }));
+        return std::unexpected(::Error::make(::Error::Code::Unsupported, "unknown storage layout: " + metadata.layout_id));
     }
     auto codec = resolve_codec(metadata.codec_selector);
     if (!codec.has_value()) {
-        return std::unexpected(OpenError<Key>(codec.error()));
+        return std::unexpected(codec.error());
     }
 
     const std::filesystem::path base_path = index_path.parent_path();
@@ -58,7 +54,7 @@ std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>>
 }
 
 template <HierarchyTraits Traits, typename NodeData>
-std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_storage(const std::filesystem::path& base_path,
+std::expected<Storage<Traits, NodeData>, ::Error> make_storage(const std::filesystem::path& base_path,
     const IndexFormat<Traits> format,
     const path_layout::Mapping<typename Traits::Key> mapping,
     std::string payload_class,
@@ -69,11 +65,7 @@ std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_s
     std::error_code error;
     std::filesystem::create_directories(base_path, error);
     if (error) {
-        return std::unexpected(OpenError<Key>(FilesystemError {
-            base_path,
-            "create_directories",
-            error,
-        }));
+        return std::unexpected(::Error::make(::Error::Code::Io, "create directories", base_path, error));
     }
 
     typename Storage<Traits, NodeData>::Persistence persistence {

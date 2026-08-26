@@ -18,7 +18,6 @@
 #include "terrainbuilder.h"
 #include "octree/Space.h"
 #include "tile_provider.h"
-#include "sf/Error.h"
 
 #include "ctb/GlobalGeodetic.hpp"
 #include "ctb/GlobalMercator.hpp"
@@ -330,7 +329,7 @@ int run(std::span<char *> args) {
         if (!build_result.has_value()) {
             LOG_ERROR(
                 "Failed to finalize Structura Fundamentalis output: {}",
-                sf::describe_error(build_result.error()));
+                build_result.error().to_string());
             return 1;
         }
     }

@@ -12,8 +12,7 @@
 #include "octree/Space.h"
 #include "utils.h"
 #include "containers/Cow.h"
-#include "store/describe_error.h"
-#include "sf/Error.h"
+#include "Error.h"
 #include "sf/finalize_storage.h"
 #include "sf/validate_index.h"
 
@@ -24,12 +23,12 @@ struct Context {
     const bool keep_inside;
 };
 
-std::expected<void, sf::ProcessingError> cut_node(
+std::expected<void, ::Error> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask);
 
-inline std::expected<void, sf::ProcessingError> cut_leaf_node(
+inline std::expected<void, ::Error> cut_leaf_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -45,7 +44,7 @@ inline std::expected<void, sf::ProcessingError> cut_leaf_node(
         LOG_TRACE("Mesh was fully inside the mask");
         const auto copy_result = ctx.output.copy_from(id, ctx.input);
         if (!copy_result.has_value()) {
-            return std::unexpected(sf::ProcessingError(copy_result.error()));
+            return std::unexpected(copy_result.error());
         }
     } else {
         const SimpleMesh &clipped_mesh = clipped;
@@ -54,7 +53,7 @@ inline std::expected<void, sf::ProcessingError> cut_leaf_node(
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
             const auto save_result = ctx.output.save(id, clipped_mesh);
             if (!save_result.has_value()) {
-                return std::unexpected(sf::ProcessingError(save_result.error()));
+                return std::unexpected(save_result.error());
             }
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
@@ -63,7 +62,7 @@ inline std::expected<void, sf::ProcessingError> cut_leaf_node(
     return {};
 }
 
-inline std::expected<void, sf::ProcessingError> cut_virtual_node(
+inline std::expected<void, ::Error> cut_virtual_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -86,7 +85,7 @@ inline std::expected<void, sf::ProcessingError> cut_virtual_node(
     return {};
 }
 
-inline std::expected<void, sf::ProcessingError> cut_node(
+inline std::expected<void, ::Error> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -123,14 +122,14 @@ inline std::expected<void, sf::ProcessingError> cut_node(
     return {};
 }
 
-inline std::expected<void, sf::ProcessingError> cut_dataset(
+inline std::expected<void, ::Error> cut_dataset(
     const mesh::storage::IndexedStorage &input,
     const MeshMask& mask,
     mesh::storage::Storage &output,
     const bool keep_inside) {
     const auto validation = sf::validate_index(input.index());
     if (!validation.has_value()) {
-        return std::unexpected(sf::ProcessingError(validation.error()));
+        return std::unexpected(validation.error());
     }
     Context ctx(input, output, octree::Space::earth(), keep_inside);
     const auto cut_result = cut_node(ctx, octree::Id::root(), mask);
@@ -139,14 +138,12 @@ inline std::expected<void, sf::ProcessingError> cut_dataset(
     }
     const auto finalization = sf::finalize_storage(output);
     if (!finalization.has_value()) {
-        return std::unexpected(std::visit(
-            [](const auto &error) -> sf::ProcessingError { return error; },
-            finalization.error()));
+        return std::unexpected(finalization.error());
     }
     return {};
 }
 
-inline std::expected<void, sf::ProcessingError> cut_dataset(
+inline std::expected<void, ::Error> cut_dataset(
     const mesh::storage::IndexedStorage &input_dataset,
     const MeshMask& mask,
     const std::filesystem::path &output_path,
@@ -159,12 +156,11 @@ inline std::expected<void, sf::ProcessingError> cut_dataset(
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
     if (!output_result.has_value()) {
-        return std::unexpected(sf::ProcessingError(output_result.error()));
+        return std::unexpected(output_result.error());
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {
-        return std::unexpected(sf::ProcessingError(store::SaveError<octree::Id>(
-            store::AlreadyExists{output_path})));
+        return std::unexpected(::Error::make(::Error::Code::AlreadyExists, "output dataset already contains nodes: " + output_path.string()));
     }
 
     return cut_dataset(input_dataset, mask, output_dataset, keep_inside);

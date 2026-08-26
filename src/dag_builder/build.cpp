@@ -34,7 +34,6 @@
 #include "range_utils.h"
 #include "storage.h"
 #include "store/ThreadSafeStorage.h"
-#include "store/describe_error.h"
 #include "utils.h"
 #include "vertex_lock.h"
 #include "parallel.h"
@@ -52,13 +51,11 @@ std::optional<Clustering> load_and_clusterize_mesh(
     const auto result = storage.load(id);
 
     if (!result) {
-        const auto *codec_error = std::get_if<store::CodecError>(&result.error());
-        if (codec_error == nullptr
-            || codec_error->category != store::CodecErrorCategory::FileNotFound) {
+        if (result.error().code() != ::Error::Code::NotFound) {
             LOG_ERROR(
                 "Failed to read node {}: {}",
                 id,
-                store::describe_error(result.error()));
+                result.error().to_string());
         }
         return std::nullopt;
     }
@@ -452,7 +449,7 @@ LevelWorkplan build_level_workplan(
 }
 
 // Pre-filter input nodes to only those that intersect the target root bounds.
-std::expected<std::vector<std::vector<octree::Id>>, sf::InvalidTopology> gather_relevant_input_leaves(
+std::expected<std::vector<std::vector<octree::Id>>, ::Error> gather_relevant_input_leaves(
     const store::Index<octree::StoreTraits> &index,
     const octree::Space &space,
     const radix::geometry::Aabb3d &root_bounds)
@@ -472,7 +469,7 @@ std::expected<std::vector<std::vector<octree::Id>>, sf::InvalidTopology> gather_
         },
         start);
     if (!traversal.has_value()) {
-        return std::unexpected(sf::InvalidTopology{traversal.error().key});
+        return std::unexpected(traversal.error());
     }
     return result;
 }
@@ -529,7 +526,7 @@ std::unordered_set<octree::Id> build_level(
         if (!debug_result.has_value()) {
             LOG_ERROR_AND_EXIT(
                 "Failed to open debug mesh storage: {}",
-                store::describe_error(debug_result.error()));
+                debug_result.error().to_string());
         }
         debug_storage.emplace(std::move(debug_result.value()));
     }
@@ -559,7 +556,7 @@ std::unordered_set<octree::Id> build_level(
                         LOG_ERROR_AND_EXIT(
                             "Failed to save debug mesh for node {}: {}",
                             target,
-                            store::describe_error(debug_save_result.error()));
+                            debug_save_result.error().to_string());
                     }
                 }
                 saved_ids.push_back(target);
@@ -567,7 +564,7 @@ std::unordered_set<octree::Id> build_level(
                 LOG_ERROR(
                     "Failed to save node {}: {}",
                     target,
-                    store::describe_error(save_result.error()));
+                    save_result.error().to_string());
             }
         }
         progress.task_finished();
@@ -586,7 +583,7 @@ std::unordered_set<octree::Id> build_level(
 // Builds the DAG from input_storage into output_storage, restricted to levels within level_range.
 // Iterates octree levels from finest to coarsest, simplifying and re-clustering geometry at each
 // level from its children.
-std::expected<void, sf::InvalidTopology> build_levels(
+std::expected<void, ::Error> build_levels(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
@@ -643,7 +640,7 @@ std::expected<void, sf::InvalidTopology> build_levels(
             LOG_WARN(
                 "Could not save index after level {}: {}",
                 level,
-                store::describe_error(result.error()));
+                result.error().to_string());
         }
     }
 
@@ -652,7 +649,7 @@ std::expected<void, sf::InvalidTopology> build_levels(
 }
 
 // Builds the complete DAG from input_storage into output_storage.
-std::expected<void, sf::InvalidTopology> build_full(
+std::expected<void, ::Error> build_full(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options) {

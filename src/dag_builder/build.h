@@ -10,7 +10,7 @@
 #include "texturing.h"
 #include "mesh/storage.h"
 #include "storage.h"
-#include "sf/InvalidTopology.h"
+#include "Error.h"
 
 namespace dag {
 
@@ -32,12 +32,12 @@ struct BuildOptions {
     ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
-std::expected<void, sf::InvalidTopology> build_full(
+std::expected<void, ::Error> build_full(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options);
 
-std::expected<void, sf::InvalidTopology> build_levels(
+std::expected<void, ::Error> build_levels(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,

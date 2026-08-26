@@ -11,7 +11,6 @@
 #include "ProgressIndicator.h"
 #include "storage.h"
 #include "utils.h"
-#include "store/describe_error.h"
 
 namespace {
 
@@ -25,7 +24,7 @@ void export_node(const cli::Args &args) {
     const dag::codec::Dag codec;
     const auto load_result = codec.read(node_path);
     if (!load_result.has_value()) {
-        LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().message);
+        LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().to_string());
         return;
     }
 
@@ -43,7 +42,7 @@ void export_storage(const cli::Args &args) {
         LOG_ERROR(
             "Failed to open input storage {}: {}",
             args.input_path,
-            store::describe_error(input_result.error()));
+            input_result.error().to_string());
         return;
     }
     const dag::storage::IndexedStorage input_storage = std::move(input_result.value());
@@ -57,7 +56,7 @@ void export_storage(const cli::Args &args) {
         LOG_ERROR(
             "Failed to open output storage {}: {}",
             args.output_path,
-            store::describe_error(output_result.error()));
+            output_result.error().to_string());
         return;
     }
     mesh::storage::Storage output_storage = std::move(output_result.value());
@@ -79,7 +78,7 @@ void export_storage(const cli::Args &args) {
             LOG_ERROR(
                 "Failed to load node {}: {}",
                 id,
-                store::describe_error(load_result.error()));
+                load_result.error().to_string());
             progress.task_finished();
             continue;
         }
@@ -91,7 +90,7 @@ void export_storage(const cli::Args &args) {
             LOG_ERROR(
                 "Failed to save mesh for node {}: {}",
                 id,
-                store::describe_error(save_result.error()));
+                save_result.error().to_string());
             progress.task_finished();
             continue;
         }
@@ -107,7 +106,7 @@ void export_storage(const cli::Args &args) {
         LOG_ERROR(
             "Failed to save index for {}: {}",
             args.output_path,
-            store::describe_error(index_result.error()));
+            index_result.error().to_string());
     }
 
     LOG_INFO("Exported {} debug meshes to {}", exported_count, args.output_path);

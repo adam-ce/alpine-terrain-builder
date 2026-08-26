@@ -7,24 +7,11 @@
 
 #include <expected>
 
+#include "Error.h"
 #include "store/Index.h"
 #include "store/path_layout.h"
 
 namespace store {
-
-enum class IndexFormatErrorCategory {
-    Open,
-    Write,
-    Malformed,
-};
-
-struct IndexFormatError {
-    IndexFormatErrorCategory category;
-    std::filesystem::path path;
-    std::string message;
-
-    bool operator==(const IndexFormatError&) const = default;
-};
 
 template <HierarchyTraits Traits>
 struct IndexMetadata {
@@ -38,8 +25,8 @@ template <HierarchyTraits Traits>
 struct IndexFormat {
     std::string_view index_filename;
 
-    std::expected<IndexMetadata<Traits>, IndexFormatError> (*read)(const std::filesystem::path& index_path);
-    std::expected<void, IndexFormatError> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
+    std::expected<IndexMetadata<Traits>, ::Error> (*read)(const std::filesystem::path& index_path);
+    std::expected<void, ::Error> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
     std::optional<path_layout::Mapping<typename Traits::Key>> (*mapping_from_id)(std::string_view id);
     path_layout::Mapping<typename Traits::Key> (*default_mapping)();
 };

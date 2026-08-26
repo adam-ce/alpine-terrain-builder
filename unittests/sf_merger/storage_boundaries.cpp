@@ -80,8 +80,8 @@ TEST_CASE("SF merge rejects Inner input before dispatch", "[sfmerger][sf][valida
 
     const auto merged = merge_datasets(left, right, output);
     REQUIRE_FALSE(merged.has_value());
-    REQUIRE(std::holds_alternative<sf::InvalidTopology>(merged.error()));
-    CHECK(std::get<sf::InvalidTopology>(merged.error()).key == root);
+    CHECK(merged.error().code() == ::Error::Code::CorruptData);
+    CHECK(merged.error().to_string().contains(root.to_string()));
     CHECK_FALSE(std::filesystem::exists(output_directory.path() / "octree.storeindex"));
 }
 
@@ -99,8 +99,8 @@ TEST_CASE("SF merge retains an invalid output index for diagnosis", "[sfmerger][
 
     const auto merged = merge_datasets(left, right, output);
     REQUIRE_FALSE(merged.has_value());
-    REQUIRE(std::holds_alternative<sf::InvalidTopology>(merged.error()));
-    CHECK(std::get<sf::InvalidTopology>(merged.error()).key == root);
+    CHECK(merged.error().code() == ::Error::Code::CorruptData);
+    CHECK(merged.error().to_string().contains(root.to_string()));
     CHECK(std::filesystem::is_regular_file(output_directory.path() / "octree.storeindex"));
 }
 

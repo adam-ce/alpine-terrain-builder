@@ -10,7 +10,7 @@
 #include "mesh/SimpleMesh.h"
 #include "tile_provider.h"
 #include "mesh/storage.h"
-#include "sf/Error.h"
+#include "Error.h"
 
 namespace terrainbuilder {
 
@@ -31,7 +31,7 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-std::expected<void, sf::FinalizeError> build_all_patches(
+std::expected<void, ::Error> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,

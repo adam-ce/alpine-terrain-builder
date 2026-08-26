@@ -43,7 +43,6 @@
 #include "octree/Space.h"
 #include "octree/utils.h"
 #include "store/ThreadSafeStorage.h"
-#include "store/describe_error.h"
 #include "sf/finalize_storage.h"
 
 namespace terrainbuilder {
@@ -173,7 +172,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-std::expected<void, sf::FinalizeError> build_all_patches(
+std::expected<void, ::Error> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,
@@ -199,7 +198,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",
             output_base_path,
-            store::describe_error(storage_result.error()));
+            storage_result.error().to_string());
     }
     mesh::storage::Storage raw_storage = std::move(storage_result.value());
     raw_storage.settings().allow_overwrite = overwrite_existing;
@@ -293,7 +292,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
             LOG_ERROR(
                 "Failed to inspect node {}: {}",
                 node,
-                store::describe_error(already_exists.error()));
+                already_exists.error().to_string());
             progress.task_finished();
             context.cancel_group_execution();
             return;
@@ -325,7 +324,7 @@ std::expected<void, sf::FinalizeError> build_all_patches(
                 LOG_ERROR(
                     "Failed to save mesh for node {}: {}",
                     node,
-                    store::describe_error(save_result.error()));
+                    save_result.error().to_string());
                 progress.task_finished();
                 context.cancel_group_execution();
                 return;

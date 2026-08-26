@@ -7,8 +7,6 @@
 #include "log.h"
 #include "mesh/storage.h"
 #include "storage.h"
-#include "store/describe_error.h"
-#include "sf/Error.h"
 #include "ContinuationMode.h"
 
 int main(int argc, char **argv) {
@@ -22,7 +20,7 @@ int main(int argc, char **argv) {
             LOG_ERROR(
                 "Failed to open input dataset {}: {}",
                 args.input_path,
-                store::describe_error(input_result.error()));
+                input_result.error().to_string());
             return EXIT_FAILURE;
         }
         auto output_result = dag::storage::open_folder_indexed(args.output_path);
@@ -30,7 +28,7 @@ int main(int argc, char **argv) {
             LOG_ERROR(
                 "Failed to open output dataset {}: {}",
                 args.output_path,
-                store::describe_error(output_result.error()));
+                output_result.error().to_string());
             return EXIT_FAILURE;
         }
         const mesh::storage::IndexedStorage input_storage = std::move(input_result.value());
@@ -65,7 +63,7 @@ int main(int argc, char **argv) {
             options,
             args.level_range);
         if (!build_result.has_value()) {
-            LOG_ERROR("Invalid Structura Fundamentalis input: {}", sf::describe_error(build_result.error()));
+            LOG_ERROR("Invalid Structura Fundamentalis input: {}", build_result.error().to_string());
             return EXIT_FAILURE;
         }
         const auto index_result = output_storage.save_index();
@@ -73,7 +71,7 @@ int main(int argc, char **argv) {
             LOG_ERROR(
                 "Failed to save output index in {}: {}",
                 args.output_path,
-                store::describe_error(index_result.error()));
+                index_result.error().to_string());
             return EXIT_FAILURE;
         }
 

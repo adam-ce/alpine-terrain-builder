@@ -5,8 +5,8 @@
 #include <optional>
 #include <unordered_map>
 
+#include "Error.h"
 #include "log.h"
-#include "store/InvalidKey.h"
 #include "store/NodeStatus.h"
 #include "store/Traits.h"
 #include <libassert/assert.hpp>
@@ -17,15 +17,14 @@ template <HierarchyTraits Traits>
 class Index {
 public:
     using Key = typename Traits::Key;
-    using Error = InvalidKey<Key>;
     using Container = std::unordered_map<Key, NodeStatus, typename Traits::Hasher>;
     using iterator = typename Container::iterator;
     using const_iterator = typename Container::const_iterator;
 
-    std::expected<std::optional<NodeStatus>, Error> get(const Key& key) const
+    std::expected<std::optional<NodeStatus>, ::Error> get(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         const NodeStatus* status = get_raw_unchecked(key);
         if (status == nullptr) {
@@ -34,10 +33,10 @@ public:
         return *status;
     }
 
-    std::expected<bool, Error> add(const Key& key)
+    std::expected<bool, ::Error> add(const Key& key)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
 
         NodeStatus* status = get_raw_unchecked(key);
@@ -63,7 +62,7 @@ public:
         }
 
         if (!Traits::is_valid(parent.value())) {
-            return std::unexpected(Error { parent.value() });
+            return std::unexpected(invalid_key_error(parent.value()));
         }
         NodeStatus* parent_status = get_raw_unchecked(parent.value());
         if (parent_status == nullptr) {
@@ -89,10 +88,10 @@ public:
         return true;
     }
 
-    std::expected<bool, Error> remove(const Key& key)
+    std::expected<bool, ::Error> remove(const Key& key)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
 
         NodeStatus* status = get_raw_unchecked(key);
@@ -112,14 +111,14 @@ public:
         UNREACHABLE();
     }
 
-    std::expected<bool, Error> is_present(const Key& key) const
+    std::expected<bool, ::Error> is_present(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         return m_index.contains(key);
     }
-    std::expected<bool, Error> is_absent(const Key& key) const
+    std::expected<bool, ::Error> is_absent(const Key& key) const
     {
         const auto present = is_present(key);
         if (!present.has_value()) {
@@ -127,7 +126,7 @@ public:
         }
         return !present.value();
     }
-    std::expected<bool, Error> is(const NodeStatus status, const Key& key) const
+    std::expected<bool, ::Error> is(const NodeStatus status, const Key& key) const
     {
         const auto result = get(key);
         if (!result.has_value()) {
@@ -136,32 +135,32 @@ public:
         return result.value() == status;
     }
 
-    std::expected<NodeStatus*, Error> get_raw(const Key& key)
+    std::expected<NodeStatus*, ::Error> get_raw(const Key& key)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         return get_raw_unchecked(key);
     }
-    std::expected<const NodeStatus*, Error> get_raw(const Key& key) const
+    std::expected<const NodeStatus*, ::Error> get_raw(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         return get_raw_unchecked(key);
     }
-    std::expected<void, Error> set_raw(const Key& key, const NodeStatus status)
+    std::expected<void, ::Error> set_raw(const Key& key, const NodeStatus status)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         set_raw_unchecked(key, status);
         return {};
     }
-    std::expected<void, Error> remove_raw(const Key& key)
+    std::expected<void, ::Error> remove_raw(const Key& key)
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(Error { key });
+            return std::unexpected(invalid_key_error(key));
         }
         remove_raw_unchecked(key);
         return {};
@@ -177,6 +176,11 @@ public:
     const_iterator cend() const { return m_index.cend(); }
 
 private:
+    static ::Error invalid_key_error(const Key& key)
+    {
+        return ::Error::make(::Error::Code::InvalidInput, "invalid hierarchy key " + key_to_string(key));
+    }
+
     NodeStatus* get_raw_unchecked(const Key& key)
     {
         const auto iterator = m_index.find(key);
@@ -190,14 +194,14 @@ private:
     void set_raw_unchecked(const Key& key, const NodeStatus status) { m_index[key] = status; }
     void remove_raw_unchecked(const Key& key) { m_index.erase(key); }
 
-    std::expected<bool, Error> update_parent_after_remove(const Key& key)
+    std::expected<bool, ::Error> update_parent_after_remove(const Key& key)
     {
         const auto parent = Traits::parent(key);
         if (!parent.has_value()) {
             return true;
         }
         if (!Traits::is_valid(parent.value())) {
-            return std::unexpected(Error { parent.value() });
+            return std::unexpected(invalid_key_error(parent.value()));
         }
 
         NodeStatus* parent_status = get_raw_unchecked(parent.value());

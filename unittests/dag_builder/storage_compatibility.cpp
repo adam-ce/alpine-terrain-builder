@@ -83,8 +83,7 @@ TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
         const auto result = codec.write(node_path, batch);
 
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().operation == store::CodecOperation::Write);
-        CHECK(result.error().category == store::CodecErrorCategory::Domain);
+        CHECK(result.error().code() == ::Error::Code::InvalidInput);
         CHECK_FALSE(std::filesystem::exists(node_paths[0]));
         CHECK_FALSE(std::filesystem::exists(node_paths[1]));
     }
@@ -100,8 +99,7 @@ TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
         const auto result = codec.read(node_path);
 
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().operation == store::CodecOperation::Read);
-        CHECK(result.error().category == store::CodecErrorCategory::InvalidData);
+        CHECK(result.error().code() == ::Error::Code::CorruptData);
     }
 }
 
@@ -133,12 +131,11 @@ TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[stor
     CHECK(metadata_codec.value()->paths("node") == std::vector<std::filesystem::path> { "node.dagmeta" });
     const auto write_result = metadata_codec.value()->write("node", dag::NodeMetadata {});
     REQUIRE_FALSE(write_result.has_value());
-    CHECK(write_result.error().operation == store::CodecOperation::Write);
-    CHECK(write_result.error().category == store::CodecErrorCategory::UnsupportedOperation);
+    CHECK(write_result.error().code() == ::Error::Code::Unsupported);
 
     const auto unknown = dag::codec::from_extension(".unknown");
     REQUIRE_FALSE(unknown.has_value());
-    CHECK(unknown.error().category == store::CodecErrorCategory::UnsupportedCodec);
+    CHECK(unknown.error().code() == ::Error::Code::Unsupported);
 }
 
 TEST_CASE("DAG indexed storage survives ThreadSafeStorage move and release", "[store][storage]")
@@ -221,6 +218,7 @@ TEST_CASE("DAG builder rejects invalid SF topology before processing", "[dag][sf
 
     const auto built = dag::build_full(input, output, options);
     REQUIRE_FALSE(built.has_value());
-    CHECK(built.error().key == root);
+    CHECK(built.error().code() == ::Error::Code::CorruptData);
+    CHECK(built.error().to_string().contains(root.to_string()));
     CHECK(output.index().empty());
 }

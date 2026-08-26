@@ -10,7 +10,7 @@
 #include <expected>
 
 #include "store/Codec.h"
-#include "store/Layout.h"
+#include "store/path_layout.h"
 #include "store/StorageError.h"
 #include "store/Traits.h"
 
@@ -22,7 +22,7 @@ public:
     using Key = typename Traits::Key;
     using value_type = NodeData;
 
-    RawStorage(Layout<Key> layout, std::unique_ptr<Codec<NodeData>> codec)
+    RawStorage(path_layout::Resolver<Key> layout, std::unique_ptr<Codec<NodeData>> codec)
         : m_layout(std::move(layout))
         , m_codec(std::move(codec))
     {
@@ -194,11 +194,11 @@ public:
         return {};
     }
 
-    const Layout<Key>& layout() const { return m_layout; }
+    const path_layout::Resolver<Key>& layout() const { return m_layout; }
     const Codec<NodeData>& codec() const { return *m_codec; }
 
 private:
-    Layout<Key> m_layout;
+    path_layout::Resolver<Key> m_layout;
     std::unique_ptr<Codec<NodeData>> m_codec;
 };
 

@@ -5,7 +5,7 @@
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "octree/store_layout/Mappings.h"
-#include "store/Layout.h"
+#include "store/path_layout.h"
 
 TEST_CASE("extensionless octree mappings preserve physical paths", "[store][layout]")
 {
@@ -14,7 +14,7 @@ TEST_CASE("extensionless octree mappings preserve physical paths", "[store][layo
 
     SECTION("flat")
     {
-        const store::Layout layout(dataset / "sf-flat", octree::store_layout::flat());
+        const store::path_layout::Resolver layout(dataset / "sf-flat", octree::store_layout::flat());
         const std::filesystem::path node_path = layout.node_path(octree::Id::root());
         CHECK(node_path == dataset / "sf-flat/0-0");
         CHECK(sfmesh.paths(node_path) == std::vector { dataset / "sf-flat/0-0.sfmesh" });
@@ -23,7 +23,7 @@ TEST_CASE("extensionless octree mappings preserve physical paths", "[store][layo
 
     SECTION("level and coordinate directories")
     {
-        const store::Layout layout(dataset / "sf-coordinates", octree::store_layout::level_and_coordinate_directories());
+        const store::path_layout::Resolver layout(dataset / "sf-coordinates", octree::store_layout::level_and_coordinate_directories());
         const octree::Id child = octree::Id::root().child(2).value();
         const octree::Id deep = octree::Id::root().child(5).value().child(7).value();
         CHECK(sfmesh.paths(layout.node_path(child)) == std::vector { dataset / "sf-coordinates/1/0/1/0.sfmesh" });

@@ -45,16 +45,16 @@ std::optional<radix::tile::Id> path_to_tile(const std::filesystem::path& node_pa
 }
 
 template <typename Traits>
-store::PathMapping<typename Traits::Key> test_mapping();
+store::path_layout::Mapping<typename Traits::Key> test_mapping();
 
 template <>
-store::PathMapping<octree::Id> test_mapping<octree::StoreTraits>()
+store::path_layout::Mapping<octree::Id> test_mapping<octree::StoreTraits>()
 {
     return octree::store_layout::flat();
 }
 
 template <>
-store::PathMapping<radix::tile::Id> test_mapping<raster_store::StoreTraits>()
+store::path_layout::Mapping<radix::tile::Id> test_mapping<raster_store::StoreTraits>()
 {
     return { "test_tiles", tile_to_path, path_to_tile };
 }
@@ -106,7 +106,7 @@ template <typename Traits>
 store::Storage<Traits, int> make_storage(const std::filesystem::path& path)
 {
     return store::Storage<Traits, int>(
-        store::RawStorage<Traits, int>(store::Layout<typename Traits::Key>(path, test_mapping<Traits>()), std::make_unique<IntCodec>()));
+        store::RawStorage<Traits, int>(store::path_layout::Resolver<typename Traits::Key>(path, test_mapping<Traits>()), std::make_unique<IntCodec>()));
 }
 
 class MultiFileCodec final : public store::Codec<int> {
@@ -216,12 +216,12 @@ std::expected<void, store::IndexFormatError> count_index_write(const std::filesy
     return {};
 }
 
-std::optional<store::PathMapping<octree::Id>> fake_mapping_from_id(const std::string_view id)
+std::optional<store::path_layout::Mapping<octree::Id>> fake_mapping_from_id(const std::string_view id)
 {
-    return id == "flat" ? std::optional<store::PathMapping<octree::Id>>(octree::store_layout::flat()) : std::nullopt;
+    return id == "flat" ? std::optional<store::path_layout::Mapping<octree::Id>>(octree::store_layout::flat()) : std::nullopt;
 }
 
-store::PathMapping<octree::Id> fake_default_mapping() { return octree::store_layout::flat(); }
+store::path_layout::Mapping<octree::Id> fake_default_mapping() { return octree::store_layout::flat(); }
 
 store::IndexFormat<octree::StoreTraits> counting_index_format()
 {
@@ -239,7 +239,7 @@ store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
 {
     using Storage = store::Storage<octree::StoreTraits, int>;
     return store::IndexedStorage<octree::StoreTraits, int>(
-        store::RawStorage<octree::StoreTraits, int>(store::Layout<octree::Id>(path, octree::store_layout::flat()), std::move(codec)),
+        store::RawStorage<octree::StoreTraits, int>(store::path_layout::Resolver<octree::Id>(path, octree::store_layout::flat()), std::move(codec)),
         store::Index<octree::StoreTraits> {},
         Storage::Persistence {
             counting_index_format(),
@@ -312,7 +312,7 @@ TEST_CASE("raw storage requires and removes every codec path", "[store][storage]
 {
     TemporaryDirectory directory("multi-file");
     store::RawStorage<octree::StoreTraits, int> storage(
-        store::Layout<octree::Id>(directory.path(), octree::store_layout::flat()), std::make_unique<MultiFileCodec>());
+        store::path_layout::Resolver<octree::Id>(directory.path(), octree::store_layout::flat()), std::make_unique<MultiFileCodec>());
     const octree::Id root = octree::Id::root();
     const auto paths = storage.paths(root).value();
     REQUIRE(paths.size() == 2);

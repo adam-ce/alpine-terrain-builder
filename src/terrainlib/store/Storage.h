@@ -215,7 +215,7 @@ public:
     }
 
     const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }
-    const Layout<Key>& layout() const { return m_raw.layout(); }
+    const path_layout::Resolver<Key>& layout() const { return m_raw.layout(); }
     const Codec<NodeData>& codec() const { return m_raw.codec(); }
     std::optional<std::string_view> codec_selector() const
     {

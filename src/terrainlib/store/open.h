@@ -46,7 +46,7 @@ std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>>
 
     const std::filesystem::path base_path = index_path.parent_path();
     using Storage = store::Storage<Traits, NodeData>;
-    return IndexedStorage<Traits, NodeData>(RawStorage<Traits, NodeData>(Layout<Key>(base_path, mapping.value()), std::move(codec.value())),
+    return IndexedStorage<Traits, NodeData>(RawStorage<Traits, NodeData>(path_layout::Resolver<Key>(base_path, mapping.value()), std::move(codec.value())),
         std::move(metadata.index),
         typename Storage::Persistence {
             format,
@@ -60,7 +60,7 @@ std::expected<IndexedStorage<Traits, NodeData>, OpenError<typename Traits::Key>>
 template <HierarchyTraits Traits, typename NodeData>
 std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_storage(const std::filesystem::path& base_path,
     const IndexFormat<Traits> format,
-    const PathMapping<typename Traits::Key> mapping,
+    const path_layout::Mapping<typename Traits::Key> mapping,
     std::string payload_class,
     std::string codec_selector,
     std::unique_ptr<Codec<NodeData>> codec)
@@ -83,7 +83,7 @@ std::expected<Storage<Traits, NodeData>, OpenError<typename Traits::Key>> make_s
         std::move(payload_class),
         std::move(codec_selector),
     };
-    RawStorage<Traits, NodeData> raw(Layout<Key>(base_path, mapping), std::move(codec));
+    RawStorage<Traits, NodeData> raw(path_layout::Resolver<Key>(base_path, mapping), std::move(codec));
     return Storage<Traits, NodeData>(std::move(raw), Index<Traits> {}, std::move(persistence), true);
 }
 

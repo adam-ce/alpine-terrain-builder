@@ -15,7 +15,7 @@
 namespace octree::storage {
 
 struct OpenOptions {
-    std::optional<store::PathMapping<Id>> default_mapping = std::nullopt;
+    std::optional<store::path_layout::Mapping<Id>> default_mapping = std::nullopt;
     std::optional<std::string> preferred_extension = std::nullopt;
 };
 
@@ -87,7 +87,7 @@ std::expected<store::Storage<StoreTraits, NodeData>, store::OpenError<Id>> open_
         return store::Storage<StoreTraits, NodeData>(std::move(*indexed));
     }
 
-    const store::PathMapping<Id> mapping = options.default_mapping.value_or(format.default_mapping());
+    const store::path_layout::Mapping<Id> mapping = options.default_mapping.value_or(format.default_mapping());
     std::string codec_selector = options.preferred_extension.value_or(std::move(default_codec_selector));
     auto codec = resolve_codec(codec_selector);
     if (!codec) {

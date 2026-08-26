@@ -377,14 +377,14 @@ It does not necessarily name a physical file. Replace
 
 ```cpp
 template<typename Key>
-struct store::PathMapping {
+struct store::path_layout::Mapping {
     std::string_view id;
     NodePath (*key_to_node_path)(const Key&);
     std::optional<Key> (*node_path_to_key)(const NodePath&);
 };
 ```
 
-`store::Layout<Key>` owns the base directory and one `PathMapping<Key>`. It
+`store::path_layout::Resolver<Key>` owns the base directory and one `store::path_layout::Mapping<Key>`. It
 does not own a preferred extension. A configured codec expands the
 extensionless `NodePath` into the physical file or files.
 
@@ -543,10 +543,10 @@ struct store::IndexFormat {
         const std::filesystem::path& index_path,
         const IndexMetadata<Traits>& metadata);
 
-    std::optional<PathMapping<typename Traits::Key>>
+    std::optional<path_layout::Mapping<typename Traits::Key>>
     (*mapping_from_id)(std::string_view id);
 
-    PathMapping<typename Traits::Key>
+    path_layout::Mapping<typename Traits::Key>
     (*default_mapping)();
 };
 ```
@@ -817,8 +817,8 @@ storage, layout strategies, and static codecs remain temporarily as the
 working compatibility path until Phase 3 can replace the complete
 layout-plus-codec path construction in one step.
 
-1. Add `store::NodePath`, `store::PathMapping<Key>`, and
-   `store::Layout<Key>`.
+1. Add `store::NodePath`, `store::path_layout::Mapping<Key>`, and
+   `store::path_layout::Resolver<Key>`.
 2. Add the stateful `store::Codec<Payload>` interface with `paths()`, `read()`,
    and `write()`, plus `CodecError`.
 3. Add the runtime `store::codec::ZppBits<T>`, preserving the existing `.bin`
@@ -854,7 +854,7 @@ path.
 ### Phase 3 — Generalize storage and index lifecycle
 
 1. Cut the production path construction over to the Phase 2
-   `store::Layout<Key>` and runtime codecs. Move the legacy preferred extension
+   `store::path_layout::Resolver<Key>` and runtime codecs. Move the legacy preferred extension
    out of layout state and retain it as the 3D format adapter's codec selector.
 2. Port legacy layout discovery so it recognizes codec endings through the
    supplied resolver, strips the accepted ending, and then calls
@@ -1062,8 +1062,8 @@ No formatting-only pass or unrelated refactor belongs in these commits.
 | `octree/IndexMap.*` | `store/Index.h` |
 | `octree/traverse.h` | `store/traverse.h` |
 | complete node paths embedded in layouts | extensionless `store/NodePath.h` plus codec endings |
-| `octree/disk/Layout.h` | `store/Layout.h` |
-| `octree/disk/layout/Strategy.h` | `store/PathMapping.h` |
+| `octree/disk/Layout.h` | `store/path_layout.h` |
+| `octree/disk/layout/Strategy.h` | `store/path_layout.h` |
 | `StrategyRegister.h` | explicit dimension-adapter lookup functions |
 | `strategy/Flat.h` | `octree/store_layout/Flat.h` |
 | `strategy/LevelAndCoordinateDirectories.h` | `octree/store_layout/LevelAndCoordinateDirectories.h` |

@@ -8,7 +8,7 @@
 #include <expected>
 
 #include "store/Index.h"
-#include "store/PathMapping.h"
+#include "store/path_layout.h"
 
 namespace store {
 
@@ -40,8 +40,8 @@ struct IndexFormat {
 
     std::expected<IndexMetadata<Traits>, IndexFormatError> (*read)(const std::filesystem::path& index_path);
     std::expected<void, IndexFormatError> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
-    std::optional<PathMapping<typename Traits::Key>> (*mapping_from_id)(std::string_view id);
-    PathMapping<typename Traits::Key> (*default_mapping)();
+    std::optional<path_layout::Mapping<typename Traits::Key>> (*mapping_from_id)(std::string_view id);
+    path_layout::Mapping<typename Traits::Key> (*default_mapping)();
 };
 
 } // namespace store

@@ -210,7 +210,7 @@ inline std::expected<void, store::IndexFormatError> write_index_file(const std::
     return {};
 }
 
-inline store::PathMapping<Id> default_mapping() { return store_layout::level_and_coordinate_directories(); }
+inline store::path_layout::Mapping<Id> default_mapping() { return store_layout::level_and_coordinate_directories(); }
 
 inline store::IndexFormat<StoreTraits> index_format()
 {

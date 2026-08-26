@@ -180,11 +180,10 @@ add_library(terrainlib
     store/IndexFormat.h
     store/IndexedStorage.h
     store/InvalidKey.h
-    store/Layout.h
     store/NodeStatus.h
     store/NodeStatusOrMissing.h
     store/OpenError.h
-    store/PathMapping.h
+    store/path_layout.h
     store/RawStorage.h
     store/Storage.h
     store/StorageError.h

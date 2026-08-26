@@ -25,12 +25,13 @@ mesh::Simple triangle_mesh(const double offset)
     return mesh::Simple({ { 0, 1, 2 } }, { { offset, 0.0, 0.0 }, { offset + 1.0, 0.0, 0.0 }, { offset, 1.0, 0.0 } });
 }
 
-mesh::storage::IndexedStorage make_storage(const std::filesystem::path& path, const store::PathMapping<octree::Id> mapping, const std::string& extension)
+mesh::storage::IndexedStorage make_storage(
+    const std::filesystem::path& path, const store::path_layout::Mapping<octree::Id> mapping, const std::string& extension)
 {
     auto codec = mesh::codec::from_extension(extension);
     REQUIRE(codec.has_value());
     return mesh::storage::IndexedStorage(
-        store::RawStorage<octree::StoreTraits, mesh::Simple>(store::Layout<octree::Id>(path, mapping), std::move(codec.value())),
+        store::RawStorage<octree::StoreTraits, mesh::Simple>(store::path_layout::Resolver<octree::Id>(path, mapping), std::move(codec.value())),
         store::Index<octree::StoreTraits> {},
         mesh::storage::Storage::Persistence {
             octree::storage::index_format(),

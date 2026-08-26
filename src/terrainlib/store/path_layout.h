@@ -2,16 +2,24 @@
 
 #include <filesystem>
 #include <optional>
+#include <string_view>
 #include <utility>
 
-#include "store/PathMapping.h"
-
-namespace store {
+namespace store::path_layout {
 
 template <typename Key>
-class Layout {
+struct Mapping {
+    std::string_view id;
+    std::filesystem::path (*key_to_node_path)(const Key&);
+    std::optional<Key> (*node_path_to_key)(const std::filesystem::path&);
+
+    bool operator==(const Mapping&) const = default;
+};
+
+template <typename Key>
+class Resolver {
 public:
-    Layout(std::filesystem::path base_path, PathMapping<Key> mapping)
+    Resolver(std::filesystem::path base_path, Mapping<Key> mapping)
         : m_base_path(std::move(base_path))
         , m_mapping(mapping)
     {
@@ -30,11 +38,11 @@ public:
     }
 
     const std::filesystem::path& base_path() const { return m_base_path; }
-    PathMapping<Key> mapping() const { return m_mapping; }
+    Mapping<Key> mapping() const { return m_mapping; }
 
 private:
     std::filesystem::path m_base_path;
-    PathMapping<Key> m_mapping;
+    Mapping<Key> m_mapping;
 };
 
-} // namespace store
+} // namespace store::path_layout

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <optional>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -32,8 +31,6 @@ public:
     struct Frame {
         std::string message;
         std::source_location location;
-        std::optional<Code> original_code;
-        std::optional<Code> new_code;
     };
 
     static Error make(Code code,

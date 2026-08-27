@@ -44,7 +44,7 @@ Error::Error(const Code code, Frame frame)
 
 Error Error::make(const Code code, std::string message, const std::source_location location)
 {
-    return Error(code, Frame { std::move(message), location, std::nullopt, std::nullopt });
+    return Error(code, Frame { std::move(message), location });
 }
 
 Error Error::make(const Code code,
@@ -90,8 +90,6 @@ Error Error::with_context(std::string message, const std::source_location locati
     result.m_frames.push_back(Frame {
         std::move(message),
         location,
-        std::nullopt,
-        std::nullopt,
     });
     return result;
 }
@@ -100,10 +98,8 @@ Error Error::reclassified(const Code code, std::string message, const std::sourc
 {
     Error result = std::move(*this);
     result.m_frames.push_back(Frame {
-        std::move(message),
+        fmt::format("{} (reclassified {} -> {})", message, code_name(result.m_code), code_name(code)),
         location,
-        result.m_code,
-        code,
     });
     result.m_code = code;
     return result;
@@ -119,9 +115,6 @@ std::string Error::to_string() const
             frame->location.file_name(),
             frame->location.line(),
             frame->location.function_name());
-        if (frame->original_code.has_value() && frame->new_code.has_value()) {
-            result += fmt::format("\n  reclassified {} -> {}", code_name(frame->original_code.value()), code_name(frame->new_code.value()));
-        }
     }
     return result;
 }

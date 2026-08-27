@@ -2,7 +2,6 @@
 
 #include <exception>
 #include <filesystem>
-#include <new>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -69,8 +68,6 @@ public:
                 std::terminate();
             }
             return {};
-        } catch (const std::bad_alloc&) {
-            throw;
         } catch (const std::exception& error) {
             return std::unexpected(::Error::make(::Error::Code::Internal, "write glTF file \"" + path.string() + "\": " + error.what()));
         } catch (...) {

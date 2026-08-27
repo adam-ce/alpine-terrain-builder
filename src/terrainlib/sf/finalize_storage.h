@@ -11,18 +11,14 @@ namespace sf {
 
 inline std::expected<void, ::Error> finalize_storage(mesh::storage::Storage& storage)
 {
-    const auto save_result = storage.save_or_create_index();
+    auto save_result = storage.save_or_create_index();
     if (!save_result.has_value()) {
-        return std::unexpected(save_result.error());
+        return save_result;
     }
 
     const auto index = storage.index();
     DEBUG_ASSERT(index.has_value());
-    const auto validation = validate_index(index->get());
-    if (!validation.has_value()) {
-        return std::unexpected(validation.error());
-    }
-    return {};
+    return validate_index(index->get());
 }
 
 } // namespace sf

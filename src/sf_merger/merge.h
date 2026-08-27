@@ -65,9 +65,9 @@ public:
         const Context& ctx
     ) {
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
-        const auto has_result = this->_output.has_node(id);
+        auto has_result = this->_output.has_node(id);
         if (!has_result.has_value()) {
-            return std::unexpected(has_result.error());
+            return std::unexpected(std::move(has_result).error());
         }
         if (has_result.value()) {
             LOG_DEBUG("[{}] Already merged, skipping...", id);
@@ -82,7 +82,7 @@ public:
                 DEBUG_ASSERT(id.has_children());
                 const auto children = id.children().value();
                 for (const auto &child_id : children) {
-                    const auto child_result = this->merge_node(child_id, result.context);
+                    auto child_result = this->merge_node(child_id, result.context);
                     if (!child_result.has_value()) {
                         return child_result;
                     }
@@ -94,33 +94,33 @@ public:
                 if (result.source == merge::Source::Left && left_status == Status::Missing) {
                     auto mesh_opt = this->_left.load_node(id);
                     if (mesh_opt.has_value()) {
-                        const auto write_result = this->_output.write_node(id, *mesh_opt);
+                        auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
-                            return std::unexpected(write_result.error());
+                            return write_result;
                         }
                     }
                 } else if (result.source == merge::Source::Right && right_status == Status::Missing) {
                     auto mesh_opt = this->_right.load_node(id);
                     if (mesh_opt.has_value()) {
-                        const auto write_result = this->_output.write_node(id, *mesh_opt);
+                        auto write_result = this->_output.write_node(id, *mesh_opt);
                         if (!write_result.has_value()) {
-                            return std::unexpected(write_result.error());
+                            return write_result;
                         }
                     }
                 } else {
-                    const auto copy_result = this->_output.copy_subtree_to_output(
+                    auto copy_result = this->_output.copy_subtree_to_output(
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right);
                     if (!copy_result.has_value()) {
-                        return std::unexpected(copy_result.error());
+                        return copy_result;
                     }
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
                 LOG_DEBUG("[{}] was merged", id);
-                const auto write_result = this->_output.write_node(id, result.mesh);
+                auto write_result = this->_output.write_node(id, result.mesh);
                 if (!write_result.has_value()) {
-                    return std::unexpected(write_result.error());
+                    return write_result;
                 }
                 return {};
             } else if constexpr (std::is_same_v<Result, merge::Ignore>) {
@@ -187,9 +187,9 @@ inline std::expected<void, ::Error> merge_datasets(
     mesh::storage::Storage &output_dataset,
     const std::optional<MeshMask> mask = std::nullopt) {
     for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
-        const auto validation = sf::validate_index(input->index());
+        auto validation = sf::validate_index(input->index());
         if (!validation.has_value()) {
-            return std::unexpected(validation.error());
+            return validation;
         }
     }
 
@@ -207,22 +207,18 @@ inline std::expected<void, ::Error> merge_datasets(
     if (mask.has_value()) {
         merge::visitor::Masked visitor {mask.value(), space};
         Merger<merge::visitor::Masked> merger(visitor, left, right, output);
-        const auto result = merger.merge_root();
+        auto result = merger.merge_root();
         if (!result.has_value()) {
             return result;
         }
     } else {
         merge::visitor::Simple visitor;
         Merger<merge::visitor::Simple> merger(visitor, left, right, output);
-        const auto result = merger.merge_root();
+        auto result = merger.merge_root();
         if (!result.has_value()) {
             return result;
         }
     }
 
-    const auto finalization = sf::finalize_storage(output_dataset);
-    if (!finalization.has_value()) {
-        return std::unexpected(finalization.error());
-    }
-    return {};
+    return sf::finalize_storage(output_dataset);
 }

@@ -457,7 +457,7 @@ std::expected<std::vector<std::vector<octree::Id>>, ::Error> gather_relevant_inp
     const auto start = space.find_smallest_node_encompassing_bounds(root_bounds)
         .value_or(octree::Id::root());
     std::vector<std::vector<octree::Id>> result(octree::Id::max_level() + 1);
-    const auto traversal = store::traverse(
+    auto traversal = store::traverse(
         index,
         [&](const octree::Id &id, const store::NodeStatus status) {
             if (status == store::NodeStatus::Leaf && radix::geometry::intersect(root_bounds, space.get_node_bounds(id))) {
@@ -469,7 +469,7 @@ std::expected<std::vector<std::vector<octree::Id>>, ::Error> gather_relevant_inp
         },
         start);
     if (!traversal.has_value()) {
-        return std::unexpected(traversal.error());
+        return std::unexpected(std::move(traversal).error());
     }
     return result;
 }
@@ -588,9 +588,9 @@ std::expected<void, ::Error> build_levels(
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range) {
-    const auto validation = sf::validate_index(input_storage.index());
+    auto validation = sf::validate_index(input_storage.index());
     if (!validation.has_value()) {
-        return std::unexpected(validation.error());
+        return validation;
     }
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
     const octree::Space space = octree::Space::earth();
@@ -598,7 +598,7 @@ std::expected<void, ::Error> build_levels(
     const auto root_bounds = shifted_space.get_node_bounds_with_children(root_node);
     auto input_by_level_result = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
     if (!input_by_level_result.has_value()) {
-        return std::unexpected(input_by_level_result.error());
+        return std::unexpected(std::move(input_by_level_result).error());
     }
     auto input_by_level = std::move(input_by_level_result.value());
 

@@ -17,8 +17,6 @@ class ThreadSafeStorage {
 public:
     using value_type = typename Storage::value_type;
     using key_type = typename Storage::key_type;
-    using load_error = typename Storage::load_error;
-    using save_error = typename Storage::save_error;
 
     explicit ThreadSafeStorage(Storage&& storage)
         : m_storage(std::move(storage))
@@ -32,7 +30,7 @@ public:
 
     Storage release() && { return std::move(m_storage); }
 
-    std::expected<value_type, load_error> load(const key_type& key) const
+    auto load(const key_type& key) const
     {
         std::shared_lock lock(m_mutex);
         return m_storage.load(key);
@@ -46,7 +44,7 @@ public:
 
     std::filesystem::path base_path() const noexcept { return m_storage.base_path(); }
 
-    std::expected<void, save_error> save(const key_type& key, const value_type& value) const
+    auto save(const key_type& key, const value_type& value) const
     {
         std::unique_lock lock(m_mutex);
         return m_storage.save(key, value);

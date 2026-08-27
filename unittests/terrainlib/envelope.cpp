@@ -467,9 +467,7 @@ TEST_CASE("Envelope rejects incompatible metadata")
         --envelope.uncompressed_size;
         const auto result = io::envelope::deserialize<Schema>(encode_envelope(envelope));
         check_error(result, ::Error::Code::CorruptData);
-        REQUIRE_FALSE(result.error().frames().empty());
-        CHECK(result.error().frames().back().original_code == ::Error::Code::ResourceExhausted);
-        CHECK(result.error().frames().back().new_code == ::Error::Code::CorruptData);
+        CHECK(result.error().to_string().find("reclassified ResourceExhausted -> CorruptData") != std::string::npos);
     }
 
     SECTION("uncompressed size is larger than the payload")

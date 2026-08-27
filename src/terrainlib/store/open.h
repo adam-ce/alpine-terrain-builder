@@ -16,9 +16,9 @@ std::expected<IndexedStorage<Traits, NodeData>, ::Error> open_index(
     const std::filesystem::path& index_path, const IndexFormat<Traits> format, const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
 {
     using Key = typename Traits::Key;
-    const auto metadata_result = format.read(index_path);
+    auto metadata_result = format.read(index_path);
     if (!metadata_result.has_value()) {
-        return std::unexpected(metadata_result.error());
+        return std::unexpected(std::move(metadata_result).error());
     }
     IndexMetadata<Traits> metadata = std::move(metadata_result.value());
     if (metadata.payload_class != expected_payload_class) {
@@ -27,7 +27,7 @@ std::expected<IndexedStorage<Traits, NodeData>, ::Error> open_index(
     for (const auto& [key, status] : metadata.index) {
         static_cast<void>(status);
         if (!Traits::is_valid(key)) {
-            return std::unexpected(::Error::make(::Error::Code::CorruptData, "index contains invalid hierarchy key " + key_to_string(key)));
+            return std::unexpected(::Error::make(::Error::Code::CorruptData, "index contains invalid hierarchy key " + Traits::key_to_string(key)));
         }
     }
 
@@ -37,7 +37,7 @@ std::expected<IndexedStorage<Traits, NodeData>, ::Error> open_index(
     }
     auto codec = resolve_codec(metadata.codec_selector);
     if (!codec.has_value()) {
-        return std::unexpected(codec.error());
+        return std::unexpected(std::move(codec).error());
     }
 
     const std::filesystem::path base_path = index_path.parent_path();

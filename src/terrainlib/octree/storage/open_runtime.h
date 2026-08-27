@@ -61,7 +61,7 @@ std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const 
     if (index_exists) {
         auto indexed = store::open_index<StoreTraits, NodeData>(index_path, format, payload_class, resolve_codec);
         if (!indexed) {
-            return std::unexpected(indexed.error());
+            return std::unexpected(std::move(indexed).error());
         }
         return store::Storage<StoreTraits, NodeData>(std::move(*indexed));
     }
@@ -70,7 +70,7 @@ std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const 
     std::string codec_selector = options.preferred_extension.value_or(std::move(default_codec_selector));
     auto codec = resolve_codec(codec_selector);
     if (!codec) {
-        return std::unexpected(codec.error());
+        return std::unexpected(std::move(codec).error());
     }
 
     return store::make_storage<StoreTraits, NodeData>(base_path, format, mapping, std::move(payload_class), std::move(codec_selector), std::move(*codec));
@@ -85,7 +85,7 @@ std::expected<store::IndexedStorage<StoreTraits, NodeData>, ::Error> open_folder
 {
     auto result = open_folder<NodeData>(base_path, std::move(payload_class), std::move(default_codec_selector), std::move(resolve_codec), std::move(options));
     if (!result) {
-        return std::unexpected(result.error());
+        return std::unexpected(std::move(result).error());
     }
     return store::IndexedStorage<StoreTraits, NodeData>(std::move(*result));
 }

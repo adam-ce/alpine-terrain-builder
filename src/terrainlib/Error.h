@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <optional>
 #include <source_location>
-#include <span>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -68,7 +67,6 @@ public:
         std::source_location location = std::source_location::current()) &&;
 
     Code code() const { return m_code; }
-    std::span<const Frame> frames() const { return m_frames; }
     std::string to_string() const;
 
 private:

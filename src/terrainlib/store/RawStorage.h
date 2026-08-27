@@ -35,40 +35,32 @@ public:
     std::expected<NodeData, ::Error> load(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(invalid_key_error(key));
+            return std::unexpected(store::invalid_key_error<Traits>(key));
         }
-        const auto result = m_codec->read(m_layout.node_path(key));
-        if (!result.has_value()) {
-            return std::unexpected(result.error());
-        }
-        return std::move(*result);
+        return m_codec->read(m_layout.node_path(key));
     }
 
     std::expected<void, ::Error> save(const Key& key, const NodeData& data) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(invalid_key_error(key));
+            return std::unexpected(store::invalid_key_error<Traits>(key));
         }
-        const auto result = m_codec->write(m_layout.node_path(key), data);
-        if (!result.has_value()) {
-            return std::unexpected(result.error());
-        }
-        return {};
+        return m_codec->write(m_layout.node_path(key), data);
     }
 
     std::expected<std::vector<std::filesystem::path>, ::Error> paths(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(invalid_key_error(key));
+            return std::unexpected(store::invalid_key_error<Traits>(key));
         }
         return m_codec->paths(m_layout.node_path(key));
     }
 
     std::expected<bool, ::Error> has(const Key& key) const
     {
-        const auto node_paths = paths(key);
+        auto node_paths = paths(key);
         if (!node_paths.has_value()) {
-            return std::unexpected(node_paths.error());
+            return std::unexpected(std::move(node_paths).error());
         }
         if (node_paths->empty()) {
             return false;
@@ -88,9 +80,9 @@ public:
 
     std::expected<bool, ::Error> remove(const Key& key) const
     {
-        const auto node_paths = paths(key);
+        auto node_paths = paths(key);
         if (!node_paths.has_value()) {
-            return std::unexpected(node_paths.error());
+            return std::unexpected(std::move(node_paths).error());
         }
         bool removed = false;
         for (const auto& path : node_paths.value()) {
@@ -112,14 +104,14 @@ public:
     std::expected<void, ::Error> copy_from(const Key& key, const RawStorage& source, BeforeModify&& before_modify) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(invalid_key_error(key));
+            return std::unexpected(store::invalid_key_error<Traits>(key));
         }
-        const auto source_exists = source.has(key);
+        auto source_exists = source.has(key);
         if (!source_exists.has_value()) {
-            return std::unexpected(source_exists.error());
+            return std::unexpected(std::move(source_exists).error());
         }
         if (!source_exists.value()) {
-            return std::unexpected(::Error::make(::Error::Code::NotFound, "source node " + key_to_string(key) + " is missing"));
+            return std::unexpected(::Error::make(::Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing"));
         }
 
         const std::filesystem::path probe("__codec_probe__/node");
@@ -174,11 +166,6 @@ public:
     const Codec<NodeData>& codec() const { return *m_codec; }
 
 private:
-    static ::Error invalid_key_error(const Key& key)
-    {
-        return ::Error::make(::Error::Code::InvalidInput, "invalid hierarchy key " + key_to_string(key));
-    }
-
     path_layout::Resolver<Key> m_layout;
     std::unique_ptr<Codec<NodeData>> m_codec;
 };

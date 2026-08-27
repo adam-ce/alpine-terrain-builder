@@ -25,13 +25,13 @@ public:
         const octree::Id &id,
         const SimpleMesh &mesh) {
         mesh::validate(mesh);
-        const auto save_result = this->_storage.save(id, mesh);
+        auto save_result = this->_storage.save(id, mesh);
         if (!save_result.has_value()) {
             return save_result;
         }
-        const auto path_result = this->_storage.path_for(id);
+        auto path_result = this->_storage.path_for(id);
         if (!path_result.has_value()) {
-            return std::unexpected(path_result.error());
+            return std::unexpected(std::move(path_result).error());
         }
         auto p = path_result.value();
         // change extension to .png
@@ -45,8 +45,8 @@ public:
     std::expected<void, ::Error> copy_subtree_to_output(
         const octree::Id &id,
         const NodeLoader &loader) {
-        std::optional<::Error> error;
-        const auto traversal = store::traverse(
+        std::optional<::Error> error = std::nullopt;
+        auto traversal = store::traverse(
             loader.storage().index(),
             [&](const octree::Id &child_id, const store::NodeStatus &status) {
                 if (error.has_value()) {
@@ -57,15 +57,15 @@ public:
                 }
                 DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
-                const auto result = this->_storage.copy_from(child_id, loader.storage());
+                auto result = this->_storage.copy_from(child_id, loader.storage());
                 if (!result.has_value()) {
-                    error = result.error();
+                    error = std::move(result).error();
                 }
             },
             [&](const octree::Id &) { return !error.has_value(); },
             id);
         if (!traversal.has_value()) {
-            return std::unexpected(traversal.error());
+            return traversal;
         }
         if (error.has_value()) {
             return std::unexpected(std::move(error.value()));

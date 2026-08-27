@@ -42,18 +42,18 @@ inline std::expected<void, ::Error> cut_leaf_node(
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
-        const auto copy_result = ctx.output.copy_from(id, ctx.input);
+        auto copy_result = ctx.output.copy_from(id, ctx.input);
         if (!copy_result.has_value()) {
-            return std::unexpected(copy_result.error());
+            return copy_result;
         }
     } else {
         const SimpleMesh &clipped_mesh = clipped;
         if (!clipped_mesh.is_empty()) {
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
-            const auto save_result = ctx.output.save(id, clipped_mesh);
+            auto save_result = ctx.output.save(id, clipped_mesh);
             if (!save_result.has_value()) {
-                return std::unexpected(save_result.error());
+                return save_result;
             }
         } else {
             LOG_TRACE("Mesh was fully outside the mask");
@@ -77,7 +77,7 @@ inline std::expected<void, ::Error> cut_virtual_node(
         const auto child_bounds = geometry::pad_bounds_relative(ctx.space.get_node_bounds(child_id), 0.125);
         LOG_TRACE("Clipping mask for {}", child_id);
         const MeshMask child_mask = clip_mask_on_bounds(mask, child_bounds);
-        const auto child_result = cut_node(ctx, child_id, child_mask);
+        auto child_result = cut_node(ctx, child_id, child_mask);
         if (!child_result.has_value()) {
             return child_result;
         }
@@ -127,20 +127,16 @@ inline std::expected<void, ::Error> cut_dataset(
     const MeshMask& mask,
     mesh::storage::Storage &output,
     const bool keep_inside) {
-    const auto validation = sf::validate_index(input.index());
+    auto validation = sf::validate_index(input.index());
     if (!validation.has_value()) {
-        return std::unexpected(validation.error());
+        return validation;
     }
     Context ctx(input, output, octree::Space::earth(), keep_inside);
-    const auto cut_result = cut_node(ctx, octree::Id::root(), mask);
+    auto cut_result = cut_node(ctx, octree::Id::root(), mask);
     if (!cut_result.has_value()) {
         return cut_result;
     }
-    const auto finalization = sf::finalize_storage(output);
-    if (!finalization.has_value()) {
-        return std::unexpected(finalization.error());
-    }
-    return {};
+    return sf::finalize_storage(output);
 }
 
 inline std::expected<void, ::Error> cut_dataset(
@@ -156,7 +152,7 @@ inline std::expected<void, ::Error> cut_dataset(
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
     if (!output_result.has_value()) {
-        return std::unexpected(output_result.error());
+        return std::unexpected(std::move(output_result).error());
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {

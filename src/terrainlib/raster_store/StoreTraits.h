@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 
 #include <radix/tile.h>
 
@@ -41,6 +42,7 @@ struct StoreTraits {
         const uint32_t extent = uint32_t { 1 } << key.zoom_level;
         return key.coords.x < extent && key.coords.y < extent;
     }
+    static std::string key_to_string(const Key& key) { return to_string(key); }
 };
 
 } // namespace raster_store

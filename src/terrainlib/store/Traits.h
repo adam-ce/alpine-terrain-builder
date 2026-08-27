@@ -1,7 +1,10 @@
 #pragma once
 
 #include <concepts>
+#include <source_location>
 #include <string>
+
+#include "Error.h"
 
 namespace store {
 
@@ -13,16 +16,14 @@ concept HierarchyTraits = requires(typename Traits::Key key) {
     Traits::parent(key);
     Traits::children(key);
     { Traits::is_valid(key) } -> std::same_as<bool>;
+    { Traits::key_to_string(key) } -> std::same_as<std::string>;
 };
 
-template <typename Key>
-std::string key_to_string(const Key& key)
+template <HierarchyTraits Traits>
+::Error invalid_key_error(const typename Traits::Key& key,
+    const std::source_location location = std::source_location::current())
 {
-    if constexpr (requires { key.to_string(); }) {
-        return key.to_string();
-    } else {
-        return to_string(key);
-    }
+    return ::Error::make(::Error::Code::InvalidInput, "invalid hierarchy key " + Traits::key_to_string(key), location);
 }
 
 } // namespace store

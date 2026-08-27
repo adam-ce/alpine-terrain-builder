@@ -19,16 +19,18 @@ public:
 
     std::expected<mesh::Simple, ::Error> read(const std::filesystem::path& node_path) const override
     {
-        auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(paths(node_path).front());
+        const std::filesystem::path path = paths(node_path).front();
+        auto payload = ::io::envelope::read_from_path<mesh::sf::Schema>(path);
         if (!payload) {
             return std::unexpected(std::move(payload).error().with_context("read SF mesh"));
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return std::unexpected(::Error::make(::Error::Code::CorruptData, valid.error()));
+            return std::unexpected(
+                ::Error::make(::Error::Code::CorruptData, "invalid SF mesh in \"" + path.string() + "\": " + valid.error()));
         }
         auto decoded = mesh::sf::decode_payload(std::move(*payload));
         if (!decoded) {
-            return std::unexpected(::Error::make(::Error::Code::CorruptData, "could not decode SF mesh payload"));
+            return std::unexpected(::Error::make(::Error::Code::CorruptData, "could not decode SF mesh \"" + path.string() + "\""));
         }
         return std::move(*decoded);
     }
@@ -40,14 +42,16 @@ public:
 
     std::expected<void, ::Error> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
     {
+        const std::filesystem::path path = paths(node_path).front();
         auto payload = mesh::sf::encode_payload(mesh, options);
         if (!payload) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "could not encode SF mesh payload"));
+            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "could not encode SF mesh \"" + path.string() + "\""));
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, valid.error()));
+            return std::unexpected(
+                ::Error::make(::Error::Code::InvalidInput, "invalid SF mesh for \"" + path.string() + "\": " + valid.error()));
         }
-        auto result = ::io::envelope::write_to_path<mesh::sf::Schema>(*payload, paths(node_path).front());
+        auto result = ::io::envelope::write_to_path<mesh::sf::Schema>(*payload, path);
         if (!result) {
             return std::unexpected(std::move(result).error().with_context("write SF mesh"));
         }

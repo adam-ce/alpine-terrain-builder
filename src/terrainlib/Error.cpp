@@ -86,25 +86,27 @@ Error Error::make(const Code code,
 
 Error Error::with_context(std::string message, const std::source_location location) &&
 {
-    m_frames.push_back(Frame {
+    Error result = std::move(*this);
+    result.m_frames.push_back(Frame {
         std::move(message),
         location,
         std::nullopt,
         std::nullopt,
     });
-    return std::move(*this);
+    return result;
 }
 
 Error Error::reclassified(const Code code, std::string message, const std::source_location location) &&
 {
-    m_frames.push_back(Frame {
+    Error result = std::move(*this);
+    result.m_frames.push_back(Frame {
         std::move(message),
         location,
-        m_code,
+        result.m_code,
         code,
     });
-    m_code = code;
-    return std::move(*this);
+    result.m_code = code;
+    return result;
 }
 
 std::string Error::to_string() const

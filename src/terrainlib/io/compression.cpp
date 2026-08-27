@@ -86,8 +86,8 @@ namespace {
 std::expected<CompressedData, ::Error> compress_with_checksum(
     const Bytes& uncompressed_data, const CompressionAlgorithm compression_algorithm, const ChecksumAlgorithm checksum_algorithm)
 {
-    if (const auto validation = validate_algorithms(compression_algorithm, checksum_algorithm); !validation) {
-        return std::unexpected(validation.error());
+    if (auto validation = validate_algorithms(compression_algorithm, checksum_algorithm); !validation) {
+        return std::unexpected(std::move(validation).error());
     }
     if (uncompressed_data.size() > default_max_decompressed_size) {
         return std::unexpected(::Error::make(::Error::Code::ResourceExhausted, "uncompressed data exceeds the compression size limit"));
@@ -129,8 +129,8 @@ std::expected<Bytes, ::Error> checked_decompress(const Bytes& compressed_data,
     const std::string_view checksum,
     const std::size_t max_decompressed_size)
 {
-    if (const auto validation = validate_algorithms(compression_algorithm, checksum_algorithm); !validation) {
-        return std::unexpected(validation.error());
+    if (auto validation = validate_algorithms(compression_algorithm, checksum_algorithm); !validation) {
+        return std::unexpected(std::move(validation).error());
     }
     if (checksum_algorithm != ChecksumAlgorithm::Crc32c && !checksum.empty()) {
         return std::unexpected(::Error::make(::Error::Code::InvalidInput, "a checksum was supplied for an algorithm that does not accept one"));

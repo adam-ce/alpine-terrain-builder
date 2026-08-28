@@ -196,7 +196,11 @@ add_library(terrainlib
     uv/fit.h
     uv/unwrap.h uv/unwrap.cpp
 )
-set_source_files_properties(mesh/io/gltf.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+set_source_files_properties(
+    mesh/igl/igl.cpp
+    mesh/io/gltf.cpp
+    PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+)
 
 target_compile_features(terrainlib PUBLIC cxx_std_23)
 target_compile_definitions(terrainlib PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE)

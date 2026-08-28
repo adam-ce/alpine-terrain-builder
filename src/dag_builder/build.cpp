@@ -51,7 +51,7 @@ std::optional<Clustering> load_and_clusterize_mesh(
     const auto result = storage.load(id);
 
     if (!result) {
-        if (result.error().code() != ::Error::Code::NotFound) {
+        if (result.error().code() != Error::Code::NotFound) {
             LOG_ERROR(
                 "Failed to read node {}: {}",
                 id,
@@ -449,7 +449,7 @@ LevelWorkplan build_level_workplan(
 }
 
 // Pre-filter input nodes to only those that intersect the target root bounds.
-std::expected<std::vector<std::vector<octree::Id>>, ::Error> gather_relevant_input_leaves(
+Expected<std::vector<std::vector<octree::Id>>> gather_relevant_input_leaves(
     const store::Index<octree::StoreTraits> &index,
     const octree::Space &space,
     const radix::geometry::Aabb3d &root_bounds)
@@ -469,7 +469,7 @@ std::expected<std::vector<std::vector<octree::Id>>, ::Error> gather_relevant_inp
         },
         start);
     if (!traversal.has_value()) {
-        return std::unexpected(std::move(traversal).error());
+        return Error::propagate(std::move(traversal));
     }
     return result;
 }
@@ -583,7 +583,7 @@ std::unordered_set<octree::Id> build_level(
 // Builds the DAG from input_storage into output_storage, restricted to levels within level_range.
 // Iterates octree levels from finest to coarsest, simplifying and re-clustering geometry at each
 // level from its children.
-std::expected<void, ::Error> build_levels(
+Expected<void> build_levels(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,
@@ -598,7 +598,7 @@ std::expected<void, ::Error> build_levels(
     const auto root_bounds = shifted_space.get_node_bounds_with_children(root_node);
     auto input_by_level_result = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
     if (!input_by_level_result.has_value()) {
-        return std::unexpected(std::move(input_by_level_result).error());
+        return Error::propagate(std::move(input_by_level_result));
     }
     auto input_by_level = std::move(input_by_level_result.value());
 
@@ -649,7 +649,7 @@ std::expected<void, ::Error> build_levels(
 }
 
 // Builds the complete DAG from input_storage into output_storage.
-std::expected<void, ::Error> build_full(
+Expected<void> build_full(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options) {

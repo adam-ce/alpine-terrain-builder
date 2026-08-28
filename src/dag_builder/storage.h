@@ -20,7 +20,7 @@ using MetadataStorage = store::Storage<octree::StoreTraits, dag::NodeMetadata>;
 using IndexedMetadataStorage =
     store::IndexedStorage<octree::StoreTraits, dag::NodeMetadata>;
 
-inline std::expected<IndexedStorage, ::Error> open_index(
+inline Expected<IndexedStorage> open_index(
     const std::filesystem::path &path) {
     return store::open_index<octree::StoreTraits, dag::ClusterBatch>(
         path,
@@ -29,7 +29,7 @@ inline std::expected<IndexedStorage, ::Error> open_index(
         dag::codec::from_extension);
 }
 
-inline std::expected<Storage, ::Error> open_folder(
+inline Expected<Storage> open_folder(
     const std::filesystem::path &path,
     OpenOptions options = {}) {
     return octree::storage::open_folder<dag::ClusterBatch>(
@@ -40,7 +40,7 @@ inline std::expected<Storage, ::Error> open_folder(
         std::move(options));
 }
 
-inline std::expected<IndexedStorage, ::Error>
+inline Expected<IndexedStorage>
 open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {}) {
     return octree::storage::open_folder_indexed<dag::ClusterBatch>(
         path,
@@ -50,7 +50,7 @@ open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {})
         std::move(options));
 }
 
-inline std::expected<IndexedMetadataStorage, ::Error>
+inline Expected<IndexedMetadataStorage>
 open_metadata_indexed(const std::filesystem::path &path) {
     const std::filesystem::path index_path =
         path.filename() == octree::storage::index_file_name

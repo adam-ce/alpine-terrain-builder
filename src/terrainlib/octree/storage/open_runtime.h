@@ -20,7 +20,7 @@ struct OpenOptions {
 };
 
 template <typename NodeData, typename CodecResolver>
-std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const std::filesystem::path& base_path,
+Expected<store::Storage<StoreTraits, NodeData>> open_folder(const std::filesystem::path& base_path,
     std::string payload_class,
     std::string default_codec_selector,
     CodecResolver resolve_codec,
@@ -29,16 +29,16 @@ std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const 
     std::error_code error;
     const bool base_exists = std::filesystem::exists(base_path, error);
     if (error) {
-        return std::unexpected(::Error::make(::Error::Code::Io, "check existence of", base_path, error));
+        return Error::fail(Error::Code::Io, "check existence of", base_path, error);
     }
     if (base_exists && !std::filesystem::is_directory(base_path, error)) {
-        return std::unexpected(::Error::make(
-            ::Error::Code::Io, "check directory", base_path, error ? error : std::make_error_code(std::errc::not_a_directory)));
+        return Error::fail(
+            Error::Code::Io, "check directory", base_path, error ? error : std::make_error_code(std::errc::not_a_directory));
     }
     if (!base_exists) {
         std::filesystem::create_directories(base_path, error);
         if (error) {
-            return std::unexpected(::Error::make(::Error::Code::Io, "create directories", base_path, error));
+            return Error::fail(Error::Code::Io, "create directories", base_path, error);
         }
     }
 
@@ -47,21 +47,21 @@ std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const 
     const std::filesystem::path metadata_path = base_path / metadata_file_name;
     const bool index_exists = std::filesystem::exists(index_path, error);
     if (error) {
-        return std::unexpected(::Error::make(::Error::Code::Io, "check existence of", index_path, error));
+        return Error::fail(Error::Code::Io, "check existence of", index_path, error);
     }
     const bool metadata_exists = std::filesystem::exists(metadata_path, error);
     if (error) {
-        return std::unexpected(::Error::make(::Error::Code::Io, "check existence of", metadata_path, error));
+        return Error::fail(Error::Code::Io, "check existence of", metadata_path, error);
     }
     if (index_exists != metadata_exists) {
-        return std::unexpected(::Error::make(::Error::Code::CorruptData,
+        return Error::fail(Error::Code::CorruptData,
             "octree dataset metadata and index must either both exist or both be absent: "
-                + (index_exists ? metadata_path : index_path).string()));
+                + (index_exists ? metadata_path : index_path).string());
     }
     if (index_exists) {
         auto indexed = store::open_index<StoreTraits, NodeData>(index_path, format, payload_class, resolve_codec);
         if (!indexed) {
-            return std::unexpected(std::move(indexed).error());
+            return Error::propagate(std::move(indexed));
         }
         return store::Storage<StoreTraits, NodeData>(std::move(*indexed));
     }
@@ -70,14 +70,14 @@ std::expected<store::Storage<StoreTraits, NodeData>, ::Error> open_folder(const 
     std::string codec_selector = options.preferred_extension.value_or(std::move(default_codec_selector));
     auto codec = resolve_codec(codec_selector);
     if (!codec) {
-        return std::unexpected(std::move(codec).error());
+        return Error::propagate(std::move(codec));
     }
 
     return store::make_storage<StoreTraits, NodeData>(base_path, format, mapping, std::move(payload_class), std::move(codec_selector), std::move(*codec));
 }
 
 template <typename NodeData, typename CodecResolver>
-std::expected<store::IndexedStorage<StoreTraits, NodeData>, ::Error> open_folder_indexed(const std::filesystem::path& base_path,
+Expected<store::IndexedStorage<StoreTraits, NodeData>> open_folder_indexed(const std::filesystem::path& base_path,
     std::string payload_class,
     std::string default_codec_selector,
     CodecResolver resolve_codec,
@@ -85,7 +85,7 @@ std::expected<store::IndexedStorage<StoreTraits, NodeData>, ::Error> open_folder
 {
     auto result = open_folder<NodeData>(base_path, std::move(payload_class), std::move(default_codec_selector), std::move(resolve_codec), std::move(options));
     if (!result) {
-        return std::unexpected(std::move(result).error());
+        return Error::propagate(std::move(result));
     }
     return store::IndexedStorage<StoreTraits, NodeData>(std::move(*result));
 }

@@ -25,8 +25,8 @@ template <HierarchyTraits Traits>
 struct IndexFormat {
     std::string_view index_filename;
 
-    std::expected<IndexMetadata<Traits>, ::Error> (*read)(const std::filesystem::path& index_path);
-    std::expected<void, ::Error> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
+    Expected<IndexMetadata<Traits>> (*read)(const std::filesystem::path& index_path);
+    Expected<void> (*write)(const std::filesystem::path& index_path, const IndexMetadata<Traits>& metadata);
     std::optional<path_layout::Mapping<typename Traits::Key>> (*mapping_from_id)(std::string_view id);
     path_layout::Mapping<typename Traits::Key> (*default_mapping)();
 };

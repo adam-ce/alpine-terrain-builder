@@ -32,12 +32,12 @@ struct BuildOptions {
     ContinuationMode continuation_mode = ContinuationMode::Error;
 };
 
-std::expected<void, ::Error> build_full(
+Expected<void> build_full(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options);
 
-std::expected<void, ::Error> build_levels(
+Expected<void> build_levels(
     const mesh::storage::IndexedStorage &input_storage,
     dag::storage::IndexedStorage &output_storage,
     const BuildOptions &options,

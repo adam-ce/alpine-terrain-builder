@@ -17,10 +17,10 @@ namespace io::conversion {
 
 namespace detail {
 
-    inline ::Error allocation_error(
+    inline std::unexpected<Error> allocation_error(
         const std::source_location location = std::source_location::current()) noexcept
     {
-        return ::Error::make(::Error::Code::ResourceExhausted, "allocate raster conversion output", location);
+        return Error::fail(Error::Code::ResourceExhausted, "allocate raster conversion output", location);
     }
 
     template <typename Channel>
@@ -133,26 +133,26 @@ namespace detail {
 } // namespace detail
 
 template <typename Pixel>
-std::expected<radix::Raster<Pixel>, ::Error> to_raster(const cv::Mat& source)
+Expected<radix::Raster<Pixel>> to_raster(const cv::Mat& source)
 {
     if constexpr (!detail::Traits<Pixel>::supported) {
-        return std::unexpected(::Error::make(::Error::Code::Unsupported, "unsupported raster pixel type"));
+        return Error::fail(Error::Code::Unsupported, "unsupported raster pixel type");
     } else {
         if (source.empty()) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "cannot convert an empty OpenCV matrix to a raster"));
+            return Error::fail(Error::Code::InvalidInput, "cannot convert an empty OpenCV matrix to a raster");
         }
         if (source.dims != 2) {
-            return std::unexpected(::Error::make(::Error::Code::Unsupported,
-                "unsupported OpenCV matrix dimension count " + std::to_string(source.dims)));
+            return Error::fail(Error::Code::Unsupported,
+                "unsupported OpenCV matrix dimension count " + std::to_string(source.dims));
         }
         if (source.type() != detail::cv_type<Pixel>) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput,
+            return Error::fail(Error::Code::InvalidInput,
                 "OpenCV matrix type " + std::to_string(source.type()) + " does not match expected type "
-                    + std::to_string(detail::cv_type<Pixel>)));
+                    + std::to_string(detail::cv_type<Pixel>));
         }
         if (source.cols < 0 || source.rows < 0 || static_cast<unsigned long long>(source.cols) > std::numeric_limits<unsigned>::max()
             || static_cast<unsigned long long>(source.rows) > std::numeric_limits<unsigned>::max()) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "OpenCV matrix dimensions are outside the raster range"));
+            return Error::fail(Error::Code::InvalidInput, "OpenCV matrix dimensions are outside the raster range");
         }
 
         try {
@@ -163,25 +163,25 @@ std::expected<radix::Raster<Pixel>, ::Error> to_raster(const cv::Mat& source)
             detail::copy_mat_to_raster(source, destination);
             return destination;
         } catch (const std::bad_alloc&) {
-            return std::unexpected(detail::allocation_error());
+            return detail::allocation_error();
         } catch (const cv::Exception& error) {
-            return std::unexpected(::Error::make(::Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg));
+            return Error::fail(Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
         }
     }
 }
 
 template <typename Pixel>
-std::expected<cv::Mat, ::Error> to_mat(const radix::Raster<Pixel>& source)
+Expected<cv::Mat> to_mat(const radix::Raster<Pixel>& source)
 {
     if constexpr (!detail::Traits<Pixel>::supported) {
-        return std::unexpected(::Error::make(::Error::Code::Unsupported, "unsupported raster pixel type"));
+        return Error::fail(Error::Code::Unsupported, "unsupported raster pixel type");
     } else {
         if (source.width() == 0 || source.height() == 0) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "cannot convert an empty raster to an OpenCV matrix"));
+            return Error::fail(Error::Code::InvalidInput, "cannot convert an empty raster to an OpenCV matrix");
         }
         if (source.width() > static_cast<unsigned>(std::numeric_limits<int>::max())
             || source.height() > static_cast<unsigned>(std::numeric_limits<int>::max())) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "raster dimensions are outside the OpenCV matrix range"));
+            return Error::fail(Error::Code::InvalidInput, "raster dimensions are outside the OpenCV matrix range");
         }
 
         try {
@@ -189,9 +189,9 @@ std::expected<cv::Mat, ::Error> to_mat(const radix::Raster<Pixel>& source)
             detail::copy_raster_to_mat(source, destination);
             return destination;
         } catch (const std::bad_alloc&) {
-            return std::unexpected(detail::allocation_error());
+            return detail::allocation_error();
         } catch (const cv::Exception& error) {
-            return std::unexpected(::Error::make(::Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg));
+            return Error::fail(Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
         }
     }
 }

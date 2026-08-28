@@ -78,7 +78,7 @@ TEST_CASE("io::conversion reports invalid inputs")
     {
         const auto result = io::conversion::to_raster<std::uint8_t>(cv::Mat {});
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().code() == ::Error::Code::InvalidInput);
+        CHECK(result.error().code() == Error::Code::InvalidInput);
     }
 
     SECTION("multidimensional matrix")
@@ -87,7 +87,7 @@ TEST_CASE("io::conversion reports invalid inputs")
         const cv::Mat source(static_cast<int>(sizes.size()), sizes.data(), CV_8UC1);
         const auto result = io::conversion::to_raster<std::uint8_t>(source);
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().code() == ::Error::Code::Unsupported);
+        CHECK(result.error().code() == Error::Code::Unsupported);
     }
 
     SECTION("pixel type mismatch")
@@ -95,7 +95,7 @@ TEST_CASE("io::conversion reports invalid inputs")
         const cv::Mat source(2, 2, CV_8UC3);
         const auto result = io::conversion::to_raster<std::uint8_t>(source);
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().code() == ::Error::Code::InvalidInput);
+        CHECK(result.error().code() == Error::Code::InvalidInput);
     }
 
     SECTION("unsupported pixel")
@@ -106,13 +106,13 @@ TEST_CASE("io::conversion reports invalid inputs")
         const cv::Mat source(2, 2, CV_8UC1);
         const auto result = io::conversion::to_raster<Pixel>(source);
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().code() == ::Error::Code::Unsupported);
+        CHECK(result.error().code() == Error::Code::Unsupported);
     }
 
     SECTION("empty raster")
     {
         const auto result = io::conversion::to_mat(radix::Raster<std::uint8_t> {});
         REQUIRE_FALSE(result.has_value());
-        CHECK(result.error().code() == ::Error::Code::InvalidInput);
+        CHECK(result.error().code() == Error::Code::InvalidInput);
     }
 }

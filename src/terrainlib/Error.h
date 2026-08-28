@@ -1,10 +1,12 @@
 #pragma once
 
+#include <expected>
 #include <filesystem>
 #include <source_location>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 class Error {
@@ -56,6 +58,44 @@ public:
         const std::error_code& cause,
         std::source_location location = std::source_location::current());
 
+    static std::unexpected<Error> fail(Code code,
+        std::string message,
+        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(Code code,
+        std::string_view operation,
+        const std::filesystem::path& path,
+        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(Code code,
+        std::string_view operation,
+        const std::error_code& cause,
+        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(Code code,
+        std::string_view operation,
+        const std::filesystem::path& path,
+        const std::error_code& cause,
+        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(Code code,
+        std::string_view operation,
+        const std::filesystem::path& source,
+        const std::filesystem::path& destination,
+        const std::error_code& cause,
+        std::source_location location = std::source_location::current());
+
+    template <typename T>
+    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
+        std::source_location location = std::source_location::current());
+    template <typename T>
+    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
+        std::string message,
+        std::source_location location = std::source_location::current());
+    template <typename T>
+    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
+        Code code,
+        std::string message,
+        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> propagate(Error&& error,
+        std::source_location location = std::source_location::current());
+
     [[nodiscard]] Error with_context(
         std::string message,
         std::source_location location = std::source_location::current()) &&;
@@ -72,3 +112,30 @@ private:
     Code m_code;
     std::vector<Frame> m_frames;
 };
+
+template <typename T>
+using Expected = std::expected<T, Error>;
+
+template <typename T>
+std::unexpected<Error> Error::propagate(std::expected<T, Error>&& result, const std::source_location location)
+{
+    return propagate(std::move(result).error(), location);
+}
+
+template <typename T>
+std::unexpected<Error> Error::propagate(
+    std::expected<T, Error>&& result, std::string message, const std::source_location location)
+{
+    return std::unexpected<Error> {
+        std::move(result).error().with_context(std::move(message), location),
+    };
+}
+
+template <typename T>
+std::unexpected<Error> Error::propagate(
+    std::expected<T, Error>&& result, const Code code, std::string message, const std::source_location location)
+{
+    return std::unexpected<Error> {
+        std::move(result).error().reclassified(code, std::move(message), location),
+    };
+}

@@ -32,35 +32,35 @@ public:
     RawStorage(RawStorage&&) noexcept = default;
     RawStorage& operator=(RawStorage&&) noexcept = default;
 
-    std::expected<NodeData, ::Error> load(const Key& key) const
+    Expected<NodeData> load(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(store::invalid_key_error<Traits>(key));
+            return store::invalid_key_error<Traits>(key);
         }
         return m_codec->read(m_layout.node_path(key));
     }
 
-    std::expected<void, ::Error> save(const Key& key, const NodeData& data) const
+    Expected<void> save(const Key& key, const NodeData& data) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(store::invalid_key_error<Traits>(key));
+            return store::invalid_key_error<Traits>(key);
         }
         return m_codec->write(m_layout.node_path(key), data);
     }
 
-    std::expected<std::vector<std::filesystem::path>, ::Error> paths(const Key& key) const
+    Expected<std::vector<std::filesystem::path>> paths(const Key& key) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(store::invalid_key_error<Traits>(key));
+            return store::invalid_key_error<Traits>(key);
         }
         return m_codec->paths(m_layout.node_path(key));
     }
 
-    std::expected<bool, ::Error> has(const Key& key) const
+    Expected<bool> has(const Key& key) const
     {
         auto node_paths = paths(key);
         if (!node_paths.has_value()) {
-            return std::unexpected(std::move(node_paths).error());
+            return Error::propagate(std::move(node_paths));
         }
         if (node_paths->empty()) {
             return false;
@@ -69,7 +69,7 @@ public:
             std::error_code error;
             const bool exists = std::filesystem::exists(path, error);
             if (error) {
-                return std::unexpected(::Error::make(::Error::Code::Io, "check existence of", path, error));
+                return Error::fail(Error::Code::Io, "check existence of", path, error);
             }
             if (!exists) {
                 return false;
@@ -78,47 +78,47 @@ public:
         return true;
     }
 
-    std::expected<bool, ::Error> remove(const Key& key) const
+    Expected<bool> remove(const Key& key) const
     {
         auto node_paths = paths(key);
         if (!node_paths.has_value()) {
-            return std::unexpected(std::move(node_paths).error());
+            return Error::propagate(std::move(node_paths));
         }
         bool removed = false;
         for (const auto& path : node_paths.value()) {
             std::error_code error;
             removed = std::filesystem::remove(path, error) || removed;
             if (error) {
-                return std::unexpected(::Error::make(::Error::Code::Io, "remove", path, error));
+                return Error::fail(Error::Code::Io, "remove", path, error);
             }
         }
         return removed;
     }
 
-    std::expected<void, ::Error> copy_from(const Key& key, const RawStorage& source) const
+    Expected<void> copy_from(const Key& key, const RawStorage& source) const
     {
-        return copy_from(key, source, []() -> std::expected<void, ::Error> { return {}; });
+        return copy_from(key, source, []() -> Expected<void> { return {}; });
     }
 
     template <typename BeforeModify>
-    std::expected<void, ::Error> copy_from(const Key& key, const RawStorage& source, BeforeModify&& before_modify) const
+    Expected<void> copy_from(const Key& key, const RawStorage& source, BeforeModify&& before_modify) const
     {
         if (!Traits::is_valid(key)) {
-            return std::unexpected(store::invalid_key_error<Traits>(key));
+            return store::invalid_key_error<Traits>(key);
         }
         auto source_exists = source.has(key);
         if (!source_exists.has_value()) {
-            return std::unexpected(std::move(source_exists).error());
+            return Error::propagate(std::move(source_exists));
         }
         if (!source_exists.value()) {
-            return std::unexpected(::Error::make(::Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing"));
+            return Error::fail(Error::Code::NotFound, "source node " + Traits::key_to_string(key) + " is missing");
         }
 
         const std::filesystem::path probe("__codec_probe__/node");
         if (m_codec->paths(probe) != source.m_codec->paths(probe)) {
             auto loaded = source.m_codec->read(source.m_layout.node_path(key));
             if (!loaded.has_value()) {
-                return std::unexpected(std::move(loaded).error().with_context("read source node while copying"));
+                return Error::propagate(std::move(loaded), "read source node while copying");
             }
             const auto prepared = before_modify();
             if (!prepared.has_value()) {
@@ -126,7 +126,7 @@ public:
             }
             auto written = m_codec->write(m_layout.node_path(key), loaded.value());
             if (!written.has_value()) {
-                return std::unexpected(std::move(written).error().with_context("write target node while copying"));
+                return Error::propagate(std::move(written), "write target node while copying");
             }
             return {};
         }
@@ -134,7 +134,7 @@ public:
         const auto source_paths = source.m_codec->paths(source.m_layout.node_path(key));
         const auto target_paths = m_codec->paths(m_layout.node_path(key));
         if (source_paths.size() != target_paths.size()) {
-            return std::unexpected(::Error::make(::Error::Code::Internal, "matching codec probes produced different actual path counts"));
+            return Error::fail(Error::Code::Internal, "matching codec probes produced different actual path counts");
         }
         if (source_paths == target_paths) {
             return {};
@@ -147,16 +147,16 @@ public:
             std::error_code error;
             std::filesystem::remove(target_paths[index], error);
             if (error) {
-                return std::unexpected(::Error::make(::Error::Code::Io, "remove", target_paths[index], error));
+                return Error::fail(Error::Code::Io, "remove", target_paths[index], error);
             }
             std::filesystem::create_directories(target_paths[index].parent_path(), error);
             if (error) {
-                return std::unexpected(::Error::make(::Error::Code::Io, "create directories", target_paths[index].parent_path(), error));
+                return Error::fail(Error::Code::Io, "create directories", target_paths[index].parent_path(), error);
             }
             std::filesystem::create_hard_link(source_paths[index], target_paths[index], error);
             if (error) {
-                return std::unexpected(::Error::make(
-                    ::Error::Code::Io, "create hard link", source_paths[index], target_paths[index], error));
+                return Error::fail(
+                    Error::Code::Io, "create hard link", source_paths[index], target_paths[index], error);
             }
         }
         return {};

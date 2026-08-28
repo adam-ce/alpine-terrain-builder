@@ -22,6 +22,6 @@ TEST_CASE("Structura Fundamentalis validation reports the first Inner node", "[s
 
     const auto result = sf::validate_index(index);
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == ::Error::Code::CorruptData);
+    CHECK(result.error().code() == Error::Code::CorruptData);
     CHECK(result.error().to_string().contains(root.to_string()));
 }

@@ -84,6 +84,51 @@ Error Error::make(const Code code,
         location);
 }
 
+std::unexpected<Error> Error::fail(const Code code, std::string message, const std::source_location location)
+{
+    return std::unexpected<Error> { make(code, std::move(message), location) };
+}
+
+std::unexpected<Error> Error::fail(const Code code,
+    const std::string_view operation,
+    const std::filesystem::path& path,
+    const std::source_location location)
+{
+    return std::unexpected<Error> { make(code, operation, path, location) };
+}
+
+std::unexpected<Error> Error::fail(const Code code,
+    const std::string_view operation,
+    const std::error_code& cause,
+    const std::source_location location)
+{
+    return std::unexpected<Error> { make(code, operation, cause, location) };
+}
+
+std::unexpected<Error> Error::fail(const Code code,
+    const std::string_view operation,
+    const std::filesystem::path& path,
+    const std::error_code& cause,
+    const std::source_location location)
+{
+    return std::unexpected<Error> { make(code, operation, path, cause, location) };
+}
+
+std::unexpected<Error> Error::fail(const Code code,
+    const std::string_view operation,
+    const std::filesystem::path& source,
+    const std::filesystem::path& destination,
+    const std::error_code& cause,
+    const std::source_location location)
+{
+    return std::unexpected<Error> { make(code, operation, source, destination, cause, location) };
+}
+
+std::unexpected<Error> Error::propagate(Error&& error, const std::source_location location)
+{
+    return std::unexpected<Error> { std::move(error).with_context("propagated", location) };
+}
+
 Error Error::with_context(std::string message, const std::source_location location) &&
 {
     Error result = std::move(*this);

@@ -172,7 +172,7 @@ T expect(const std::optional<T> &opt, const std::string &msg) {
 }
 }
 
-std::expected<void, ::Error> build_all_patches(
+Expected<void> build_all_patches(
     Dataset &dataset,
     const octree::Id::Level target_level,
     const OGRSpatialReference &texture_srs,

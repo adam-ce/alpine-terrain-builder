@@ -37,7 +37,6 @@ public:
     using Status = store::NodeStatusOrMissing;
     using Context = Visitor::Context;
     using Result = merge::Result<Context>;
-    using Expected = std::expected<void, ::Error>;
 
     Merger(
         Visitor& visitor,
@@ -46,19 +45,19 @@ public:
         NodeWriter output) : _visitor(visitor), _left(left), _right(right), _output(output) {
     }
 
-    Expected merge_root() {
+    Expected<void> merge_root() {
         const octree::Id id = octree::Id::root();
         const Context ctx = this->_visitor.make_root_context();
         return merge_node(id, ctx);
     }
 
-    Expected merge_node(const octree::Id &id, const Context& ctx) {
+    Expected<void> merge_node(const octree::Id &id, const Context& ctx) {
         const Status left_status = this->_left.get_status(id);
         const Status right_status = this->_right.get_status(id);
         return this->merge_node(id, left_status, right_status, ctx);
     }
 
-    Expected merge_node(
+    Expected<void> merge_node(
         const octree::Id &id,
         const Status left_status,
         const Status right_status,
@@ -67,7 +66,7 @@ public:
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
         auto has_result = this->_output.has_node(id);
         if (!has_result.has_value()) {
-            return std::unexpected(std::move(has_result).error());
+            return Error::propagate(std::move(has_result));
         }
         if (has_result.value()) {
             LOG_DEBUG("[{}] Already merged, skipping...", id);
@@ -75,7 +74,7 @@ public:
         }
 
         const auto merge_result = this->call_merge(id, left_status, right_status, ctx);
-        return std::visit([&](const auto &result) -> Expected {
+        return std::visit([&](const auto &result) -> Expected<void> {
             using Result = std::decay_t<decltype(result)>;
             if constexpr (std::is_same_v<Result, merge::Recurse<Context>>) {
                 LOG_DEBUG("[{}] needs recursion", id);
@@ -181,7 +180,7 @@ private:
     NodeWriter _output;
 };
 
-inline std::expected<void, ::Error> merge_datasets(
+inline Expected<void> merge_datasets(
     const mesh::storage::IndexedStorage &left_dataset,
     const mesh::storage::IndexedStorage &right_dataset,
     mesh::storage::Storage &output_dataset,

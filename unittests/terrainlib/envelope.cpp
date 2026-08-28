@@ -121,7 +121,7 @@ io::envelope::Bytes compress_without_content_size(const io::envelope::Bytes& unc
 }
 
 template <typename Result>
-void check_error(const Result& result, const ::Error::Code expected)
+void check_error(const Result& result, const Error::Code expected)
 {
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code() == expected);
@@ -261,7 +261,7 @@ TEST_CASE("CRC-32C protects independently compressed data")
         corrupted.front() ^= std::byte { 0x01 };
         check_error(io::envelope::checked_decompress(
                         corrupted, io::envelope::CompressionAlgorithm::None, io::envelope::ChecksumAlgorithm::Crc32c, compressed->checksum),
-            ::Error::Code::CorruptData);
+            Error::Code::CorruptData);
     }
 
     SECTION("with zstd compression")
@@ -281,16 +281,16 @@ TEST_CASE("CRC-32C protects independently compressed data")
             wrong_checksum.front() = wrong_checksum.front() == '0' ? '1' : '0';
             check_error(
                 io::envelope::checked_decompress(compressed->compressed_data, compression_algorithm, io::envelope::ChecksumAlgorithm::Crc32c, wrong_checksum),
-                ::Error::Code::CorruptData);
+                Error::Code::CorruptData);
         }
     }
 
     SECTION("malformed checksum")
     {
         check_error(io::envelope::checked_decompress(original, io::envelope::CompressionAlgorithm::None, io::envelope::ChecksumAlgorithm::Crc32c, "E3069283"),
-            ::Error::Code::CorruptData);
+            Error::Code::CorruptData);
         check_error(io::envelope::checked_decompress(original, io::envelope::CompressionAlgorithm::None, io::envelope::ChecksumAlgorithm::Crc32c, {}),
-            ::Error::Code::CorruptData);
+            Error::Code::CorruptData);
     }
 }
 
@@ -318,7 +318,7 @@ TEST_CASE("Envelope round trips and upgrades payloads protected by CRC-32C")
 
         auto corrupted = envelope;
         corrupted.compressed_data.front() ^= std::byte { 0x01 };
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(corrupted)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(corrupted)), Error::Code::CorruptData);
     }
 
     SECTION("older version")
@@ -364,11 +364,11 @@ TEST_CASE("Checked compression round trips and validates its checksum")
         auto corrupted = compressed->compressed_data;
         corrupted.back() ^= std::byte { 0x01 };
         check_error(io::envelope::checked_decompress(corrupted, compression_algorithm, io::envelope::ChecksumAlgorithm::HandledByCompressionLib, {}),
-            ::Error::Code::CorruptData);
+            Error::Code::CorruptData);
 
         check_error(io::envelope::checked_decompress(
                         compressed->compressed_data, compression_algorithm, io::envelope::ChecksumAlgorithm::HandledByCompressionLib, {}, original.size() - 1),
-            ::Error::Code::ResourceExhausted);
+            Error::Code::ResourceExhausted);
     }
 }
 
@@ -386,7 +386,7 @@ TEST_CASE("Checked decompression uses its maximum when the format omits the cont
 
         check_error(io::envelope::checked_decompress(
                         compressed_data, compression_algorithm, io::envelope::ChecksumAlgorithm::HandledByCompressionLib, {}, original.size() - 1),
-            ::Error::Code::ResourceExhausted);
+            Error::Code::ResourceExhausted);
     }
 }
 
@@ -400,49 +400,49 @@ TEST_CASE("Envelope rejects incompatible metadata")
     {
         auto envelope = decode_envelope(*serialized);
         ++envelope.magic;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("class name")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.class_name = "other.Payload";
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("class version")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.class_version = 99;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::Unsupported);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::Unsupported);
     }
 
     SECTION("checksum algorithm")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.checksum_algorithm = static_cast<io::envelope::ChecksumAlgorithm>(99);
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::Unsupported);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::Unsupported);
     }
 
     SECTION("compression algorithm")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.compression_algorithm = static_cast<io::envelope::CompressionAlgorithm>(99);
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::Unsupported);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::Unsupported);
     }
 
     SECTION("algorithm combination")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.checksum_algorithm = io::envelope::ChecksumAlgorithm::None;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("external checksum")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.checksum = "not used by zstd";
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("malformed CRC-32C checksum")
@@ -450,7 +450,7 @@ TEST_CASE("Envelope rejects incompatible metadata")
         auto envelope = decode_envelope(*serialized);
         envelope.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
         envelope.checksum = "1234";
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("incorrect CRC-32C checksum")
@@ -458,7 +458,7 @@ TEST_CASE("Envelope rejects incompatible metadata")
         auto envelope = decode_envelope(*serialized);
         envelope.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
         envelope.checksum = "00000000";
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("uncompressed size is smaller than the payload")
@@ -466,7 +466,7 @@ TEST_CASE("Envelope rejects incompatible metadata")
         auto envelope = decode_envelope(*serialized);
         --envelope.uncompressed_size;
         const auto result = io::envelope::deserialize<Schema>(encode_envelope(envelope));
-        check_error(result, ::Error::Code::CorruptData);
+        check_error(result, Error::Code::CorruptData);
         CHECK(result.error().to_string().find("reclassified ResourceExhausted -> CorruptData") != std::string::npos);
     }
 
@@ -474,28 +474,28 @@ TEST_CASE("Envelope rejects incompatible metadata")
     {
         auto envelope = decode_envelope(*serialized);
         ++envelope.uncompressed_size;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("zero uncompressed size does not mean unspecified")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.uncompressed_size = 0;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("uncompressed size exceeds the hard limit")
     {
         auto envelope = decode_envelope(*serialized);
         envelope.uncompressed_size = io::envelope::default_max_decompressed_size + 1;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::ResourceExhausted);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::ResourceExhausted);
     }
 
     SECTION("uncompressed size exceeds a caller limit")
     {
         auto envelope = decode_envelope(*serialized);
         check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope), static_cast<std::size_t>(envelope.uncompressed_size - 1)),
-            ::Error::Code::ResourceExhausted);
+            Error::Code::ResourceExhausted);
     }
 }
 
@@ -509,14 +509,14 @@ TEST_CASE("Envelope validates the size of uncompressed data")
     {
         auto envelope = decode_envelope(*serialized);
         --envelope.uncompressed_size;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 
     SECTION("declared size is larger")
     {
         auto envelope = decode_envelope(*serialized);
         ++envelope.uncompressed_size;
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 }
 
@@ -525,7 +525,7 @@ TEST_CASE("Envelope reports malformed serialized data")
     SECTION("envelope")
     {
         const io::envelope::Bytes malformed { std::byte { 0x01 }, std::byte { 0x02 } };
-        check_error(io::envelope::deserialize<Schema>(malformed), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(malformed), Error::Code::CorruptData);
     }
 
     SECTION("payload")
@@ -540,6 +540,6 @@ TEST_CASE("Envelope reports malformed serialized data")
             .uncompressed_size = 1,
             .compressed_data = { std::byte { 0x01 } },
         };
-        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), ::Error::Code::CorruptData);
+        check_error(io::envelope::deserialize<Schema>(encode_envelope(envelope)), Error::Code::CorruptData);
     }
 }

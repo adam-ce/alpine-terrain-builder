@@ -58,26 +58,26 @@ store::path_layout::Mapping<radix::tile::Id> test_mapping<raster_store::StoreTra
     return { "test_tiles", tile_to_path, path_to_tile };
 }
 
-std::expected<int, ::Error> read_int(const std::filesystem::path& path)
+Expected<int> read_int(const std::filesystem::path& path)
 {
     auto bytes = io::read_bytes_from_path(path);
     if (!bytes) {
-        return std::unexpected(std::move(bytes).error().with_context("read test integer"));
+        return Error::propagate(std::move(bytes), "read test integer");
     }
     if (bytes->size() != sizeof(int)) {
-        return std::unexpected(::Error::make(::Error::Code::CorruptData, "test integer has the wrong byte count"));
+        return Error::fail(Error::Code::CorruptData, "test integer has the wrong byte count");
     }
     int value;
     std::memcpy(&value, bytes->data(), sizeof(value));
     return value;
 }
 
-std::expected<void, ::Error> write_int(const int value, const std::filesystem::path& path)
+Expected<void> write_int(const int value, const std::filesystem::path& path)
 {
     const auto bytes = std::span(reinterpret_cast<const uint8_t*>(&value), sizeof(value));
     auto written = io::write_bytes_to_path(bytes, path);
     if (!written) {
-        return std::unexpected(std::move(written).error().with_context("write test integer"));
+        return Error::propagate(std::move(written), "write test integer");
     }
     return {};
 }
@@ -89,9 +89,9 @@ public:
         return { add_extension(node_path, ".data") };
     }
 
-    std::expected<int, ::Error> read(const std::filesystem::path& node_path) const override { return read_int(paths(node_path).front()); }
+    Expected<int> read(const std::filesystem::path& node_path) const override { return read_int(paths(node_path).front()); }
 
-    std::expected<void, ::Error> write(const std::filesystem::path& node_path, const int& value) const override
+    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
     {
         return write_int(value, paths(node_path).front());
     }
@@ -111,20 +111,20 @@ public:
         return { add_extension(node_path, ".data"), add_extension(node_path, ".metadata") };
     }
 
-    std::expected<int, ::Error> read(const std::filesystem::path& node_path) const override
+    Expected<int> read(const std::filesystem::path& node_path) const override
     {
         auto value = read_int(paths(node_path).front());
         if (!value) {
-            return std::unexpected(std::move(value).error().with_context("read multi-file test value"));
+            return Error::propagate(std::move(value), "read multi-file test value");
         }
         return value.value();
     }
 
-    std::expected<void, ::Error> write(const std::filesystem::path& node_path, const int& value) const override
+    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
     {
         const auto node_paths = paths(node_path);
         if (!write_int(value, node_paths[0]) || !write_int(value + 1, node_paths[1])) {
-            return std::unexpected(::Error::make(::Error::Code::Io, "multi-file test write failed"));
+            return Error::fail(Error::Code::Io, "multi-file test write failed");
         }
         return {};
     }
@@ -142,25 +142,25 @@ public:
         return { add_extension(node_path, extension) };
     }
 
-    std::expected<int, ::Error> read(const std::filesystem::path& node_path) const override
+    Expected<int> read(const std::filesystem::path& node_path) const override
     {
         if (fail_read) {
-            return std::unexpected(::Error::make(::Error::Code::CorruptData, "injected decode failure"));
+            return Error::fail(Error::Code::CorruptData, "injected decode failure");
         }
         auto value = read_int(paths(node_path).front());
         if (!value) {
-            return std::unexpected(std::move(value).error().with_context("read configurable test value"));
+            return Error::propagate(std::move(value), "read configurable test value");
         }
         return value.value();
     }
 
-    std::expected<void, ::Error> write(const std::filesystem::path& node_path, const int& value) const override
+    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
     {
         if (fail_write) {
-            return std::unexpected(::Error::make(::Error::Code::InvalidInput, "injected encode failure"));
+            return Error::fail(Error::Code::InvalidInput, "injected encode failure");
         }
         if (!write_int(value, paths(node_path).front())) {
-            return std::unexpected(::Error::make(::Error::Code::Io, "configurable test write failed"));
+            return Error::fail(Error::Code::Io, "configurable test write failed");
         }
         return {};
     }
@@ -172,12 +172,12 @@ public:
 
 std::atomic_uint32_t index_writes = 0;
 
-std::expected<store::IndexMetadata<octree::StoreTraits>, ::Error> unused_index_read(const std::filesystem::path& path)
+Expected<store::IndexMetadata<octree::StoreTraits>> unused_index_read(const std::filesystem::path& path)
 {
-    return std::unexpected(::Error::make(::Error::Code::NotFound, "read unused test index from", path));
+    return Error::fail(Error::Code::NotFound, "read unused test index from", path);
 }
 
-std::expected<void, ::Error> count_index_write(const std::filesystem::path&, const store::IndexMetadata<octree::StoreTraits>&)
+Expected<void> count_index_write(const std::filesystem::path&, const store::IndexMetadata<octree::StoreTraits>&)
 {
     ++index_writes;
     return {};
@@ -227,7 +227,7 @@ TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
 
     const auto result = io::write_bytes_to_path(std::span<const uint8_t> {}, blocker / "payload");
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == ::Error::Code::Io);
+    CHECK(result.error().code() == Error::Code::Io);
 }
 
 TEMPLATE_TEST_CASE("shared raw storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
@@ -252,10 +252,10 @@ TEST_CASE("shared storage rejects invalid 2D keys", "[store][storage]")
     auto storage = make_storage<raster_store::StoreTraits>(directory.path());
     const radix::tile::Id invalid { 3, { 8, 0 } };
 
-    CHECK(storage.load(invalid).error().code() == ::Error::Code::InvalidInput);
-    CHECK(storage.save(invalid, 1).error().code() == ::Error::Code::InvalidInput);
-    CHECK(storage.has(invalid).error().code() == ::Error::Code::InvalidInput);
-    CHECK(storage.remove(invalid).error().code() == ::Error::Code::InvalidInput);
+    CHECK(storage.load(invalid).error().code() == Error::Code::InvalidInput);
+    CHECK(storage.save(invalid, 1).error().code() == Error::Code::InvalidInput);
+    CHECK(storage.has(invalid).error().code() == Error::Code::InvalidInput);
+    CHECK(storage.remove(invalid).error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("shared storage preserves overwrite settings", "[store][storage]")
@@ -267,7 +267,7 @@ TEST_CASE("shared storage preserves overwrite settings", "[store][storage]")
     REQUIRE(storage.save(root, 1).has_value());
     const auto rejected = storage.save(root, 2);
     REQUIRE_FALSE(rejected.has_value());
-    CHECK(rejected.error().code() == ::Error::Code::AlreadyExists);
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
     CHECK(storage.load(root).value() == 1);
 
     storage.settings().allow_overwrite = true;
@@ -396,7 +396,7 @@ TEST_CASE("copy_from enforces overwrite settings", "[store][storage][copy]")
 
     const auto rejected = target.copy_from(root, source);
     REQUIRE_FALSE(rejected.has_value());
-    CHECK(rejected.error().code() == ::Error::Code::AlreadyExists);
+    CHECK(rejected.error().code() == Error::Code::AlreadyExists);
     CHECK(target.load(root).value() == 1);
 
     target.settings().allow_overwrite = true;
@@ -423,7 +423,7 @@ TEST_CASE("failed multi-file overwrite leaves the target node unindexed", "[stor
 
     const auto copied = target.copy_from(root, source);
     REQUIRE_FALSE(copied.has_value());
-    CHECK(copied.error().code() == ::Error::Code::Io);
+    CHECK(copied.error().code() == Error::Code::Io);
     CHECK_FALSE(target.has(root).value());
     CHECK_FALSE(target.index().get(root).value().has_value());
     CHECK(std::filesystem::equivalent(source.paths(root)->front(), target_paths.front()));
@@ -445,7 +445,7 @@ TEST_CASE("copy_from propagates source and codec failures", "[store][storage][co
 
         const auto copied = target.copy_from(root, source);
         REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == ::Error::Code::NotFound);
+        CHECK(copied.error().code() == Error::Code::NotFound);
         CHECK(target.has(root).value());
         CHECK(target.load(root).value() == 7);
     }
@@ -465,7 +465,7 @@ TEST_CASE("copy_from propagates source and codec failures", "[store][storage][co
 
         const auto copied = target.copy_from(root, source);
         REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == ::Error::Code::CorruptData);
+        CHECK(copied.error().code() == Error::Code::CorruptData);
         CHECK(target.has(root).value());
         CHECK(target.load(root).value() == 7);
     }
@@ -485,7 +485,7 @@ TEST_CASE("copy_from propagates source and codec failures", "[store][storage][co
 
         const auto copied = target.copy_from(root, source);
         REQUIRE_FALSE(copied.has_value());
-        CHECK(copied.error().code() == ::Error::Code::InvalidInput);
+        CHECK(copied.error().code() == Error::Code::InvalidInput);
         CHECK_FALSE(target.has(root).value());
     }
 }

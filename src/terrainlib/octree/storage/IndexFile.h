@@ -123,33 +123,33 @@ inline std::expected<store::Index<StoreTraits>, std::string> decode_index(const 
     return result;
 }
 
-inline std::expected<StoreMetadata, ::Error> read_store_metadata(const std::filesystem::path& base_path)
+inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& base_path)
 {
     const std::filesystem::path path = base_path / metadata_file_name;
     auto metadata = io::envelope::read_from_path<StoreMetadataSchema>(path);
     if (!metadata) {
-        return std::unexpected(std::move(metadata).error());
+        return Error::propagate(std::move(metadata));
     }
     if (auto valid = validate(*metadata); !valid) {
-        return std::unexpected(::Error::make(::Error::Code::CorruptData, "invalid store metadata in " + path.string() + ": " + valid.error()));
+        return Error::fail(Error::Code::CorruptData, "invalid store metadata in " + path.string() + ": " + valid.error());
     }
     return std::move(*metadata);
 }
 
-inline std::expected<store::IndexMetadata<StoreTraits>, ::Error> read_index_file(const std::filesystem::path& path)
+inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::filesystem::path& path)
 {
     auto metadata = read_store_metadata(path.parent_path());
     if (!metadata) {
-        return std::unexpected(std::move(metadata).error());
+        return Error::propagate(std::move(metadata));
     }
 
     auto encoded_index = io::envelope::read_from_path<StoreIndexSchema>(path);
     if (!encoded_index) {
-        return std::unexpected(std::move(encoded_index).error());
+        return Error::propagate(std::move(encoded_index));
     }
     auto index = decode_index(*encoded_index);
     if (!index) {
-        return std::unexpected(::Error::make(::Error::Code::CorruptData, "invalid store index in " + path.string() + ": " + index.error()));
+        return Error::fail(Error::Code::CorruptData, "invalid store index in " + path.string() + ": " + index.error());
     }
     return store::IndexMetadata<StoreTraits> {
         std::move(*index),
@@ -159,7 +159,7 @@ inline std::expected<store::IndexMetadata<StoreTraits>, ::Error> read_index_file
     };
 }
 
-inline std::expected<void, ::Error> write_index_file(const std::filesystem::path& path, const store::IndexMetadata<StoreTraits>& metadata)
+inline Expected<void> write_index_file(const std::filesystem::path& path, const store::IndexMetadata<StoreTraits>& metadata)
 {
     const StoreMetadata store_metadata {
         .layout_id = metadata.layout_id,
@@ -167,16 +167,16 @@ inline std::expected<void, ::Error> write_index_file(const std::filesystem::path
         .codec_selector = metadata.codec_selector,
     };
     if (auto valid = validate(store_metadata); !valid) {
-        return std::unexpected(::Error::make(::Error::Code::InvalidInput, "invalid store metadata: " + valid.error()));
+        return Error::fail(Error::Code::InvalidInput, "invalid store metadata: " + valid.error());
     }
     const std::filesystem::path metadata_path = path.parent_path() / metadata_file_name;
     if (auto written = io::envelope::write_to_path<StoreMetadataSchema>(store_metadata, metadata_path); !written) {
-        return std::unexpected(std::move(written).error().with_context("write octree store metadata " + metadata_path.string()));
+        return Error::propagate(std::move(written), "write octree store metadata " + metadata_path.string());
     }
 
     const StoreIndex encoded_index = encode_index(metadata.index);
     if (auto written = io::envelope::write_to_path<StoreIndexSchema>(encoded_index, path); !written) {
-        return std::unexpected(std::move(written).error().with_context("write octree store index " + path.string()));
+        return Error::propagate(std::move(written), "write octree store index " + path.string());
     }
     return {};
 }

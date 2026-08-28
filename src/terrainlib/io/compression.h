@@ -34,10 +34,10 @@ struct CompressedData {
     std::string checksum;
 };
 
-std::expected<CompressedData, ::Error> compress_with_checksum(
+Expected<CompressedData> compress_with_checksum(
     const Bytes& uncompressed_data, CompressionAlgorithm compression_algorithm, ChecksumAlgorithm checksum_algorithm);
 
-std::expected<Bytes, ::Error> checked_decompress(const Bytes& compressed_data,
+Expected<Bytes> checked_decompress(const Bytes& compressed_data,
     CompressionAlgorithm compression_algorithm,
     ChecksumAlgorithm checksum_algorithm,
     std::string_view checksum,

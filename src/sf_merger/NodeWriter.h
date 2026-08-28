@@ -16,12 +16,12 @@ class NodeWriter {
 public:
     NodeWriter(mesh::storage::Storage &storage) : _storage(storage) {}
 
-    std::expected<bool, ::Error> has_node(
+    Expected<bool> has_node(
         const octree::Id &id) {
         return this->_storage.has(id);
     }
 
-    std::expected<void, ::Error> write_node(
+    Expected<void> write_node(
         const octree::Id &id,
         const SimpleMesh &mesh) {
         mesh::validate(mesh);
@@ -31,7 +31,7 @@ public:
         }
         auto path_result = this->_storage.path_for(id);
         if (!path_result.has_value()) {
-            return std::unexpected(std::move(path_result).error());
+            return Error::propagate(std::move(path_result));
         }
         auto p = path_result.value();
         // change extension to .png
@@ -42,10 +42,10 @@ public:
         return {};
     }
 
-    std::expected<void, ::Error> copy_subtree_to_output(
+    Expected<void> copy_subtree_to_output(
         const octree::Id &id,
         const NodeLoader &loader) {
-        std::optional<::Error> error = std::nullopt;
+        std::optional<Error> error = std::nullopt;
         auto traversal = store::traverse(
             loader.storage().index(),
             [&](const octree::Id &child_id, const store::NodeStatus &status) {
@@ -68,7 +68,7 @@ public:
             return traversal;
         }
         if (error.has_value()) {
-            return std::unexpected(std::move(error.value()));
+            return Error::propagate(std::move(error.value()));
         }
         return {};
     }

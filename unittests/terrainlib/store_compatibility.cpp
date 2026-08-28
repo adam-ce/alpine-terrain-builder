@@ -182,7 +182,7 @@ TEST_CASE("mesh codec resolver dispatches every supported selector", "[store][op
 
     const auto unknown = mesh::codec::from_extension(".unknown");
     REQUIRE_FALSE(unknown.has_value());
-    CHECK(unknown.error().code() == ::Error::Code::Unsupported);
+    CHECK(unknown.error().code() == Error::Code::Unsupported);
 }
 
 TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store][open]")
@@ -199,7 +199,7 @@ TEST_CASE("octree opening rejects a mismatched metadata payload class", "[store]
 
     const auto result = mesh::storage::open_index(index_path);
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == ::Error::Code::Unsupported);
+    CHECK(result.error().code() == Error::Code::Unsupported);
 }
 
 TEST_CASE("octree opening retains index failures without directory fallback", "[store][open]")
@@ -217,7 +217,7 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
 
     const auto unknown_layout = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(unknown_layout.has_value());
-    CHECK(unknown_layout.error().code() == ::Error::Code::Unsupported);
+    CHECK(unknown_layout.error().code() == Error::Code::Unsupported);
     CHECK(unknown_layout.error().to_string().contains("unknown-layout"));
 
     index_file.layout_id = "flat";
@@ -225,13 +225,13 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     REQUIRE(octree::storage::write_index_file(index_path, index_file).has_value());
     const auto unknown_codec = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(unknown_codec.has_value());
-    CHECK(unknown_codec.error().code() == ::Error::Code::Unsupported);
+    CHECK(unknown_codec.error().code() == Error::Code::Unsupported);
 
     const std::array<uint8_t, 3> malformed_bytes { 0xff, 0x00, 0x01 };
     REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
     const auto malformed = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(malformed.has_value());
-    CHECK(malformed.error().code() == ::Error::Code::CorruptData);
+    CHECK(malformed.error().code() == Error::Code::CorruptData);
 
     const auto independent_metadata = octree::storage::read_store_metadata(directory.path());
     REQUIRE(independent_metadata.has_value());

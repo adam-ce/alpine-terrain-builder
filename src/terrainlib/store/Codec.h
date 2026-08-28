@@ -17,14 +17,14 @@ public:
 
     virtual std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const = 0;
 
-    virtual std::expected<NodeData, ::Error> read(const std::filesystem::path&) const
+    virtual Expected<NodeData> read(const std::filesystem::path&) const
     {
-        return std::unexpected(::Error::make(::Error::Code::Unsupported, "codec does not support reading"));
+        return Error::fail(Error::Code::Unsupported, "codec does not support reading");
     }
 
-    virtual std::expected<void, ::Error> write(const std::filesystem::path&, const NodeData&) const
+    virtual Expected<void> write(const std::filesystem::path&, const NodeData&) const
     {
-        return std::unexpected(::Error::make(::Error::Code::Unsupported, "codec does not support writing"));
+        return Error::fail(Error::Code::Unsupported, "codec does not support writing");
     }
 
 protected:

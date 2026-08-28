@@ -23,12 +23,12 @@ struct Context {
     const bool keep_inside;
 };
 
-std::expected<void, ::Error> cut_node(
+Expected<void> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask);
 
-inline std::expected<void, ::Error> cut_leaf_node(
+inline Expected<void> cut_leaf_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -62,7 +62,7 @@ inline std::expected<void, ::Error> cut_leaf_node(
     return {};
 }
 
-inline std::expected<void, ::Error> cut_virtual_node(
+inline Expected<void> cut_virtual_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -85,7 +85,7 @@ inline std::expected<void, ::Error> cut_virtual_node(
     return {};
 }
 
-inline std::expected<void, ::Error> cut_node(
+inline Expected<void> cut_node(
     Context& ctx,
     const octree::Id& id,
     const MeshMask& mask
@@ -122,7 +122,7 @@ inline std::expected<void, ::Error> cut_node(
     return {};
 }
 
-inline std::expected<void, ::Error> cut_dataset(
+inline Expected<void> cut_dataset(
     const mesh::storage::IndexedStorage &input,
     const MeshMask& mask,
     mesh::storage::Storage &output,
@@ -139,7 +139,7 @@ inline std::expected<void, ::Error> cut_dataset(
     return sf::finalize_storage(output);
 }
 
-inline std::expected<void, ::Error> cut_dataset(
+inline Expected<void> cut_dataset(
     const mesh::storage::IndexedStorage &input_dataset,
     const MeshMask& mask,
     const std::filesystem::path &output_path,
@@ -152,11 +152,11 @@ inline std::expected<void, ::Error> cut_dataset(
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
     if (!output_result.has_value()) {
-        return std::unexpected(std::move(output_result).error());
+        return Error::propagate(std::move(output_result));
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {
-        return std::unexpected(::Error::make(::Error::Code::AlreadyExists, "output dataset already contains nodes: " + output_path.string()));
+        return Error::fail(Error::Code::AlreadyExists, "output dataset already contains nodes: " + output_path.string());
     }
 
     return cut_dataset(input_dataset, mask, output_dataset, keep_inside);

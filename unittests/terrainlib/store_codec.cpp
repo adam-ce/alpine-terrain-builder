@@ -30,7 +30,7 @@ public:
     {
         return { add_extension(node_path, ".out") };
     }
-    std::expected<void, ::Error> write(const std::filesystem::path&, const int&) const override
+    Expected<void> write(const std::filesystem::path&, const int&) const override
     {
         ++writes;
         return {};
@@ -82,11 +82,11 @@ TEST_CASE("runtime codec defaults report unsupported operations", "[store][codec
 
     const auto read = codec.read(path);
     REQUIRE_FALSE(read.has_value());
-    CHECK(read.error().code() == ::Error::Code::Unsupported);
+    CHECK(read.error().code() == Error::Code::Unsupported);
 
     const auto write = codec.write(path, 42);
     REQUIRE_FALSE(write.has_value());
-    CHECK(write.error().code() == ::Error::Code::Unsupported);
+    CHECK(write.error().code() == Error::Code::Unsupported);
 }
 
 TEST_CASE("runtime write-only codec remains explicitly unreadable", "[store][codec]")
@@ -96,7 +96,7 @@ TEST_CASE("runtime write-only codec remains explicitly unreadable", "[store][cod
     CHECK(codec.writes == 1);
     const auto read = codec.read("node");
     REQUIRE_FALSE(read.has_value());
-    CHECK(read.error().code() == ::Error::Code::Unsupported);
+    CHECK(read.error().code() == Error::Code::Unsupported);
 }
 
 TEST_CASE("runtime mesh codecs are reentrant", "[store][codec]")
@@ -117,5 +117,5 @@ TEST_CASE("runtime glTF codec converts writer exceptions", "[store][codec]")
 
     const auto result = codec.write(node_path, triangle_mesh(0.0));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == ::Error::Code::Internal);
+    CHECK(result.error().code() == Error::Code::Internal);
 }

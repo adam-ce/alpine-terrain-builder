@@ -51,5 +51,5 @@ TEST_CASE("shared traversal rejects an invalid explicit root", "[store][traverse
 
     const auto result = store::traverse(index, [](const Key&, const store::NodeStatus) { }, store::AlwaysRefine {}, invalid);
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == ::Error::Code::InvalidInput);
+    CHECK(result.error().code() == Error::Code::InvalidInput);
 }

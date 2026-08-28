@@ -23,7 +23,7 @@ struct AlwaysRefine {
 };
 
 template <HierarchyTraits Traits, typename VisitFn, typename RefineFn = AlwaysRefine>
-std::expected<void, ::Error> traverse(const Index<Traits>& index,
+Expected<void> traverse(const Index<Traits>& index,
     VisitFn&& visit,
     RefineFn&& refine = {},
     const typename Traits::Key& root = Traits::root(),
@@ -31,22 +31,22 @@ std::expected<void, ::Error> traverse(const Index<Traits>& index,
 {
     using Key = typename Traits::Key;
     if (!Traits::is_valid(root)) {
-        return std::unexpected(store::invalid_key_error<Traits>(root));
+        return store::invalid_key_error<Traits>(root);
     }
     auto root_status = index.get(root);
     if (!root_status.has_value()) {
-        return std::unexpected(std::move(root_status).error());
+        return Error::propagate(std::move(root_status));
     }
     if (!root_status.value().has_value()) {
         return {};
     }
 
     if (order == TraversalOrder::DepthFirst) {
-        std::function<std::expected<void, ::Error>(const Key&)> depth_first;
-        depth_first = [&](const Key& current) -> std::expected<void, ::Error> {
+        std::function<Expected<void>(const Key&)> depth_first;
+        depth_first = [&](const Key& current) -> Expected<void> {
             auto status = index.get(current);
             if (!status.has_value()) {
-                return std::unexpected(std::move(status).error());
+                return Error::propagate(std::move(status));
             }
             if (!status.value().has_value()) {
                 return {};
@@ -77,7 +77,7 @@ std::expected<void, ::Error> traverse(const Index<Traits>& index,
 
         auto status = index.get(current);
         if (!status.has_value()) {
-            return std::unexpected(std::move(status).error());
+            return Error::propagate(std::move(status));
         }
         if (!status.value().has_value()) {
             continue;

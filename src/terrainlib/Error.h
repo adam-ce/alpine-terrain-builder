@@ -83,10 +83,7 @@ public:
 
     template <typename T>
     static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
-        std::source_location location = std::source_location::current());
-    template <typename T>
-    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
-        std::string message,
+        std::string message = "propagated",
         std::source_location location = std::source_location::current());
     template <typename T>
     static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
@@ -94,23 +91,16 @@ public:
         std::string message,
         std::source_location location = std::source_location::current());
     static std::unexpected<Error> propagate(Error&& error,
+        std::string message = "propagated",
         std::source_location location = std::source_location::current());
-    static std::unexpected<Error> propagate(Error&& error,
-        std::string message,
-        std::source_location location = std::source_location::current());
-
-    [[nodiscard]] Error with_context(
-        std::string message,
-        std::source_location location = std::source_location::current()) &&;
-    [[nodiscard]] Error reclassified(Code code,
-        std::string message,
-        std::source_location location = std::source_location::current()) &&;
 
     Code code() const { return m_code; }
     std::string to_string() const;
 
 private:
     Error(Code code, Frame frame);
+    [[nodiscard]] Error with_context(std::string message, std::source_location location) &&;
+    [[nodiscard]] Error reclassified(Code code, std::string message, std::source_location location) &&;
 
     Code m_code;
     std::vector<Frame> m_frames;
@@ -118,12 +108,6 @@ private:
 
 template <typename T>
 using Expected = std::expected<T, Error>;
-
-template <typename T>
-std::unexpected<Error> Error::propagate(std::expected<T, Error>&& result, const std::source_location location)
-{
-    return propagate(std::move(result).error(), location);
-}
 
 template <typename T>
 std::unexpected<Error> Error::propagate(

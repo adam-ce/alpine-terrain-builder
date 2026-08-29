@@ -2,6 +2,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <new>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -32,46 +33,28 @@ public:
     Expected<mesh::Simple> read(const std::filesystem::path& node_path) const override
     {
         const std::filesystem::path path = paths(node_path).front();
-        const auto result = mesh::io::gltf::load_from_path(path);
+        auto result = mesh::io::gltf::load_from_path(path);
         if (!result) {
-            switch (static_cast<mesh::io::LoadMeshErrorKind>(result.error())) {
-            case mesh::io::LoadMeshErrorKind::UnsupportedFormat:
-                return Error::fail(Error::Code::Unsupported, "load unsupported glTF format from", path);
-            case mesh::io::LoadMeshErrorKind::FileNotFound:
-                return Error::fail(Error::Code::NotFound, "open glTF file", path);
-            case mesh::io::LoadMeshErrorKind::InvalidFormat:
-                return Error::fail(Error::Code::CorruptData, "decode invalid glTF file", path);
-            case mesh::io::LoadMeshErrorKind::OutOfMemory:
-                return Error::fail(Error::Code::ResourceExhausted, "load glTF file: out of memory", path);
-            }
-            std::terminate();
+            return Error::propagate(std::move(result), "read glTF mesh \"" + path.string() + "\"");
         }
-        return std::move(result.value());
+        return std::move(*result);
     }
 
     Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
     {
         const std::filesystem::path path = paths(node_path).front();
         try {
-            const auto result = mesh::io::gltf::save_to_path(mesh, path);
+            auto result = mesh::io::gltf::save_to_path(mesh, path);
             if (!result) {
-                switch (static_cast<mesh::io::SaveMeshErrorKind>(result.error())) {
-                case mesh::io::SaveMeshErrorKind::UnsupportedFormat:
-                    return Error::fail(Error::Code::Unsupported, "write unsupported glTF format to", path);
-                case mesh::io::SaveMeshErrorKind::OpenFile:
-                    return Error::fail(Error::Code::Io, "open glTF file for writing", path);
-                case mesh::io::SaveMeshErrorKind::WriteFile:
-                    return Error::fail(Error::Code::Io, "write glTF file", path);
-                case mesh::io::SaveMeshErrorKind::OutOfMemory:
-                    return Error::fail(Error::Code::ResourceExhausted, "write glTF file: out of memory", path);
-                }
-                std::terminate();
+                return Error::propagate(std::move(result), "write glTF mesh \"" + path.string() + "\"");
             }
             return {};
+        } catch (const std::bad_alloc&) {
+            return Error::fail(Error::Code::ResourceExhausted, "write glTF mesh \"" + path.string() + "\": out of memory");
         } catch (const std::exception& error) {
-            return Error::fail(Error::Code::Internal, "write glTF file \"" + path.string() + "\": " + error.what());
+            return Error::fail(Error::Code::Internal, "write glTF mesh \"" + path.string() + "\": " + error.what());
         } catch (...) {
-            return Error::fail(Error::Code::Internal, "write glTF file \"" + path.string() + "\": unknown exception");
+            return Error::fail(Error::Code::Internal, "write glTF mesh \"" + path.string() + "\": unknown exception");
         }
     }
 

@@ -1,7 +1,11 @@
+#include <array>
+#include <fstream>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/quaternion.hpp>
-#include <libassert/assert.hpp>
+#include <limits>
+#include <new>
+#include <stdexcept>
 
 #define CGLTF_IMPLEMENTATION
 #define CGLTF_WRITE_IMPLEMENTATION
@@ -10,12 +14,10 @@
 #undef CGLTF_IMPLEMENTATION
 #undef CGLTF_WRITE_IMPLEMENTATION
 
+#include "io/utils.h"
 #include "log.h"
-#include "mesh/io/utils.h"
 #include "mesh/io/gltf.h"
 #include "mesh/io/texture.h"
-
-using namespace mesh::io::utils;
 
 namespace mesh::io::gltf {
 
@@ -178,7 +180,7 @@ std::string data_uri_encode(unsigned char const *bytes_to_encode, unsigned int i
     return "data:application/octet-stream;base64," + base64_encode(bytes_to_encode, in_len);
 }
 
-std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material) {
+Expected<std::optional<cv::Mat>> load_texture_from_material(const cgltf_material &material) {
     if (!material.has_pbr_metallic_roughness || material.pbr_metallic_roughness.base_color_texture.texture == nullptr) {
         LOG_WARN("mesh material has no texture");
         return std::nullopt;
@@ -193,52 +195,184 @@ std::optional<cv::Mat> load_texture_from_material(const cgltf_material &material
     }
 
     const std::span<const uint8_t> raw_texture{cgltf_buffer_view_data(albedo_image.buffer_view), albedo_image.buffer_view->size};
-    cv::Mat texture = mesh::io::read_texture_from_encoded_bytes(raw_texture);
-    return texture;
+    try {
+        cv::Mat texture = mesh::io::read_texture_from_encoded_bytes(raw_texture);
+        if (texture.empty()) {
+            return Error::fail(Error::Code::CorruptData, "could not decode embedded glTF texture");
+        }
+        return std::optional<cv::Mat> { std::move(texture) };
+    } catch (const cv::Exception& error) {
+        if (error.code == cv::Error::StsNoMem) {
+            return Error::fail(Error::Code::ResourceExhausted, "decode embedded glTF texture: out of memory");
+        }
+        return Error::fail(Error::Code::CorruptData, "could not decode embedded glTF texture: " + error.msg);
+    }
 }
 
-#define GET_OR_INVALID_FORMAT(var, opt)                              \
-    do {                                                             \
-        if (!(opt).has_value()) {                                    \
-            return std::unexpected(LoadMeshErrorKind::InvalidFormat); \
-        } else {                                                     \
-            var = opt.value();                                       \
-        }                                                            \
-    } while (false)
-
-template <typename T>
-static std::optional<std::reference_wrapper<const T>> get_single_element(const char *name, cgltf_size count, T const *items) {
-    if (count == 0) {
-        LOG_ERROR("file contains no {}", name);
-        return std::nullopt;
-    }
-    if (count > 1) {
-        LOG_WARN("file contains more than one {}", name);
-        return std::nullopt;
-    }
-
-    const T &ref = items[0];
-
-    return ref;
-}
-
-LoadMeshError map_cgltf_error(cgltf_result result) {
+Error load_cgltf_error(const cgltf_result result, const std::filesystem::path& path) {
     switch (result) {
     case cgltf_result::cgltf_result_data_too_short:
     case cgltf_result::cgltf_result_unknown_format:
     case cgltf_result::cgltf_result_invalid_json:
     case cgltf_result::cgltf_result_invalid_gltf:
+        return Error::make(Error::Code::CorruptData, "decode invalid glTF file", path);
     case cgltf_result::cgltf_result_legacy_gltf:
-        return LoadMeshErrorKind::InvalidFormat;
+        return Error::make(Error::Code::Unsupported, "decode legacy glTF file", path);
     case cgltf_result::cgltf_result_file_not_found:
+        return Error::make(Error::Code::NotFound, "open glTF file", path);
     case cgltf_result::cgltf_result_io_error:
-        return LoadMeshErrorKind::FileNotFound;
+        return Error::make(Error::Code::Io, "read glTF file", path);
     case cgltf_result::cgltf_result_out_of_memory:
-        return LoadMeshErrorKind::OutOfMemory;
-    default:
-        UNREACHABLE();
-        break;
+        return Error::make(Error::Code::ResourceExhausted, "load glTF file: out of memory", path);
+    case cgltf_result::cgltf_result_invalid_options:
+    case cgltf_result::cgltf_result_success:
+    case cgltf_result::cgltf_result_max_enum:
+        return Error::make(Error::Code::Internal, "unexpected glTF loader result for \"" + path.string() + "\"");
     }
+    return Error::make(Error::Code::Internal, "unknown glTF loader result for \"" + path.string() + "\"");
+}
+
+Expected<std::vector<std::uint8_t>> serialize_json(const cgltf_options& options, const cgltf_data& data)
+try {
+    const cgltf_size expected_size = cgltf_write(&options, nullptr, 0, &data);
+    if (expected_size == 0) {
+        return Error::fail(Error::Code::Internal, "glTF serialization produced no output");
+    }
+
+    std::vector<std::uint8_t> json;
+    if (expected_size > json.max_size()) {
+        return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the supported size");
+    }
+    json.resize(expected_size);
+    const cgltf_size actual_size = cgltf_write(&options, reinterpret_cast<char*>(json.data()), json.size(), &data);
+    if (actual_size != expected_size) {
+        return Error::fail(Error::Code::Internal, "glTF serialization size changed between passes");
+    }
+    json.resize(actual_size - 1);
+    return json;
+} catch (const std::bad_alloc&) {
+    return Error::fail(Error::Code::ResourceExhausted, "allocate glTF serialization output");
+} catch (const std::length_error&) {
+    return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the supported size");
+}
+
+bool write_all(std::ofstream& file, std::span<const std::uint8_t> bytes)
+{
+    constexpr std::size_t max_write_size = std::size_t { 1 } << 30;
+    while (!bytes.empty()) {
+        const std::size_t write_size = (std::min)(bytes.size(), max_write_size);
+        file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(write_size));
+        if (!file.good()) {
+            return false;
+        }
+        bytes = bytes.subspan(write_size);
+    }
+    return true;
+}
+
+Expected<void> write_serialized(
+    const std::filesystem::path& path,
+    const std::span<const std::uint8_t> json,
+    const cgltf_data& data,
+    const bool binary_output)
+try {
+    constexpr std::uint32_t glb_magic = 0x46546C67;
+    constexpr std::uint32_t glb_version = 2;
+    constexpr std::uint32_t json_chunk_magic = 0x4E4F534A;
+    constexpr std::uint32_t binary_chunk_magic = 0x004E4942;
+    constexpr std::size_t header_size = 12;
+    constexpr std::size_t chunk_header_size = 8;
+    constexpr std::size_t glb_size_limit = (std::numeric_limits<std::uint32_t>::max)();
+
+    std::size_t json_padding = 0;
+    std::size_t binary_size = 0;
+    std::size_t binary_padding = 0;
+    std::size_t padded_json_size = 0;
+    std::size_t padded_binary_size = 0;
+    std::size_t total_size = json.size();
+    if (binary_output) {
+        json_padding = (4 - json.size() % 4) % 4;
+        binary_size = data.bin == nullptr ? 0 : data.bin_size;
+        binary_padding = (4 - binary_size % 4) % 4;
+        if (json.size() > glb_size_limit - 3 || binary_size > glb_size_limit - 3) {
+            return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the GLB size limit");
+        }
+        padded_json_size = json.size() + json_padding;
+        padded_binary_size = binary_size + binary_padding;
+        if (padded_json_size > glb_size_limit - header_size - chunk_header_size) {
+            return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the GLB size limit");
+        }
+        total_size = header_size + chunk_header_size + padded_json_size;
+        if (binary_size != 0) {
+            if (padded_binary_size > glb_size_limit - chunk_header_size
+                || chunk_header_size + padded_binary_size > glb_size_limit - total_size) {
+                return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the GLB size limit");
+            }
+            total_size += chunk_header_size + padded_binary_size;
+        }
+    }
+
+    const std::error_code directory_error = ::io::utils::create_parent_directories(path);
+    if (directory_error) {
+        return Error::fail(Error::Code::Io, "create parent directories for", path, directory_error);
+    }
+
+    std::ofstream file(path, std::ios::binary);
+    if (!file.is_open()) {
+        return Error::fail(Error::Code::Io, "open glTF file for writing", path);
+    }
+
+    if (!binary_output) {
+        if (!write_all(file, json)) {
+            return Error::fail(Error::Code::Io, "write glTF JSON to", path);
+        }
+    } else {
+        const auto put_u32 = [](const std::span<std::uint8_t> bytes, const std::size_t offset, const std::uint32_t value) {
+            bytes[offset] = static_cast<std::uint8_t>(value);
+            bytes[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+            bytes[offset + 2] = static_cast<std::uint8_t>(value >> 16);
+            bytes[offset + 3] = static_cast<std::uint8_t>(value >> 24);
+        };
+        std::array<std::uint8_t, header_size + chunk_header_size> header {};
+        put_u32(header, 0, glb_magic);
+        put_u32(header, 4, glb_version);
+        put_u32(header, 8, static_cast<std::uint32_t>(total_size));
+        put_u32(header, 12, static_cast<std::uint32_t>(padded_json_size));
+        put_u32(header, 16, json_chunk_magic);
+        constexpr std::array<std::uint8_t, 3> json_padding_bytes { 0x20, 0x20, 0x20 };
+        constexpr std::array<std::uint8_t, 3> binary_padding_bytes {};
+
+        if (!write_all(file, header)
+            || !write_all(file, json)
+            || !write_all(file, std::span(json_padding_bytes).first(json_padding))) {
+            return Error::fail(Error::Code::Io, "write glTF JSON chunk to", path);
+        }
+        if (binary_size != 0) {
+            std::array<std::uint8_t, chunk_header_size> binary_header {};
+            put_u32(binary_header, 0, static_cast<std::uint32_t>(padded_binary_size));
+            put_u32(binary_header, 4, binary_chunk_magic);
+            const std::span binary_bytes(static_cast<const std::uint8_t*>(data.bin), binary_size);
+            if (!write_all(file, binary_header)
+                || !write_all(file, binary_bytes)
+                || !write_all(file, std::span(binary_padding_bytes).first(binary_padding))) {
+                return Error::fail(Error::Code::Io, "write glTF binary chunk to", path);
+            }
+        }
+    }
+
+    file.flush();
+    if (!file.good()) {
+        return Error::fail(Error::Code::Io, "flush glTF file", path);
+    }
+    file.close();
+    if (file.fail()) {
+        return Error::fail(Error::Code::Io, "close glTF file", path);
+    }
+    return {};
+} catch (const std::bad_alloc&) {
+    return Error::fail(Error::Code::ResourceExhausted, "allocate glTF writer state");
+} catch (const std::length_error&) {
+    return Error::fail(Error::Code::ResourceExhausted, "serialized glTF exceeds the supported size");
 }
 
 /// Calculates the size of the data of a vector in bytes.
@@ -265,60 +399,65 @@ static std::string image_ext_to_mime(std::string_view extension) {
 }
 }
 
-std::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path) {
+Expected<RawMesh> load_raw_from_path(const std::filesystem::path &path) {
     cgltf_options options = {};
     cgltf_data *data = NULL;
     const std::string path_str = path.string();
     const char *path_ptr = path_str.c_str();
     cgltf_result result = cgltf_parse_file(&options, path_ptr, &data);
     if (result != cgltf_result::cgltf_result_success) {
-        return std::unexpected(result);
+        return Error::propagate(load_cgltf_error(result, path), "parse glTF file");
     }
+    RawMesh raw_mesh(data, cgltf_free);
 
-    result = cgltf_load_buffers(&options, data, path_ptr);
+    result = cgltf_load_buffers(&options, raw_mesh.get(), path_ptr);
     if (result != cgltf_result::cgltf_result_success) {
-        cgltf_free(data);
-        return std::unexpected(result);
+        return Error::propagate(load_cgltf_error(result, path), "load glTF buffers");
     }
 
-    result = cgltf_validate(data);
+    result = cgltf_validate(raw_mesh.get());
     if (result != cgltf_result_success) {
-        cgltf_free(data);
-        return std::unexpected(result);
+        return Error::propagate(load_cgltf_error(result, path), "validate glTF data");
     }
 
-    return RawMesh(data, cgltf_free);
+    return raw_mesh;
 }
 
-std::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
+Expected<SimpleMesh> load_from_raw(const RawMesh &raw, const LoadOptions& /* options */) {
     LOG_TRACE("Loading mesh from gltf data");
 
     const cgltf_data &data = *raw;
 
-    const auto mesh_opt = get_single_element("mesh", data.meshes_count, data.meshes);
-    if (!mesh_opt.has_value()) {
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+    if (data.meshes_count == 0) {
+        return Error::fail(Error::Code::CorruptData, "glTF file contains no mesh");
     }
-    const cgltf_mesh &mesh = mesh_opt.value();
+    if (data.meshes_count > 1) {
+        return Error::fail(Error::Code::Unsupported, "loading glTF files with multiple meshes is not supported");
+    }
+    const cgltf_mesh &mesh = data.meshes[0];
 
-    const auto mesh_primitive_opt = get_single_element("mesh primitive", mesh.primitives_count, mesh.primitives);
-    if (!mesh_primitive_opt.has_value()) {
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+    if (mesh.primitives_count == 0) {
+        return Error::fail(Error::Code::CorruptData, "glTF mesh contains no primitive");
     }
-    const cgltf_primitive &mesh_primitive = mesh_primitive_opt.value();
+    if (mesh.primitives_count > 1) {
+        return Error::fail(Error::Code::Unsupported, "loading glTF meshes with multiple primitives is not supported");
+    }
+    const cgltf_primitive &mesh_primitive = mesh.primitives[0];
     if (mesh_primitive.type != cgltf_primitive_type::cgltf_primitive_type_triangles) {
         LOG_ERROR("mesh has invalid primitive type");
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return Error::fail(Error::Code::Unsupported, "loading non-triangle glTF primitives is not supported");
     }
 
     // indices
     if (mesh_primitive.indices == nullptr) {
         LOG_ERROR("mesh primitive has no indices");
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return Error::fail(Error::Code::Unsupported, "loading non-indexed glTF primitives is not supported");
     }
     cgltf_accessor &index_accessor = *mesh_primitive.indices;
     std::vector<glm::uvec3> indices;
-    DEBUG_ASSERT(index_accessor.count % 3 == 0);
+    if (index_accessor.count % 3 != 0) {
+        return Error::fail(Error::Code::CorruptData, "glTF mesh index count is not divisible by three");
+    }
     indices.resize(index_accessor.count / 3);
     cgltf_accessor_unpack_indices(
         &index_accessor,
@@ -330,13 +469,13 @@ std::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const
     cgltf_attribute *position_attr = find_attribute_with_type(mesh_primitive.attributes, mesh_primitive.attributes_count, cgltf_attribute_type_position);
     if (position_attr == nullptr) {
         LOG_ERROR("mesh has no position attribute");
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return Error::fail(Error::Code::CorruptData, "glTF mesh contains no position attribute");
     }
 
     cgltf_accessor &position_accessor = *position_attr->data;
     if (position_accessor.type != cgltf_type_vec3) {
         LOG_WARN("mesh positions are not vec3");
-        return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+        return Error::fail(Error::Code::CorruptData, "glTF mesh positions are not three-component vectors");
     }
     std::vector<glm::vec3> positions;
     positions.resize(position_accessor.count);
@@ -351,7 +490,7 @@ std::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const
         cgltf_accessor &uv_accessor = *uv_attr->data;
         if (uv_accessor.type != cgltf_type_vec2) {
             LOG_WARN("mesh uvss are not vec2");
-            return std::unexpected(LoadMeshErrorKind::InvalidFormat);
+            return Error::fail(Error::Code::CorruptData, "glTF mesh UVs are not two-component vectors");
         }
         uvs.resize(uv_accessor.count);
         cgltf_accessor_unpack_floats(&uv_accessor, reinterpret_cast<float *>(uvs.data()), uvs.size() * 2);
@@ -374,14 +513,18 @@ std::expected<SimpleMesh, LoadMeshError> load_from_raw(const RawMesh &raw, const
 
     std::optional<cv::Mat> texture;
     if (mesh_primitive.material != nullptr) {
-        texture = load_texture_from_material(*mesh_primitive.material);
+        auto loaded_texture = load_texture_from_material(*mesh_primitive.material);
+        if (!loaded_texture) {
+            return Error::propagate(std::move(loaded_texture), "load glTF material texture");
+        }
+        texture = std::move(*loaded_texture);
     }
 
     return SimpleMesh(indices, positionsd, uvsd, texture);
 }
 
 /// Saves the mesh as a .gltf or .glb file at the given path.
-std::expected<void, SaveMeshError> save_to_path(
+Expected<void> save_to_path(
     const SimpleMesh &terrain_mesh,
     const std::filesystem::path &path,
     const SaveOptions& options) {
@@ -423,7 +566,23 @@ std::expected<void, SaveMeshError> save_to_path(
     const bool has_texture = terrain_mesh.has_texture();
     std::vector<uint8_t> texture_bytes;
     if (has_texture) {
-        texture_bytes = mesh::io::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
+        try {
+            if (!cv::haveImageWriter(options.texture_format)) {
+                return Error::fail(Error::Code::Unsupported, "unsupported glTF texture format: " + options.texture_format);
+            }
+            texture_bytes = mesh::io::write_texture_to_encoded_buffer(terrain_mesh.texture.value(), options.texture_format);
+        } catch (const cv::Exception& error) {
+            if (error.code == cv::Error::StsNoMem) {
+                return Error::fail(Error::Code::ResourceExhausted, "encode glTF texture: out of memory");
+            }
+            if (error.code == cv::Error::StsUnsupportedFormat || error.code == cv::Error::StsNotImplemented) {
+                return Error::fail(Error::Code::Unsupported, "unsupported glTF texture encoding: " + error.msg);
+            }
+            return Error::fail(Error::Code::InvalidInput, "could not encode glTF texture: " + error.msg);
+        }
+        if (!terrain_mesh.texture->empty() && texture_bytes.empty()) {
+            return Error::fail(Error::Code::InvalidInput, "could not encode glTF texture");
+        }
     }
 
     // Create a single buffer that holds all binary data (indices, vertices, textures)
@@ -707,24 +866,32 @@ std::expected<void, SaveMeshError> save_to_path(
     }
 
     // ********************* Save the GLTF data to a file ********************* //
-    create_parent_directories(path);
     cgltf_options gltf_options = {};
     if (binary_output) {
         gltf_options.type = cgltf_file_type_glb;
     }
-    if (cgltf_write_file(&gltf_options, path.string().c_str(), &data) != cgltf_result_success) {
-        throw std::runtime_error("Failed to save GLTF file");
+    auto serialized = serialize_json(gltf_options, data);
+    if (!serialized) {
+        return Error::propagate(std::move(serialized), "serialize glTF output");
+    }
+    auto written = write_serialized(path, *serialized, data, binary_output);
+    if (!written) {
+        return Error::propagate(std::move(written), "write glTF output");
     }
 
     return {};
 }
 
-std::expected<SimpleMesh, LoadMeshError> load_from_path(const std::filesystem::path &path, const LoadOptions &options) {
-    std::expected<RawMesh, cgltf_result> raw_mesh = load_raw_from_path(path);
+Expected<SimpleMesh> load_from_path(const std::filesystem::path &path, const LoadOptions &options) {
+    auto raw_mesh = load_raw_from_path(path);
     if (!raw_mesh) {
-        return std::unexpected(map_cgltf_error(raw_mesh.error()));
+        return Error::propagate(std::move(raw_mesh), "load raw glTF data");
     }
-    return load_from_raw(*raw_mesh, options);
+    auto mesh = load_from_raw(*raw_mesh, options);
+    if (!mesh) {
+        return Error::propagate(std::move(mesh), "decode glTF mesh \"" + path.string() + "\"");
+    }
+    return std::move(*mesh);
 }
 
 } // namespace mesh::io::gltf

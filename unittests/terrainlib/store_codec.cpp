@@ -108,7 +108,7 @@ TEST_CASE("runtime mesh codecs are reentrant", "[store][codec]")
     SECTION("JSON glTF") { check_mesh_codec_reentrancy(mesh::codec::Gltf(mesh::codec::GltfContainer::Json), directory.path() / "gltf"); }
 }
 
-TEST_CASE("runtime glTF codec converts writer exceptions", "[store][codec]")
+TEST_CASE("runtime glTF codec reports writer IO errors", "[store][codec]")
 {
     TemporaryDirectory directory("gltf-error");
     mesh::codec::Gltf codec(mesh::codec::GltfContainer::Binary);
@@ -117,5 +117,5 @@ TEST_CASE("runtime glTF codec converts writer exceptions", "[store][codec]")
 
     const auto result = codec.write(node_path, triangle_mesh(0.0));
     REQUIRE_FALSE(result.has_value());
-    CHECK(result.error().code() == Error::Code::Internal);
+    CHECK(result.error().code() == Error::Code::Io);
 }

@@ -6,50 +6,12 @@
 
 namespace mesh::io {
 
-namespace {
-
-Error load_error(const LoadMeshError error, const std::filesystem::path& path)
-{
-    switch (static_cast<LoadMeshErrorKind>(error)) {
-    case LoadMeshErrorKind::UnsupportedFormat:
-        return Error::make(Error::Code::Unsupported, "load unsupported glTF format from", path);
-    case LoadMeshErrorKind::FileNotFound:
-        return Error::make(Error::Code::NotFound, "open glTF file", path);
-    case LoadMeshErrorKind::InvalidFormat:
-        return Error::make(Error::Code::CorruptData, "decode invalid glTF file", path);
-    case LoadMeshErrorKind::OutOfMemory:
-        return Error::make(Error::Code::ResourceExhausted, "load glTF file: out of memory", path);
-    }
-    return Error::make(Error::Code::Internal, "unknown glTF load failure for \"" + path.string() + "\"");
-}
-
-Error save_error(const SaveMeshError error, const std::filesystem::path& path)
-{
-    switch (static_cast<SaveMeshErrorKind>(error)) {
-    case SaveMeshErrorKind::UnsupportedFormat:
-        return Error::make(Error::Code::Unsupported, "write unsupported glTF format to", path);
-    case SaveMeshErrorKind::OpenFile:
-        return Error::make(Error::Code::Io, "open glTF file for writing", path);
-    case SaveMeshErrorKind::WriteFile:
-        return Error::make(Error::Code::Io, "write glTF file", path);
-    case SaveMeshErrorKind::OutOfMemory:
-        return Error::make(Error::Code::ResourceExhausted, "write glTF file: out of memory", path);
-    }
-    return Error::make(Error::Code::Internal, "unknown glTF write failure for \"" + path.string() + "\"");
-}
-
-} // namespace
-
 Expected<SimpleMesh> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions& options) {
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
-        auto result = gltf::load_from_path(path, options);
-        if (!result) {
-            return Error::propagate(load_error(result.error(), path), "load glTF mesh");
-        }
-        return std::move(*result);
+        return gltf::load_from_path(path, options);
     } else if (extension == ".sfmesh") {
         std::filesystem::path node_path = path;
         node_path.replace_extension();
@@ -70,11 +32,7 @@ Expected<void> save_to_path(
 
     const std::filesystem::path extension = path.extension();
     if (extension == ".glb" || extension == ".gltf") {
-        auto result = gltf::save_to_path(mesh, path, options);
-        if (!result) {
-            return Error::propagate(save_error(result.error(), path), "write glTF mesh");
-        }
-        return {};
+        return gltf::save_to_path(mesh, path, options);
     } else if (extension == ".sfmesh") {
         std::filesystem::path node_path = path;
         node_path.replace_extension();

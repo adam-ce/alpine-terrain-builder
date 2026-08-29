@@ -99,7 +99,6 @@ add_library(terrainlib
     mesh/igl/manifold.h
     mesh/igl/orient.h
     mesh/io.h mesh/io.cpp
-    mesh/io/error.h
     mesh/io/gltf.h mesh/io/gltf.cpp
     mesh/io/options.h
     mesh/io/texture.h mesh/io/texture.cpp

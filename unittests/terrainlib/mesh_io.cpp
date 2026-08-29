@@ -19,9 +19,11 @@
 
 #include <opencv2/opencv.hpp>
 #include <fmt/core.h>
+#include <fstream>
 
 #include "../catch2_helpers.h"
 #include "../opencv_helpers.h"
+#include "../temporary_directory.h"
 #include "mesh/io.h"
 #include "mesh/encode.h"
 
@@ -232,15 +234,32 @@ TEST_CASE("io roundtrip no texture and uvs") {
 
 TEST_CASE("mesh IO reports project errors")
 {
+    test::TemporaryDirectory temporary_directory("mesh-io-errors");
+
     const auto unsupported_input = mesh::io::load_from_path("mesh.unsupported");
     REQUIRE_FALSE(unsupported_input.has_value());
     CHECK(unsupported_input.error().code() == Error::Code::Unsupported);
 
-    const auto missing_input = mesh::io::load_from_path("missing.glb");
+    const auto missing_input = mesh::io::load_from_path(temporary_directory.path() / "missing.glb");
     REQUIRE_FALSE(missing_input.has_value());
     CHECK(missing_input.error().code() == Error::Code::NotFound);
+
+    const std::filesystem::path corrupt_path = temporary_directory.path() / "corrupt.gltf";
+    std::ofstream(corrupt_path) << "not glTF";
+    const auto corrupt_input = mesh::io::load_from_path(corrupt_path);
+    REQUIRE_FALSE(corrupt_input.has_value());
+    CHECK(corrupt_input.error().code() == Error::Code::CorruptData);
 
     const auto unsupported_output = mesh::io::save_to_path(mesh::Simple {}, "mesh.unsupported");
     REQUIRE_FALSE(unsupported_output.has_value());
     CHECK(unsupported_output.error().code() == Error::Code::Unsupported);
+
+    mesh::Simple mesh;
+    mesh.positions = { { 0, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 } };
+    mesh.triangles = { { 0, 1, 2 } };
+    const std::filesystem::path directory_output = temporary_directory.path() / "directory.glb";
+    REQUIRE(std::filesystem::create_directory(directory_output));
+    const auto failed_output = mesh::io::save_to_path(mesh, directory_output);
+    REQUIRE_FALSE(failed_output.has_value());
+    CHECK(failed_output.error().code() == Error::Code::Io);
 }

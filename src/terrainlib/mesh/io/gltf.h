@@ -1,33 +1,31 @@
 #pragma once
 
 #include <filesystem>
-#include <vector>
 #include <memory>
+#include <vector>
 
 #include <cgltf_write.h>
-#include <expected>
 
+#include "Error.h"
 #include "mesh/SimpleMesh.h"
-#include "mesh/io/error.h"
 #include "mesh/io/options.h"
 
 namespace mesh::io::gltf {
 
 using RawMesh = std::unique_ptr<cgltf_data, decltype(&cgltf_free)>;
 
-std::expected<SimpleMesh, LoadMeshError> load_from_path(
+Expected<SimpleMesh> load_from_path(
     const std::filesystem::path &path,
     const LoadOptions &options = {});
-std::expected<SimpleMesh, LoadMeshError> load_from_raw(
+Expected<SimpleMesh> load_from_raw(
     const RawMesh &mesh,
     const LoadOptions &options = {});
 
-std::expected<void, SaveMeshError> save_to_path(
+Expected<void> save_to_path(
     const SimpleMesh &mesh,
     const std::filesystem::path &path,
     const SaveOptions &options = {});
-// std::expected<SimpleMesh, LoadMeshError> save_to_raw(const RawMesh &mesh, const SaveOptions &options = {});
 
-std::expected<RawMesh, cgltf_result> load_raw_from_path(const std::filesystem::path &path);
+Expected<RawMesh> load_raw_from_path(const std::filesystem::path &path);
 
 } // namespace mesh::io::gltf

@@ -17,7 +17,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
         LOG_INFO("Loading mask file from {}", path);
         const glm::dvec2 radius_range = mask::pad_radius_range(earth::radius_range(), 2);
         auto result = mask::load_from_path(path, radius_range);
-        if (result.has_value()) {
+        if (result) {
             const auto mask = result.value();
             LOG_DEBUG("Loaded mask successfully ({} vertices, {} triangles)",
                 mask.vertex_count(), mask.face_count());
@@ -35,7 +35,7 @@ std::optional<MeshMask> load_mask_from_path(const std::filesystem::path& path) {
 void run(const cli::MergeArgs& args) {
     LOG_TRACE("Loading base dataset from {}", args.base_path);
     auto base_result = mesh::storage::open_folder_indexed(args.base_path);
-    if (!base_result.has_value()) {
+    if (!base_result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open base dataset {}: {}",
             args.base_path,
@@ -45,7 +45,7 @@ void run(const cli::MergeArgs& args) {
 
     LOG_TRACE("Loading new dataset from {}", args.new_path);
     auto new_result = mesh::storage::open_folder_indexed(args.new_path);
-    if (!new_result.has_value()) {
+    if (!new_result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open new dataset {}: {}",
             args.new_path,
@@ -59,7 +59,7 @@ void run(const cli::MergeArgs& args) {
     options.default_mapping = base_dataset.layout().mapping();
     options.preferred_extension = std::string(base_dataset.codec_selector().value_or(".sfmesh"));
     auto output_result = mesh::storage::open_folder(args.output_path, std::move(options));
-    if (!output_result.has_value()) {
+    if (!output_result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",
             args.output_path,
@@ -74,7 +74,7 @@ void run(const cli::MergeArgs& args) {
         new_dataset,
         output_dataset,
         mask);
-    if (!merge_result.has_value()) {
+    if (!merge_result) {
         LOG_ERROR_AND_EXIT("Failed to merge datasets: {}", merge_result.error().to_string());
     }
 }
@@ -82,7 +82,7 @@ void run(const cli::MergeArgs& args) {
 void run(const cli::CutArgs& args) {
     LOG_TRACE("Loading input dataset from {}", args.input_path);
     auto input_result = mesh::storage::open_folder_indexed(args.input_path);
-    if (!input_result.has_value()) {
+    if (!input_result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open input dataset {}: {}",
             args.input_path,
@@ -95,7 +95,7 @@ void run(const cli::CutArgs& args) {
         mask,
         args.output_path,
         args.keep_inside);
-    if (!cut_result.has_value()) {
+    if (!cut_result) {
         LOG_ERROR_AND_EXIT("Failed to cut dataset: {}", cut_result.error().to_string());
     }
 }

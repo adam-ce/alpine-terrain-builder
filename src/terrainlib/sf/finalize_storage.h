@@ -12,7 +12,7 @@ namespace sf {
 inline Expected<void> finalize_storage(mesh::storage::Storage& storage)
 {
     auto save_result = storage.save_or_create_index();
-    if (!save_result.has_value()) {
+    if (!save_result) {
         return save_result;
     }
 

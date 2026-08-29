@@ -12,7 +12,7 @@
 void run(const cli::Args& args) {
     LOG_INFO("Loading input mesh...");
     const std::expected<SimpleMesh, mesh::io::LoadMeshError> load_result = mesh::io::load_from_path(args.input_path);
-    if (!load_result.has_value()) {
+    if (!load_result) {
         LOG_ERROR("Failed to load mesh: {}", load_result.error().description());
         return;
     }
@@ -31,7 +31,7 @@ void run(const cli::Args& args) {
 
     LOG_INFO("Writing output mesh...");
     const std::expected<void, mesh::io::SaveMeshError> save_result = mesh::io::save_to_path(mesh, args.output_path);
-    if (!save_result.has_value()) {
+    if (!save_result) {
         LOG_ERROR("Failed to save mesh: {}", save_result.error().description());
         return;
     }

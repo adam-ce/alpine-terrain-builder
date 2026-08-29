@@ -34,8 +34,9 @@ Expected<void> traverse(const Index<Traits>& index,
         return store::invalid_key_error<Traits>(root);
     }
     auto root_status = index.get(root);
-    if (!root_status.has_value()) {
-        return Error::propagate(std::move(root_status));
+    if (!root_status) {
+        return Error::propagate(
+            std::move(root_status), "read traversal root status for node " + Traits::key_to_string(root));
     }
     if (!root_status.value().has_value()) {
         return {};
@@ -45,8 +46,9 @@ Expected<void> traverse(const Index<Traits>& index,
         std::function<Expected<void>(const Key&)> depth_first;
         depth_first = [&](const Key& current) -> Expected<void> {
             auto status = index.get(current);
-            if (!status.has_value()) {
-                return Error::propagate(std::move(status));
+            if (!status) {
+                return Error::propagate(std::move(status),
+                    "read node status during depth-first traversal for " + Traits::key_to_string(current));
             }
             if (!status.value().has_value()) {
                 return {};
@@ -58,7 +60,7 @@ Expected<void> traverse(const Index<Traits>& index,
                 if (children.has_value()) {
                     for (const Key& child : children.value()) {
                         auto result = depth_first(child);
-                        if (!result.has_value()) {
+                        if (!result) {
                             return result;
                         }
                     }
@@ -76,8 +78,9 @@ Expected<void> traverse(const Index<Traits>& index,
         queue.pop();
 
         auto status = index.get(current);
-        if (!status.has_value()) {
-            return Error::propagate(std::move(status));
+        if (!status) {
+            return Error::propagate(std::move(status),
+                "read node status during breadth-first traversal for " + Traits::key_to_string(current));
         }
         if (!status.value().has_value()) {
             continue;

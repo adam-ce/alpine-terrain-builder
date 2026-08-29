@@ -43,7 +43,7 @@ inline Expected<void> cut_leaf_node(
     if (clipped.is_ref()) {
         LOG_TRACE("Mesh was fully inside the mask");
         auto copy_result = ctx.output.copy_from(id, ctx.input);
-        if (!copy_result.has_value()) {
+        if (!copy_result) {
             return copy_result;
         }
     } else {
@@ -52,7 +52,7 @@ inline Expected<void> cut_leaf_node(
             LOG_TRACE("Mesh was clipped from {} vertices and {} triangles to {} vertices and {} triangles",
                 mesh.vertex_count(), mesh.face_count(), clipped_mesh.vertex_count(), clipped_mesh.face_count());
             auto save_result = ctx.output.save(id, clipped_mesh);
-            if (!save_result.has_value()) {
+            if (!save_result) {
                 return save_result;
             }
         } else {
@@ -78,7 +78,7 @@ inline Expected<void> cut_virtual_node(
         LOG_TRACE("Clipping mask for {}", child_id);
         const MeshMask child_mask = clip_mask_on_bounds(mask, child_bounds);
         auto child_result = cut_node(ctx, child_id, child_mask);
-        if (!child_result.has_value()) {
+        if (!child_result) {
             return child_result;
         }
     }
@@ -128,15 +128,21 @@ inline Expected<void> cut_dataset(
     mesh::storage::Storage &output,
     const bool keep_inside) {
     auto validation = sf::validate_index(input.index());
-    if (!validation.has_value()) {
-        return validation;
+    if (!validation) {
+        return Error::propagate(
+            std::move(validation), "validate cut input dataset \"" + input.base_path().string() + "\"");
     }
     Context ctx(input, output, octree::Space::earth(), keep_inside);
     auto cut_result = cut_node(ctx, octree::Id::root(), mask);
-    if (!cut_result.has_value()) {
-        return cut_result;
+    if (!cut_result) {
+        return Error::propagate(std::move(cut_result), "cut dataset \"" + input.base_path().string() + "\"");
     }
-    return sf::finalize_storage(output);
+    auto finalized = sf::finalize_storage(output);
+    if (!finalized) {
+        return Error::propagate(
+            std::move(finalized), "finalize cut output dataset \"" + output.base_path().string() + "\"");
+    }
+    return {};
 }
 
 inline Expected<void> cut_dataset(
@@ -151,8 +157,9 @@ inline Expected<void> cut_dataset(
     options.default_mapping = octree::store_layout::level_and_coordinate_directories();
     options.preferred_extension = ".glb";
     auto output_result = mesh::storage::open_folder_indexed(output_path, std::move(options));
-    if (!output_result.has_value()) {
-        return Error::propagate(std::move(output_result));
+    if (!output_result) {
+        return Error::propagate(
+            std::move(output_result), "open cut output dataset \"" + output_path.string() + "\"");
     }
     mesh::storage::IndexedStorage output_dataset = std::move(output_result.value());
     if (!output_dataset.index().empty()) {

@@ -569,7 +569,7 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path
 
 inline std::expected<MeshMask, LoadError> load_from_path(const std::filesystem::path &path, const glm::dvec2& radius_range) {
     auto ref_mask_res = load_referenced_from_path(path);
-    if (!ref_mask_res.has_value()) {
+    if (!ref_mask_res) {
         return std::unexpected(ref_mask_res.error());
     }
     ReferencedPolygonMask ref_polygon_mask = std::move(ref_mask_res.value());

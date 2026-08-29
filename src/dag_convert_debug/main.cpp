@@ -23,7 +23,7 @@ void export_node(const cli::Args &args) {
     node_path.replace_extension();
     const dag::codec::Dag codec;
     const auto load_result = codec.read(node_path);
-    if (!load_result.has_value()) {
+    if (!load_result) {
         LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().to_string());
         return;
     }
@@ -31,14 +31,14 @@ void export_node(const cli::Args &args) {
     const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
     const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
-    if (!save_result.has_value()) {
+    if (!save_result) {
         LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().description());
     }
 }
 
 void export_storage(const cli::Args &args) {
     auto input_result = dag::storage::open_folder_indexed(args.input_path);
-    if (!input_result.has_value()) {
+    if (!input_result) {
         LOG_ERROR(
             "Failed to open input storage {}: {}",
             args.input_path,
@@ -52,7 +52,7 @@ void export_storage(const cli::Args &args) {
     auto output_result = mesh::storage::open_folder(
         args.output_path,
         std::move(options));
-    if (!output_result.has_value()) {
+    if (!output_result) {
         LOG_ERROR(
             "Failed to open output storage {}: {}",
             args.output_path,
@@ -74,7 +74,7 @@ void export_storage(const cli::Args &args) {
         }
 
         const auto load_result = input_storage.load(id);
-        if (!load_result.has_value()) {
+        if (!load_result) {
             LOG_ERROR(
                 "Failed to load node {}: {}",
                 id,
@@ -86,7 +86,7 @@ void export_storage(const cli::Args &args) {
         const mesh::Simple mesh = clustering_to_mesh(load_result.value().clustering);
 
         const auto save_result = output_storage.save(id, mesh);
-        if (!save_result.has_value()) {
+        if (!save_result) {
             LOG_ERROR(
                 "Failed to save mesh for node {}: {}",
                 id,
@@ -102,7 +102,7 @@ void export_storage(const cli::Args &args) {
     progress_thread.join();
 
     const auto index_result = output_storage.save_or_create_index();
-    if (!index_result.has_value()) {
+    if (!index_result) {
         LOG_ERROR(
             "Failed to save index for {}: {}",
             args.output_path,

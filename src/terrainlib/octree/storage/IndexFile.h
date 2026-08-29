@@ -128,7 +128,7 @@ inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& 
     const std::filesystem::path path = base_path / metadata_file_name;
     auto metadata = io::envelope::read_from_path<StoreMetadataSchema>(path);
     if (!metadata) {
-        return Error::propagate(std::move(metadata));
+        return metadata;
     }
     if (auto valid = validate(*metadata); !valid) {
         return Error::fail(Error::Code::CorruptData, "invalid store metadata in " + path.string() + ": " + valid.error());
@@ -140,12 +140,12 @@ inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::fi
 {
     auto metadata = read_store_metadata(path.parent_path());
     if (!metadata) {
-        return Error::propagate(std::move(metadata));
+        return Error::propagate(std::move(metadata), "read octree store metadata");
     }
 
     auto encoded_index = io::envelope::read_from_path<StoreIndexSchema>(path);
     if (!encoded_index) {
-        return Error::propagate(std::move(encoded_index));
+        return Error::propagate(std::move(encoded_index), "read octree store index \"" + path.string() + "\"");
     }
     auto index = decode_index(*encoded_index);
     if (!index) {

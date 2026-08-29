@@ -37,7 +37,7 @@ public:
 
         // Try storage
         auto mesh_opt = this->_storage.load(id);
-        if (mesh_opt.has_value()) {
+        if (mesh_opt) {
             auto mesh = mesh_opt.value();
             this->_cache.put(id, mesh);
             return mesh;
@@ -54,7 +54,7 @@ public:
 
             // Try storage
             auto parent_mesh_opt = this->_storage.load(parent_id);
-            if (parent_mesh_opt.has_value()) {
+            if (parent_mesh_opt) {
                 auto parent_mesh = parent_mesh_opt.value();
                 const auto bounds = this->_space.get_node_bounds(id);
                 SimpleMesh clipped = mesh::clip_on_bounds(parent_mesh, bounds);

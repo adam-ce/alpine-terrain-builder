@@ -17,8 +17,8 @@ Expected<IndexedStorage<Traits, NodeData>> open_index(
 {
     using Key = typename Traits::Key;
     auto metadata_result = format.read(index_path);
-    if (!metadata_result.has_value()) {
-        return Error::propagate(std::move(metadata_result));
+    if (!metadata_result) {
+        return Error::propagate(std::move(metadata_result), "read storage index \"" + index_path.string() + "\"");
     }
     IndexMetadata<Traits> metadata = std::move(metadata_result.value());
     if (metadata.payload_class != expected_payload_class) {
@@ -36,8 +36,8 @@ Expected<IndexedStorage<Traits, NodeData>> open_index(
         return Error::fail(Error::Code::Unsupported, "unknown storage layout: " + metadata.layout_id);
     }
     auto codec = resolve_codec(metadata.codec_selector);
-    if (!codec.has_value()) {
-        return Error::propagate(std::move(codec));
+    if (!codec) {
+        return Error::propagate(std::move(codec), "resolve storage codec \"" + metadata.codec_selector + "\"");
     }
 
     const std::filesystem::path base_path = index_path.parent_path();

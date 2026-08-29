@@ -82,7 +82,7 @@ public:
         if (parent.status == store::NodeStatusOrMissing::Leaf) {
             auto result = this->_storage.load(parent.id);
             DisplayEntry entry;
-            if (result.has_value()) {
+            if (result) {
                 const auto &mesh = result.value();
                 entry = MeshNode{parent.id, mesh.vertex_count(), mesh.face_count()};
             } else {
@@ -192,7 +192,7 @@ mesh::storage::IndexedStorage open_path_indexed(const std::filesystem::path& pat
     auto result = std::filesystem::is_directory(path)
         ? mesh::storage::open_folder_indexed(path)
         : mesh::storage::open_index(path);
-    if (!result.has_value()) {
+    if (!result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open dataset {}: {}",
             path,

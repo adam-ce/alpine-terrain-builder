@@ -33,7 +33,7 @@ public:
     {
         const std::filesystem::path path = paths(node_path).front();
         const auto result = mesh::io::gltf::load_from_path(path);
-        if (!result.has_value()) {
+        if (!result) {
             switch (static_cast<mesh::io::LoadMeshErrorKind>(result.error())) {
             case mesh::io::LoadMeshErrorKind::UnsupportedFormat:
                 return Error::fail(Error::Code::Unsupported, "load unsupported glTF format from", path);
@@ -54,7 +54,7 @@ public:
         const std::filesystem::path path = paths(node_path).front();
         try {
             const auto result = mesh::io::gltf::save_to_path(mesh, path);
-            if (!result.has_value()) {
+            if (!result) {
                 switch (static_cast<mesh::io::SaveMeshErrorKind>(result.error())) {
                 case mesh::io::SaveMeshErrorKind::UnsupportedFormat:
                     return Error::fail(Error::Code::Unsupported, "write unsupported glTF format to", path);

@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
 
     try {
         auto input_result = mesh::storage::open_folder_indexed(args.input_path);
-        if (!input_result.has_value()) {
+        if (!input_result) {
             LOG_ERROR(
                 "Failed to open input dataset {}: {}",
                 args.input_path,
@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
             return EXIT_FAILURE;
         }
         auto output_result = dag::storage::open_folder_indexed(args.output_path);
-        if (!output_result.has_value()) {
+        if (!output_result) {
             LOG_ERROR(
                 "Failed to open output dataset {}: {}",
                 args.output_path,
@@ -62,12 +62,12 @@ int main(int argc, char **argv) {
             output_storage,
             options,
             args.level_range);
-        if (!build_result.has_value()) {
+        if (!build_result) {
             LOG_ERROR("Invalid Structura Fundamentalis input: {}", build_result.error().to_string());
             return EXIT_FAILURE;
         }
         const auto index_result = output_storage.save_index();
-        if (!index_result.has_value()) {
+        if (!index_result) {
             LOG_ERROR(
                 "Failed to save output index in {}: {}",
                 args.output_path,

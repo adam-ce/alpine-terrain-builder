@@ -468,8 +468,8 @@ Expected<std::vector<std::vector<octree::Id>>> gather_relevant_input_leaves(
             return radix::geometry::intersect(root_bounds, space.get_node_bounds(id));
         },
         start);
-    if (!traversal.has_value()) {
-        return Error::propagate(std::move(traversal));
+    if (!traversal) {
+        return Error::propagate(std::move(traversal), "gather relevant input leaves");
     }
     return result;
 }
@@ -523,7 +523,7 @@ std::unordered_set<octree::Id> build_level(
         auto debug_result = mesh::storage::open_folder(
             ctx.output_storage.base_path().string() + "-debug",
             std::move(options));
-        if (!debug_result.has_value()) {
+        if (!debug_result) {
             LOG_ERROR_AND_EXIT(
                 "Failed to open debug mesh storage: {}",
                 debug_result.error().to_string());
@@ -552,7 +552,7 @@ std::unordered_set<octree::Id> build_level(
                 if (debug_storage) {
                     const auto debug_mesh = clustering_to_mesh(result->clustering);
                     const auto debug_save_result = debug_storage->save(target, debug_mesh);
-                    if (!debug_save_result.has_value()) {
+                    if (!debug_save_result) {
                         LOG_ERROR_AND_EXIT(
                             "Failed to save debug mesh for node {}: {}",
                             target,
@@ -589,7 +589,7 @@ Expected<void> build_levels(
     const BuildOptions &options,
     const AnyRange<uint32_t> &level_range) {
     auto validation = sf::validate_index(input_storage.index());
-    if (!validation.has_value()) {
+    if (!validation) {
         return validation;
     }
     const octree::OddLevelShifted shifted_space = octree::OddLevelShifted::earth();
@@ -597,8 +597,8 @@ Expected<void> build_levels(
     const octree::Id root_node = options.root_node;
     const auto root_bounds = shifted_space.get_node_bounds_with_children(root_node);
     auto input_by_level_result = gather_relevant_input_leaves(input_storage.index(), space, root_bounds);
-    if (!input_by_level_result.has_value()) {
-        return Error::propagate(std::move(input_by_level_result));
+    if (!input_by_level_result) {
+        return Error::propagate(std::move(input_by_level_result), "prepare input leaves for DAG build");
     }
     auto input_by_level = std::move(input_by_level_result.value());
 
@@ -636,7 +636,7 @@ Expected<void> build_levels(
             ctx);
 
         // Persist per level so a finished level can be read back before the whole run completes
-        if (const auto result = ctx.output_storage.save_or_create_index(); !result.has_value()) {
+        if (const auto result = ctx.output_storage.save_or_create_index(); !result) {
             LOG_WARN(
                 "Could not save index after level {}: {}",
                 level,

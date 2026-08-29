@@ -59,7 +59,7 @@ public:
     Expected<bool> has(const Key& key) const
     {
         auto node_paths = paths(key);
-        if (!node_paths.has_value()) {
+        if (!node_paths) {
             return Error::propagate(std::move(node_paths));
         }
         if (node_paths->empty()) {
@@ -81,7 +81,7 @@ public:
     Expected<bool> remove(const Key& key) const
     {
         auto node_paths = paths(key);
-        if (!node_paths.has_value()) {
+        if (!node_paths) {
             return Error::propagate(std::move(node_paths));
         }
         bool removed = false;
@@ -107,7 +107,7 @@ public:
             return store::invalid_key_error<Traits>(key);
         }
         auto source_exists = source.has(key);
-        if (!source_exists.has_value()) {
+        if (!source_exists) {
             return Error::propagate(std::move(source_exists));
         }
         if (!source_exists.value()) {
@@ -117,15 +117,15 @@ public:
         const std::filesystem::path probe("__codec_probe__/node");
         if (m_codec->paths(probe) != source.m_codec->paths(probe)) {
             auto loaded = source.m_codec->read(source.m_layout.node_path(key));
-            if (!loaded.has_value()) {
+            if (!loaded) {
                 return Error::propagate(std::move(loaded), "read source node while copying");
             }
             const auto prepared = before_modify();
-            if (!prepared.has_value()) {
+            if (!prepared) {
                 return prepared;
             }
             auto written = m_codec->write(m_layout.node_path(key), loaded.value());
-            if (!written.has_value()) {
+            if (!written) {
                 return Error::propagate(std::move(written), "write target node while copying");
             }
             return {};
@@ -140,7 +140,7 @@ public:
             return {};
         }
         const auto prepared = before_modify();
-        if (!prepared.has_value()) {
+        if (!prepared) {
             return prepared;
         }
         for (size_t index = 0; index < source_paths.size(); ++index) {

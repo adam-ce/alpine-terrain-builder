@@ -85,8 +85,9 @@ public:
         }
         if (m_index.has_value()) {
             auto status = m_index->get(key);
-            if (!status.has_value()) {
-                return Error::propagate(std::move(status));
+            if (!status) {
+                return Error::propagate(std::move(status),
+                    "look up node " + Traits::key_to_string(key) + " in storage index before loading");
             }
             if (!status->has_value() || status->value() == NodeStatus::Virtual) {
                 return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
@@ -101,8 +102,9 @@ public:
             return store::invalid_key_error<Traits>(key);
         }
         auto exists = has(key);
-        if (!exists.has_value()) {
-            return Error::propagate(std::move(exists));
+        if (!exists) {
+            return Error::propagate(
+                std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
@@ -112,13 +114,14 @@ public:
         }
 
         auto result = m_raw.save(key, data);
-        if (!result.has_value()) {
+        if (!result) {
             return result;
         }
         if (m_index.has_value()) {
             auto added = m_index->add(key);
-            if (!added.has_value()) {
-                return Error::propagate(std::move(added));
+            if (!added) {
+                return Error::propagate(
+                    std::move(added), "add saved node " + Traits::key_to_string(key) + " to storage index");
             }
             m_dirty = m_dirty || added.value();
         }
@@ -131,8 +134,9 @@ public:
             return store::invalid_key_error<Traits>(key);
         }
         auto exists = has(key);
-        if (!exists.has_value()) {
-            return Error::propagate(std::move(exists));
+        if (!exists) {
+            return Error::propagate(
+                std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before copying");
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
@@ -145,21 +149,23 @@ public:
                 return {};
             }
             auto removed = m_index->remove(key);
-            if (!removed.has_value()) {
-                return Error::propagate(std::move(removed));
+            if (!removed) {
+                return Error::propagate(
+                    std::move(removed), "remove overwritten node " + Traits::key_to_string(key) + " from storage index");
             }
             m_dirty = m_dirty || removed.value();
             return {};
         };
 
         auto result = m_raw.copy_from(key, source.m_raw, prepare_target);
-        if (!result.has_value()) {
+        if (!result) {
             return result;
         }
         if (m_index.has_value()) {
             auto added = m_index->add(key);
-            if (!added.has_value()) {
-                return Error::propagate(std::move(added));
+            if (!added) {
+                return Error::propagate(
+                    std::move(added), "add copied node " + Traits::key_to_string(key) + " to storage index");
             }
             m_dirty = m_dirty || added.value();
         }
@@ -169,13 +175,14 @@ public:
     Expected<bool> remove(const Key& key)
     {
         auto removed = m_raw.remove(key);
-        if (!removed.has_value()) {
+        if (!removed) {
             return removed;
         }
         if (m_index.has_value()) {
             auto index_removed = m_index->remove(key);
-            if (!index_removed.has_value()) {
-                return Error::propagate(std::move(index_removed));
+            if (!index_removed) {
+                return Error::propagate(
+                    std::move(index_removed), "remove node " + Traits::key_to_string(key) + " from storage index");
             }
             m_dirty = m_dirty || index_removed.value();
         }
@@ -191,8 +198,9 @@ public:
             return m_raw.has(key);
         }
         auto status = m_index->get(key);
-        if (!status.has_value()) {
-            return Error::propagate(std::move(status));
+        if (!status) {
+            return Error::propagate(
+                std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index");
         }
         return status->has_value() && status->value() != NodeStatus::Virtual;
     }
@@ -202,7 +210,7 @@ public:
     Expected<std::filesystem::path> path_for(const Key& key) const
     {
         auto node_paths = paths(key);
-        if (!node_paths.has_value()) {
+        if (!node_paths) {
             return Error::propagate(std::move(node_paths));
         }
         return node_paths->empty() ? m_raw.layout().node_path(key) : node_paths->front();
@@ -251,7 +259,7 @@ public:
             m_persistence->codec_selector,
         };
         auto result = m_persistence->format.write(m_persistence->index_path, metadata);
-        if (result.has_value()) {
+        if (result) {
             m_dirty = false;
         }
         return result;
@@ -282,7 +290,7 @@ private:
             return;
         }
         const auto result = save_index();
-        if (!result.has_value()) {
+        if (!result) {
             LOG_ERROR("Failed to automatically save index: {}", result.error().to_string());
         }
     }

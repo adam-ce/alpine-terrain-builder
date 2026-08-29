@@ -26,12 +26,13 @@ public:
         const SimpleMesh &mesh) {
         mesh::validate(mesh);
         auto save_result = this->_storage.save(id, mesh);
-        if (!save_result.has_value()) {
+        if (!save_result) {
             return save_result;
         }
         auto path_result = this->_storage.path_for(id);
-        if (!path_result.has_value()) {
-            return Error::propagate(std::move(path_result));
+        if (!path_result) {
+            return Error::propagate(
+                std::move(path_result), "resolve texture output path for node " + id.to_string());
         }
         auto p = path_result.value();
         // change extension to .png
@@ -58,17 +59,20 @@ public:
                 DEBUG_ASSERT(status == store::NodeStatus::Leaf);
 
                 auto result = this->_storage.copy_from(child_id, loader.storage());
-                if (!result.has_value()) {
+                if (!result) {
                     error = std::move(result).error();
                 }
             },
             [&](const octree::Id &) { return !error.has_value(); },
             id);
-        if (!traversal.has_value()) {
-            return traversal;
+        if (!traversal) {
+            return Error::propagate(
+                std::move(traversal), "traverse source subtree rooted at " + id.to_string() + " while copying");
         }
         if (error.has_value()) {
-            return Error::propagate(std::move(error.value()));
+            return std::unexpected<Error> {
+                std::move(error.value()).with_context("copy subtree rooted at " + id.to_string() + " to output"),
+            };
         }
         return {};
     }

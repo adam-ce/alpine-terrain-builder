@@ -61,7 +61,8 @@ Expected<store::Storage<StoreTraits, NodeData>> open_folder(const std::filesyste
     if (index_exists) {
         auto indexed = store::open_index<StoreTraits, NodeData>(index_path, format, payload_class, resolve_codec);
         if (!indexed) {
-            return Error::propagate(std::move(indexed));
+            return Error::propagate(
+                std::move(indexed), "open indexed octree storage at \"" + base_path.string() + "\"");
         }
         return store::Storage<StoreTraits, NodeData>(std::move(*indexed));
     }
@@ -70,7 +71,7 @@ Expected<store::Storage<StoreTraits, NodeData>> open_folder(const std::filesyste
     std::string codec_selector = options.preferred_extension.value_or(std::move(default_codec_selector));
     auto codec = resolve_codec(codec_selector);
     if (!codec) {
-        return Error::propagate(std::move(codec));
+        return Error::propagate(std::move(codec), "resolve octree storage codec \"" + codec_selector + "\"");
     }
 
     return store::make_storage<StoreTraits, NodeData>(base_path, format, mapping, std::move(payload_class), std::move(codec_selector), std::move(*codec));

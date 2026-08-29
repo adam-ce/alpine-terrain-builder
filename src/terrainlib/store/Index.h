@@ -68,8 +68,8 @@ public:
         NodeStatus* parent_status = get_raw_unchecked(parent.value());
         if (parent_status == nullptr) {
             auto parent_result = add(parent.value());
-            if (!parent_result.has_value()) {
-                return Error::propagate(std::move(parent_result));
+            if (!parent_result) {
+                return parent_result;
             }
             set_raw_unchecked(parent.value(), NodeStatus::Virtual);
             set_raw_unchecked(key, NodeStatus::Leaf);
@@ -122,15 +122,15 @@ public:
     Expected<bool> is_absent(const Key& key) const
     {
         auto present = is_present(key);
-        if (!present.has_value()) {
-            return Error::propagate(std::move(present));
+        if (!present) {
+            return present;
         }
         return !present.value();
     }
     Expected<bool> is(const NodeStatus status, const Key& key) const
     {
         auto result = get(key);
-        if (!result.has_value()) {
+        if (!result) {
             return Error::propagate(std::move(result));
         }
         return result.value() == status;

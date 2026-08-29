@@ -34,11 +34,11 @@ public:
         const auto node_paths = paths(node_path);
         auto clustering_payload = io::envelope::read_from_path<dag::format::ClusteringSchema>(node_paths[0]);
         if (!clustering_payload) {
-            return Error::propagate(std::move(clustering_payload));
+            return Error::propagate(std::move(clustering_payload), "read DAG clustering");
         }
         auto metadata_payload = io::envelope::read_from_path<dag::format::MetadataSchema>(node_paths[1]);
         if (!metadata_payload) {
-            return Error::propagate(std::move(metadata_payload));
+            return Error::propagate(std::move(metadata_payload), "read DAG metadata");
         }
         auto clustering = dag::format::decode_clustering(std::move(*clustering_payload));
         if (!clustering) {
@@ -84,11 +84,11 @@ public:
         }
         auto data_written = io::envelope::write_to_path<dag::format::ClusteringSchema>(*clustering, node_paths[0]);
         if (!data_written) {
-            return data_written;
+            return Error::propagate(std::move(data_written), "write DAG clustering");
         }
         auto metadata_written = io::envelope::write_to_path<dag::format::MetadataSchema>(metadata, node_paths[1]);
         if (!metadata_written) {
-            return metadata_written;
+            return Error::propagate(std::move(metadata_written), "write DAG metadata");
         }
         return {};
     }
@@ -106,7 +106,7 @@ public:
         const std::filesystem::path path = paths(node_path).front();
         auto payload = io::envelope::read_from_path<dag::format::MetadataSchema>(path);
         if (!payload) {
-            return Error::propagate(std::move(payload));
+            return Error::propagate(std::move(payload), "read DAG metadata");
         }
         auto metadata = dag::format::decode_metadata(std::move(*payload));
         if (!metadata) {

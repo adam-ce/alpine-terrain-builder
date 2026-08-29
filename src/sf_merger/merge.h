@@ -65,8 +65,9 @@ public:
     ) {
         LOG_DEBUG("[{}] Start merging (left = {}, right = {})", id, left_status, right_status);
         auto has_result = this->_output.has_node(id);
-        if (!has_result.has_value()) {
-            return Error::propagate(std::move(has_result));
+        if (!has_result) {
+            return Error::propagate(
+                std::move(has_result), "check merged output for node " + id.to_string());
         }
         if (has_result.value()) {
             LOG_DEBUG("[{}] Already merged, skipping...", id);
@@ -82,7 +83,7 @@ public:
                 const auto children = id.children().value();
                 for (const auto &child_id : children) {
                     auto child_result = this->merge_node(child_id, result.context);
-                    if (!child_result.has_value()) {
+                    if (!child_result) {
                         return child_result;
                     }
                 }
@@ -94,7 +95,7 @@ public:
                     auto mesh_opt = this->_left.load_node(id);
                     if (mesh_opt.has_value()) {
                         auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result.has_value()) {
+                        if (!write_result) {
                             return write_result;
                         }
                     }
@@ -102,7 +103,7 @@ public:
                     auto mesh_opt = this->_right.load_node(id);
                     if (mesh_opt.has_value()) {
                         auto write_result = this->_output.write_node(id, *mesh_opt);
-                        if (!write_result.has_value()) {
+                        if (!write_result) {
                             return write_result;
                         }
                     }
@@ -110,7 +111,7 @@ public:
                     auto copy_result = this->_output.copy_subtree_to_output(
                         id,
                         result.source == merge::Source::Left ? this->_left : this->_right);
-                    if (!copy_result.has_value()) {
+                    if (!copy_result) {
                         return copy_result;
                     }
                 }
@@ -118,7 +119,7 @@ public:
             } else if constexpr (std::is_same_v<Result, merge::Merged>) {
                 LOG_DEBUG("[{}] was merged", id);
                 auto write_result = this->_output.write_node(id, result.mesh);
-                if (!write_result.has_value()) {
+                if (!write_result) {
                     return write_result;
                 }
                 return {};
@@ -187,8 +188,9 @@ inline Expected<void> merge_datasets(
     const std::optional<MeshMask> mask = std::nullopt) {
     for (const mesh::storage::IndexedStorage *input : {&left_dataset, &right_dataset}) {
         auto validation = sf::validate_index(input->index());
-        if (!validation.has_value()) {
-            return validation;
+        if (!validation) {
+            return Error::propagate(
+                std::move(validation), "validate merge input dataset \"" + get_dataset_name(*input) + "\"");
         }
     }
 
@@ -207,17 +209,22 @@ inline Expected<void> merge_datasets(
         merge::visitor::Masked visitor {mask.value(), space};
         Merger<merge::visitor::Masked> merger(visitor, left, right, output);
         auto result = merger.merge_root();
-        if (!result.has_value()) {
-            return result;
+        if (!result) {
+            return Error::propagate(std::move(result), "merge masked datasets");
         }
     } else {
         merge::visitor::Simple visitor;
         Merger<merge::visitor::Simple> merger(visitor, left, right, output);
         auto result = merger.merge_root();
-        if (!result.has_value()) {
-            return result;
+        if (!result) {
+            return Error::propagate(std::move(result), "merge datasets");
         }
     }
 
-    return sf::finalize_storage(output_dataset);
+    auto finalized = sf::finalize_storage(output_dataset);
+    if (!finalized) {
+        return Error::propagate(
+            std::move(finalized), "finalize merged output dataset \"" + get_dataset_name(output_dataset) + "\"");
+    }
+    return {};
 }

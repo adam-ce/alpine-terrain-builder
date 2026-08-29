@@ -25,7 +25,7 @@
 
 OGRSpatialReference parse_srs(const std::string &user_input) {
     const auto result = srs::from_user_input(user_input);
-    if (!result.has_value()) {
+    if (!result) {
         LOG_ERROR(result.error());
         exit(1);
     }
@@ -326,7 +326,7 @@ int run(std::span<char *> args) {
             output_base_path,
             output_format,
             overwrite_existing);
-        if (!build_result.has_value()) {
+        if (!build_result) {
             LOG_ERROR(
                 "Failed to finalize Structura Fundamentalis output: {}",
                 build_result.error().to_string());

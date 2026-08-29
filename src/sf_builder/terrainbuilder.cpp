@@ -75,7 +75,7 @@ std::optional<SimpleMesh> build_patch(
         mesh_srs,
         target_bounds_srs, target_bounds,
         texture_srs, texture_bounds);
-    if (!mesh_result.has_value()) {
+    if (!mesh_result) {
         const BuildMeshError error = mesh_result.error();
         if (error == BuildMeshError::OutOfBounds) {
             const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
@@ -154,7 +154,7 @@ void build_and_save_patch(
     // metadata["texture_bounds"] = fmt::format(
     //     "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
     //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    if (!mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata}).has_value()) {
+    if (!mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata})) {
         LOG_ERROR("Failed to save mesh to file {}", output_path);
         std::exit(2);
     }
@@ -194,7 +194,7 @@ Expected<void> build_all_patches(
     auto storage_result = mesh::storage::open_folder(
         output_base_path,
         std::move(open_options));
-    if (!storage_result.has_value()) {
+    if (!storage_result) {
         LOG_ERROR_AND_EXIT(
             "Failed to open output dataset {}: {}",
             output_base_path,
@@ -288,7 +288,7 @@ Expected<void> build_all_patches(
     tbb::parallel_for(size_t(0), target_nodes.size(), [&](size_t i) {
         const auto &node = target_nodes[i];
         const auto already_exists = storage.has(node);
-        if (!already_exists.has_value()) {
+        if (!already_exists) {
             LOG_ERROR(
                 "Failed to inspect node {}: {}",
                 node,
@@ -320,7 +320,7 @@ Expected<void> build_all_patches(
             const auto mesh = std::move(mesh_result.value());
             mesh::validate(mesh);
             const auto save_result = storage.save(node, mesh);
-            if (!save_result.has_value()) {
+            if (!save_result) {
                 LOG_ERROR(
                     "Failed to save mesh for node {}: {}",
                     node,
@@ -347,6 +347,11 @@ Expected<void> build_all_patches(
     }
 
     auto finalized_storage = std::move(storage).release();
-    return sf::finalize_storage(finalized_storage);
+    auto finalized = sf::finalize_storage(finalized_storage);
+    if (!finalized) {
+        return Error::propagate(
+            std::move(finalized), "finalize generated terrain storage \"" + output_base_path.string() + "\"");
+    }
+    return {};
 }
 }

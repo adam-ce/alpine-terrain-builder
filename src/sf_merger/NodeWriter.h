@@ -70,9 +70,8 @@ public:
                 std::move(traversal), "traverse source subtree rooted at " + id.to_string() + " while copying");
         }
         if (error.has_value()) {
-            return std::unexpected<Error> {
-                std::move(error.value()).with_context("copy subtree rooted at " + id.to_string() + " to output"),
-            };
+            return Error::propagate(
+                std::move(error.value()), "copy subtree rooted at " + id.to_string() + " to output");
         }
         return {};
     }

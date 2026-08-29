@@ -95,6 +95,9 @@ public:
         std::source_location location = std::source_location::current());
     static std::unexpected<Error> propagate(Error&& error,
         std::source_location location = std::source_location::current());
+    static std::unexpected<Error> propagate(Error&& error,
+        std::string message,
+        std::source_location location = std::source_location::current());
 
     [[nodiscard]] Error with_context(
         std::string message,

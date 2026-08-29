@@ -129,6 +129,11 @@ std::unexpected<Error> Error::propagate(Error&& error, const std::source_locatio
     return std::unexpected<Error> { std::move(error).with_context("propagated", location) };
 }
 
+std::unexpected<Error> Error::propagate(Error&& error, std::string message, const std::source_location location)
+{
+    return std::unexpected<Error> { std::move(error).with_context(std::move(message), location) };
+}
+
 Error Error::with_context(std::string message, const std::source_location location) &&
 {
     Error result = std::move(*this);

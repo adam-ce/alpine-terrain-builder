@@ -38,3 +38,15 @@ TEST_CASE("Error::propagate uses a supplied context as its call-site frame", "[e
     CHECK(description.find("unittests/terrainlib/error.cpp") != std::string::npos);
     CHECK(description.find("decode payload") != std::string::npos);
 }
+
+TEST_CASE("Error::propagate adds supplied context to an Error", "[error]")
+{
+    Error source = Error::make(Error::Code::Io, "open input");
+    const Expected<void> result = Error::propagate(std::move(source), "read input");
+
+    REQUIRE_FALSE(result.has_value());
+    const std::string description = result.error().to_string();
+    CHECK(description.find("read input") != std::string::npos);
+    CHECK(description.find("unittests/terrainlib/error.cpp") != std::string::npos);
+    CHECK(description.find("open input") != std::string::npos);
+}

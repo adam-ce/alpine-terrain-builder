@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <execution>
 #include <filesystem>
+#include <stdexcept>
 
 #include <fmt/core.h>
 #include <memory>
@@ -38,5 +39,8 @@ ParallelTileGenerator alpine_raster::make_generator(const std::string& input_dat
 
 void alpine_raster::TileWriter::write(const std::string& file_path, const radix::tile::Descriptor&, const radix::Raster<float>& heights) const
 {
-    image::save_image_as_png(radix::raster::transform(heights, radix::height_encoding::to_rgb), file_path);
+    auto result = image::save_image_as_png(radix::raster::transform(heights, radix::height_encoding::to_rgb), file_path);
+    if (!result) {
+        throw std::runtime_error(result.error().to_string());
+    }
 }

@@ -36,7 +36,11 @@ inline Expected<void> cut_leaf_node(
     DEBUG_ASSERT(DEBUG_ASSERT_VAL(
         ctx.input.index().is(store::NodeStatus::Leaf, id)).value());
 
-    const SimpleMesh mesh = DEBUG_ASSERT_VAL(ctx.input.load(id)).value();
+    auto mesh_result = ctx.input.load(id);
+    if (!mesh_result) {
+        return Error::propagate(std::move(mesh_result), "read cut input node " + id.to_string());
+    }
+    const SimpleMesh mesh = std::move(*mesh_result);
     LOG_TRACE("Cutting mesh at {} using mask with {} vertices and {} triangles",
         id, mask.vertex_count(), mask.face_count());
     const Cow<const SimpleMesh> clipped = clip_on_mask(mesh, mask, ctx.keep_inside);

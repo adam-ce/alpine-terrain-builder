@@ -115,7 +115,7 @@ TEST_CASE("SF builders preserve geometry at regular and point-touching mask bord
     const auto regression_mesh = mesh::io::load_from_path(regression_path);
     const std::string regression_error = regression_mesh.has_value()
                                             ? std::string()
-                                            : regression_mesh.error().description();
+                                            : regression_mesh.error().to_string();
     INFO("Point-touching mask-border merge: " << regression_error);
     REQUIRE(regression_mesh.has_value());
     CHECK_FALSE(regression_mesh->is_empty());

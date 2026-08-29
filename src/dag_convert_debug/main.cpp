@@ -32,7 +32,7 @@ void export_node(const cli::Args &args) {
 
     const auto save_result = mesh::io::save_to_path(mesh, args.output_path);
     if (!save_result) {
-        LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().description());
+        LOG_ERROR("Failed to save mesh to {}: {}", args.output_path, save_result.error().to_string());
     }
 }
 

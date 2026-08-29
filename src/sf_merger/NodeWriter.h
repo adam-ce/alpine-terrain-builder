@@ -4,7 +4,9 @@
 #include <optional>
 
 #include <libassert/assert.hpp>
+#include <opencv2/imgcodecs.hpp>
 
+#include "Error.h"
 #include "NodeLoader.h"
 #include "mesh/SimpleMesh.h"
 #include "octree/Id.h"
@@ -38,7 +40,14 @@ public:
         // change extension to .png
         p.replace_extension(".png");
         if (mesh.texture.has_value()) {
-            cv::imwrite(p, mesh.texture.value());
+            try {
+                if (!cv::imwrite(p, mesh.texture.value())) {
+                    return Error::fail(Error::Code::Io, "write node texture to", p);
+                }
+            } catch (const cv::Exception& error) {
+                return Error::fail(
+                    Error::Code::Io, "write node texture to \"" + p.string() + "\": " + error.what());
+            }
         }
         return {};
     }

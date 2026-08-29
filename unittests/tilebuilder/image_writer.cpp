@@ -19,7 +19,6 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <stdexcept>
 
 #include <catch2/catch_test_macros.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -38,7 +37,7 @@ TEST_CASE("tile builder writes radix rasters as PNG images")
     raster.pixel({ 0, 1 }) = { 0, 0, 255 };
     raster.pixel({ 1, 1 }) = { 255, 255, 255 };
 
-    image::save_image_as_png(raster, output_path.string());
+    REQUIRE(image::save_image_as_png(raster, output_path.string()).has_value());
 
     const auto decoded = cv::imread(output_path.string(), cv::IMREAD_COLOR);
     REQUIRE(decoded.rows == 2);
@@ -53,7 +52,12 @@ TEST_CASE("tile builder writes radix rasters as PNG images")
 
 TEST_CASE("tile builder handles image writer edge cases")
 {
-    SECTION("empty debug raster is rejected") { CHECK_THROWS_AS(image::debug_out(radix::Raster<float> {}, "empty.png"), std::invalid_argument); }
+    SECTION("empty debug raster is rejected")
+    {
+        const auto result = image::debug_out(radix::Raster<float> {}, "empty.png");
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code() == Error::Code::InvalidInput);
+    }
 
     SECTION("constant debug raster is written as black")
     {
@@ -62,7 +66,7 @@ TEST_CASE("tile builder handles image writer edge cases")
 
         radix::Raster<float> raster({ 2, 2 });
         std::ranges::fill(raster, 42.F);
-        image::debug_out(raster, output_path.string());
+        REQUIRE(image::debug_out(raster, output_path.string()).has_value());
 
         const auto decoded = cv::imread(output_path.string(), cv::IMREAD_COLOR);
         REQUIRE(decoded.rows == 2);
@@ -78,6 +82,8 @@ TEST_CASE("tile builder handles image writer edge cases")
         std::filesystem::remove_all(missing_directory);
         const auto output_path = missing_directory / "image.png";
 
-        CHECK_THROWS_AS(image::save_image_as_png(radix::Raster<glm::u8vec3>({ 1, 1 }), output_path.string()), std::runtime_error);
+        const auto result = image::save_image_as_png(radix::Raster<glm::u8vec3>({ 1, 1 }), output_path.string());
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code() == Error::Code::Io);
     }
 }

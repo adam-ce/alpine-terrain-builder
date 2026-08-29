@@ -70,7 +70,9 @@ TEST_CASE("versioned octree and SF payload validation is free-standing")
         .index = 0,
         .status = static_cast<std::uint8_t>(store::NodeStatus::Leaf),
     } } };
-    CHECK_FALSE(octree::storage::decode_index(invalid_index).has_value());
+    const auto decoded_index = octree::storage::decode_index(invalid_index);
+    REQUIRE_FALSE(decoded_index.has_value());
+    CHECK(decoded_index.error().code() == Error::Code::CorruptData);
 
     const mesh::sf::Payload oversized_mesh {
         .vertex_count = std::numeric_limits<std::uint32_t>::max(),
@@ -80,7 +82,9 @@ TEST_CASE("versioned octree and SF payload validation is free-standing")
         .uvs = {},
         .texture = {},
     };
-    CHECK_FALSE(mesh::sf::validate(oversized_mesh).has_value());
+    const auto validated_mesh = mesh::sf::validate(oversized_mesh);
+    REQUIRE_FALSE(validated_mesh.has_value());
+    CHECK(validated_mesh.error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("storage hard-links matching payload formats")

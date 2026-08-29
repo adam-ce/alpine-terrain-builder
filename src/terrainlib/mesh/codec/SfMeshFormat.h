@@ -1,11 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <vector>
 
-#include <expected>
-
+#include "Error.h"
 #include "io/envelope.h"
 #include "mesh/EncodedMesh.h"
 #include "mesh/SimpleMesh.h"
@@ -29,34 +27,34 @@ namespace v1 {
 using Schema = ::io::envelope::PayloadSchema<"mesh.SfMesh", ::io::envelope::Version<1, v1::Payload>>;
 using Payload = Schema::latest_type;
 
-inline std::expected<void, std::string> validate(const Payload& payload)
+inline Expected<void> validate(const Payload& payload)
 {
     if (payload.vertex_count > ::io::envelope::default_max_decompressed_size / sizeof(mesh::Simple::Position)) {
-        return std::unexpected("SF mesh vertex count exceeds the allocation limit");
+        return Error::fail(Error::Code::InvalidInput, "SF mesh vertex count exceeds the allocation limit");
     }
     if (payload.face_count > ::io::envelope::default_max_decompressed_size / sizeof(mesh::Simple::Triangle)) {
-        return std::unexpected("SF mesh face count exceeds the allocation limit");
+        return Error::fail(Error::Code::InvalidInput, "SF mesh face count exceeds the allocation limit");
     }
     if (payload.vertex_count == 0 && (!payload.positions.empty() || !payload.uvs.empty())) {
-        return std::unexpected("empty mesh contains vertex data");
+        return Error::fail(Error::Code::InvalidInput, "empty mesh contains vertex data");
     }
     if (payload.vertex_count != 0 && payload.positions.empty()) {
-        return std::unexpected("non-empty mesh contains no position data");
+        return Error::fail(Error::Code::InvalidInput, "non-empty mesh contains no position data");
     }
     if (payload.face_count == 0 && !payload.triangles.empty()) {
-        return std::unexpected("empty mesh contains triangle data");
+        return Error::fail(Error::Code::InvalidInput, "empty mesh contains triangle data");
     }
     if (payload.face_count != 0 && payload.triangles.empty()) {
-        return std::unexpected("non-empty mesh contains no triangle data");
+        return Error::fail(Error::Code::InvalidInput, "non-empty mesh contains no triangle data");
     }
     return {};
 }
 
-inline std::expected<Payload, mesh::EncodeError> encode_payload(const mesh::Simple& mesh, const mesh::EncodeOptions options = {})
+inline Expected<Payload> encode_payload(const mesh::Simple& mesh, const mesh::EncodeOptions options = {})
 {
     auto encoded = mesh::encode(mesh, options);
     if (!encoded) {
-        return std::unexpected(encoded.error());
+        return Error::fail(Error::Code::InvalidInput, "could not encode SF mesh payload");
     }
     return Payload {
         .vertex_count = encoded->header.vertex_count,
@@ -68,7 +66,7 @@ inline std::expected<Payload, mesh::EncodeError> encode_payload(const mesh::Simp
     };
 }
 
-inline std::expected<mesh::Simple, mesh::DecodeError> decode_payload(Payload payload)
+inline Expected<mesh::Simple> decode_payload(Payload payload)
 {
     const mesh::Encoded encoded{
         .header = {
@@ -83,7 +81,11 @@ inline std::expected<mesh::Simple, mesh::DecodeError> decode_payload(Payload pay
         .uvs = std::move(payload.uvs),
         .texture = std::move(payload.texture),
     };
-    return mesh::decode(encoded);
+    auto decoded = mesh::decode(encoded);
+    if (!decoded) {
+        return Error::fail(Error::Code::CorruptData, "could not decode SF mesh payload");
+    }
+    return std::move(*decoded);
 }
 
 } // namespace mesh::sf

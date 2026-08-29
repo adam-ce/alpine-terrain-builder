@@ -154,8 +154,9 @@ void build_and_save_patch(
     // metadata["texture_bounds"] = fmt::format(
     //     "{{ \"min\": {{ \"x\": {}, \"y\": {} }}, \"max\": {{ \"x\": {}, \"y\": {} }} }}",
     //    texture_bounds.min.x, texture_bounds.min.y, texture_bounds.max.x, texture_bounds.max.y);
-    if (!mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata})) {
-        LOG_ERROR("Failed to save mesh to file {}", output_path);
+    const auto saved = mesh::io::save_to_path(mesh, output_path, mesh::io::SaveOptions{.metadata = metadata});
+    if (!saved) {
+        LOG_ERROR("Failed to save mesh to file {}: {}", output_path, saved.error().to_string());
         std::exit(2);
     }
     LOG_DEBUG("Writing mesh took {}s", format_secs_since(start));
@@ -195,10 +196,8 @@ Expected<void> build_all_patches(
         output_base_path,
         std::move(open_options));
     if (!storage_result) {
-        LOG_ERROR_AND_EXIT(
-            "Failed to open output dataset {}: {}",
-            output_base_path,
-            storage_result.error().to_string());
+        return Error::propagate(
+            std::move(storage_result), "open output terrain dataset \"" + output_base_path.string() + "\"");
     }
     mesh::storage::Storage raw_storage = std::move(storage_result.value());
     raw_storage.settings().allow_overwrite = overwrite_existing;

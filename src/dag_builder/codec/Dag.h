@@ -42,13 +42,11 @@ public:
         }
         auto clustering = dag::format::decode_clustering(std::move(*clustering_payload));
         if (!clustering) {
-            return Error::fail(
-                Error::Code::CorruptData, "invalid DAG clustering in \"" + node_paths[0].string() + "\": " + clustering.error());
+            return Error::propagate(std::move(clustering), "decode DAG clustering read from \"" + node_paths[0].string() + "\"");
         }
         auto metadata = dag::format::decode_metadata(std::move(*metadata_payload));
         if (!metadata) {
-            return Error::fail(
-                Error::Code::CorruptData, "invalid DAG metadata in \"" + node_paths[1].string() + "\": " + metadata.error());
+            return Error::propagate(std::move(metadata), "decode DAG metadata read from \"" + node_paths[1].string() + "\"");
         }
         dag::ClusterBatch batch {
             .metadata = std::move(*metadata),
@@ -70,17 +68,14 @@ public:
         }
         auto clustering = dag::format::encode_clustering(batch.clustering);
         if (!clustering) {
-            return Error::fail(
-                Error::Code::InvalidInput, "cannot encode DAG clustering for \"" + node_paths[0].string() + "\": " + clustering.error());
+            return Error::propagate(std::move(clustering), "encode DAG clustering for \"" + node_paths[0].string() + "\"");
         }
         const dag::format::NodeMetadata metadata = dag::format::encode_metadata(batch.metadata);
         if (auto valid = dag::format::validate(*clustering); !valid) {
-            return Error::fail(
-                Error::Code::InvalidInput, "invalid DAG clustering for \"" + node_paths[0].string() + "\": " + valid.error());
+            return Error::propagate(std::move(valid), "validate DAG clustering for \"" + node_paths[0].string() + "\"");
         }
         if (auto valid = dag::format::validate(metadata); !valid) {
-            return Error::fail(
-                Error::Code::InvalidInput, "invalid DAG metadata for \"" + node_paths[1].string() + "\": " + valid.error());
+            return Error::propagate(std::move(valid), "validate DAG metadata for \"" + node_paths[1].string() + "\"");
         }
         auto data_written = io::envelope::write_to_path<dag::format::ClusteringSchema>(*clustering, node_paths[0]);
         if (!data_written) {
@@ -110,7 +105,7 @@ public:
         }
         auto metadata = dag::format::decode_metadata(std::move(*payload));
         if (!metadata) {
-            return Error::fail(Error::Code::CorruptData, "invalid DAG metadata in \"" + path.string() + "\": " + metadata.error());
+            return Error::propagate(std::move(metadata), "decode DAG metadata read from \"" + path.string() + "\"");
         }
         return std::move(*metadata);
     }

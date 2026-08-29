@@ -25,11 +25,12 @@ public:
             return Error::propagate(std::move(payload), "read SF mesh");
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return Error::fail(Error::Code::CorruptData, "invalid SF mesh in \"" + path.string() + "\": " + valid.error());
+            return Error::propagate(
+                std::move(valid), Error::Code::CorruptData, "validate SF mesh read from \"" + path.string() + "\"");
         }
         auto decoded = mesh::sf::decode_payload(std::move(*payload));
         if (!decoded) {
-            return Error::fail(Error::Code::CorruptData, "could not decode SF mesh \"" + path.string() + "\"");
+            return Error::propagate(std::move(decoded), "decode SF mesh \"" + path.string() + "\"");
         }
         return std::move(*decoded);
     }
@@ -44,10 +45,10 @@ public:
         const std::filesystem::path path = paths(node_path).front();
         auto payload = mesh::sf::encode_payload(mesh, options);
         if (!payload) {
-            return Error::fail(Error::Code::InvalidInput, "could not encode SF mesh \"" + path.string() + "\"");
+            return Error::propagate(std::move(payload), "encode SF mesh \"" + path.string() + "\"");
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return Error::fail(Error::Code::InvalidInput, "invalid SF mesh for \"" + path.string() + "\": " + valid.error());
+            return Error::propagate(std::move(valid), "validate SF mesh for \"" + path.string() + "\"");
         }
         auto result = ::io::envelope::write_to_path<mesh::sf::Schema>(*payload, path);
         if (!result) {

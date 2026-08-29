@@ -109,7 +109,9 @@ TEST_CASE("versioned DAG payload validation is free-standing")
         .group_assignment = { 0 },
         .groups = {},
     };
-    CHECK_FALSE(dag::format::validate(invalid_metadata).has_value());
+    const auto validated_metadata = dag::format::validate(invalid_metadata);
+    REQUIRE_FALSE(validated_metadata.has_value());
+    CHECK(validated_metadata.error().code() == Error::Code::InvalidInput);
 
     dag::format::Clustering oversized_clustering {
         .vertex_count = std::numeric_limits<std::uint64_t>::max(),
@@ -117,7 +119,9 @@ TEST_CASE("versioned DAG payload validation is free-standing")
         .clusters = {},
         .textures = {},
     };
-    CHECK_FALSE(dag::format::validate(oversized_clustering).has_value());
+    const auto validated_clustering = dag::format::validate(oversized_clustering);
+    REQUIRE_FALSE(validated_clustering.has_value());
+    CHECK(validated_clustering.error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]")

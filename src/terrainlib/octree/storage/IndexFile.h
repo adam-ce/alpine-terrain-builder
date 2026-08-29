@@ -43,16 +43,16 @@ using StoreIndexSchema = io::envelope::PayloadSchema<"octree.StoreIndex", io::en
 using StoreMetadata = StoreMetadataSchema::latest_type;
 using StoreIndex = StoreIndexSchema::latest_type;
 
-inline std::expected<void, std::string> validate(const StoreMetadata& metadata)
+inline Expected<void> validate(const StoreMetadata& metadata)
 {
     if (metadata.layout_id.empty()) {
-        return std::unexpected("layout ID is empty");
+        return Error::fail(Error::Code::InvalidInput, "layout ID is empty");
     }
     if (metadata.payload_class.empty()) {
-        return std::unexpected("payload class is empty");
+        return Error::fail(Error::Code::InvalidInput, "payload class is empty");
     }
     if (metadata.codec_selector.empty()) {
-        return std::unexpected("codec selector is empty");
+        return Error::fail(Error::Code::InvalidInput, "codec selector is empty");
     }
     return {};
 }
@@ -71,24 +71,24 @@ inline StoreIndex encode_index(const store::Index<StoreTraits>& index)
     return result;
 }
 
-inline std::expected<store::Index<StoreTraits>, std::string> decode_index(const StoreIndex& encoded)
+inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encoded)
 {
     store::Index<StoreTraits> result;
     std::unordered_set<Id> seen;
     for (const v1::IndexEntry& entry : encoded.entries) {
         const auto id = Id::try_make(static_cast<Id::Level>(entry.level), static_cast<Id::Index>(entry.index));
         if (!id) {
-            return std::unexpected("index contains an invalid octree ID");
+            return Error::fail(Error::Code::CorruptData, "index contains an invalid octree ID");
         }
         if (!seen.insert(*id).second) {
-            return std::unexpected("index contains a duplicate octree ID");
+            return Error::fail(Error::Code::CorruptData, "index contains a duplicate octree ID");
         }
         if (entry.status > static_cast<std::uint8_t>(store::NodeStatus::Virtual)) {
-            return std::unexpected("index contains an invalid node status");
+            return Error::fail(Error::Code::CorruptData, "index contains an invalid node status");
         }
-        const auto set = result.set_raw(*id, store::NodeStatus { static_cast<store::NodeStatus::Value>(entry.status) });
+        auto set = result.set_raw(*id, store::NodeStatus { static_cast<store::NodeStatus::Value>(entry.status) });
         if (!set) {
-            return std::unexpected("index contains an invalid octree ID");
+            return Error::propagate(std::move(set), Error::Code::CorruptData, "add decoded node to store index");
         }
     }
 
@@ -97,27 +97,32 @@ inline std::expected<store::Index<StoreTraits>, std::string> decode_index(const 
         bool has_child = false;
         if (children) {
             for (const Id& child : *children) {
-                const auto child_status = result.get(child);
+                auto child_status = result.get(child);
                 if (!child_status) {
-                    return std::unexpected("index child lookup failed");
+                    return Error::propagate(
+                        std::move(child_status), Error::Code::CorruptData, "look up child while validating store index");
                 }
                 has_child = has_child || child_status->has_value();
             }
         }
         if ((status == store::NodeStatus::Leaf && has_child) || ((status == store::NodeStatus::Inner || status == store::NodeStatus::Virtual) && !has_child)) {
-            return std::unexpected("index contains inconsistent node topology");
+            return Error::fail(Error::Code::CorruptData, "index contains inconsistent node topology");
         }
 
         const auto parent = StoreTraits::parent(id);
         if (!parent) {
             if (id != StoreTraits::root()) {
-                return std::unexpected("index contains a non-root node without a parent");
+                return Error::fail(Error::Code::CorruptData, "index contains a non-root node without a parent");
             }
             continue;
         }
-        const auto parent_status = result.get(*parent);
-        if (!parent_status || !parent_status->has_value() || parent_status->value() == store::NodeStatus::Leaf) {
-            return std::unexpected("index contains a node without a valid indexed parent");
+        auto parent_status = result.get(*parent);
+        if (!parent_status) {
+            return Error::propagate(
+                std::move(parent_status), Error::Code::CorruptData, "look up parent while validating store index");
+        }
+        if (!parent_status->has_value() || parent_status->value() == store::NodeStatus::Leaf) {
+            return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
         }
     }
     return result;
@@ -131,7 +136,8 @@ inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& 
         return metadata;
     }
     if (auto valid = validate(*metadata); !valid) {
-        return Error::fail(Error::Code::CorruptData, "invalid store metadata in " + path.string() + ": " + valid.error());
+        return Error::propagate(
+            std::move(valid), Error::Code::CorruptData, "validate store metadata read from \"" + path.string() + "\"");
     }
     return std::move(*metadata);
 }
@@ -149,7 +155,7 @@ inline Expected<store::IndexMetadata<StoreTraits>> read_index_file(const std::fi
     }
     auto index = decode_index(*encoded_index);
     if (!index) {
-        return Error::fail(Error::Code::CorruptData, "invalid store index in " + path.string() + ": " + index.error());
+        return Error::propagate(std::move(index), "decode store index read from \"" + path.string() + "\"");
     }
     return store::IndexMetadata<StoreTraits> {
         std::move(*index),
@@ -167,7 +173,7 @@ inline Expected<void> write_index_file(const std::filesystem::path& path, const 
         .codec_selector = metadata.codec_selector,
     };
     if (auto valid = validate(store_metadata); !valid) {
-        return Error::fail(Error::Code::InvalidInput, "invalid store metadata: " + valid.error());
+        return Error::propagate(std::move(valid), "validate store metadata for writing");
     }
     const std::filesystem::path metadata_path = path.parent_path() / metadata_file_name;
     if (auto written = io::envelope::write_to_path<StoreMetadataSchema>(store_metadata, metadata_path); !written) {

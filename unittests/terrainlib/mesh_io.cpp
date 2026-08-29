@@ -93,9 +93,9 @@ TEST_CASE("io roundtrip") {
             REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const auto result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
-                FAIL(result.error().description());
+                FAIL(result.error().to_string());
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
@@ -136,9 +136,9 @@ TEST_CASE("io roundtrip high precision") {
             REQUIRE(mesh::io::save_to_path(mesh, mesh_path, mesh::io::SaveOptions{.texture_format = ".png"}).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const auto result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
-                FAIL(result.error().description());
+                FAIL(result.error().to_string());
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
@@ -179,9 +179,9 @@ TEST_CASE("io roundtrip no texture") {
             REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const auto result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
-                FAIL(result.error().description());
+                FAIL(result.error().to_string());
             }
             // std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
@@ -216,9 +216,9 @@ TEST_CASE("io roundtrip no texture and uvs") {
             REQUIRE(mesh::io::save_to_path(mesh, mesh_path).has_value());
             CHECK(std::filesystem::exists(mesh_path));
 
-            const std::expected<SimpleMesh, mesh::io::LoadMeshError> result = mesh::io::load_from_path(mesh_path);
+            const auto result = mesh::io::load_from_path(mesh_path);
             if (!result.has_value()) {
-                FAIL(result.error().description());
+                FAIL(result.error().to_string());
             }
             std::filesystem::remove(mesh_path);
             const SimpleMesh roundtrip_mesh = result.value();
@@ -228,4 +228,19 @@ TEST_CASE("io roundtrip no texture and uvs") {
             CHECK(!roundtrip_mesh.texture.has_value());
         }
     }
+}
+
+TEST_CASE("mesh IO reports project errors")
+{
+    const auto unsupported_input = mesh::io::load_from_path("mesh.unsupported");
+    REQUIRE_FALSE(unsupported_input.has_value());
+    CHECK(unsupported_input.error().code() == Error::Code::Unsupported);
+
+    const auto missing_input = mesh::io::load_from_path("missing.glb");
+    REQUIRE_FALSE(missing_input.has_value());
+    CHECK(missing_input.error().code() == Error::Code::NotFound);
+
+    const auto unsupported_output = mesh::io::save_to_path(mesh::Simple {}, "mesh.unsupported");
+    REQUIRE_FALSE(unsupported_output.has_value());
+    CHECK(unsupported_output.error().code() == Error::Code::Unsupported);
 }

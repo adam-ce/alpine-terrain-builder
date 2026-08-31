@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <utility>
 
-#include "codec/from_extension.h"
+#include "codec.h"
 #include "octree/StoreTraits.h"
 #include "octree/storage/IndexFile.h"
 #include "octree/storage/open_runtime.h"
@@ -26,7 +26,7 @@ inline Expected<IndexedStorage> open_index(
         path,
         octree::storage::index_format(),
         payload_class,
-        dag::codec::from_extension);
+        dag::codec::cluster_batch_from_extension);
 }
 
 inline Expected<Storage> open_folder(
@@ -36,7 +36,7 @@ inline Expected<Storage> open_folder(
         path,
         std::string(payload_class),
         ".dag",
-        dag::codec::from_extension,
+        dag::codec::cluster_batch_from_extension,
         std::move(options));
 }
 
@@ -46,7 +46,7 @@ open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {})
         path,
         std::string(payload_class),
         ".dag",
-        dag::codec::from_extension,
+        dag::codec::cluster_batch_from_extension,
         std::move(options));
 }
 

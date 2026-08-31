@@ -1,11 +1,10 @@
 #include <filesystem>
 #include <future>
-#include <limits>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include "build.h"
-#include "codec/Dag.h"
+#include "codec.h"
 #include "dag_node.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/storage.h"
@@ -51,7 +50,7 @@ TEST_CASE("runtime DAG envelope codec is reentrant")
     const dag::ClusterBatch batch = sample_batch();
 
     TemporaryDirectory output;
-    dag::codec::Dag codec;
+    dag::codec::ClusterBatch codec;
     std::vector<std::future<bool>> operations;
     for (int index = 0; index < 8; ++index) {
         operations.push_back(std::async(std::launch::async, [&codec, &batch, &output, index] {
@@ -68,10 +67,10 @@ TEST_CASE("runtime DAG envelope codec is reentrant")
     }
 }
 
-TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
+TEST_CASE("DAG codec rejects invalid batches and inconsistent files")
 {
     TemporaryDirectory output;
-    dag::codec::Dag codec;
+    dag::codec::ClusterBatch codec;
     const std::filesystem::path node_path(output.path() / "node");
     const auto node_paths = codec.paths(node_path);
 
@@ -88,13 +87,26 @@ TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
         CHECK_FALSE(std::filesystem::exists(node_paths[1]));
     }
 
+    SECTION("write invalid metadata")
+    {
+        auto batch = sample_batch();
+        batch.metadata.group_assignment = { 1 };
+
+        const auto result = codec.write(node_path, batch);
+
+        REQUIRE_FALSE(result.has_value());
+        CHECK(result.error().code() == Error::Code::InvalidInput);
+        CHECK_FALSE(std::filesystem::exists(node_paths[0]));
+        CHECK_FALSE(std::filesystem::exists(node_paths[1]));
+    }
+
     SECTION("read")
     {
         REQUIRE(codec.write(node_path, sample_batch()).has_value());
-        dag::NodeMetadata metadata = sample_batch().metadata;
-        metadata.group_assignment.clear();
-        const auto encoded_metadata = dag::format::encode_metadata(metadata);
-        REQUIRE(io::envelope::write_to_path<dag::format::MetadataSchema>(encoded_metadata, node_paths[1]).has_value());
+        const std::filesystem::path empty_node_path(output.path() / "empty-node");
+        const auto empty_node_paths = codec.paths(empty_node_path);
+        REQUIRE(codec.write(empty_node_path, dag::ClusterBatch {}).has_value());
+        REQUIRE(std::filesystem::copy_file(empty_node_paths[1], node_paths[1], std::filesystem::copy_options::overwrite_existing));
 
         const auto result = codec.read(node_path);
 
@@ -103,30 +115,9 @@ TEST_CASE("DAG codec rejects inconsistent cross-file cluster counts")
     }
 }
 
-TEST_CASE("versioned DAG payload validation is free-standing")
-{
-    dag::format::NodeMetadata invalid_metadata {
-        .group_assignment = { 0 },
-        .groups = {},
-    };
-    const auto validated_metadata = dag::format::validate(invalid_metadata);
-    REQUIRE_FALSE(validated_metadata.has_value());
-    CHECK(validated_metadata.error().code() == Error::Code::InvalidInput);
-
-    dag::format::Clustering oversized_clustering {
-        .vertex_count = std::numeric_limits<std::uint64_t>::max(),
-        .encoded_positions = {},
-        .clusters = {},
-        .textures = {},
-    };
-    const auto validated_clustering = dag::format::validate(oversized_clustering);
-    REQUIRE_FALSE(validated_clustering.has_value());
-    CHECK(validated_clustering.error().code() == Error::Code::InvalidInput);
-}
-
 TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[store][open]")
 {
-    const auto batch_codec = dag::codec::from_extension(".dag");
+    const auto batch_codec = dag::codec::cluster_batch_from_extension(".dag");
     REQUIRE(batch_codec.has_value());
     CHECK(batch_codec.value()->paths("node") == std::vector<std::filesystem::path> { "node.dag", "node.dagmeta" });
 
@@ -137,7 +128,7 @@ TEST_CASE("DAG resolvers expose writable batches and read-only metadata", "[stor
     REQUIRE_FALSE(write_result.has_value());
     CHECK(write_result.error().code() == Error::Code::Unsupported);
 
-    const auto unknown = dag::codec::from_extension(".unknown");
+    const auto unknown = dag::codec::cluster_batch_from_extension(".unknown");
     REQUIRE_FALSE(unknown.has_value());
     CHECK(unknown.error().code() == Error::Code::Unsupported);
 }

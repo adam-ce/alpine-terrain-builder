@@ -8,6 +8,7 @@ add_library(dagbuilderlib
     centroids.h
     cluster.h
     clusterize.h
+    codec.h codec.cpp
     compact.h
     correspondence.h
     dag_id.h
@@ -40,10 +41,6 @@ add_library(dagbuilderlib
     atlas/rect/atlas.h atlas/rect/atlas.cpp
     atlas/rect/create.h
     atlas/reprojection.h
-
-    codec/Dag.h
-    codec/DagFormat.h
-    codec/from_extension.h
 
     merge/clusterings.h merge/clusterings.cpp
     merge/clusters.h

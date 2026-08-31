@@ -1,23 +1,27 @@
-#pragma once
-
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <meshoptimizer.h>
 #include <opencv2/core.hpp>
 
+#include "codec.h"
+
 #include "Error.h"
 #include "cluster.h"
 #include "dag_node.h"
 #include "io/envelope.h"
+#include "io/envelope_file.h"
 #include "mesh/io/texture.h"
 #include "meshopt.h"
 
-namespace dag::format {
+namespace dag::codec {
+namespace {
+namespace format {
 
 namespace v1 {
 
@@ -342,4 +346,118 @@ inline Expected<::Clustering> decode_clustering(Clustering clustering)
     return result;
 }
 
-} // namespace dag::format
+} // namespace format
+
+Expected<void> validate_batch(const dag::ClusterBatch& batch, const Error::Code code)
+{
+    if (batch.metadata.group_assignment.size() != batch.clustering.clusters.size()) {
+        return Error::fail(code, "DAG metadata group-assignment count does not match clustering cluster count");
+    }
+    return {};
+}
+
+Expected<dag::NodeMetadata> read_metadata(const std::filesystem::path& path)
+{
+    auto payload = io::envelope::read_from_path<format::MetadataSchema>(path);
+    if (!payload) {
+        return Error::propagate(std::move(payload), "read DAG metadata");
+    }
+    auto metadata = format::decode_metadata(std::move(*payload));
+    if (!metadata) {
+        return Error::propagate(std::move(metadata), "decode DAG metadata read from \"" + path.string() + "\"");
+    }
+    return std::move(*metadata);
+}
+
+} // namespace
+
+std::vector<std::filesystem::path> ClusterBatch::paths(const std::filesystem::path& node_path) const
+{
+    return {
+        add_extension(node_path, ".dag"),
+        add_extension(node_path, ".dagmeta"),
+    };
+}
+
+Expected<dag::ClusterBatch> ClusterBatch::read(const std::filesystem::path& node_path) const
+{
+    const auto node_paths = paths(node_path);
+    auto clustering_payload = io::envelope::read_from_path<format::ClusteringSchema>(node_paths[0]);
+    if (!clustering_payload) {
+        return Error::propagate(std::move(clustering_payload), "read DAG clustering");
+    }
+    auto metadata = read_metadata(node_paths[1]);
+    if (!metadata) {
+        return Error::propagate(std::move(metadata));
+    }
+    auto clustering = format::decode_clustering(std::move(*clustering_payload));
+    if (!clustering) {
+        return Error::propagate(std::move(clustering), "decode DAG clustering read from \"" + node_paths[0].string() + "\"");
+    }
+    dag::ClusterBatch batch {
+        .metadata = std::move(*metadata),
+        .clustering = std::move(*clustering),
+    };
+    if (auto valid = validate_batch(batch, Error::Code::CorruptData); !valid) {
+        return Error::propagate(std::move(valid),
+            "validate DAG files \"" + node_paths[0].string() + "\" and \"" + node_paths[1].string() + "\"");
+    }
+    return batch;
+}
+
+Expected<void> ClusterBatch::write(const std::filesystem::path& node_path, const dag::ClusterBatch& batch) const
+{
+    const auto node_paths = paths(node_path);
+    if (auto valid = validate_batch(batch, Error::Code::InvalidInput); !valid) {
+        return Error::propagate(std::move(valid),
+            "validate DAG files \"" + node_paths[0].string() + "\" and \"" + node_paths[1].string() + "\"");
+    }
+    auto clustering = format::encode_clustering(batch.clustering);
+    if (!clustering) {
+        return Error::propagate(std::move(clustering), "encode DAG clustering for \"" + node_paths[0].string() + "\"");
+    }
+    const format::NodeMetadata metadata = format::encode_metadata(batch.metadata);
+    if (auto valid = format::validate(*clustering); !valid) {
+        return Error::propagate(std::move(valid), "validate DAG clustering for \"" + node_paths[0].string() + "\"");
+    }
+    if (auto valid = format::validate(metadata); !valid) {
+        return Error::propagate(std::move(valid), "validate DAG metadata for \"" + node_paths[1].string() + "\"");
+    }
+    auto data_written = io::envelope::write_to_path<format::ClusteringSchema>(*clustering, node_paths[0]);
+    if (!data_written) {
+        return Error::propagate(std::move(data_written), "write DAG clustering");
+    }
+    auto metadata_written = io::envelope::write_to_path<format::MetadataSchema>(metadata, node_paths[1]);
+    if (!metadata_written) {
+        return Error::propagate(std::move(metadata_written), "write DAG metadata");
+    }
+    return {};
+}
+
+std::vector<std::filesystem::path> Metadata::paths(const std::filesystem::path& node_path) const
+{
+    return { add_extension(node_path, ".dagmeta") };
+}
+
+Expected<dag::NodeMetadata> Metadata::read(const std::filesystem::path& node_path) const
+{
+    return read_metadata(paths(node_path).front());
+}
+
+Expected<std::unique_ptr<store::Codec<dag::ClusterBatch>>> cluster_batch_from_extension(const std::string_view extension)
+{
+    if (extension == ".dag") {
+        return std::make_unique<ClusterBatch>();
+    }
+    return Error::fail(Error::Code::Unsupported, "unsupported DAG codec selector: " + std::string(extension));
+}
+
+Expected<std::unique_ptr<store::Codec<dag::NodeMetadata>>> metadata_from_extension(const std::string_view extension)
+{
+    if (extension == ".dag") {
+        return std::make_unique<Metadata>();
+    }
+    return Error::fail(Error::Code::Unsupported, "unsupported DAG metadata codec selector: " + std::string(extension));
+}
+
+} // namespace dag::codec

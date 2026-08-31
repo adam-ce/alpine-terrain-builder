@@ -2,7 +2,7 @@
 #include <filesystem>
 
 #include "cli.h"
-#include "codec/Dag.h"
+#include "codec.h"
 #include "dag_node.h"
 #include "log.h"
 #include "mesh/io.h"
@@ -21,7 +21,7 @@ void export_node(const cli::Args &args) {
     }
     std::filesystem::path node_path = args.input_path;
     node_path.replace_extension();
-    const dag::codec::Dag codec;
+    const dag::codec::ClusterBatch codec;
     const auto load_result = codec.read(node_path);
     if (!load_result) {
         LOG_ERROR("Failed to load node from {}: {}", args.input_path, load_result.error().to_string());

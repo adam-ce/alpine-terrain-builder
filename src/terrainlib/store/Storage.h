@@ -86,8 +86,7 @@ public:
         if (m_index.has_value()) {
             auto status = m_index->get(key);
             if (!status) {
-                return Error::propagate(std::move(status),
-                    "look up node " + Traits::key_to_string(key) + " in storage index before loading");
+                return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
             }
             if (!status->has_value() || status->value() == NodeStatus::Virtual) {
                 return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
@@ -103,14 +102,11 @@ public:
         }
         auto exists = has(key);
         if (!exists) {
-            return Error::propagate(
-                std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
+            return Error::propagate(std::move(exists), "check whether node " + Traits::key_to_string(key) + " exists before saving");
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists,
-                "save node to",
-                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
+            return Error::fail(Error::Code::AlreadyExists, "save node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
 
         auto result = m_raw.save(key, data);
@@ -120,8 +116,7 @@ public:
         if (m_index.has_value()) {
             auto added = m_index->add(key);
             if (!added) {
-                return Error::propagate(
-                    std::move(added), "add saved node " + Traits::key_to_string(key) + " to storage index");
+                return Error::propagate(std::move(added), "add saved node " + Traits::key_to_string(key) + " to storage index");
             }
             m_dirty = m_dirty || added.value();
         }
@@ -135,14 +130,11 @@ public:
         }
         auto exists = has(key);
         if (!exists) {
-            return Error::propagate(
-                std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before copying");
+            return Error::propagate(std::move(exists), "check whether target node " + Traits::key_to_string(key) + " exists before copying");
         }
         if (exists.value() && !m_settings.allow_overwrite) {
             const auto node_paths = m_raw.paths(key).value();
-            return Error::fail(Error::Code::AlreadyExists,
-                "copy node to",
-                node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
+            return Error::fail(Error::Code::AlreadyExists, "copy node to", node_paths.empty() ? m_raw.layout().node_path(key) : node_paths.front());
         }
         const auto prepare_target = [&]() -> Expected<void> {
             if (!exists.value() || !m_index.has_value()) {
@@ -150,8 +142,7 @@ public:
             }
             auto removed = m_index->remove(key);
             if (!removed) {
-                return Error::propagate(
-                    std::move(removed), "remove overwritten node " + Traits::key_to_string(key) + " from storage index");
+                return Error::propagate(std::move(removed), "remove overwritten node " + Traits::key_to_string(key) + " from storage index");
             }
             m_dirty = m_dirty || removed.value();
             return {};
@@ -164,8 +155,7 @@ public:
         if (m_index.has_value()) {
             auto added = m_index->add(key);
             if (!added) {
-                return Error::propagate(
-                    std::move(added), "add copied node " + Traits::key_to_string(key) + " to storage index");
+                return Error::propagate(std::move(added), "add copied node " + Traits::key_to_string(key) + " to storage index");
             }
             m_dirty = m_dirty || added.value();
         }
@@ -181,8 +171,7 @@ public:
         if (m_index.has_value()) {
             auto index_removed = m_index->remove(key);
             if (!index_removed) {
-                return Error::propagate(
-                    std::move(index_removed), "remove node " + Traits::key_to_string(key) + " from storage index");
+                return Error::propagate(std::move(index_removed), "remove node " + Traits::key_to_string(key) + " from storage index");
             }
             m_dirty = m_dirty || index_removed.value();
         }
@@ -199,8 +188,7 @@ public:
         }
         auto status = m_index->get(key);
         if (!status) {
-            return Error::propagate(
-                std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index");
+            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index");
         }
         return status->has_value() && status->value() != NodeStatus::Virtual;
     }

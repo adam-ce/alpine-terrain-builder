@@ -2,9 +2,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "mesh/storage.h"
 #include "sf/finalize_storage.h"
-#include "../temporary_directory.h"
 
 namespace {
 

@@ -17,8 +17,7 @@ namespace io::conversion {
 
 namespace detail {
 
-    inline std::unexpected<Error> allocation_error(
-        const std::source_location location = std::source_location::current()) noexcept
+    inline std::unexpected<Error> allocation_error(const std::source_location location = std::source_location::current()) noexcept
     {
         return Error::fail(Error::Code::ResourceExhausted, "allocate raster conversion output", location);
     }
@@ -142,13 +141,11 @@ Expected<radix::Raster<Pixel>> to_raster(const cv::Mat& source)
             return Error::fail(Error::Code::InvalidInput, "cannot convert an empty OpenCV matrix to a raster");
         }
         if (source.dims != 2) {
-            return Error::fail(Error::Code::Unsupported,
-                "unsupported OpenCV matrix dimension count " + std::to_string(source.dims));
+            return Error::fail(Error::Code::Unsupported, "unsupported OpenCV matrix dimension count " + std::to_string(source.dims));
         }
         if (source.type() != detail::cv_type<Pixel>) {
             return Error::fail(Error::Code::InvalidInput,
-                "OpenCV matrix type " + std::to_string(source.type()) + " does not match expected type "
-                    + std::to_string(detail::cv_type<Pixel>));
+                "OpenCV matrix type " + std::to_string(source.type()) + " does not match expected type " + std::to_string(detail::cv_type<Pixel>));
         }
         if (source.cols < 0 || source.rows < 0 || static_cast<unsigned long long>(source.cols) > std::numeric_limits<unsigned>::max()
             || static_cast<unsigned long long>(source.rows) > std::numeric_limits<unsigned>::max()) {

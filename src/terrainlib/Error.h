@@ -35,17 +35,10 @@ public:
         std::source_location location;
     };
 
-    static Error make(Code code,
-        std::string message,
-        std::source_location location = std::source_location::current());
-    static Error make(Code code,
-        std::string_view operation,
-        const std::filesystem::path& path,
-        std::source_location location = std::source_location::current());
-    static Error make(Code code,
-        std::string_view operation,
-        const std::error_code& cause,
-        std::source_location location = std::source_location::current());
+    static Error make(Code code, std::string message, std::source_location location = std::source_location::current());
+    static Error make(
+        Code code, std::string_view operation, const std::filesystem::path& path, std::source_location location = std::source_location::current());
+    static Error make(Code code, std::string_view operation, const std::error_code& cause, std::source_location location = std::source_location::current());
     static Error make(Code code,
         std::string_view operation,
         const std::filesystem::path& path,
@@ -58,17 +51,11 @@ public:
         const std::error_code& cause,
         std::source_location location = std::source_location::current());
 
-    static std::unexpected<Error> fail(Code code,
-        std::string message,
-        std::source_location location = std::source_location::current());
-    static std::unexpected<Error> fail(Code code,
-        std::string_view operation,
-        const std::filesystem::path& path,
-        std::source_location location = std::source_location::current());
-    static std::unexpected<Error> fail(Code code,
-        std::string_view operation,
-        const std::error_code& cause,
-        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(Code code, std::string message, std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(
+        Code code, std::string_view operation, const std::filesystem::path& path, std::source_location location = std::source_location::current());
+    static std::unexpected<Error> fail(
+        Code code, std::string_view operation, const std::error_code& cause, std::source_location location = std::source_location::current());
     static std::unexpected<Error> fail(Code code,
         std::string_view operation,
         const std::filesystem::path& path,
@@ -82,17 +69,12 @@ public:
         std::source_location location = std::source_location::current());
 
     template <typename T>
-    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
-        std::string message = "propagated",
-        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> propagate(
+        std::expected<T, Error>&& result, std::string message = "propagated", std::source_location location = std::source_location::current());
     template <typename T>
-    static std::unexpected<Error> propagate(std::expected<T, Error>&& result,
-        Code code,
-        std::string message,
-        std::source_location location = std::source_location::current());
-    static std::unexpected<Error> propagate(Error&& error,
-        std::string message = "propagated",
-        std::source_location location = std::source_location::current());
+    static std::unexpected<Error> propagate(
+        std::expected<T, Error>&& result, Code code, std::string message, std::source_location location = std::source_location::current());
+    static std::unexpected<Error> propagate(Error&& error, std::string message = "propagated", std::source_location location = std::source_location::current());
 
     Code code() const { return m_code; }
     std::string to_string() const;
@@ -110,8 +92,7 @@ template <typename T>
 using Expected = std::expected<T, Error>;
 
 template <typename T>
-std::unexpected<Error> Error::propagate(
-    std::expected<T, Error>&& result, std::string message, const std::source_location location)
+std::unexpected<Error> Error::propagate(std::expected<T, Error>&& result, std::string message, const std::source_location location)
 {
     return std::unexpected<Error> {
         std::move(result).error().with_context(std::move(message), location),
@@ -119,8 +100,7 @@ std::unexpected<Error> Error::propagate(
 }
 
 template <typename T>
-std::unexpected<Error> Error::propagate(
-    std::expected<T, Error>&& result, const Code code, std::string message, const std::source_location location)
+std::unexpected<Error> Error::propagate(std::expected<T, Error>&& result, const Code code, std::string message, const std::source_location location)
 {
     return std::unexpected<Error> {
         std::move(result).error().reclassified(code, std::move(message), location),

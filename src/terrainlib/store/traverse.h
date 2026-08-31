@@ -35,8 +35,7 @@ Expected<void> traverse(const Index<Traits>& index,
     }
     auto root_status = index.get(root);
     if (!root_status) {
-        return Error::propagate(
-            std::move(root_status), "read traversal root status for node " + Traits::key_to_string(root));
+        return Error::propagate(std::move(root_status), "read traversal root status for node " + Traits::key_to_string(root));
     }
     if (!root_status.value().has_value()) {
         return {};
@@ -47,8 +46,7 @@ Expected<void> traverse(const Index<Traits>& index,
         depth_first = [&](const Key& current) -> Expected<void> {
             auto status = index.get(current);
             if (!status) {
-                return Error::propagate(std::move(status),
-                    "read node status during depth-first traversal for " + Traits::key_to_string(current));
+                return Error::propagate(std::move(status), "read node status during depth-first traversal for " + Traits::key_to_string(current));
             }
             if (!status.value().has_value()) {
                 return {};
@@ -79,8 +77,7 @@ Expected<void> traverse(const Index<Traits>& index,
 
         auto status = index.get(current);
         if (!status) {
-            return Error::propagate(std::move(status),
-                "read node status during breadth-first traversal for " + Traits::key_to_string(current));
+            return Error::propagate(std::move(status), "read node status during breadth-first traversal for " + Traits::key_to_string(current));
         }
         if (!status.value().has_value()) {
             continue;

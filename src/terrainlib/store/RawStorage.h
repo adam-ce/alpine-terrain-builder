@@ -10,8 +10,8 @@
 #include <expected>
 
 #include "store/Codec.h"
-#include "store/path_layout.h"
 #include "store/Traits.h"
+#include "store/path_layout.h"
 
 namespace store {
 
@@ -155,8 +155,7 @@ public:
             }
             std::filesystem::create_hard_link(source_paths[index], target_paths[index], error);
             if (error) {
-                return Error::fail(
-                    Error::Code::Io, "create hard link", source_paths[index], target_paths[index], error);
+                return Error::fail(Error::Code::Io, "create hard link", source_paths[index], target_paths[index], error);
             }
         }
         return {};

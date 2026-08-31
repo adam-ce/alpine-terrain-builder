@@ -2,10 +2,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "cut.h"
 #include "merge.h"
 #include "mesh/storage.h"
-#include "../temporary_directory.h"
 
 namespace {
 

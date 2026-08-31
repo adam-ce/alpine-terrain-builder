@@ -17,10 +17,7 @@ public:
 
     virtual std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const = 0;
 
-    virtual Expected<NodeData> read(const std::filesystem::path&) const
-    {
-        return Error::fail(Error::Code::Unsupported, "codec does not support reading");
-    }
+    virtual Expected<NodeData> read(const std::filesystem::path&) const { return Error::fail(Error::Code::Unsupported, "codec does not support reading"); }
 
     virtual Expected<void> write(const std::filesystem::path&, const NodeData&) const
     {

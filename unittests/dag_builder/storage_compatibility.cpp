@@ -3,6 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "build.h"
 #include "codec.h"
 #include "dag_node.h"
@@ -10,7 +11,6 @@
 #include "mesh/storage.h"
 #include "storage.h"
 #include "store/ThreadSafeStorage.h"
-#include "../temporary_directory.h"
 
 namespace {
 

@@ -125,8 +125,7 @@ Expected<Bytes> serialize(const typename Schema::latest_type& payload,
     ChecksumAlgorithm checksum_algorithm = ChecksumAlgorithm::HandledByCompressionLib);
 
 template <typename Schema>
-Expected<typename Schema::latest_type> deserialize(
-    std::span<const std::byte> bytes, std::size_t max_decompressed_size = default_max_decompressed_size);
+Expected<typename Schema::latest_type> deserialize(std::span<const std::byte> bytes, std::size_t max_decompressed_size = default_max_decompressed_size);
 
 } // namespace io::envelope
 

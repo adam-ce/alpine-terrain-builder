@@ -20,8 +20,7 @@ concept HierarchyTraits = requires(typename Traits::Key key) {
 };
 
 template <HierarchyTraits Traits>
-std::unexpected<Error> invalid_key_error(const typename Traits::Key& key,
-    const std::source_location location = std::source_location::current())
+std::unexpected<Error> invalid_key_error(const typename Traits::Key& key, const std::source_location location = std::source_location::current())
 {
     return Error::fail(Error::Code::InvalidInput, "invalid hierarchy key " + Traits::key_to_string(key), location);
 }

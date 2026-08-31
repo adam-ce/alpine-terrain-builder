@@ -6,11 +6,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "io/bytes.h"
 #include "mesh/codec/Gltf.h"
 #include "mesh/codec/SfMesh.h"
 #include "store/Codec.h"
-#include "../temporary_directory.h"
 
 namespace {
 
@@ -26,10 +26,7 @@ public:
 
 class WriteOnlyCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
-    {
-        return { add_extension(node_path, ".out") };
-    }
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".out") }; }
     Expected<void> write(const std::filesystem::path&, const int&) const override
     {
         ++writes;
@@ -49,8 +46,8 @@ void check_mesh_codec_reentrancy(const Codec& codec, const std::filesystem::path
 {
     std::vector<std::future<bool>> writes;
     for (int index = 0; index < 4; ++index) {
-        writes.push_back(std::async(std::launch::async,
-            [&codec, base, index] { return codec.write(base / std::to_string(index) / "node", triangle_mesh(index)).has_value(); }));
+        writes.push_back(std::async(
+            std::launch::async, [&codec, base, index] { return codec.write(base / std::to_string(index) / "node", triangle_mesh(index)).has_value(); }));
     }
     for (auto& write : writes) {
         REQUIRE(write.get());

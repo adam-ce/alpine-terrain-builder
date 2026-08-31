@@ -32,8 +32,7 @@ Expected<store::Storage<StoreTraits, NodeData>> open_folder(const std::filesyste
         return Error::fail(Error::Code::Io, "check existence of", base_path, error);
     }
     if (base_exists && !std::filesystem::is_directory(base_path, error)) {
-        return Error::fail(
-            Error::Code::Io, "check directory", base_path, error ? error : std::make_error_code(std::errc::not_a_directory));
+        return Error::fail(Error::Code::Io, "check directory", base_path, error ? error : std::make_error_code(std::errc::not_a_directory));
     }
     if (!base_exists) {
         std::filesystem::create_directories(base_path, error);
@@ -55,14 +54,12 @@ Expected<store::Storage<StoreTraits, NodeData>> open_folder(const std::filesyste
     }
     if (index_exists != metadata_exists) {
         return Error::fail(Error::Code::CorruptData,
-            "octree dataset metadata and index must either both exist or both be absent: "
-                + (index_exists ? metadata_path : index_path).string());
+            "octree dataset metadata and index must either both exist or both be absent: " + (index_exists ? metadata_path : index_path).string());
     }
     if (index_exists) {
         auto indexed = store::open_index<StoreTraits, NodeData>(index_path, format, payload_class, resolve_codec);
         if (!indexed) {
-            return Error::propagate(
-                std::move(indexed), "open indexed octree storage at \"" + base_path.string() + "\"");
+            return Error::propagate(std::move(indexed), "open indexed octree storage at \"" + base_path.string() + "\"");
         }
         return store::Storage<StoreTraits, NodeData>(std::move(*indexed));
     }

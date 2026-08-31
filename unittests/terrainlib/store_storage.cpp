@@ -8,13 +8,13 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "io/bytes.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
 #include "raster_store/StoreTraits.h"
 #include "store/IndexedStorage.h"
 #include "string_utils.h"
-#include "../temporary_directory.h"
 
 namespace {
 
@@ -84,17 +84,11 @@ Expected<void> write_int(const int value, const std::filesystem::path& path)
 
 class IntCodec final : public store::Codec<int> {
 public:
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
-    {
-        return { add_extension(node_path, ".data") };
-    }
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".data") }; }
 
     Expected<int> read(const std::filesystem::path& node_path) const override { return read_int(paths(node_path).front()); }
 
-    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override
-    {
-        return write_int(value, paths(node_path).front());
-    }
+    Expected<void> write(const std::filesystem::path& node_path, const int& value) const override { return write_int(value, paths(node_path).front()); }
 };
 
 template <typename Traits>
@@ -137,10 +131,7 @@ public:
     {
     }
 
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
-    {
-        return { add_extension(node_path, extension) };
-    }
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, extension) }; }
 
     Expected<int> read(const std::filesystem::path& node_path) const override
     {

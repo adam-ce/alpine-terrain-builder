@@ -12,10 +12,7 @@ namespace mesh::codec {
 
 class SfMesh final : public store::Codec<mesh::Simple> {
 public:
-    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override
-    {
-        return { add_extension(node_path, ".sfmesh") };
-    }
+    std::vector<std::filesystem::path> paths(const std::filesystem::path& node_path) const override { return { add_extension(node_path, ".sfmesh") }; }
 
     Expected<mesh::Simple> read(const std::filesystem::path& node_path) const override
     {
@@ -25,8 +22,7 @@ public:
             return Error::propagate(std::move(payload), "read SF mesh");
         }
         if (auto valid = mesh::sf::validate(*payload); !valid) {
-            return Error::propagate(
-                std::move(valid), Error::Code::CorruptData, "validate SF mesh read from \"" + path.string() + "\"");
+            return Error::propagate(std::move(valid), Error::Code::CorruptData, "validate SF mesh read from \"" + path.string() + "\"");
         }
         auto decoded = mesh::sf::decode_payload(std::move(*payload));
         if (!decoded) {
@@ -35,10 +31,7 @@ public:
         return std::move(*decoded);
     }
 
-    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override
-    {
-        return write(node_path, mesh, {});
-    }
+    Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh) const override { return write(node_path, mesh, {}); }
 
     Expected<void> write(const std::filesystem::path& node_path, const mesh::Simple& mesh, const mesh::EncodeOptions options) const
     {

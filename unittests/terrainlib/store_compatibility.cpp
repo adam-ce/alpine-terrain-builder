@@ -7,6 +7,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../temporary_directory.h"
 #include "io/bytes.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/codec/SfMeshFormat.h"
@@ -14,7 +15,6 @@
 #include "mesh/storage.h"
 #include "octree/storage/IndexFile.h"
 #include "octree/store_layout/Mappings.h"
-#include "../temporary_directory.h"
 
 namespace {
 

@@ -29,10 +29,7 @@ std::string_view code_name(const Error::Code code)
     return "Unknown";
 }
 
-std::string describe_system_error(const std::error_code& cause)
-{
-    return fmt::format("{} ({}:{})", cause.message(), cause.category().name(), cause.value());
-}
+std::string describe_system_error(const std::error_code& cause) { return fmt::format("{} ({}:{})", cause.message(), cause.category().name(), cause.value()); }
 
 } // namespace
 
@@ -42,32 +39,20 @@ Error::Error(const Code code, Frame frame)
     m_frames.push_back(std::move(frame));
 }
 
-Error Error::make(const Code code, std::string message, const std::source_location location)
-{
-    return Error(code, Frame { std::move(message), location });
-}
+Error Error::make(const Code code, std::string message, const std::source_location location) { return Error(code, Frame { std::move(message), location }); }
 
-Error Error::make(const Code code,
-    const std::string_view operation,
-    const std::filesystem::path& path,
-    const std::source_location location)
+Error Error::make(const Code code, const std::string_view operation, const std::filesystem::path& path, const std::source_location location)
 {
     return make(code, fmt::format("{} \"{}\"", operation, path.string()), location);
 }
 
-Error Error::make(const Code code,
-    const std::string_view operation,
-    const std::error_code& cause,
-    const std::source_location location)
+Error Error::make(const Code code, const std::string_view operation, const std::error_code& cause, const std::source_location location)
 {
     return make(code, fmt::format("{}: {}", operation, describe_system_error(cause)), location);
 }
 
-Error Error::make(const Code code,
-    const std::string_view operation,
-    const std::filesystem::path& path,
-    const std::error_code& cause,
-    const std::source_location location)
+Error Error::make(
+    const Code code, const std::string_view operation, const std::filesystem::path& path, const std::error_code& cause, const std::source_location location)
 {
     return make(code, fmt::format("{} \"{}\": {}", operation, path.string(), describe_system_error(cause)), location);
 }
@@ -79,9 +64,7 @@ Error Error::make(const Code code,
     const std::error_code& cause,
     const std::source_location location)
 {
-    return make(code,
-        fmt::format("{} \"{}\" -> \"{}\": {}", operation, source.string(), destination.string(), describe_system_error(cause)),
-        location);
+    return make(code, fmt::format("{} \"{}\" -> \"{}\": {}", operation, source.string(), destination.string(), describe_system_error(cause)), location);
 }
 
 std::unexpected<Error> Error::fail(const Code code, std::string message, const std::source_location location)
@@ -89,27 +72,18 @@ std::unexpected<Error> Error::fail(const Code code, std::string message, const s
     return std::unexpected<Error> { make(code, std::move(message), location) };
 }
 
-std::unexpected<Error> Error::fail(const Code code,
-    const std::string_view operation,
-    const std::filesystem::path& path,
-    const std::source_location location)
+std::unexpected<Error> Error::fail(const Code code, const std::string_view operation, const std::filesystem::path& path, const std::source_location location)
 {
     return std::unexpected<Error> { make(code, operation, path, location) };
 }
 
-std::unexpected<Error> Error::fail(const Code code,
-    const std::string_view operation,
-    const std::error_code& cause,
-    const std::source_location location)
+std::unexpected<Error> Error::fail(const Code code, const std::string_view operation, const std::error_code& cause, const std::source_location location)
 {
     return std::unexpected<Error> { make(code, operation, cause, location) };
 }
 
-std::unexpected<Error> Error::fail(const Code code,
-    const std::string_view operation,
-    const std::filesystem::path& path,
-    const std::error_code& cause,
-    const std::source_location location)
+std::unexpected<Error> Error::fail(
+    const Code code, const std::string_view operation, const std::filesystem::path& path, const std::error_code& cause, const std::source_location location)
 {
     return std::unexpected<Error> { make(code, operation, path, cause, location) };
 }

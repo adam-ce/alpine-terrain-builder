@@ -99,8 +99,7 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
             for (const Id& child : *children) {
                 auto child_status = result.get(child);
                 if (!child_status) {
-                    return Error::propagate(
-                        std::move(child_status), Error::Code::CorruptData, "look up child while validating store index");
+                    return Error::propagate(std::move(child_status), Error::Code::CorruptData, "look up child while validating store index");
                 }
                 has_child = has_child || child_status->has_value();
             }
@@ -118,8 +117,7 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
         }
         auto parent_status = result.get(*parent);
         if (!parent_status) {
-            return Error::propagate(
-                std::move(parent_status), Error::Code::CorruptData, "look up parent while validating store index");
+            return Error::propagate(std::move(parent_status), Error::Code::CorruptData, "look up parent while validating store index");
         }
         if (!parent_status->has_value() || parent_status->value() == store::NodeStatus::Leaf) {
             return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
@@ -136,8 +134,7 @@ inline Expected<StoreMetadata> read_store_metadata(const std::filesystem::path& 
         return metadata;
     }
     if (auto valid = validate(*metadata); !valid) {
-        return Error::propagate(
-            std::move(valid), Error::Code::CorruptData, "validate store metadata read from \"" + path.string() + "\"");
+        return Error::propagate(std::move(valid), Error::Code::CorruptData, "validate store metadata read from \"" + path.string() + "\"");
     }
     return std::move(*metadata);
 }

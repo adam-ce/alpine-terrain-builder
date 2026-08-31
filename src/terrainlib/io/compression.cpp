@@ -55,8 +55,7 @@ namespace {
         case ChecksumAlgorithm::Crc32c:
             break;
         default:
-            return Error::fail(Error::Code::Unsupported,
-                "unsupported checksum algorithm " + std::to_string(static_cast<unsigned>(checksum_algorithm)));
+            return Error::fail(Error::Code::Unsupported, "unsupported checksum algorithm " + std::to_string(static_cast<unsigned>(checksum_algorithm)));
         }
 
         switch (compression_algorithm) {
@@ -65,8 +64,7 @@ namespace {
         case CompressionAlgorithm::ZstdDefaultCompressionWithChecksum:
             break;
         default:
-            return Error::fail(Error::Code::Unsupported,
-                "unsupported compression algorithm " + std::to_string(static_cast<unsigned>(compression_algorithm)));
+            return Error::fail(Error::Code::Unsupported, "unsupported compression algorithm " + std::to_string(static_cast<unsigned>(compression_algorithm)));
         }
 
         const bool no_compression = compression_algorithm == CompressionAlgorithm::None
@@ -115,8 +113,7 @@ Expected<CompressedData> compress_with_checksum(
     const std::size_t compressed_size
         = ZSTD_compress2(context.get(), compressed_data.data(), compressed_data.size(), uncompressed_data.data(), uncompressed_data.size());
     if (ZSTD_isError(compressed_size)) {
-        return Error::fail(Error::Code::Internal,
-            std::string("Zstandard compression failed: ") + ZSTD_getErrorName(compressed_size));
+        return Error::fail(Error::Code::Internal, std::string("Zstandard compression failed: ") + ZSTD_getErrorName(compressed_size));
     }
 
     compressed_data.resize(compressed_size);
@@ -181,8 +178,7 @@ Expected<Bytes> checked_decompress(const Bytes& compressed_data,
             if (!content_size_is_known && ZSTD_getErrorCode(decompressed_size) == ZSTD_error_dstSize_tooSmall) {
                 return Error::fail(Error::Code::ResourceExhausted, "decompressed data exceeds the configured size limit");
             }
-            return Error::fail(Error::Code::CorruptData,
-                std::string("Zstandard decompression failed: ") + ZSTD_getErrorName(decompressed_size));
+            return Error::fail(Error::Code::CorruptData, std::string("Zstandard decompression failed: ") + ZSTD_getErrorName(decompressed_size));
         }
         if (content_size_is_known && decompressed_size != uncompressed_data.size()) {
             return Error::fail(Error::Code::CorruptData, "Zstandard decompressed size does not match its frame header");

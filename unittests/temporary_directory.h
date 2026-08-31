@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -25,6 +26,11 @@ public:
         REQUIRE(std::filesystem::create_directories(m_path));
     }
 
+    TemporaryDirectory(const TemporaryDirectory&) = delete;
+    TemporaryDirectory& operator=(const TemporaryDirectory&) = delete;
+    TemporaryDirectory(TemporaryDirectory&&) = delete;
+    TemporaryDirectory& operator=(TemporaryDirectory&&) = delete;
+
     ~TemporaryDirectory()
     {
         std::error_code error;
@@ -36,5 +42,10 @@ public:
 private:
     std::filesystem::path m_path;
 };
+
+static_assert(!std::is_copy_constructible_v<TemporaryDirectory>);
+static_assert(!std::is_copy_assignable_v<TemporaryDirectory>);
+static_assert(!std::is_move_constructible_v<TemporaryDirectory>);
+static_assert(!std::is_move_assignable_v<TemporaryDirectory>);
 
 } // namespace test

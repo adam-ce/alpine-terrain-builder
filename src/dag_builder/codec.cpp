@@ -21,6 +21,12 @@
 
 namespace dag::codec {
 namespace {
+
+Error::Code classify_texture_error(const cv::Exception& error, const Error::Code fallback)
+{
+    return error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : fallback;
+}
+
 namespace format {
 
 namespace v1 {
@@ -209,7 +215,9 @@ inline Expected<Clustering> encode_clustering(const ::Clustering& clustering)
             result.textures.push_back({ std::move(jpeg) });
         }
     } catch (const cv::Exception& error) {
-        return Error::fail(Error::Code::InvalidInput, "could not encode DAG texture: " + error.msg);
+        return Error::fail(
+            classify_texture_error(error, Error::Code::InvalidInput),
+            "could not encode DAG texture: " + error.msg);
     }
     return result;
 }
@@ -340,7 +348,9 @@ inline Expected<::Clustering> decode_clustering(Clustering clustering)
             textures.push_back(std::move(image));
         }
     } catch (const cv::Exception& error) {
-        return Error::fail(Error::Code::CorruptData, "could not decode DAG texture: " + error.msg);
+        return Error::fail(
+            classify_texture_error(error, Error::Code::CorruptData),
+            "could not decode DAG texture: " + error.msg);
     }
     result.textures = TextureSet(std::move(textures));
     return result;

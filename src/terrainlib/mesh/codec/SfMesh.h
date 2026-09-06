@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <vector>
 
-#include "io/envelope_file.h"
+#include "io/envelope.h"
 #include "mesh/SimpleMesh.h"
 #include "mesh/codec/SfMeshFormat.h"
 #include "store/Codec.h"

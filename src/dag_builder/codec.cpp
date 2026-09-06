@@ -15,7 +15,6 @@
 #include "cluster.h"
 #include "dag_node.h"
 #include "io/envelope.h"
-#include "io/envelope_file.h"
 #include "mesh/io/texture.h"
 #include "meshopt.h"
 

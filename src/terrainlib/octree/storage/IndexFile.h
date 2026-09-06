@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "io/envelope_file.h"
+#include "io/envelope.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
 #include "store/Index.h"

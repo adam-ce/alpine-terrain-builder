@@ -58,7 +58,6 @@ add_library(terrainlib
     io/compression.h io/compression.cpp
     io/conversion.h
     io/envelope.h
-    io/envelope_file.h
     io/utils.h io/utils.cpp
 
     mesh/EncodedMesh.h

@@ -187,7 +187,7 @@ Sampling placement alone does not determine a correct filter:
 | Semantic kind | Relevant considerations |
 |---|---|
 | Height | low-pass before decimation; terrain error and peak loss |
-| Orthophoto | linear-light filtering; alpha premultiplication |
+| Orthophoto | linear-light filtering; no alpha support needed |
 | Categorical | mode, coverage, or another categorical policy |
 | Probability/coverage | conservative area averaging may be appropriate |
 | Vector/normal | component filtering followed by normalization where needed |

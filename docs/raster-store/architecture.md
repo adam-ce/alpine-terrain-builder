@@ -1,43 +1,36 @@
 # Architecture
-This document describes the intended raster-store (RS), raster-fundamentalis (RF), tile-base (TB), and tile-server architecture.
 
-Raster-store (RS) is a storage mechanism for geospatial raster data tiles for the alpine maps project.
-It is build on top of the store architecture, which is used for 3d meshes as well.
-Tile data is made available as templetized radix::Raster<> objects, and referenced with radix::tile::Id (a Google/Mapbox/XYZ tile identifier).
-Supported template parameters are in particular basic data types (float, double, all int types etc), and glm vector types.
-Every texel contains a data value and attribution reference into a global attribution table.
-The attribution table contains meta information like accuracy and date in addition to the copyright information.
-[storage-format.md](storage-format.md) notes down the details.
+This document describes the responsibilities and lifecycle of raster-store
+(RS), raster-fundamentalis (RF), tile-base (TB), and the tile-server.
+Raster-store provides geospatial raster tile storage for the alpine maps
+project on top of the shared store mechanisms also used for 3D meshes.
 
-Raster-fundamentalis (RS) is our world-wide authoritative dataset and uses RS for storage.
-RF is build from many different sources, some of which contain world wide data, others contain more accurate but only local data.
-Any data-source is first transformed into a RF dataset using rf-builder.
-The generated RF dataset will have only one attribution.
-Two data-sources can be combined using rf-merger, and an attribution priority list. 
-The merger selects tiles with the higher priority, or resolves conflicts on a per-texel basis, if necessary.
+[Storage format](storage-format.md) defines the directory layout, serialized
+data, and format invariants. [Terminology](terminology.md) defines the domain
+language, and [sampling and generation](sampling-and-generation.md) covers
+sampling and filtering policy.
 
-Tile-base is built from RF by adding overviews (lower resolution versions of the original data).
-Several aggregation methods for the lower resolutions must be supported (at least min/max/avg).
-Tile-base is consumed by the tile-server, which generates tiles for the alpine-maps renderer client.
-The tile-server can combine several tile-base datasets into one tile, e.g. a digital surface and terrain model (dsm and dtm).
-The client can ask for different resolutions (e.g. 65px or 256px tiles), for different pixel types (area or vertex pixels with overlapping borders, see [sampling-and-generation.md](sampling-and-generation.md) for details), and for different encodings (e.g. JPEG, PNG, compressed ETC2, compressed DXT1, comrpessed raw, etc).
-Raster-store (RF, and TB) always use area pixels.
+## Current implementation scope
 
-RS datasets are potentially several TiB in size, so building and merging can take several days or weeks.
-In order to prevent premature overengineering, the following policies should be used for rf-builder, rf-merger, and tb-builder:
-- every build or merge generates a new dataset
-- errors abort the build
-- the index is updated at least every few minutes to keep the data readable if there is an abort.
-- for builds and merges, it's possible to submit a cache store (e.g. from an earlier or aborted run), which allows to skip processing of already existant nodes.
-- if a node can be reused (either from cache, or when merging 2 datasets), a hard link should be set to prevent storage cost explosion.
+The first raster-store library implementation covers tile storage only:
+typed tiles, attribution tables, codecs, persistent index and metadata,
+dataset opening, and snapshot publication. Spatial window reads, ancestor
+fallback, builders, merging, and sampling are outside this implementation.
+It remains part of the existing `terrainlib` target.
 
 ## Implementation status
+
 So far, a refactor delivered the dimension-neutral mechanisms to index RS:
+
 - `store::Index<Traits>`, `store::traverse`, layouts, runtime codecs, storage,
   typed errors, and cache interfaces;
 - `octree::StoreTraits` 3D layout/index/open adapters (for reference only);
 - `raster_store::StoreTraits` for in-memory topology keyed by
   `radix::tile::Id`;
+
+The 3D octree stores use versioned envelopes. Persistent raster index and
+metadata adapters, the `.amort` codec, snapshot publication, and raster
+opening APIs are not implemented yet.
 
 ### Final public names
 
@@ -97,54 +90,71 @@ tile-base store (one per layer, one per data version. user visible server should
 ```
 
 ## Dataset organization
-A store directory is an immutable snapshot. Each snapshot contains an index, a meta-data file (e.g. the used codec), a source attribution table, and the data:
 
-```text
-store-snapshot-id/
- ├── raster_store.metadata
- ├── raster_store.index
- ├── source_attribution_table.json
- ├── build_log.txt
- └── <zoom>/<x>/<y>.amort
-```
+RF and tile-base use the same storage format but live under separate roots.
+Their different data-selection and hierarchy policies belong to their tools.
+Additional metadata can be introduced later using the same envelope mechanism.
+See the [directory layout](storage-format.md#directory-layout) for filenames
+and the [attribution lookup rules](storage-format.md#source-attribution-table).
 
-The shown payload path is the default `zoom/x/y_google` layout. Other layouts
-may map the same tile IDs differently;
+RF snapshots normally share an attribution table. TB construction copies that
+table unchanged into the output snapshot, preserving indices. This copy is
+independent of the mutable RF table, so later edits or RF removal do not
+affect it. The complete TB can then be transferred by rsync as one directory.
+An RF snapshot using an ancestor table depends on that external table.
 
-### Sparse quadtree index
-
-The index uses the same four logical states as the octree index:
-
-| State     | Chunk exists | Indexed descendants |
-|-----------|-------------:|--------------------:|
-| `Leaf`    |     yes      |          no         |
-| `Inner`   |     yes      |         yes         |
-| `Virtual` |      no      |         yes         |
-| `Missing` |      no      |          no         |
-
-`Missing` is represented by absence from the index, not serialized as an
-entry.
-
-### Chunk (tile) model
-
-Each Chunk is one radix::Raster<> tile and metadata.
-Both are specified by the codec.
-Different codecs can be used for writing and reading if they are compatible (e.g. there can be a read-only codec only returning the metadata).
-
-Codecs used for writing should be lossless in order not to degenerate the data during repeated encdoding (e.g. merging, overview generation etc.). 
+The source table is maintained manually. Builders and overview generators
+consume entries without editing or renumbering them. A user may correct an
+entry or clear its field values while retaining the complete object. Reusing
+an index requires the user to establish that no retained snapshot using that
+table refers to it; the library does not track this lifecycle. The required
+entry structure is specified in the storage format. See also the
+[shared-table decision](../adr/0001-shared-raster-attribution-table.md).
 
 ## Snapshot lifecycle
 
-A snapshot is never mutated, instead, operations build new snapshots, while reducing disk usage by using hard links:
+Datasets may be several TiB in size, so builds and merges can take days or
+weeks. The RF builder, RF merger, and TB builder follow these policies:
 
-E.g., when adding data, we would:
-1. define a validity mask for the new data (in vector format, everything inside is attributed to the dataset).
-2. create a new sf from the new data and validity mask using rf-builder
-3. define an attribution source merging priority (an ordering of attribution sources)
-4. using these two, a new snapshot is generated using rf-merger. most tiles will be hard-linked from one of the datasets, the border tiles will have the higher resolution of the two, and be merged, new chunks/tiles.
+- Every build or merge generates a new snapshot; published snapshots are
+  never mutated.
+- Errors abort the build.
+- Builders checkpoint the index at least every few minutes so an aborted
+  build remains readable as a cache.
+- Callers may supply a cache store from an earlier or aborted run to skip
+  processing nodes that can be reused.
+- Reusable tiles are hard-linked to limit storage cost.
 
 Because hard links share inodes, a linked container must never be opened for
-in-place modification. Existing snapshots are considered immutable. Obsolete snapshots can be deleted, the data will be preserved if necessary due to reference counting in the inodes.
+in-place modification. Obsolete snapshots can be deleted; other hard links
+keep the data alive.
+
+Published snapshots are opened through `IndexedStorage`. Its API currently
+also exposes mutation, so immutability relies on caller discipline. Making
+the type truly read-only belongs to a separate work package.
+
+Hard-link reuse may cross RF and TB roots. The calling tool decides whether
+a tile can be reused, including payload type, dimensions, encoding, and
+attribution-index compatibility.
+Storage performs the requested operation and reports operational failures;
+it does not add semantic compatibility checks to decide whether reuse is
+valid. A TB with different tile dimensions needs newly generated tiles
+wherever existing tiles cannot be reused unchanged. Linked TB payloads and
+the independent attribution table remain valid after removing the RF.
+
+### Opening and checkpoints
+
+Normal opening rejects `.part` snapshot directories. The explicit
+`allow_incomplete` option opens one as `IndexedStorage` for cache reuse, using
+the last saved index and ignoring unindexed files. Checkpoint timing belongs
+to the builder, which explicitly saves the index periodically.
+
+Opening and publication do not perform an additional whole-snapshot
+validation pass or scan payload files for existence. Errors from envelope
+decoding and the normal format-adapter/opening path are propagated when the
+index or a tile is read. Generic envelope checks cover the serialized
+representation, version, compression, and checksum; index invariants belong
+to the format adapter. The attribution table is parsed separately as JSON.
 
 ### Publication
 
@@ -152,8 +162,10 @@ A new snapshot is assembled in a sibling directory named
 `<snapshot-id>.part`. Publication follows this protocol:
 
 1. Write all payload and metadata files into the `.part` directory.
-2. Write the final index last and validate the completed snapshot.
+2. Write the final index last and flush and close the output files.
 3. Rename the directory to `<snapshot-id>` on the same filesystem.
+
+Publication returns success after the rename without reopening the snapshot.
 
 The final destination must not already exist. A `.part` directory is
 incomplete and is never considered published. The rename removes the suffix;
@@ -177,22 +189,47 @@ rebuilt.
 ## Tools
 
 ### rf_builder
-raster-fundamentalis is our authoritative raster-store.
-- unlike a tile pyramid, not every level is occupied (there is no downsampled versions of the data).
-- Coarse physical tiles (e.g. zoom level 10) may coexist with more accurate descendants (e.g. zoom level 15).
-- it consumes raw gdal data or datasets from the tile downloader.
-- the raster-fundamentalis builder is implemented in src/rf-builder/*
+
+Raster-fundamentalis is the worldwide authoritative dataset, assembled from
+sources with different coverage and accuracy. RF has no downsampled overview
+levels. Coarse physical tiles, for example at zoom 10, may coexist with more
+accurate descendants, for example at zoom 15.
+
+The builder consumes GDAL data or datasets from the tile downloader. An import
+supplies a data source, an existing attribution index, and a vector validity
+mask defining the accepted region. The resulting RF has one attribution.
+Several imports with different masks may share the same attribution index;
+masks are not retained after RF creation.
+
+Planned location: `src/rf-builder/*`.
 
 ### rf_merger
 
+The merger combines two RF stores using an attribution priority list. It
+reuses tiles from the preferred source where possible and resolves conflicts
+per texel where necessary. New boundary tiles use the higher resolution of
+the inputs.
+
 ### tb_builder
-tile-base is a hierarchy build from raster-fundamentalis, containing all data and its overviews / downsampled versions. 
-- lives in src/tb-builder
-- see also [sampling-and-generation.md](sampling-and-generation.md)
+
+Tile-base adds overviews to RF and retains the data. Every level is occupied
+and selects an adequate source. It must support at least minimum, maximum, and average
+aggregation. A TB may choose different tile dimensions from its RF input.
+See [sampling and generation](sampling-and-generation.md) for filtering and
+source-selection policy.
+
+Planned location: `src/tb-builder`.
 
 ### tile_server
-The tile-server consumes tile-base and generates tiles of requested resolution and pixel type (vertex|area) on the fly.
-- requests by url, e.g.: layer/vertex|area/resolution/z/x/y.ending
-- some tile layers will want to pack several tile-bases (e.g. dtm+dsm, percentage larger than slope angle (PLaTSA) + phong shading + AO shading)
-- extra ECEF bounding sphere tree (later)
-- lives in src/tile-server/*
+
+The server consumes tile-base and generates renderer tiles of the requested
+dimensions, sampling placement, and encoding on the fly. Requests identify
+these choices in the URL, for example `layer/vertex|area/resolution/z/x/y.ending`.
+Output dimensions may be 65px or 256px, with area or vertex pixels.
+
+Delivery encoding is not yet finalized. Required options include JPEG, PNG,
+compressed ETC2/DXT1, and compressed raw rasters. Some layers combine several
+tile-bases, such as DTM and DSM, or percentage larger than slope angle (PLaTSA),
+Phong shading, and AO shading. An ECEF bounding-sphere tree is planned later.
+
+Planned location: `src/tile-server/*`.

@@ -149,7 +149,7 @@ CMake configuration and Linux test environment documented above.
 - Six focused review passes found no issues in this follow-up. Qt lint reports
   DEP-10 on `std::chrono::duration::count()`; these calls use the required chrono
   API, so the container `.size()` recommendation does not apply.
-- A full-resolution Vienna DSM import is being run under
+- A full-resolution Vienna DSM import was attempted under
   `/data/scratch/codex/rf-vienna-20260910`. Inputs are Austria's
   `OeRect_01m_gs_31287.img` and the union of Stadt Wien's official district
   polygons. The user approved a scratch attribution entry with unknown source
@@ -161,6 +161,50 @@ CMake configuration and Linux test environment documented above.
 - The initial Debug run exposed costly detailed-boundary centre tests. The
   user stopped the partitioned-mask import and the optimized build at 14:57
   CEST. The last checkpoint contains 4 of 63 candidates (6.3%), with
-  221459620 payload bytes. The incomplete snapshot and logs are retained;
-  no final Vienna snapshot was published. Whole-tile containment currently
-  has no fast path: accepted source pixels still receive individual mask tests.
+  221459620 payload bytes. No final Vienna snapshot was published.
+  At that point, every accepted source
+  pixel still received an individual mask test.
+
+### Mask acceleration follow-up
+
+- Committed the preceding RF implementation and logging work as `b354cb3`
+  before starting this separately reviewable change.
+- Replaced per-centre ring scans with a persistent CGAL point-location index
+  over the exact union of the simplified mask polygons. A static boundary-edge
+  BVH proves when a span of transformed centres lies entirely in one face;
+  those spans need only one point query. Boundary spans subdivide and fall back
+  to individual indexed queries. No mask-CRS approximation, pre-transform tile
+  shortcut, or parallel imports were introduced.
+- Differential tests compare against the preceding ring-test behavior for
+  holes, overlaps, shared edges, concave and disconnected regions, random point
+  order, long rows, enclosed holes, source-invalid pixels, and moved masks.
+  The RF suite passes in both Debug and Release: 22 cases, 50955 assertions.
+  The separate original-Vienna-mask benchmark also matches the reference.
+- On the same 4096-point Vienna workload, Release selection time was 33.319 ms
+  before acceleration, 6.010 ms with persistent point location alone, and
+  4.364 ms with the boundary BVH and bulk selection (about 7.6 times faster
+  than the baseline). Debug times were 2905.693, 156.352, and 86.517 ms.
+  These are individual measurements including centre transformation, excluding
+  mask opening and the reference check; they are not full-import speedups.
+- Three 4096-square Release tile benchmarks used the original official Vienna
+  boundary and the Austria DSM. Western boundary tile `13/4464/2840`, central
+  tile `13/4468/2840`, and eastern exterior tile `13/4473/2840` took 22.127,
+  20.651, and 20.891 seconds respectively. Reading/resampling took 13.090–14.396
+  seconds, masking 7.079–7.288 seconds, and packing/writing 0.057–0.483 seconds.
+  The exterior tile had no accepted pixels and was not written. Timings exclude
+  planning, initial mask loading, index checkpointing, and final publication.
+- Both RF targets build in Debug and Release. Six focused review passes found
+  no defects. Qt lint flags bounded BVH construction, intentional validity
+  mutation, and chrono `count()` calls; the generic container recommendations
+  do not apply to these uses. Reproduction instructions are retained under
+  `/data/scratch/codex/rf-vienna-20260910/mask-acceleration`.
+- A fresh Release import using the original official boundary and no cache
+  started at 18:09 CEST. The user cancelled it after 38/80 candidates (47.5%);
+  its last checkpoint contained 25 tiles and 1311434910 payload bytes. No final
+  snapshot was published. Throughput was about 20 seconds per candidate, with
+  a projected total of 27 minutes. A 45-second sample during the run measured
+  99.8% of one CPU core, 2.21 MiB/s of file reads, and no physical reads charged
+  to the process; those reads were served from cache.
+- After cancellation, the user requested deletion of all Vienna run outputs
+  and logs. Partial snapshots and run/benchmark logs were removed; the Release
+  build, source inputs, attribution tables, and reproduction scripts were kept.

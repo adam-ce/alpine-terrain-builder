@@ -328,6 +328,14 @@ are separate phases, and variable tile costs can change the estimate.
   clipped to the Mercator latitude range before tile traversal. Mask polygon
   bounding boxes only prune candidates; final centre tests use simplified
   polygons in their original CRS, including boundaries and excluding holes.
+- Mask selection builds one exact polygon union, a persistent CGAL trapezoidal
+  point-location index, and a static BVH over conservative union-boundary edge
+  boxes. After transforming a row's centres into the original mask CRS, a span
+  whose enclosing box intersects no boundary is classified with one point
+  query. Boundary-adjacent spans subdivide and eventually use individual
+  indexed queries. Enclosures use the actual transformed, source-valid centres,
+  preserving curved-projection behavior, holes, and boundary inclusion.
+  Source-invalid pixels remain invalid. There is no pre-transform whole-tile shortcut.
 - Sampling uses quarter-output-pixel finite differences and the largest
   singular value, starting with 3x3 points over each candidate's coverage.
   It increases to 9x9 and 17x17 for variation above 5% or ratios within 10% of

@@ -12,9 +12,9 @@ Expected<void> write_bytes_to_path(const std::span<const uint8_t> bytes, const s
     LOG_TRACE("Writing bytes to path {}", path);
 
     if (make_dirs) {
-        const std::error_code error = utils::create_parent_directories(path);
-        if (error) {
-            return Error::fail(Error::Code::Io, "create parent directories for", path, error);
+        auto directories = utils::create_parent_directories(path);
+        if (!directories) {
+            return Error::propagate(std::move(directories), "write bytes");
         }
     }
 
@@ -26,6 +26,15 @@ Expected<void> write_bytes_to_path(const std::span<const uint8_t> bytes, const s
     file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
     if (!file.good()) {
         return Error::fail(Error::Code::Io, "write bytes to", path);
+    }
+
+    file.flush();
+    if (!file.good()) {
+        return Error::fail(Error::Code::Io, "flush bytes to", path);
+    }
+    file.close();
+    if (file.fail()) {
+        return Error::fail(Error::Code::Io, "close file after writing", path);
     }
 
     return {};

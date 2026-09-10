@@ -92,36 +92,8 @@ inline Expected<store::Index<StoreTraits>> decode_index(const StoreIndex& encode
         }
     }
 
-    for (const auto& [id, status] : result) {
-        const auto children = StoreTraits::children(id);
-        bool has_child = false;
-        if (children) {
-            for (const Id& child : *children) {
-                auto child_status = result.get(child);
-                if (!child_status) {
-                    return Error::propagate(std::move(child_status), Error::Code::CorruptData, "look up child while validating store index");
-                }
-                has_child = has_child || child_status->has_value();
-            }
-        }
-        if ((status == store::NodeStatus::Leaf && has_child) || ((status == store::NodeStatus::Inner || status == store::NodeStatus::Virtual) && !has_child)) {
-            return Error::fail(Error::Code::CorruptData, "index contains inconsistent node topology");
-        }
-
-        const auto parent = StoreTraits::parent(id);
-        if (!parent) {
-            if (id != StoreTraits::root()) {
-                return Error::fail(Error::Code::CorruptData, "index contains a non-root node without a parent");
-            }
-            continue;
-        }
-        auto parent_status = result.get(*parent);
-        if (!parent_status) {
-            return Error::propagate(std::move(parent_status), Error::Code::CorruptData, "look up parent while validating store index");
-        }
-        if (!parent_status->has_value() || parent_status->value() == store::NodeStatus::Leaf) {
-            return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
-        }
+    if (auto valid = result.validate(); !valid) {
+        return Error::propagate(std::move(valid), "validate octree index topology");
     }
     return result;
 }

@@ -156,6 +156,13 @@ add_library(terrainlib
     range/RangeToInclusive.h
 
     raster_store/StoreTraits.h
+    raster_store/Tile.h
+    raster_store/attribution.h raster_store/attribution.cpp
+    raster_store/io/TileCodec.h
+    raster_store/io/manifest.h raster_store/io/manifest.cpp
+    raster_store/path_layout.h
+    raster_store/pixel_type.h
+    raster_store/storage.h
 
     sf/finalize_storage.h
     sf/validate_index.h

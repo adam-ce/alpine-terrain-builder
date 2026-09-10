@@ -167,6 +167,47 @@ public:
         return {};
     }
 
+    Expected<void> validate() const
+    {
+        for (const auto& [key, status] : m_index) {
+            if (!Traits::is_valid(key)) {
+                return Error::fail(Error::Code::CorruptData, "index contains an invalid hierarchy key");
+            }
+            if (static_cast<NodeStatus::Value>(status) > NodeStatus::Virtual) {
+                return Error::fail(Error::Code::CorruptData, "index contains an invalid node status");
+            }
+            bool has_child = false;
+            if (const auto children = Traits::children(key)) {
+                for (const auto& child : *children) {
+                    auto child_status = get(child);
+                    if (!child_status) {
+                        return Error::propagate(std::move(child_status), Error::Code::CorruptData, "validate indexed child");
+                    }
+                    has_child = has_child || child_status->has_value();
+                }
+            }
+            if ((status == NodeStatus::Leaf && has_child)
+                || ((status == NodeStatus::Inner || status == NodeStatus::Virtual) && !has_child)) {
+                return Error::fail(Error::Code::CorruptData, "index contains inconsistent node topology");
+            }
+            const auto parent = Traits::parent(key);
+            if (!parent) {
+                if (key != Traits::root()) {
+                    return Error::fail(Error::Code::CorruptData, "index contains a non-root node without a parent");
+                }
+                continue;
+            }
+            auto parent_status = get(*parent);
+            if (!parent_status) {
+                return Error::propagate(std::move(parent_status), Error::Code::CorruptData, "validate indexed parent");
+            }
+            if (!parent_status->has_value() || parent_status->value() == NodeStatus::Leaf) {
+                return Error::fail(Error::Code::CorruptData, "index contains a node without a valid indexed parent");
+            }
+        }
+        return {};
+    }
+
     void clear() { m_index.clear(); }
     bool empty() const { return m_index.empty(); }
     size_t size() const { return m_index.size(); }

@@ -10,6 +10,7 @@
 
 #include "../temporary_directory.h"
 #include "io/bytes.h"
+#include "io/utils.h"
 #include "octree/StoreTraits.h"
 #include "octree/store_layout/Mappings.h"
 #include "raster_store/StoreTraits.h"
@@ -209,6 +210,16 @@ store::IndexedStorage<octree::StoreTraits, int> make_indexed_storage(
 }
 
 } // namespace
+
+TEST_CASE("parent directory creation reports success for new and existing directories", "[io][bytes]")
+{
+    TemporaryDirectory directory("create-parents");
+    const auto path = directory.path() / "parent" / "nested" / "payload";
+    REQUIRE(io::utils::create_parent_directories(path));
+    CHECK(std::filesystem::is_directory(path.parent_path()));
+    CHECK_FALSE(std::filesystem::exists(path));
+    REQUIRE(io::utils::create_parent_directories(path));
+}
 
 TEST_CASE("byte writes report directory creation errors", "[io][bytes]")
 {

@@ -28,9 +28,51 @@ So far, a refactor delivered the dimension-neutral mechanisms to index RS:
 - `raster_store::StoreTraits` for in-memory topology keyed by
   `radix::tile::Id`;
 
-The 3D octree stores use versioned envelopes. Persistent raster index and
-metadata adapters, the `.amort` codec, snapshot publication, and raster
-opening APIs are not implemented yet.
+The 3D octree stores use versioned envelopes. Raster persistence implementation
+and verification progress is tracked in
+[implementation-status.md](implementation-status.md).
+
+### Raster storage API
+
+Include `raster_store/storage.h`. `raster_store::storage::create<PixelType>()`
+takes the final snapshot path and creates its sibling `.part` directory.
+The attribution table must already be available through the agreed lookup,
+or `CreateOptions::copy_attribution_from_index` can identify an input index
+whose selected table is copied unchanged into the output.
+
+```cpp
+raster_store::storage::CreateOptions options;
+options.tile_dimensions = { 3, 3 };
+auto output = raster_store::storage::create<float>(snapshot_path, options);
+if (!output) {
+    return Error::propagate(std::move(output));
+}
+raster_store::Tile<float> tile(3); // Attribution defaults to NoData.
+if (auto saved = output->save({ 0, { 0, 0 } }, tile); !saved) {
+    return saved;
+}
+return raster_store::storage::publish(std::move(*output));
+```
+
+Call `save_index()` explicitly for intermediate checkpoints. `open<PixelType>()`
+returns `IndexedStorage<PixelType>`; pass `{ .allow_incomplete = true }` for
+cache access to a `.part` snapshot. `attribution::read_table(index_path)`
+provides the selected table separately. `publish()` consumes the output handle
+on success or failure and returns `Expected<void>`.
+
+Raster opening supplies the decoded metadata to the shared `store::open_index`
+overload. The shared opener resolves the metadata's codec selector through
+the supplied callback; raster codec names and dimensions are handled in
+`raster_store`, while mesh callers retain their extension resolver.
+
+Manifest I/O lives in `raster_store/io/manifest.h` under
+`raster_store::io::manifest`. `raster_store/io/TileCodec.h` defines
+`raster_store::io::TileCodec<PixelType>` and its supporting `tile_codec`
+namespace. Versioned payload structs belong to `manifest::detail::v1` and
+`tile_codec::detail::v1`, respectively. The XYZ layout lives in
+`raster_store/path_layout.h` under `raster_store::path_layout::zoom_xy_google`.
+Both raster and octree index decoding use `store::Index<Traits>::validate() const`
+to validate the decoded hierarchy.
 
 ### Final public names
 
@@ -149,6 +191,11 @@ Normal opening rejects `.part` snapshot directories. The explicit
 the last saved index and ignoring unindexed files. Checkpoint timing belongs
 to the builder, which explicitly saves the index periodically.
 
+Checkpoints replace the index through a temporary file so a failed write does
+not truncate the previous checkpoint. The shared storage destructor may also
+save a dirty index; destruction never publishes a snapshot. Checkpointing and
+publication require the caller to finish outstanding writes first.
+
 Opening and publication do not perform an additional whole-snapshot
 validation pass or scan payload files for existence. Errors from envelope
 decoding and the normal format-adapter/opening path are propagated when the
@@ -166,6 +213,9 @@ A new snapshot is assembled in a sibling directory named
 3. Rename the directory to `<snapshot-id>` on the same filesystem.
 
 Publication returns success after the rename without reopening the snapshot.
+The current publication implementation uses Linux `renameat2` with
+`RENAME_NOREPLACE` to reject destination collisions at the rename itself.
+Other platforms currently report `Unsupported` for publication.
 
 The final destination must not already exist. A `.part` directory is
 incomplete and is never considered published. The rename removes the suffix;
@@ -200,6 +250,10 @@ supplies a data source, an existing attribution index, and a vector validity
 mask defining the accepted region. The resulting RF has one attribution.
 Several imports with different masks may share the same attribution index;
 masks are not retained after RF creation.
+
+The RF builder must validate its attribution index against the supported range
+and selected table before producing tiles. Tile storage does not scan
+attribution rasters on reads or writes to repeat this validation.
 
 Planned location: `src/rf-builder/*`.
 

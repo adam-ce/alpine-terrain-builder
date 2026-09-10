@@ -312,9 +312,9 @@ try {
         }
     }
 
-    const std::error_code directory_error = ::io::utils::create_parent_directories(path);
-    if (directory_error) {
-        return Error::fail(Error::Code::Io, "create parent directories for", path, directory_error);
+    auto directories = ::io::utils::create_parent_directories(path);
+    if (!directories) {
+        return Error::propagate(std::move(directories), "write glTF file");
     }
 
     std::ofstream file(path, std::ios::binary);

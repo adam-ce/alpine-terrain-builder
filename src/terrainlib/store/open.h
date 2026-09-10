@@ -13,14 +13,10 @@ namespace store {
 
 template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
 Expected<IndexedStorage<Traits, NodeData>> open_index(
-    const std::filesystem::path& index_path, const IndexFormat<Traits> format, const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
+    const std::filesystem::path& index_path, const IndexFormat<Traits> format, IndexMetadata<Traits> metadata,
+    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
 {
     using Key = typename Traits::Key;
-    auto metadata_result = format.read(index_path);
-    if (!metadata_result) {
-        return Error::propagate(std::move(metadata_result), "read storage index \"" + index_path.string() + "\"");
-    }
-    IndexMetadata<Traits> metadata = std::move(metadata_result.value());
     if (metadata.payload_class != expected_payload_class) {
         return Error::fail(Error::Code::Unsupported, "unexpected payload class: " + metadata.payload_class);
     }
@@ -51,6 +47,19 @@ Expected<IndexedStorage<Traits, NodeData>> open_index(
             std::move(metadata.payload_class),
             std::move(metadata.codec_selector),
         });
+}
+
+template <HierarchyTraits Traits, typename NodeData, typename CodecResolver>
+Expected<IndexedStorage<Traits, NodeData>> open_index(
+    const std::filesystem::path& index_path, const IndexFormat<Traits> format,
+    const std::string_view expected_payload_class, CodecResolver&& resolve_codec)
+{
+    auto metadata = format.read(index_path);
+    if (!metadata) {
+        return Error::propagate(std::move(metadata), "read storage index \"" + index_path.string() + "\"");
+    }
+    return open_index<Traits, NodeData>(index_path, format, std::move(*metadata),
+        expected_payload_class, std::forward<CodecResolver>(resolve_codec));
 }
 
 template <HierarchyTraits Traits, typename NodeData>

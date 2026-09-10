@@ -1,21 +1,21 @@
 # Raster store design
 
-This directory describes a proposed authoritative raster store and the
-generation of delivery tile pyramids from it. The documents are a design
-baseline, not a finalized binary-format specification.
+This directory describes authoritative raster tile storage and the planned
+generation of delivery tile pyramids from it. Storage format version 1 is
+documented alongside the implementation status; builders and generators
+remain future work.
 
 ## Documents
 
 - [Terminology](terminology.md)
-- [Status quo and reuse assessment](status-quo.md)
 - [Architecture](architecture.md)
 - [Storage format](storage-format.md)
 - [Sampling and pyramid generation](sampling-and-generation.md)
-- [Implemented refactor status](refactor-status.md)
+- [Implementation status](implementation-status.md)
 
 ## Plans
 
-- [Store refactoring plan](refactor-plan.md)
+- [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)
 - [DRAFT RF builder plan archive](rf_builder.md)
 - [DRAFT RF merger plan archive](rf_merger.md)

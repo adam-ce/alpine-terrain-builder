@@ -12,10 +12,21 @@
 : A stored pixel with attribution index 0, regardless of its payload value. A numeric sentinel such as NaN alone does not make a pixel NoData.
 
 **Validity mask**
-: A temporary RF-builder input defining the spatial region in which an input dataset is accepted. It is not retained in the RF.
+: A temporary RF-builder input defining the spatial region selecting the centres
+  of accepted output pixels. It does not exclude otherwise valid source
+  contributions to filtering outside that region. It is not retained in the RF.
 
 **raster-fundamentalis (rf)**
-: The authoritative raster store
+: The authoritative raster store from which delivery data is derived.
+
+**RF import**
+: Raster data accepted from one prepared source dataset under one validity mask
+  and attributed to one source-attribution entry.
+
+**Local sampling ratio**
+: The largest directional stretch from an output pixel spacing into source-pixel
+  coordinates at a location. It expresses the local reduction in source detail
+  without treating a pure rotation as a change in resolution.
 
 **tile-base (tb)**
 : basically rf with overviews, used to generate derived tiles

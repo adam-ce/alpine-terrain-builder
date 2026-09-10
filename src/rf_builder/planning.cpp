@@ -1,0 +1,117 @@
+#include "planning.h"
+
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include "raster_store/StoreTraits.h"
+
+namespace rf_builder::planning {
+namespace {
+std::optional<Bounds> intersection(const Bounds& a, const Bounds& b)
+{
+    Bounds result { glm::max(a.min, b.min), glm::min(a.max, b.max) };
+    if (result.min.x >= result.max.x || result.min.y >= result.max.y) {
+        return std::nullopt;
+    }
+    return result;
+}
+}
+
+double directional_stretch(const glm::dvec2 column, const glm::dvec2 row)
+{
+    const double a = glm::dot(column, column);
+    const double b = glm::dot(column, row);
+    const double d = glm::dot(row, row);
+    return std::sqrt((a + d + std::hypot(a - d, 2 * b)) / 2);
+}
+
+Expected<double> estimate(const Bounds& region, const double pixel_spacing, const Transform& transform)
+{
+    double maximum = 0;
+    double minimum = INFINITY;
+    // Quarter-output-pixel finite differences, with inward differences at the
+    // world edges. Refine 3x3 -> 9x9 -> 17x17 near the limit or high variation.
+    const double step = pixel_spacing / 4;
+    for (unsigned count : { 3u, 9u, 17u }) {
+        const double previous = maximum;
+        for (unsigned y = 0; y < count; ++y) {
+            for (unsigned x = 0; x < count; ++x) {
+                const glm::dvec2 point = glm::mix(region.min, region.max,
+                    glm::dvec2(double(x) / (count - 1), double(y) / (count - 1)));
+                const double dx = point.x + step <= RasterTransform::world_half_extent ? step : -step;
+                const double dy = point.y + step <= RasterTransform::world_half_extent ? step : -step;
+                auto centre = transform(point);
+                auto horizontal = transform(point + glm::dvec2(dx, 0));
+                auto vertical = transform(point + glm::dvec2(0, dy));
+                if (!centre) { return Error::propagate(std::move(centre)); }
+                if (!horizontal) { return Error::propagate(std::move(horizontal)); }
+                if (!vertical) { return Error::propagate(std::move(vertical)); }
+                const double ratio = directional_stretch((*horizontal - *centre) * (pixel_spacing / dx),
+                    (*vertical - *centre) * (pixel_spacing / dy));
+                if (!std::isfinite(ratio)) {
+                    return Error::fail(Error::Code::InvalidInput, "nonfinite RF sampling ratio");
+                }
+                maximum = (std::max)(maximum, ratio);
+                minimum = (std::min)(minimum, ratio);
+            }
+        }
+        if (maximum > sampling_limit || (maximum < 0.9 * sampling_limit && maximum - minimum <= 0.05 * maximum)
+            || (count > 3 && maximum - previous <= 0.001 * maximum && maximum < 0.99 * sampling_limit)) {
+            break;
+        }
+    }
+    return maximum;
+}
+
+Expected<void> traverse(const unsigned side, const std::vector<Bounds>& source_bounds,
+    const std::vector<Bounds>& mask_bounds, const Transform& transform, const Visit& visit,
+    const std::function<Expected<void>()>& checkpoint)
+{
+    if (side == 0) {
+        return Error::fail(Error::Code::InvalidInput, "RF tile side must be positive");
+    }
+    std::vector<Bounds> coverage;
+    for (const auto& source : source_bounds) {
+        for (const auto& mask : mask_bounds) {
+            if (auto overlap = intersection(source, mask)) {
+                coverage.push_back(*overlap);
+            }
+        }
+    }
+    std::vector<radix::tile::Id> pending { raster_store::StoreTraits::root() };
+    while (!pending.empty()) {
+        if (checkpoint) {
+            if (auto saved = checkpoint(); !saved) { return saved; }
+        }
+        const auto key = pending.back();
+        pending.pop_back();
+        const auto tile_bounds = RasterTransform::tile_bounds(key);
+        bool intersects = false;
+        double ratio = 0;
+        for (const auto& region : coverage) {
+            const auto overlap = intersection(tile_bounds, region);
+            if (!overlap) { continue; }
+            intersects = true;
+            auto estimated = estimate(*overlap, tile_bounds.width() / side, transform);
+            if (!estimated) {
+                return Error::propagate(std::move(estimated), "estimate resolution for RF tile " + to_string(key));
+            }
+            ratio = (std::max)(ratio, *estimated);
+            if (ratio > sampling_limit) { break; }
+        }
+        if (!intersects) { continue; }
+        if (ratio <= sampling_limit) {
+            if (auto visited = visit(key); !visited) { return visited; }
+        } else {
+            const auto children = raster_store::StoreTraits::children(key);
+            if (!children) {
+                return Error::fail(Error::Code::Unsupported, "RF sampling limit cannot be met at maximum zoom " + to_string(key));
+            }
+            // Reverse insertion gives stable northwest-first traversal.
+            pending.insert(pending.end(), children->rbegin(), children->rend());
+        }
+    }
+    return {};
+}
+
+} // namespace rf_builder::planning

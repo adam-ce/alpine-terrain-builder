@@ -13,12 +13,15 @@ An RF collection typically has this layout:
 ```text
 snapshot-root/
  ├── source_attribution_table.json
+ ├── store-snapshot-id.log
  └── store-snapshot-id/
       ├── raster_store.metadata
       ├── raster_store.index
-      ├── build_log.txt
       └── <zoom>/<x>/<y>.amort
 ```
+
+The RF builder appends runtime messages to `<snapshot-path>.log` beside the
+snapshot so startup failures and aborted runs are also recorded.
 
 A TB snapshot has a local attribution table:
 
@@ -61,8 +64,7 @@ and reuse policy.
 
 Attribution indices must be strictly less than 65535; indices at or above
 65535 produce an `Unsupported` error at checked table/API boundaries. The RF
-builder, a later work package, validates attribution references before
-producing tiles, including references outside the selected table. Storage does
+builder validates attribution references before producing tiles, including references outside the selected table. Storage does
 not scan attribution rasters to check indices on each tile read or write.
 Pixel validity and the reserved meaning of
 index 0 are defined under [NoData](#nodata-and-payload-preservation).

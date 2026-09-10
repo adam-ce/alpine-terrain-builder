@@ -245,7 +245,8 @@ sources with different coverage and accuracy. RF has no downsampled overview
 levels. Coarse physical tiles, for example at zoom 10, may coexist with more
 accurate descendants, for example at zoom 15.
 
-The builder consumes GDAL data or datasets from the tile downloader. An import
+The implemented [RF builder](rf-builder-design.md) consumes one prepared GDAL
+dataset, including a VRT mosaic. An import
 supplies a data source, an existing attribution index, and a vector validity
 mask defining the accepted region. The resulting RF has one attribution.
 Several imports with different masks may share the same attribution index;
@@ -255,7 +256,7 @@ The RF builder must validate its attribution index against the supported range
 and selected table before producing tiles. Tile storage does not scan
 attribution rasters on reads or writes to repeat this validation.
 
-Planned location: `src/rf-builder/*`.
+Implementation: `src/rf_builder/*`, executable `rf-builder`.
 
 ### rf_merger
 

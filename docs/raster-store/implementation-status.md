@@ -15,11 +15,11 @@ Tile storage is implemented and verified on Linux/GCC as of 2026-09-08.
 
 ## Deferred work
 
-RF builder validation must reject unsupported attribution indices and indices
+RF builder validation rejects unsupported attribution indices and indices
 outside the selected table before producing tiles. Storage does not scan tile
 attribution rasters on reads or writes. Clearing entries is not a library
-operation. RF/TB builders, merging, sampling, window reads, and enforced
-read-only access remain separate work.
+operation. TB builders, merging, sampling, window reads, and enforced read-only access
+remain separate work. RF import is tracked below.
 
 Publication currently uses Linux `renameat2(RENAME_NOREPLACE)`; other platforms
 return `Unsupported`. The supported native pixel representation remains x86
@@ -82,3 +82,85 @@ without a crash-durability guarantee.
   rename/copy checks and successful repeated parent-directory creation.
 - Qt lint reported no new warnings on the lines changed in this follow-up.
   `git diff --check` and the Git-attribute line-ending check passed.
+
+## RF builder — 2026-09-10
+
+The [RF-builder plan](rf-builder-design.md) is approved. RGB attribution requires
+all three selected channels to be valid. Existing documentation edits were
+present before implementation and are preserved.
+
+| Stage | Status | Evidence |
+|---|---|---|
+| Shared referenced mask loading | Verified | `terrainlib/vector_mask.h`, mesh compatibility aliases |
+| Shared scalar/RGB reader and validity | Verified | `terrainlib/DatasetReader`, per-band validity, all-channel RGB acceptance |
+| Adaptive planning and world boundaries | Verified | `RasterTransform`, `rf_builder/planning`, affine and seam fixtures |
+| Command and cache input records | Verified | `rf-builder`, `rf_builder/inputs`, CURL enabled |
+| Writes, checkpoints, publication, reporting | Verified | `rf_builder/build`, serialized writes/checkpoints, hard links, empty publication |
+| File logging and progress estimates | Verified | stderr plus appended `<output>.log`; candidate percentage, remaining time and UTC finish estimate; CLI checks cover populated, all-invalid and no-candidate results |
+| Integration and regression verification | Verified | 21 RF cases plus all six existing regression suites; full build and new-code lint pass |
+
+Baseline existing binaries: raster storage 26 cases/372 assertions; dataset
+reading 1 case/72 assertions; mask simplification 2 cases/15 assertions.
+The renderer driver rejects this repository; use the existing terrain-builder
+CMake configuration and Linux test environment documented above.
+
+### RF-builder verification
+
+- `cmake --build build/Desktop_Debug --target all --parallel 6` passed.
+- Tests used the existing Linux PROJ/GDAL data environment described above.
+
+| Executable | Test cases passed | Assertions passed |
+|---|---:|---:|
+| `unittests_rfbuilder` | 21 | 3768 |
+| `unittests_terrainlib` (excluding the existing clip benchmark) | 461 | 24517 |
+| `unittests_tilebuilder` | 14 | 389 |
+| `unittests_sfbuilder` | 16 | 176102 |
+| `unittests_sfbuilder_finalization` | 2 | 16 |
+| `unittests_dagbuilder` | 76 | 479 |
+| `unittests_sfmerger` | 13 | 195 |
+| **Total** | **603** | **205466** |
+
+- RF fixtures cover JPEG/YCbCr tiled RGB, scalar values, per-channel NoData and
+  masks, valid black and legacy sentinel values, prepared VRT file boundaries,
+  original-resolution reads despite overviews, mask holes/boundaries, affine
+  rotation/skew, mixed zooms, narrow masks, maximum zoom rejection, both
+  antimeridian sides and filter neighbourhoods, polar-only empty results,
+  invalid inputs, missing/corrupt/mismatching cache records, hard-link reuse,
+  unindexed payloads, failed links, command reporting, curved projected edges,
+  projection-domain exclusions, GDAL threading settings, feature-read errors,
+  and small sources inside default-size output tiles.
+- The rebuilt GDAL opened the Swissimage reference URL through `/vsicurl/`,
+  reported 10000x10000 pixels and three bands, and successfully read a 32x32
+  native-resolution window. The source was not added to the repository.
+- Qt lint passes for the new and extracted code. Findings in unchanged mesh
+  code were left alone. Six read-only review passes covered model/index
+  contracts, ownership, threading, C++/API correctness, error handling, and
+  performance. Identified issues were corrected and regression-tested.
+- `git diff --check` passed. Working-tree text line endings agree with Git
+  attributes, verified using `git ls-files --eol --cached --others
+  --exclude-standard`.
+- Initial user documentation edits were preserved. No commits, branches, or
+  pushes were made.
+
+### Logging/progress follow-up and Vienna run
+
+- Rebuilt `rf-builder` and `unittests_rfbuilder`; all 21 RF cases passed with
+  3834 assertions after adding persistent success/error and progress checks.
+- Six focused review passes found no issues in this follow-up. Qt lint reports
+  DEP-10 on `std::chrono::duration::count()`; these calls use the required chrono
+  API, so the container `.size()` recommendation does not apply.
+- A full-resolution Vienna DSM import is being run under
+  `/data/scratch/codex/rf-vienna-20260910`. Inputs are Austria's
+  `OeRect_01m_gs_31287.img` and the union of Stadt Wien's official district
+  polygons. The user approved a scratch attribution entry with unknown source
+  metadata left blank. The boundary source and exact invocation are recorded
+  in the scratch directory. Initial planning selected 80 candidate
+  4096-square tiles. Partitioning the city polygon on a 2 km grid reduced this
+  to 63 candidates; its union differs from the original by only
+  1.64e-8 square metres before the builder's normal simplification.
+- The initial Debug run exposed costly detailed-boundary centre tests. The
+  user stopped the partitioned-mask import and the optimized build at 14:57
+  CEST. The last checkpoint contains 4 of 63 candidates (6.3%), with
+  221459620 payload bytes. The incomplete snapshot and logs are retained;
+  no final Vienna snapshot was published. Whole-tile containment currently
+  has no fast path: accepted source pixels still receive individual mask tests.

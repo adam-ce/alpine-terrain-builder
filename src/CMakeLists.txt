@@ -78,6 +78,7 @@ alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH
 alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 6babc632401cb95a701ce431cb68adf91e2c1b71 NOT_SYSTEM)
 
 set(ALP_CLI_COMPONENT_OPTIONS
+    ALP_BUILD_RF_BUILDER
     ALP_BUILD_SF_MERGER
     ALP_BUILD_SF_BUILDER
     ALP_BUILD_TILE_DOWNLOADER
@@ -155,6 +156,10 @@ if(ALP_ENABLE_UNITY_BUILD)
 endif()
 
 add_subdirectory(terrainlib)
+
+if(ALP_BUILD_RF_BUILDER)
+    add_subdirectory(rf_builder)
+endif()
 
 if(ALP_BUILD_TILE_BUILDER)
     add_subdirectory(tile_builder)

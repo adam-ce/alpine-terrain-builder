@@ -25,12 +25,27 @@
 
 #include <radix/raster.h>
 #include <radix/tile.h>
+#include <glm/gtc/type_precision.hpp>
+#include "RasterTransform.h"
 
 class Dataset;
 class OGRSpatialReference;
 
 class DatasetReader {
 public:
+    template <typename PixelType>
+    struct Samples {
+        radix::Raster<PixelType> data;
+        radix::Raster<std::uint8_t> valid;
+    };
+
+    // RF import: Lanczos at base resolution, exact coordinates, declared source
+    // validity. RGB requires a valid filtered result in every selected channel.
+    static Expected<Samples<float>> read_scalar(GDALDataset& dataset, const RasterTransform& transform,
+        const radix::tile::SrsBounds& bounds, unsigned side, unsigned band);
+    static Expected<Samples<glm::u8vec3>> read_colour(GDALDataset& dataset, const RasterTransform& transform,
+        const radix::tile::SrsBounds& bounds, unsigned side, const std::array<unsigned, 3>& bands);
+
     DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews = true);
 
     radix::Raster<float> read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const;

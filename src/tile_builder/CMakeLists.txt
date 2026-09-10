@@ -1,5 +1,4 @@
 add_library(tilebuilderlib
-    DatasetReader.h DatasetReader.cpp
     Exception.h
     ParallelTileGenerator.h ParallelTileGenerator.cpp
     ParallelTiler.h ParallelTiler.cpp

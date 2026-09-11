@@ -232,9 +232,15 @@ CMake configuration and Linux test environment documented above.
   formatted with clang-format-21.
 - Instrumented dependency testing exposed GDAL 3.10 races in MEM driver
   creation, lazy block-cache lock initialization, and the unlocked LRU-head
-  check. Destination creation is serialized, cache setup runs before workers,
-  and a content-hashed CMake hook compiles a build-local GDAL source copy with
-  the redundant unlocked check removed. No TSan suppressions are used.
+  check. Destination creation is serialized and cache setup runs before workers.
+  The unlocked LRU-head comparison in `GDALRasterBlock::Touch()` is now accepted
+  through `misc/suppression/tsan.txt`, at the user's request. The former GDAL
+  source patch and CMake hook were removed to avoid maintaining a dependency
+  patch. TSan suppressions match stack frames, so this rule also excludes other
+  races passing through `Touch()`.
+  After rebuilding with unpatched GDAL, the RF suite reports this race without
+  the suppression and passes all 30 cases (51602 assertions) with it enabled.
+  A separate negative control still reports an unrelated data race.
 - UBSan also found CGAL's trapezoidal locator reading an uninitialized Boolean
   in `set_with_guarantees()`. The constructors ignore the returned old value.
   At the user's request, the initialization patch and its CMake hook were removed;
@@ -261,6 +267,6 @@ CMake configuration and Linux test environment documented above.
   verified by file sets, sizes, hashes and direct byte comparison. Elapsed time,
   peak RSS, exact invocations, source/executable hashes and the scratch-only
   harness are retained under `/data/scratch/codex/rf-parallel-20260910`.
-  Those full runs used the former Boolean initialization patch; their saved
-  results and suppression files describe that configuration. The default
-  remains one worker.
+  Those full runs used the former CGAL Boolean and GDAL cache-head patches;
+  their saved results and suppression files describe that configuration.
+  The default remains one worker.

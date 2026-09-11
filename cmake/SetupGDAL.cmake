@@ -41,16 +41,10 @@ function(alp_setup_gdal)
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     )
 
-    # The hook's content hash is part of the dependency cache key via its path.
-    set(_patch_source "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/PatchGdalBlockCache.cmake")
-    file(SHA256 "${_patch_source}" _patch_hash)
-    set(_patch_hook "${CMAKE_BINARY_DIR}/alp_patches/gdal-block-cache-${_patch_hash}.cmake")
-    configure_file("${_patch_source}" "${_patch_hook}" COPYONLY)
     alp_setup_cmake_project(gdal
         URL https://github.com/OSGeo/gdal.git
         COMMITISH ${ARG_GDAL_VERSION}
         CMAKE_ARGUMENTS
-            "-DCMAKE_PROJECT_gdal_INCLUDE=${_patch_hook}"
             -DGDAL_BUILD_OPTIONAL_DRIVERS=OFF
             -DGDAL_ENABLE_DRIVER_HFA=ON
             -DOGR_BUILD_OPTIONAL_DRIVERS=OFF

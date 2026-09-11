@@ -2,3 +2,9 @@
 # Possible data race during ittnotify initialization. Low impact.
 race:__itt_nullify_all_pointers
 race:__itt_init_ittlib
+
+# GDAL's unlocked poNewest comparison in Touch() races with cache-head updates.
+# The cache lock protects list changes; accept this data race instead of carrying
+# a dependency patch. TSan matches stack frames, so other races through Touch()
+# are also excluded by this rule.
+race:GDALRasterBlock::Touch()

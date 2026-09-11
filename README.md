@@ -23,9 +23,11 @@ export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1:suppressions=$PWD/misc/
 Ensure `llvm-symbolizer` is available on `PATH`, or set `ASAN_SYMBOLIZER_PATH` to
 its absolute path, so the function-specific exclusion can match.
 
-CI's TSan job loads [tsan.txt](misc/suppression/tsan.txt), containing only the two
-oneTBB initialization exclusions previously used by CI. For local TSan tests,
-set this variable from the repository root:
+CI's TSan job loads [tsan.txt](misc/suppression/tsan.txt), containing the two
+oneTBB initialization exclusions and GDAL's unlocked cache-head comparison in
+`GDALRasterBlock::Touch()`. The GDAL race is accepted without patching the
+dependency; the suppression matches any race with that function in its stack.
+For local TSan tests, set this variable from the repository root:
 
 ```sh
 export TSAN_OPTIONS="suppressions=$PWD/misc/suppression/tsan.txt"

@@ -1,9 +1,11 @@
+#include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <optional>
 #include <random>
 #include "../temporary_directory.h"
 #include "Dataset.h"
@@ -125,10 +127,8 @@ TEST_CASE("RF mask benchmark on a supplied vector mask", "[.][rf-mask-benchmark]
 {
     const char* path = std::getenv("ALP_RF_MASK_BENCHMARK");
     if (!path) { SKIP("Set ALP_RF_MASK_BENCHMARK to the original Vienna mask"); }
-    const auto started = std::chrono::steady_clock::now();
     auto mask = rf_builder::Mask::open(path);
     REQUIRE(mask);
-    const auto opened = std::chrono::steady_clock::now();
     REQUIRE(mask->bounds().size() == 1);
     const auto bounds = mask->bounds().front();
     std::vector<glm::dvec2> points;
@@ -140,16 +140,40 @@ TEST_CASE("RF mask benchmark on a supplied vector mask", "[.][rf-mask-benchmark]
     }
     std::vector<std::uint8_t> validity(points.size(), 1);
     REQUIRE(mask->select(points, validity));
-    const auto selected = std::chrono::steady_clock::now();
     const auto expected = reference_selection(path, points, std::vector<std::uint8_t>(points.size(), 1));
     CHECK(validity == expected);
-    fmt::print("MASK_BENCHMARK points={} accepted={} open_ms={} select_ms={}\n", points.size(),
-        std::ranges::count(validity, std::uint8_t(1)),
-        std::chrono::duration<double, std::milli>(opened - started).count(),
-        std::chrono::duration<double, std::milli>(selected - opened).count());
+
+    BENCHMARK_ADVANCED("RF mask opening")(Catch::Benchmark::Chronometer meter)
+    {
+        // Retain each result until measurement ends to exclude mask destruction.
+        std::vector<std::optional<Expected<rf_builder::Mask>>> opened(meter.runs());
+        meter.measure([&](int iteration) { return bool(opened[iteration].emplace(rf_builder::Mask::open(path))); });
+        for (const auto& result : opened) {
+            REQUIRE(result);
+            REQUIRE(*result);
+        }
+    };
+
+    BENCHMARK_ADVANCED("RF mask selection of 4096 points")(Catch::Benchmark::Chronometer meter)
+    {
+        // Selection mutates validity; allocate fresh input for every timed run.
+        std::vector<std::vector<std::uint8_t>> selections(meter.runs(), std::vector<std::uint8_t>(points.size(), 1));
+        std::vector<Expected<void>> results(meter.runs());
+        meter.measure([&](int iteration) {
+            results[iteration] = mask->select(points, selections[iteration]);
+            return bool(results[iteration]);
+        });
+        for (std::size_t iteration = 0; iteration < results.size(); ++iteration) {
+            REQUIRE(results[iteration]);
+            CHECK(selections[iteration] == expected);
+        }
+    };
 }
 
-TEST_CASE("RF full tile timings on a supplied Vienna DSM", "[.][rf-tile-benchmark]")
+// Keep this as a one-pass serial phase diagnostic: repeated reads warm caches,
+// and repeated saves require fresh storage. It bypasses TileWorker/TilePool and
+// still packs empty tiles, so it does not measure production import throughput.
+TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-benchmark]")
 {
     const char* mask_path = std::getenv("ALP_RF_MASK_BENCHMARK");
     const char* dataset_path = std::getenv("ALP_RF_TILE_BENCHMARK");

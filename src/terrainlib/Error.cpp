@@ -23,6 +23,8 @@ std::string_view code_name(const Error::Code code)
         return "Io";
     case Error::Code::ResourceExhausted:
         return "ResourceExhausted";
+    case Error::Code::Cancelled:
+        return "Cancelled";
     case Error::Code::Internal:
         return "Internal";
     }

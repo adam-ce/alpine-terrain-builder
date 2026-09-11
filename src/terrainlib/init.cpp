@@ -38,5 +38,7 @@ void initialize_gdal_once() {
         LOG_DEBUG("calling GDALAllRegister...");
         CPLSetErrorHandler(GdalErrorHandler);
         GDALAllRegister();
+        // Initialize GDAL's global block-cache lock before concurrent reads.
+        GDALGetCacheMax64();
     });
 }

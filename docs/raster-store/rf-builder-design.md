@@ -346,7 +346,22 @@ are separate phases, and variable tile costs can change the estimate.
   coordinates. Axis-aligned periodic global grids expose an eight-source-pixel
   wrapped halo through a VRT, so GDAL can filter across the longitude boundary.
   No latitude wrapping is performed. GDAL still performs the filtering.
-- Tile reads, payload writes, links, and index mutation have one synchronous
-  owner. Checkpoints are requested every two minutes between operations;
-  publication happens after all writes. Memory is bounded by the current tile,
-  GDAL's warp buffers, mask geometry, and the snapshot's sparse index.
+- `--jobs N` selects a fixed tile-worker count, defaulting to one. Each worker
+  owns its dataset, coordinate transformations and mask query state for the run;
+  individual GDAL warps remain single-threaded. Planning streams keys in spatial
+  traversal order. At most twice the worker count is queued, active or awaiting
+  consumption, and completed tiles may be consumed out of order.
+- One coordinator owns cache lookup/linking, payload compression and writes,
+  index mutation, progress and checkpoints. It checkpoints approximately every
+  two minutes between completed writes while workers may continue computing.
+  All workers are joined before publication. Worker count is an execution
+  setting and does not affect cache compatibility or the intended output bytes.
+- SIGINT/SIGTERM stops new scheduling and discards queued jobs. Active jobs
+  finish; successful results are saved and checkpointed. The process exits
+  without publication and retains `inputs.tmp` for reuse of the incomplete
+  snapshot. Processing failures stop queued work and join active workers;
+  failed results never enter the index. The first recorded worker error is
+  preserved even when failures are consumed out of order.
+- Memory is bounded by worker scratch buffers, outstanding tile payloads,
+  GDAL's cache, per-worker mask geometry, and the snapshot's sparse index.
+  Default-size scalar payloads occupy 96 MiB each before compression.

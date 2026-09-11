@@ -1,5 +1,6 @@
 add_library(rfbuilderlib
     Mask.h Mask.cpp
+    TileWorker.h TilePool.h
     build.h build.cpp
     inputs.h inputs.cpp
     planning.h planning.cpp

@@ -23,12 +23,13 @@
 #include <gdal.h>
 #include <gdal_priv.h>
 #include <gdalwarper.h>
-#include <vrtdataset.h>
 #include <limits>
-#include <numbers>
 #include <memory>
+#include <mutex>
+#include <numbers>
 #include <ogr_spatialref.h>
 #include <utility>
+#include <vrtdataset.h>
 
 #include "Dataset.h"
 #include <stdexcept>
@@ -322,7 +323,13 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& 
     if (!driver) {
         return Error::fail(Error::Code::Unsupported, "GDAL MEM driver is required");
     }
-    Dataset destination(driver->Create("", int(side), int(side), 2, GDT_Float32, nullptr));
+    Dataset destination([&] {
+        // GDAL 3.10 rewrites the shared driver's create callback on every call.
+        // Only creation needs serialization; each resulting dataset is private.
+        static std::mutex creation_mutex;
+        const std::lock_guard lock(creation_mutex);
+        return driver->Create("", int(side), int(side), 2, GDT_Float32, nullptr);
+    }());
     auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
     options->hSrcDS = &source;
     options->hDstDS = destination.gdalDataset();

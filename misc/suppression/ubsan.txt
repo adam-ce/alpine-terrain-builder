@@ -1,0 +1,12 @@
+# CGAL 6.0.1 arrangement facade downcasts.
+# https://github.com/CGAL/cgal/issues/9140
+# vptr_check matches the dynamic type's Itanium-mangled name.
+vptr_check:N4CGAL8Arr_faceI
+vptr_check:N4CGAL12Arr_halfedgeI
+vptr_check:N4CGAL10Arr_vertexI
+vptr_check:N4CGAL24Arrangement_on_surface_2I
+
+# The trapezoidal-decomposition constructors ignore the old Boolean returned
+# by this setter. Exclude that read instead of patching the CGAL header.
+# Only Boolean diagnostics in this specific setter are excluded.
+bool:CGAL::Trapezoidal_decomposition_2<*::set_with_guarantees(bool)

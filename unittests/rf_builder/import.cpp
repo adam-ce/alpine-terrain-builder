@@ -125,6 +125,7 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
 {
     const unsigned bands = GENERATE(1u, 3u);
     Fixture fixture(bands);
+    fixture.options.jobs = GENERATE(1u, 2u, 4u);
     auto built = rf_builder::build(fixture.options);
     INFO((built ? "" : built.error().to_string()));
     REQUIRE(built);
@@ -302,6 +303,7 @@ TEST_CASE("RF rejects bad attribution and requested caches before tile productio
 {
     Fixture fixture;
     SECTION("zero attribution") { fixture.options.attribution_index = 0; }
+    SECTION("zero workers") { fixture.options.jobs = 0; }
     SECTION("unsupported attribution") { fixture.options.attribution_index = 65535; }
     SECTION("absent attribution") { fixture.options.attribution_index = 2; }
     SECTION("missing record") { fixture.options.cache = fixture.directory.path() / "missing.part"; }
@@ -340,6 +342,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         // An unindexed garbage payload must not be considered reusable.
         write_text(*cache->path_for(keys[1]), "unfinished tile");
     }
+    fixture.options.jobs = 4;
     fixture.options.cache = cache_path.string() + ".part";
     fixture.options.output = fixture.directory.path() / "second";
     SECTION("reuse") {
@@ -504,9 +507,8 @@ TEST_CASE("rf-builder command reports a published snapshot and rejects invalid b
         return result + "'";
     };
     const auto log_path = fixture.directory.path() / "command.log";
-    const auto command = quote(ALP_RF_BUILDER_PATH) + " --dataset " + quote(fixture.options.dataset)
-        + " --mask " + quote(fixture.options.mask) + " --output " + quote(fixture.options.output.string())
-        + " --attribution-index 1 --tile-size 16 --mode scalar > " + quote(log_path.string()) + " 2>&1";
+    const auto command = quote(ALP_RF_BUILDER_PATH) + " --dataset " + quote(fixture.options.dataset) + " --mask " + quote(fixture.options.mask) + " --output "
+        + quote(fixture.options.output.string()) + " --attribution-index 1 --tile-size 16 --mode scalar --jobs 2 > " + quote(log_path.string()) + " 2>&1";
     REQUIRE(std::system(command.c_str()) == 0);
     std::ifstream log(log_path);
     const std::string text { std::istreambuf_iterator<char>(log), std::istreambuf_iterator<char>() };
@@ -623,4 +625,142 @@ TEST_CASE("RF default-size tile can contain a source smaller than GDAL probe spa
     REQUIRE(read);
     CHECK(read->valid.buffer()[std::size_t(4096 - 184) * 4096 + 116] != 0);
     CHECK(read->data.buffer()[std::size_t(4096 - 184) * 4096 + 116] == Catch::Approx(10));
+}
+
+TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "[rf-builder][parallel]")
+{
+    const unsigned bands = GENERATE(1u, 3u);
+    Fixture fixture(bands);
+    const auto outer = fixture.bounds;
+    const auto inner = Bounds { glm::mix(outer.min, outer.max, glm::dvec2(0.25)), glm::mix(outer.min, outer.max, glm::dvec2(0.75)) };
+    std::filesystem::remove(fixture.options.mask);
+    mask(fixture.options.mask,
+        fmt::format("POLYGON (({0} {1},{2} {1},{2} {3},{0} {3},{0} {1}),({4} {5},{4} {7},{6} {7},{6} {5},{4} {5}))",
+            outer.min.x,
+            outer.min.y,
+            outer.max.x,
+            outer.max.y,
+            inner.min.x,
+            inner.min.y,
+            inner.max.x,
+            inner.max.y));
+    REQUIRE(rf_builder::build(fixture.options));
+    const auto baseline = fixture.options.output;
+    const auto compare = [&]<typename PixelType>() {
+        auto original = storage::open<PixelType>(baseline);
+        REQUIRE(original);
+        const auto keys = physical_keys(*original);
+        for (const unsigned jobs : { 2u, 4u, 8u, 12u }) {
+            fixture.options.jobs = jobs;
+            fixture.options.output = fixture.directory.path() / ("parallel-" + std::to_string(jobs));
+            auto built = rf_builder::build(fixture.options);
+            INFO((built ? "" : built.error().to_string()));
+            REQUIRE(built);
+            auto output = storage::open<PixelType>(fixture.options.output);
+            REQUIRE(output);
+            CHECK(physical_keys(*output) == keys);
+            for (const auto& key : keys) {
+                auto expected = original->load(key);
+                auto actual = output->load(key);
+                REQUIRE(expected);
+                REQUIRE(actual);
+                CHECK(std::ranges::equal(actual->data.buffer(), expected->data.buffer()));
+                CHECK(std::ranges::equal(actual->source_attribution.buffer(), expected->source_attribution.buffer()));
+            }
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(baseline)) {
+                if (!entry.is_regular_file()) {
+                    continue;
+                }
+                const auto relative = entry.path().lexically_relative(baseline);
+                auto expected_bytes = io::read_bytes_from_path(entry.path());
+                auto actual_bytes = io::read_bytes_from_path(fixture.options.output / relative);
+                REQUIRE(expected_bytes);
+                REQUIRE(actual_bytes);
+                CHECK(*actual_bytes == *expected_bytes);
+            }
+        }
+    };
+    if (bands == 1) {
+        compare.template operator()<float>();
+    } else {
+        compare.template operator()<glm::u8vec3>();
+    }
+}
+
+TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-builder][parallel]")
+{
+    Fixture fixture;
+    fixture.options.jobs = 2;
+    {
+        auto source = raster(fixture.options.dataset, 128, 1, affine_for(fixture.bounds, 128));
+    }
+    const auto partial_path = std::filesystem::path(fixture.options.output.string() + ".part");
+    unsigned polls = 0;
+    const auto cancelled = rf_builder::build(fixture.options, [&] {
+        ++polls;
+        // Index metadata lives directly in .part; a zoom directory only appears
+        // once the coordinator has saved a payload.
+        if (!std::filesystem::exists(partial_path)) {
+            return false;
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(partial_path)) {
+            if (entry.is_directory()) {
+                return true;
+            }
+        }
+        return false;
+    });
+    REQUIRE_FALSE(cancelled);
+    CHECK(cancelled.error().code() == Error::Code::Cancelled);
+    CHECK(polls > 0);
+    CHECK_FALSE(std::filesystem::exists(fixture.options.output));
+    CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
+    auto partial = storage::open<float>(partial_path, { .allow_incomplete = true });
+    REQUIRE(partial);
+    const auto keys = physical_keys(*partial);
+    REQUIRE_FALSE(keys.empty());
+    CHECK(keys.size() <= 5); // one consumed tile plus at most 2*jobs outstanding
+    for (const auto& key : keys) {
+        REQUIRE(partial->load(key));
+    }
+    fixture.options.output = fixture.directory.path() / "resumed";
+    fixture.options.cache = partial_path;
+    auto resumed = rf_builder::build(fixture.options);
+    REQUIRE(resumed);
+    CHECK(resumed->reused_tiles == keys.size());
+    CHECK(resumed->tile_count == 64);
+}
+
+TEST_CASE("RF cancellation during planning leaves an empty reusable checkpoint", "[rf-builder][parallel]")
+{
+    Fixture fixture;
+    const auto result = rf_builder::build(fixture.options, [] { return true; });
+    REQUIRE_FALSE(result);
+    CHECK(result.error().code() == Error::Code::Cancelled);
+    auto partial = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
+    REQUIRE(partial);
+    CHECK(physical_keys(*partial).empty());
+    CHECK(std::filesystem::exists(partial->base_path() / "inputs.tmp"));
+}
+
+TEST_CASE("RF parallel writer failure never publishes or indexes a failed payload", "[rf-builder][parallel]")
+{
+    Fixture fixture;
+    fixture.options.jobs = 4;
+    const auto partial_path = std::filesystem::path(fixture.options.output.string() + ".part");
+    bool blocked = false;
+    const auto result = rf_builder::build(fixture.options, [&] {
+        if (!blocked && std::filesystem::exists(partial_path)) {
+            write_text(partial_path / "4", "blocks creation of the zoom directory");
+            blocked = true;
+        }
+        return false;
+    });
+    REQUIRE(blocked);
+    REQUIRE_FALSE(result);
+    CHECK_FALSE(std::filesystem::exists(fixture.options.output));
+    auto partial = storage::open<float>(partial_path, { .allow_incomplete = true });
+    REQUIRE(partial);
+    CHECK(physical_keys(*partial).empty());
+    CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
 }

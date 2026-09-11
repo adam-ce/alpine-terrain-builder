@@ -26,6 +26,8 @@ public:
         Io,
         /// An explicit size, storage, or other recoverable resource limit was exceeded.
         ResourceExhausted,
+        /// An operation was cancelled before publication or completion.
+        Cancelled,
         /// An internal invariant or an otherwise valid operation failed unexpectedly.
         Internal,
     };

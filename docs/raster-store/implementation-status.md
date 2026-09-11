@@ -208,3 +208,59 @@ CMake configuration and Linux test environment documented above.
 - After cancellation, the user requested deletion of all Vienna run outputs
   and logs. Partial snapshots and run/benchmark logs were removed; the Release
   build, source inputs, attribution tables, and reproduction scripts were kept.
+
+
+### Parallel tile processing
+
+- Implemented `--jobs N` (default one), persistent private worker contexts and
+  a pool bounded to twice the worker count across queued, active and completed
+  tiles. The coordinator retains all output/index ownership and processes ready
+  results without waiting for earlier tiles.
+- Cancellation discards queued work, finishes active tiles, saves their results,
+  checkpoints, and retains the unpublished `.part` snapshot and input record.
+  SIGINT and SIGTERM CLI checks both preserved eight tiles and exited with
+  statuses 130 and 143. The library cancellation test reopened and reused its
+  checkpoint successfully.
+- Debug and Release RF suites pass: 30 cases and approximately 51458 assertions
+  (the cancellation test's assertion count varies with the number of active
+  results saved). Error/storage regressions pass: 61 cases, 674 assertions.
+  Coverage includes scalar/RGB serial equivalence, holes, cache reuse, bounded
+  outstanding work, out-of-order completion, worker errors/exceptions, cancelled
+  queued jobs, first-error preservation, and writer failure without publication.
+- Review identified and resolved first-error selection across out-of-order
+  failures and missing direct header includes. New/changed C++ sections were
+  formatted with clang-format-21.
+- Instrumented dependency testing exposed GDAL 3.10 races in MEM driver
+  creation, lazy block-cache lock initialization, and the unlocked LRU-head
+  check. Destination creation is serialized, cache setup runs before workers,
+  and a content-hashed CMake hook compiles a build-local GDAL source copy with
+  the redundant unlocked check removed. No TSan suppressions are used.
+- UBSan also found CGAL's trapezoidal locator reading an uninitialized Boolean
+  in `set_with_guarantees()`. The constructors ignore the returned old value.
+  At the user's request, the initialization patch and its CMake hook were removed;
+  `misc/suppression/ubsan.txt` excludes Boolean diagnostics only in that CGAL setter.
+  It also excludes the four arrangement type families affected by the known
+  downcast issue (CGAL #9140). ASan and leak detection remain enabled. Negative
+  controls confirm unrelated Boolean reads, invalid downcasts, address errors,
+  leaks and integer overflow still fail. These exclusions leave the CGAL reads
+  and downcasts unfixed.
+- After removing the Boolean patch, CMake restored the original CGAL header;
+  the rebuilt ASan RF suite passes all 30 cases and 51603 assertions with the
+  updated scratch exclusions and leak detection enabled.
+- CI's ASan test step loads the tracked UBSan list with leak detection and
+  halt-on-error enabled. The same list passes all 30 ASan RF cases locally and
+  a Clang 21 CGAL fixture; all five unrelated sanitizer negative controls still
+  fail as intended. CI uses Clang 23, which was unavailable for local validation.
+- CI's existing two oneTBB TSan exclusions now live in
+  `misc/suppression/tsan.txt`. The unused root suppression file was removed;
+  its broader legacy rules were not carried over.
+- Full-Vienna validation completed on 2026-09-11: ASan and TSan at 4 and 16
+  workers all passed. Release runs at 1, 2, 4, 8 and 12 workers passed, executed
+  serially after all sanitizer runs finished. Every run published 62 tiles;
+  all 64 published files are byte-identical across all nine configurations,
+  verified by file sets, sizes, hashes and direct byte comparison. Elapsed time,
+  peak RSS, exact invocations, source/executable hashes and the scratch-only
+  harness are retained under `/data/scratch/codex/rf-parallel-20260910`.
+  Those full runs used the former Boolean initialization patch; their saved
+  results and suppression files describe that configuration. The default
+  remains one worker.

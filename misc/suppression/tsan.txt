@@ -1,0 +1,4 @@
+# Preserve the oneTBB suppressions previously used by CI.
+# Possible data race during ittnotify initialization. Low impact.
+race:__itt_nullify_all_pointers
+race:__itt_init_ittlib

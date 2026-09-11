@@ -1,11 +1,12 @@
 #pragma once
 
+#include "Error.h"
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
-#include "Error.h"
 
 namespace rf_builder {
 
@@ -19,6 +20,7 @@ struct Options {
     Mode mode = Mode::Scalar;
     std::vector<unsigned> bands;
     unsigned tile_side = 4096;
+    unsigned jobs = 1;
     std::optional<std::filesystem::path> cache = std::nullopt;
 };
 
@@ -29,6 +31,8 @@ struct Report {
     unsigned tile_side = 0;
 };
 
-Expected<Report> build(const Options& options);
+// stop_requested is polled only by the calling/coordinator thread. Active tiles
+// finish on cancellation; their results are saved and checkpointed, not published.
+Expected<Report> build(const Options& options, const std::function<bool()>& stop_requested = {});
 
 } // namespace rf_builder

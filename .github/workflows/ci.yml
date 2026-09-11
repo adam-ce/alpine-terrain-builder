@@ -188,9 +188,11 @@ jobs:
         export GDAL_DATA="${{ github.workspace }}/build/alp_external/gdal/share/gdal"
         if [[ "${{ matrix.sanitizer }}" == "asan" ]]; then
           export ASAN_SYMBOLIZER_PATH=/usr/bin/llvm-symbolizer-23
+          export ASAN_OPTIONS="detect_leaks=1:halt_on_error=1"
+          export UBSAN_OPTIONS="halt_on_error=1:print_stacktrace=1:suppressions=${{ github.workspace }}/misc/suppression/ubsan.txt"
         fi
         if [[ "${{ matrix.sanitizer }}" == "tsan" ]]; then
-          export TSAN_OPTIONS="suppressions=${{ github.workspace }}/extern/tbb/cmake/suppressions/tsan.suppressions"
+          export TSAN_OPTIONS="suppressions=${{ github.workspace }}/misc/suppression/tsan.txt"
         fi
         status=0
         ./unittests/unittests_terrainlib "~mesh::clip_on_bounds benchmark" || status=$?

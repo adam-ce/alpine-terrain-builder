@@ -1,8 +1,16 @@
-#include <CLI/CLI.hpp>
-#include <fmt/format.h>
-#include <spdlog/sinks/basic_file_sink.h>
 #include "build.h"
 #include "log.h"
+#include <CLI/CLI.hpp>
+#include <atomic>
+#include <csignal>
+#include <fmt/format.h>
+#include <spdlog/sinks/basic_file_sink.h>
+
+namespace {
+static_assert(std::atomic<int>::is_always_lock_free);
+std::atomic<int> interrupted = 0;
+void request_stop(int signal) { interrupted.store(signal, std::memory_order_relaxed); }
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -17,6 +25,7 @@ int main(int argc, char** argv)
     app.add_option("--mode", mode, "Output representation")->check(CLI::IsMember({ "scalar", "rgb" }))->default_val("scalar");
     app.add_option("--bands", options.bands, "One scalar band or three bands in RGB order")->expected(1, 3);
     app.add_option("--tile-size", options.tile_side, "Pixels per side")->check(CLI::PositiveNumber)->default_val(4096);
+    app.add_option("--jobs", options.jobs, "Concurrent tile workers")->check(CLI::PositiveNumber)->default_val(1);
     app.add_option("--cache", cache, "Compatible incomplete .part snapshot to reuse");
     try {
         app.parse(argc, argv);
@@ -34,8 +43,15 @@ int main(int argc, char** argv)
         Log::get_logger()->flush_on(spdlog::level::info);
         LOG_INFO("RF import: dataset={}, mask={}, output={}, mode={}, tile size={}, attribution={}; log={}",
             options.dataset, options.mask, options.output.string(), mode, options.tile_side, options.attribution_index, log_path.string());
-        auto result = rf_builder::build(options);
+        std::signal(SIGINT, request_stop);
+        std::signal(SIGTERM, request_stop);
+        auto result = rf_builder::build(options, [] { return interrupted.load(std::memory_order_relaxed) != 0; });
         if (!result) {
+            if (result.error().code() == Error::Code::Cancelled) {
+                LOG_INFO("{}", result.error().to_string());
+                const auto signal = interrupted.load(std::memory_order_relaxed);
+                return signal ? 128 + signal : 1;
+            }
             LOG_ERROR("{}", result.error().to_string());
             return 1;
         }

@@ -10,3 +10,11 @@ vptr_check:N4CGAL24Arrangement_on_surface_2I
 # by this setter. Exclude that read instead of patching the CGAL header.
 # Only Boolean diagnostics in this specific setter are excluded.
 bool:CGAL::Trapezoidal_decomposition_2<*::set_with_guarantees(bool)
+
+# OpenCV's random-number dispatch casts typed functions to a common signature.
+# Suppress only function-type diagnostics in that implementation.
+function:*opencv/modules/core/src/rand.cpp
+
+# OpenCV's IPP resize fallback uses -1 as an unsupported-interpolation sentinel.
+# Suppress only enum diagnostics in that implementation.
+enum:*opencv/modules/imgproc/src/resize.cpp

@@ -17,7 +17,7 @@ struct Record {
     Mode mode;
     std::uint32_t attribution_index;
     unsigned tile_side;
-    raster_store::attribution::Entity attribution;
+    raster_store::attribution::Entity attribution{};
     double sampling_limit = planning::sampling_limit;
     double mask_simplification_metres = 0.1;
     std::string resampling = "lanczos/base/exact/all-channels-valid";

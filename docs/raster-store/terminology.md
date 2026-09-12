@@ -20,8 +20,36 @@
 : The authoritative raster store from which delivery data is derived.
 
 **RF import**
-: Raster data accepted from one prepared source dataset under one validity mask
-  and attributed to one source-attribution entry.
+: Raster data accepted from one prepared GDAL dataset or one online tile
+  pyramid under one validity mask and attributed to one source-attribution entry.
+
+**Source tile**
+: An input raster covering one tile-grid region at a particular source zoom.
+  It is distinct from an RF tile, which can cover the region of many source tiles.
+
+**Source tile pyramid**
+: A hierarchy of source tiles representing a region at different zoom levels,
+  potentially with different deepest available levels in different places.
+
+**Source zoom**
+: The spatial subdivision level of the source tile grid. It does not express
+  pixel spacing without the source tile dimensions and need not equal RF zoom.
+
+**Minimum source zoom**
+: The first source level considered by an import; lower levels are outside
+  its source search and fallback range.
+
+**Maximum source zoom**
+: The ceiling of an import's source search. It does not require all regions
+  to have data at that level.
+
+**RF leaf tile**
+: A physical RF tile with no physical descendants. A disjoint RF import has
+  neither a physical ancestor nor a physical descendant of any retained tile.
+
+**Ancestor fallback**
+: Coarser source imagery supplying a region where finer source imagery is
+  absent. The supplying source ancestor need not be retained as an RF tile.
 
 **Local sampling ratio**
 : The largest directional stretch from an output pixel spacing into source-pixel

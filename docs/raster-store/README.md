@@ -16,6 +16,7 @@ TB generation and the tile server remain future work.
 ## Plans
 
 - [RF-builder design and implementation plan](rf-builder-design.md)
+- [Proposed online tile import extension](rf-builder-downloader-design.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)

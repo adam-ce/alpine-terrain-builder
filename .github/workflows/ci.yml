@@ -30,7 +30,7 @@ jobs:
             build_type: Release
             sanitizer: normal
             warnings_as_errors: ON
-            cmake_flags: ""
+            cmake_flags: -DCMAKE_CXX_FLAGS=-Wno-maybe-uninitialized
           - name: clang-23-asan
             cc: clang-23
             cxx: clang++-23

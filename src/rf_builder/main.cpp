@@ -1,5 +1,6 @@
-#include "build.h"
+#include "gdal/cli.h"
 #include "log.h"
+#include "tiles/cli.h"
 #include <CLI/CLI.hpp>
 #include <atomic>
 #include <csignal>
@@ -14,38 +15,50 @@ void request_stop(int signal) { interrupted.store(signal, std::memory_order_rela
 
 int main(int argc, char** argv)
 {
-    CLI::App app { "Import one prepared GDAL dataset into an immutable RF snapshot" };
-    rf_builder::Options options;
-    std::string mode = "scalar";
-    std::string cache;
-    app.add_option("--dataset", options.dataset, "Prepared raster or VRT path/URL")->required();
-    app.add_option("--mask", options.mask, "Vector validity mask (split polygons at the antimeridian)")->required();
-    app.add_option("--output", options.output, "New final snapshot path; runtime log appends to <output>.log")->required();
-    app.add_option("--attribution-index", options.attribution_index, "Existing attribution entry (1..65534)")->required();
-    app.add_option("--mode", mode, "Output representation")->check(CLI::IsMember({ "scalar", "rgb" }))->default_val("scalar");
-    app.add_option("--bands", options.bands, "One scalar band or three bands in RGB order")->expected(1, 3);
-    app.add_option("--tile-size", options.tile_side, "Pixels per side")->check(CLI::PositiveNumber)->default_val(4096);
-    app.add_option("--jobs", options.jobs, "Concurrent tile workers")->check(CLI::PositiveNumber)->default_val(1);
-    app.add_option("--cache", cache, "Compatible incomplete .part snapshot to reuse");
+    CLI::App app { "Import a GDAL dataset or online JPEG tiles into an immutable RF snapshot" };
+    rf_builder::gdal::Options options;
+    rf_builder::tiles::Options online;
+    app.require_subcommand(1, 1);
+    auto* gdal = app.add_subcommand("gdal", "Import a prepared GDAL dataset");
+    rf_builder::gdal::cli::configure(*gdal, options);
+    auto* tiles = app.add_subcommand("tiles", "Import an online JPEG tile pyramid");
+    rf_builder::tiles::cli::configure(*tiles, online);
     try {
         app.parse(argc, argv);
     } catch (const CLI::ParseError& error) {
         return app.exit(error);
     }
-    options.mode = mode == "rgb" ? rf_builder::Mode::Colour : rf_builder::Mode::Scalar;
-    if (!cache.empty()) { options.cache = cache; }
+    const std::string mode = options.mode == rf_builder::gdal::Mode::Colour ? "rgb" : "scalar";
+    const auto output_path = tiles->parsed() ? online.output.output : options.output;
     try {
-        auto log_path = options.output;
+        auto log_path = output_path;
         log_path += ".log";
         auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_path.string(), false);
         file_sink->set_pattern("[%Y-%m-%d %T.%e] [%n] [%l] %v");
         Log::get_logger()->sinks().push_back(std::move(file_sink));
         Log::get_logger()->flush_on(spdlog::level::info);
-        LOG_INFO("RF import: dataset={}, mask={}, output={}, mode={}, tile size={}, attribution={}; log={}",
-            options.dataset, options.mask, options.output.string(), mode, options.tile_side, options.attribution_index, log_path.string());
+        if (tiles->parsed()) {
+            LOG_INFO("RF import: provider={}, mask={}, output={}, mode=rgb, tile size={}, attribution={}; log={}",
+                online.provider.string(),
+                online.mask,
+                output_path.string(),
+                online.output.tile_side,
+                online.output.attribution_index,
+                log_path.string());
+        } else {
+            LOG_INFO("RF import: dataset={}, mask={}, output={}, mode={}, tile size={}, attribution={}; log={}",
+                options.dataset,
+                options.mask,
+                output_path.string(),
+                mode,
+                options.tile_side,
+                options.attribution_index,
+                log_path.string());
+        }
         std::signal(SIGINT, request_stop);
         std::signal(SIGTERM, request_stop);
-        auto result = rf_builder::build(options, [] { return interrupted.load(std::memory_order_relaxed) != 0; });
+        const auto stop = [] { return interrupted.load(std::memory_order_relaxed) != 0; };
+        auto result = tiles->parsed() ? rf_builder::tiles::build(online, stop) : rf_builder::gdal::build(options, stop);
         if (!result) {
             if (result.error().code() == Error::Code::Cancelled) {
                 LOG_INFO("{}", result.error().to_string());
@@ -56,7 +69,12 @@ int main(int argc, char** argv)
             return 1;
         }
         LOG_INFO("Published {}: {} tiles, {}x{} pixels per tile, {} payload bytes ({} reused tiles)",
-            options.output.string(), result->tile_count, result->tile_side, result->tile_side, result->tile_bytes, result->reused_tiles);
+            output_path.string(),
+            result->tile_count,
+            result->tile_side,
+            result->tile_side,
+            result->tile_bytes,
+            result->reused_tiles);
         return 0;
     } catch (const std::exception& error) {
         LOG_ERROR("RF import failed: {}", error.what());

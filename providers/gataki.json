@@ -1,0 +1,7 @@
+{
+  "url_pattern": "https://gataki.cg.tuwien.ac.at/raw/basemap/tiles/{zoom}/{y}/{x}.jpeg",
+  "y_direction": "down",
+  "min_zoom": 4,
+  "max_zoom": 20,
+  "tile_size": 256
+}

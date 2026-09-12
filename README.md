@@ -3,7 +3,8 @@
 See the project [code style](docs/code-style.md) before contributing.
 
 The [RF builder](docs/raster-store/rf-builder-design.md#command-usage) imports prepared
-GDAL rasters into immutable raster-store snapshots.
+GDAL rasters with `rf-builder gdal` and [online JPEG tile pyramids](docs/raster-store/rf-builder-downloader-design.md)
+with `rf-builder tiles` into immutable raster-store snapshots.
 
 Sanitizer exclusions are maintained in `misc/suppression/`. CI's ASan job also
 enables UBSan and loads [ubsan.txt](misc/suppression/ubsan.txt) for the known CGAL

@@ -1,5 +1,31 @@
 # Raster-store implementation status
 
+## Online RF import — 2026-09-12
+
+The [online import plan](rf-builder-downloader-design.md) was approved in the
+implementation session. Initial working tree: clean on `main`, one commit ahead
+of `origin/main`. Implementation and verification completed before the later,
+separately authorized commit and push.
+
+Decoded JPEG RGB remains nonlinear. Ancestor fallback uses the standard sRGB
+transfer function before/after linear-light bilinear interpolation; native
+copies retain decoded bytes. Retry waits start at 500 ms and double, with a one-hour total deadline per
+failing tile request (request time plus waits), as confirmed by the user.
+
+| Stage | Status | Evidence / remaining work |
+|---|---|---|
+| Baseline and decisions | Verified | Baseline: 30 RF cases, 51459 assertions; sRGB and one-hour total retry deadline confirmed |
+| Coordinator and subcommands | Verified | Shared lifecycle, explicit GDAL/tiles commands and bounded parallel subdivision; 47 RF cases pass |
+| Provider, HTTP and JPEG | Verified | Strict JSON, bounded retries, decoder and HTTP fixtures pass; Basemap and Gataki configure zooms 4..20, side 256 |
+| Adaptive selection and preparation | Verified | Mixed-resolution leaves, native bytes, linear-light fallback, narrow masks, holes, seams and poles |
+| Cache, cancellation and progress | Verified | Zero-HTTP cache reuse, partial restart, bounded work, cancellation and out-of-order weighted progress fixtures |
+| Integration verification | Verified | Debug RF, full Release/ASan/TSan RF, shared-dependency regressions, downloader-off builds, lint and Release measurement |
+| Documentation | Verified | Subcommand examples, accepted provider limits, sRGB/retry behavior, operational bounds and final evidence recorded |
+
+Stages advance through Not started, In progress, Implemented and Verified;
+Blocked records an unresolved dependency. Verification commands, results and
+limitations are recorded here as work proceeds.
+
 The scope and sequence are in [implementation-plan.md](implementation-plan.md).
 Tile storage is implemented and verified on Linux/GCC as of 2026-09-08.
 
@@ -270,3 +296,76 @@ CMake configuration and Linux test environment documented above.
   Those full runs used the former CGAL Boolean and GDAL cache-head patches;
   their saved results and suppression files describe that configuration.
   The default remains one worker.
+
+### Online import verification log
+
+- Baseline: existing `build/Desktop_Debug/unittests/unittests_rfbuilder`, with
+  the documented PROJ/GDAL environment: 30 cases, 51459 assertions passed.
+- After GDAL extraction: `cmake --build build/Desktop_Debug --target rf-builder
+  unittests_rfbuilder --parallel 6`, then the same RF suite/environment:
+  30 cases, 51603 assertions passed. Assertion totals vary with cancellation
+  timing. Build/test transcripts: `/tmp/rf-online-baseline/build-gdal.log` and
+  `/tmp/rf-online-baseline/tests-gdal.log`.
+- Provider GET probes on 2026-09-12 at 16.3738 E, 48.2082 N, zooms 0..22:
+  Basemap returned JPEG 256x256 at 1..20; Gataki at 4..20. Other probed
+  levels returned 404. This samples Vienna, not exhaustive coverage.
+  Exact URLs/statuses are in `/tmp/rf-online-baseline/provider-probes.json`.
+
+- Complete Debug RF suite: 47 cases, 53812 assertions passed, including 17
+  online cases. Tests use a bounded loopback HTTP fixture, with no live provider
+  dependency. The out-of-order progress test exposed serial processing of
+  descendants from a single root; idle lanes now take pending sibling subtrees.
+  The corrected fixture verifies 25%, idle 75%, and final 100% progress.
+- Shared-dependency regressions passed: reader/storage/image roundtrips
+  (33 cases, 480 assertions), tilebuilder (14 cases, 389 assertions), SF builder
+  (16 cases, 176102 assertions), and retained downloader (13 cases, 49 assertions).
+- The configured OpenCV JPEG decoder uses fetched libjpeg-turbo 3.0.3-70.
+  CMake reports `BUILD_JPEG=ON`; JPEG decoding symbols are local to OpenCV's
+  image-codec library. System JPEG may still load indirectly through TIFF.
+- New/changed C++ was formatted with clang-format-21. The Qt C++ skill's six
+  review missions found no confirmed remaining defects. Deterministic warnings
+  about chrono `count()` and mutation of a `std::vector` reference do not apply
+  to these APIs; existing GDAL aggregate/container warnings are unchanged.
+
+- Optimized validation exposed a temporary-lifetime error in online refinement:
+  the optional child array is now retained before range iteration. The CLI HTTP
+  fixture now publishes configuration through its handler mutex before the
+  subprocess starts. After these fixes, full Release and TSan RF suites pass
+  all 47 cases (53811 and 53812 assertions respectively), with no TSan reports.
+  TSan uses the existing tracked dependency suppressions; none were added.
+- The shared mask regression filter in SF merger passes 6 cases / 85 assertions.
+
+- Basemap's configured minimum is 4, explicitly confirmed by the user; the
+  available lower levels 1..3 are deliberately excluded to keep RF's default
+  side 4096. Both shipped provider files pass CLI provider/ratio validation
+  before the expected rejection of an empty mask; this check issues no HTTP.
+- Release measurement (`[online-benchmark] --benchmark-samples 20`): source
+  side 256, RF side 4096, two workers, synthetic whole-world coverage at source
+  zoom 4 with one available zoom-5 tile and one zoom-6 tile. The import produces
+  seven disjoint leaves (7x the dense pixels of the coarse single-root output),
+  54494 stored bytes and 1671 requests in 6.203 seconds. Overall test process:
+  8.146 seconds, 818180 KiB peak RSS measured with Linux `getrusage`.
+  The constant-colour JPEG fixture compresses unusually well; its stored byte
+  count is not representative of aerial photographs. Geographic completion
+  weight costs about 6.91 ns per lookup for one rectangle in the Catch2
+  benchmark. These are one-run measurements; dependency compilation was
+  concurrent on this 24-logical-CPU host.
+- RF builds and tests pass in both Release and TSan configurations with
+  `ALP_BUILD_TILE_DOWNLOADER=OFF`. The final Debug online subset passes
+  17 cases / 2209 assertions after the optimized-build fixes.
+
+- Final ASan/LSan/UBSan suite: all 47 RF cases / 53811 assertions passed.
+  `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`; `UBSAN_OPTIONS` enables
+  halt-on-error, stack traces and the existing `misc/suppression/ubsan.txt`.
+  No new suppressions were introduced. The final incremental build had no
+  additional work. TSan likewise uses only `misc/suppression/tsan.txt`.
+- Whitespace and Git-attribute line-ending checks pass for all 43 changed/new
+  text files. Generated regression outputs were removed. The initial `main`
+  checkout was retained throughout implementation and verification.
+- Final evidence is retained under `/data/scratch/codex/rf-online-20260912`:
+  build/test logs, provider probes, benchmark, lint/review report, exact build
+  roots/test environment in `verification.json`, and source/executable hashes.
+  Earlier `/tmp/rf-online-baseline` paths in this log are mirrored there.
+  All planned implementation stages are verified; no open product decisions
+  remain. Live provider evidence is limited to the regional JPEG probes; the
+  end-to-end correctness and performance checks use deterministic fixtures.

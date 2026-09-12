@@ -1,9 +1,7 @@
 # RF builder: online tile import
 
-Status: proposed implementation plan, 2026-09-12. The source and output
-policies below were agreed during the design discussion. Implementation has
-not been approved or started. In particular, the coordinator interface and
-implementation sequence below are proposals for approval.
+Status: implemented and verified, 2026-09-12. Progress and
+verification evidence are recorded in [implementation-status.md](implementation-status.md).
 
 This extends the implemented [GDAL builder](rf-builder-design.md). The
 [storage format](storage-format.md), snapshot lifecycle in
@@ -78,6 +76,10 @@ filling in those fields. The executable reads the supplied path and
 does not depend on the repository's provider directory at runtime. Additional
 providers require only another JSON file, without rebuilding RF.
 
+Both shipped files configure zooms 4..20 and 256-pixel source tiles. Basemap's
+minimum deliberately excludes its available zooms 1..3, as approved, so the
+default 4096-pixel RF side has a valid starting RF zoom of zero.
+
 `rf-builder tiles --help` must show both a complete invocation using
 `--provider providers/basemap.json` and a small JSON example with all required
 fields, explaining that the source zoom maximum is a ceiling. Remove the
@@ -140,8 +142,9 @@ patch; preserving fine data takes priority over avoiding that expansion.
 
 Copy decoded source values exactly where grids align at native resolution.
 Use bilinear interpolation in linear-light RGB for enlarged ancestor fallback:
-convert decoded nonlinear RGB values to linear light, interpolate, then encode
-the result back to nonlinear RGB8 for storage. Native-resolution copies do
+Treat decoded RGB as sRGB without ICC-profile conversion. Use the standard sRGB
+transfer function to convert to linear light, interpolate, then encode back to
+sRGB8 for storage. OpenCV JPEG decoding does not perform this linearization. Native-resolution copies do
 not undergo this conversion round trip. This is separate from the existing
 GDAL Lanczos policy and future TB filtering.
 
@@ -165,7 +168,7 @@ Extract the lifecycle currently embedded in `build.cpp` into `run.h/.cpp`:
 bounded scheduling, cache linking, output writes/index ownership, progress,
 checkpoints, error/cancellation handling, and publication.
 
-The proposed preparation result has three alternatives:
+The preparation result has three alternatives:
 
 - a prepared RF tile for the candidate key;
 - an empty completed candidate;
@@ -256,9 +259,12 @@ to distinguish hours from days with little extra computation, not predict a
 precise finish time. Test that weights are not double counted on subdivision,
 out-of-order completion, cache reuse, empty branches, or mask-bound overlap.
 
-Use finite connection/request timeouts, bounded attempts and backoff for
-transient transport failures and retryable HTTP statuses such as 429 and
-selected 5xx responses. Respect Retry-After within the bounded retry policy.
+Use finite connection/request timeouts and a one-hour total retry deadline
+per failing tile request, including request time and backoff. Start waits at
+500 ms and double them after successive transient transport failures or
+retryable HTTP statuses such as 429 and selected 5xx responses. Respect
+Retry-After within the remaining deadline. Log failures, attempt numbers,
+next waits, remaining retry budget and exhaustion to console and persistent log.
 Nonretryable responses and exhausted retries abort. Only 404 means absence;
 timeouts, authentication failures, server errors and undecodable images must
 never silently select coarser data. Reject successful non-JPEG responses and
@@ -305,13 +311,12 @@ src/rf_builder/
     inputs.h / inputs.cpp
   tiles/
     cli.h / cli.cpp
-    provider.h / provider.cpp # JSON loading and validation; no preset registry
+    provider.h / provider.cpp # JSON validation and URL building; no preset registry
     build.h / build.cpp
     planning.h / planning.cpp
-    TileWorker.h              # Discovery/refinement and pixel assembly
+    TileWorker.h / TileWorker.cpp # Discovery/refinement and pixel assembly
     inputs.h / inputs.cpp
     HttpClient.h / HttpClient.cpp
-    TileUrlBuilder.h
     jpeg.h / jpeg.cpp
 
 providers/
@@ -381,3 +386,34 @@ Before implementation, recheck the working tree and report existing edits.
 No commits, branches, pushes, or downloader deletion are included in this
 plan. Before any later commit, run the repository's required line-ending
 check and review the exact changed files.
+
+## Implemented operational details
+
+- Each worker has a 64 MiB decoded/missing-result LRU budget. Missing entries
+  are charged too. The in-flight response is capped at the larger of 1 MiB or
+  eight bytes per configured source pixel plus 64 KiB. Decode dimensions are
+  checked in the JPEG header before allocating the image.
+- Total worker memory also includes the current response/decode buffers,
+  bounded ancestor references, interpolation neighbourhood, mask geometry and
+  RF output/validity buffers. The LRU budget is not a total-process RSS limit.
+- HTTP connection timeout is 10 seconds and request timeout is 30 seconds,
+  both clipped to the remaining one-hour retry deadline. Backoff doubles from
+  500 ms. Retryable statuses are 408, 429, 500, 502, 503 and 504; selected
+  transient curl transport errors also retry. Redirects are limited to five
+  and HTTP(S). Retry-After accepts delay seconds and HTTP dates.
+- Cancellation retains the existing finish-active-work policy. An active
+  tile can therefore finish its current network retry deadline before the
+  cancelled run exits. Queued candidates and returned subdivisions do not
+  start new work after cancellation.
+- There are twice as many scheduling lanes as workers. Each lane owns one
+  outstanding candidate and a depth-first sibling stack, bounding the frontier
+  by tile-key depth even when completions arrive out of order. Idle lanes take
+  pending sibling subtrees, allowing parallel processing below a single root.
+- Online input records include OpenCV's version and JPEG build identity, as
+  well as the shared mask reader's GDAL version. Provider file paths and JSON
+  formatting do not affect compatibility.
+
+Provider GET verification on 2026-09-12 at Vienna (16.3738 E, 48.2082 N)
+returned 256x256 JPEGs at Basemap zooms 1..20 and Gataki zooms 4..20. Zooms
+outside those ranges among the tested 0..22 returned 404. This is a regional
+availability probe, not a guarantee about every tile or future provider data.

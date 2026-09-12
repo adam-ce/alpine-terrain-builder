@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Error.h"
+#include "run.h"
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -8,7 +9,7 @@
 #include <string>
 #include <vector>
 
-namespace rf_builder {
+namespace rf_builder::gdal {
 
 enum class Mode : std::uint8_t { Scalar, Colour };
 
@@ -24,15 +25,10 @@ struct Options {
     std::optional<std::filesystem::path> cache = std::nullopt;
 };
 
-struct Report {
-    std::uint64_t tile_count = 0;
-    std::uint64_t tile_bytes = 0;
-    std::uint64_t reused_tiles = 0;
-    unsigned tile_side = 0;
-};
+using Report = run::Report;
 
 // stop_requested is polled only by the calling/coordinator thread. Active tiles
 // finish on cancellation; their results are saved and checkpointed, not published.
 Expected<Report> build(const Options& options, const std::function<bool()>& stop_requested = {});
 
-} // namespace rf_builder
+} // namespace rf_builder::gdal

@@ -41,7 +41,7 @@ function(alp_setup_opencv version)
             -DWITH_OPENGL=OFF
             -DWITH_GSTREAMER=OFF
             -DWITH_FFMPEG=OFF
-            -DWITH_JPEG=ON -DWITH_PNG=ON -DWITH_TIFF=ON
+            -DWITH_JPEG=ON -DBUILD_JPEG=ON -DWITH_PNG=ON -DWITH_TIFF=ON
             -DWITH_GTK=OFF -DWITH_QT=OFF
             -DBUILD_LIST=core,imgproc,imgcodecs
         )

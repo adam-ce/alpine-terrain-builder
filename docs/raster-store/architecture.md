@@ -246,7 +246,10 @@ levels. Coarse physical tiles, for example at zoom 10, may coexist with more
 accurate descendants, for example at zoom 15.
 
 The implemented [RF builder](rf-builder-design.md) consumes one prepared GDAL
-dataset, including a VRT mosaic. An import
+dataset, including a VRT mosaic, through `rf-builder gdal`. The
+[online module](rf-builder-downloader-design.md) imports a provider-defined JPEG
+tile pyramid through `rf-builder tiles`. Each builder import produces disjoint
+physical leaves, without physical parent/descendant overlap. An import
 supplies a data source, an existing attribution index, and a vector validity
 mask defining the accepted region. The resulting RF has one attribution.
 Several imports with different masks may share the same attribution index;

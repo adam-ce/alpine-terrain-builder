@@ -1,0 +1,7 @@
+{
+  "url_pattern": "https://mapsneu.wien.gv.at/basemap/bmaporthofoto30cm/normal/google3857/{zoom}/{y}/{x}.jpeg",
+  "y_direction": "down",
+  "min_zoom": 4,
+  "max_zoom": 20,
+  "tile_size": 256
+}

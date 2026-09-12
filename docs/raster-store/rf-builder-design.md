@@ -277,13 +277,17 @@ Numerical implementation choices are verified with synthetic fixtures.
 
 ## Command usage
 
+GDAL input uses the explicit `gdal` subcommand. The former invocation without
+a subcommand is replaced. For JPEG source pyramids, use the separate
+[`tiles` subcommand](rf-builder-downloader-design.md).
+
 Build the `rf-builder` target, enabled by `ALP_BUILD_RF_BUILDER`. The selected
 `source_attribution_table.json` must already exist beside the future index or
 in one of its two ancestor directories. Attribution index 0 is reserved;
 imports accept existing entries 1 through 65534.
 
 ```sh
-build/Desktop_Debug/src/rf_builder/rf-builder \
+build/Desktop_Debug/src/rf_builder/rf-builder gdal \
     --dataset /data/prepared.vrt --mask /data/validity.gpkg \
     --output /data/rf/new-snapshot --attribution-index 1 --mode rgb
 ```

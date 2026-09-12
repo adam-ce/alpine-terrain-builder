@@ -97,7 +97,7 @@ if(ALP_NEEDS_CLI11)
     alp_add_git_repository(cli11 URL https://github.com/CLIUtils/CLI11.git COMMITISH v2.6.1)
 endif()
 
-if(ALP_BUILD_TILE_DOWNLOADER)
+if(ALP_BUILD_TILE_DOWNLOADER OR ALP_BUILD_RF_BUILDER)
     find_package(CURL REQUIRED)
 endif()
 

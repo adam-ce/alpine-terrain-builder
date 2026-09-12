@@ -15,7 +15,7 @@
 #include "inputs.h"
 #include "raster_store/Tile.h"
 
-namespace rf_builder {
+namespace rf_builder::gdal {
 
 // One instance belongs to one worker for its entire lifetime. In particular,
 // const query methods on GDAL/CGAL objects do not make them safe to share.
@@ -90,4 +90,4 @@ private:
     Mask m_mask;
     inputs::Record m_record;
 };
-} // namespace rf_builder
+} // namespace rf_builder::gdal

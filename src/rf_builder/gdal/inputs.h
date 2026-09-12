@@ -6,7 +6,7 @@
 #include "planning.h"
 #include <gdal_version.h>
 
-namespace rf_builder::inputs {
+namespace rf_builder::gdal::inputs {
 
 inline constexpr std::string_view file_name = "inputs.tmp";
 
@@ -29,9 +29,9 @@ struct Record {
 
 using Schema = io::envelope::PayloadSchema<"rf_builder.Inputs", io::envelope::Version<1, Record>>;
 
-Expected<std::string> identifier(const std::string& input);
-std::string gdal_identifier(const std::string& input);
+using run::check_link_filesystem;
+using run::gdal_identifier;
+using run::identifier;
 Expected<void> validate_cache(const std::filesystem::path& path, const Record& record);
-Expected<void> check_link_filesystem(const std::filesystem::path& cache, const std::filesystem::path& output);
 
-} // namespace rf_builder::inputs
+} // namespace rf_builder::gdal::inputs

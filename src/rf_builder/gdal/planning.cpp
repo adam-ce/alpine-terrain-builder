@@ -5,7 +5,7 @@
 #include <optional>
 #include "raster_store/StoreTraits.h"
 
-namespace rf_builder::planning {
+namespace rf_builder::gdal::planning {
 namespace {
 std::optional<Bounds> intersection(const Bounds& a, const Bounds& b)
 {
@@ -63,36 +63,40 @@ Expected<double> estimate(const Bounds& region, const double pixel_spacing, cons
     return maximum;
 }
 
-Expected<void> traverse(const unsigned side, const std::vector<Bounds>& source_bounds,
-    const std::vector<Bounds>& mask_bounds, const Transform& transform, const Visit& visit,
-    const std::function<Expected<void>()>& checkpoint)
+Cursor::Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const std::vector<Bounds>& mask_bounds, Transform transform)
+    : m_side(side)
+    , m_transform(std::move(transform))
+    , m_pending { raster_store::StoreTraits::root() }
 {
-    if (side == 0) {
-        return Error::fail(Error::Code::InvalidInput, "RF tile side must be positive");
-    }
-    std::vector<Bounds> coverage;
     for (const auto& source : source_bounds) {
         for (const auto& mask : mask_bounds) {
             if (auto overlap = intersection(source, mask)) {
-                coverage.push_back(*overlap);
+                m_coverage.push_back(*overlap);
             }
         }
     }
-    std::vector<radix::tile::Id> pending { raster_store::StoreTraits::root() };
-    while (!pending.empty()) {
-        if (checkpoint) {
-            if (auto saved = checkpoint(); !saved) { return saved; }
+}
+Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expected<void>()>& poll)
+{
+    if (m_side == 0) {
+        return Error::fail(Error::Code::InvalidInput, "RF tile side must be positive");
+    }
+    while (!m_pending.empty()) {
+        if (poll) {
+            if (auto saved = poll(); !saved) {
+                return Error::propagate(std::move(saved));
+            }
         }
-        const auto key = pending.back();
-        pending.pop_back();
+        const auto key = m_pending.back();
+        m_pending.pop_back();
         const auto tile_bounds = RasterTransform::tile_bounds(key);
         bool intersects = false;
         double ratio = 0;
-        for (const auto& region : coverage) {
+        for (const auto& region : m_coverage) {
             const auto overlap = intersection(tile_bounds, region);
             if (!overlap) { continue; }
             intersects = true;
-            auto estimated = estimate(*overlap, tile_bounds.width() / side, transform);
+            auto estimated = estimate(*overlap, tile_bounds.width() / m_side, m_transform);
             if (!estimated) {
                 return Error::propagate(std::move(estimated), "estimate resolution for RF tile " + to_string(key));
             }
@@ -101,17 +105,39 @@ Expected<void> traverse(const unsigned side, const std::vector<Bounds>& source_b
         }
         if (!intersects) { continue; }
         if (ratio <= sampling_limit) {
-            if (auto visited = visit(key); !visited) { return visited; }
+            return std::optional(key);
         } else {
             const auto children = raster_store::StoreTraits::children(key);
             if (!children) {
                 return Error::fail(Error::Code::Unsupported, "RF sampling limit cannot be met at maximum zoom " + to_string(key));
             }
             // Reverse insertion gives stable northwest-first traversal.
-            pending.insert(pending.end(), children->rbegin(), children->rend());
+            m_pending.insert(m_pending.end(), children->rbegin(), children->rend());
         }
     }
-    return {};
+    return std::nullopt;
 }
 
-} // namespace rf_builder::planning
+Expected<void> traverse(const unsigned side,
+    const std::vector<Bounds>& source_bounds,
+    const std::vector<Bounds>& mask_bounds,
+    const Transform& transform,
+    const Visit& visit,
+    const std::function<Expected<void>()>& checkpoint)
+{
+    Cursor cursor(side, source_bounds, mask_bounds, transform);
+    for (;;) {
+        auto key = cursor.next(checkpoint);
+        if (!key) {
+            return Error::propagate(std::move(key));
+        }
+        if (!*key) {
+            return {};
+        }
+        if (auto visited = visit(**key); !visited) {
+            return visited;
+        }
+    }
+}
+
+} // namespace rf_builder::gdal::planning

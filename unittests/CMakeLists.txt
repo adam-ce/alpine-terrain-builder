@@ -168,7 +168,7 @@ if(TARGET sfmergerlib)
 endif()
 
 if(TARGET rfbuilderlib)
-    add_executable(unittests_rfbuilder rf_builder/import.cpp rf_builder/mask.cpp rf_builder/mask_read_errors.cpp rf_builder/parallel.cpp)
+    add_executable(unittests_rfbuilder rf_builder/online.cpp rf_builder/HttpFixture.h rf_builder/import.cpp rf_builder/mask.cpp rf_builder/mask_read_errors.cpp rf_builder/parallel.cpp)
     target_link_libraries(unittests_rfbuilder PRIVATE rfbuilderlib Catch2::Catch2WithMain)
     atb_configure_test(unittests_rfbuilder)
     add_dependencies(unittests_rfbuilder rf-builder)

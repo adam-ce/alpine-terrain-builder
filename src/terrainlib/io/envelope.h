@@ -2,6 +2,7 @@
 
 #include "io/bytes.h"
 #include "io/compression.h"
+#include "io/glm_serialization.h"
 
 #include <zpp_bits.h>
 

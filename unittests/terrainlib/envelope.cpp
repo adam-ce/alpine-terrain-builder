@@ -165,6 +165,27 @@ TEST_CASE("Envelope round trips the latest payload version")
     CHECK(*result == expected);
 }
 
+TEST_CASE("Envelope round trips payloads containing GLM types")
+{
+    struct Payload {
+        glm::dvec3 position;
+        glm::mat4 transform;
+        std::vector<glm::vec2> texture_coordinates;
+        bool operator==(const Payload&) const = default;
+    };
+    using GlmSchema = io::envelope::PayloadSchema<"test.GlmPayload", io::envelope::Version<1, Payload>>;
+    const Payload expected {
+        .position = { 1.0, -2.0, 3.5 },
+        .transform = glm::mat4(2.0f),
+        .texture_coordinates = { { 0.0f, 0.5f }, { 1.0f, 0.75f } },
+    };
+    const auto bytes = io::envelope::serialize<GlmSchema>(expected);
+    REQUIRE(bytes.has_value());
+    const auto result = io::envelope::deserialize<GlmSchema>(*bytes);
+    REQUIRE(result.has_value());
+    CHECK(*result == expected);
+}
+
 TEST_CASE("Envelope upgrades older payload versions")
 {
     SECTION("version 1 is upgraded through every subsequent version")

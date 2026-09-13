@@ -25,6 +25,7 @@ add_executable(unittests_terrainlib
     terrainlib/error.cpp
     terrainlib/fixed_vector.cpp
     terrainlib/geometry_frames.cpp
+    terrainlib/glm_serialization.cpp
     terrainlib/grid.cpp
     terrainlib/hash_utils.cpp
     terrainlib/hybrid_index_pair_map.cpp
@@ -75,6 +76,13 @@ add_executable(unittests_terrainlib
 )
 target_link_libraries(unittests_terrainlib PRIVATE terrainlib Catch2::Catch2WithMain)
 atb_configure_test(unittests_terrainlib)
+
+# Keep the aligned GLM configuration isolated from terrainlib and its PCH.
+add_executable(unittests_glm_serialization_aligned terrainlib/glm_serialization.cpp)
+target_compile_features(unittests_glm_serialization_aligned PRIVATE cxx_std_23)
+target_compile_definitions(unittests_glm_serialization_aligned PRIVATE GLM_FORCE_INTRINSICS GLM_FORCE_ALIGNED_GENTYPES)
+target_include_directories(unittests_glm_serialization_aligned PRIVATE ${CMAKE_SOURCE_DIR}/src/terrainlib)
+target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_bits Catch2::Catch2WithMain)
 
 if(TARGET tilebuilderlib)
     add_executable(unittests_tilebuilder

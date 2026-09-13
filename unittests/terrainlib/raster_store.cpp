@@ -207,14 +207,15 @@ TEST_CASE("raster index adapters preserve mixed hierarchy and reject corrupt top
     CHECK(decoded->is(store::NodeStatus::Virtual, { 1, { 0, 0 } }).value());
     CHECK(decoded->is(store::NodeStatus::Leaf, { 2, { 1, 1 } }).value());
     REQUIRE(encoded.entries.size() == 3);
-    CHECK(encoded.entries[0].zoom == 0);
-    CHECK(encoded.entries[2].zoom == 2);
+    CHECK(encoded.entries[0].id == root);
+    CHECK(encoded.entries[1].id == radix::tile::Id { 1, { 0, 0 } });
+    CHECK(encoded.entries[2].id == radix::tile::Id { 2, { 1, 1 } });
 
     SECTION("duplicate key") { encoded.entries.push_back(encoded.entries[0]); }
-    SECTION("invalid key") { encoded.entries[0].x = 1; }
-    SECTION("invalid status") { encoded.entries[0].status = 255; }
+    SECTION("invalid key") { encoded.entries[0].id.coords.x = 1; }
+    SECTION("invalid status") { encoded.entries[0].status = static_cast<store::NodeStatus::Value>(255); }
     SECTION("missing parent") { encoded.entries.erase(encoded.entries.begin() + 1); }
-    SECTION("leaf with descendant") { encoded.entries[0].status = static_cast<std::uint8_t>(store::NodeStatus::Leaf); }
+    SECTION("leaf with descendant") { encoded.entries[0].status = store::NodeStatus::Leaf; }
     SECTION("virtual without children") { encoded.entries.pop_back(); }
     CHECK(manifest::decode_index(encoded).error().code() == Error::Code::CorruptData);
 }

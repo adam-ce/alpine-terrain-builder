@@ -17,6 +17,8 @@ inline constexpr std::string_view index_file_name = "raster_store.index";
 
 namespace detail::v1 {
 
+    static_assert(sizeof(unsigned) == sizeof(std::uint32_t), "raster index v1 requires 32-bit tile ID components");
+
     struct Metadata {
         std::string layout_id;
         std::string payload_type;
@@ -26,10 +28,8 @@ namespace detail::v1 {
     };
 
     struct IndexEntry {
-        std::uint32_t zoom;
-        std::uint32_t x;
-        std::uint32_t y;
-        std::uint8_t status;
+        radix::tile::Id id;
+        store::NodeStatus::Value status;
     };
 
     struct Hierarchy {

@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <system_error>
-#include <tuple>
 #include <unordered_set>
 
 #include "raster_store/path_layout.h"
@@ -34,12 +33,9 @@ detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index)
     detail::v1::Hierarchy encoded;
     encoded.entries.reserve(index.size());
     for (const auto& [key, status] : index) {
-        encoded.entries.push_back({ key.zoom_level, key.coords.x, key.coords.y,
-            static_cast<std::uint8_t>(static_cast<store::NodeStatus::Value>(status)) });
+        encoded.entries.push_back({ key, status });
     }
-    std::ranges::sort(encoded.entries, [](const auto& left, const auto& right) {
-        return std::tie(left.zoom, left.x, left.y) < std::tie(right.zoom, right.x, right.y);
-    });
+    std::ranges::sort(encoded.entries, [](const auto& left, const auto& right) { return left.id < right.id; });
     return encoded;
 }
 
@@ -48,17 +44,16 @@ Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& en
     store::Index<StoreTraits> index;
     std::unordered_set<radix::tile::Id, StoreTraits::Hasher> seen;
     for (const auto& entry : encoded.entries) {
-        const radix::tile::Id key { entry.zoom, { entry.x, entry.y } };
-        if (!StoreTraits::is_valid(key)) {
+        if (!StoreTraits::is_valid(entry.id)) {
             return Error::fail(Error::Code::CorruptData, "raster index contains an invalid tile ID");
         }
-        if (!seen.insert(key).second) {
+        if (!seen.insert(entry.id).second) {
             return Error::fail(Error::Code::CorruptData, "raster index contains a duplicate tile ID");
         }
-        if (entry.status > static_cast<std::uint8_t>(store::NodeStatus::Virtual)) {
+        if (entry.status > store::NodeStatus::Virtual) {
             return Error::fail(Error::Code::CorruptData, "raster index contains an invalid node status");
         }
-        auto added = index.set_raw(key, store::NodeStatus { static_cast<store::NodeStatus::Value>(entry.status) });
+        auto added = index.set_raw(entry.id, store::NodeStatus { entry.status });
         if (!added) {
             return Error::propagate(std::move(added), Error::Code::CorruptData, "decode raster index entry");
         }

@@ -43,22 +43,30 @@ whose selected table is copied unchanged into the output.
 ```cpp
 raster_store::storage::CreateOptions options;
 options.tile_dimensions = { 3, 3 };
-auto output = raster_store::storage::create<float>(snapshot_path, options);
-if (!output) {
-    return Error::propagate(std::move(output));
+auto created = raster_store::storage::create<float>(snapshot_path, options);
+if (!created) {
+    return Error::propagate(std::move(created));
 }
+auto [output, metadata] = std::move(*created);
 raster_store::Tile<float> tile(3); // Attribution defaults to NoData.
 if (auto saved = output->save({ 0, { 0, 0 } }, tile); !saved) {
     return saved;
 }
-return raster_store::storage::publish(std::move(*output));
+return raster_store::storage::publish(std::move(output));
 ```
 
-Call `save_index()` explicitly for intermediate checkpoints. `open<PixelType>()`
-returns `IndexedStorage<PixelType>`; pass `{ .allow_incomplete = true }` for
-cache access to a `.part` snapshot. `attribution::read_table(index_path)`
-provides the selected table separately. `publish()` consumes the output handle
-on success or failure and returns `Expected<void>`.
+Both factories return `Expected<std::pair<...>>` with owning `std::unique_ptr`s
+to the storage first and metadata second. `create<PixelType>()` returns writable
+`IndexedStorage<PixelType>` and const metadata; `open<PixelType>()` returns const
+storage and const metadata. Both pointers are non-null on success and can be
+moved independently.
+
+Call the non-const `save_index()` explicitly for intermediate checkpoints on
+created storage. Pass `{ .allow_incomplete = true }` to `open<PixelType>()` for
+read-only cache access to a `.part` snapshot. `attribution::read_table(index_path)`
+provides the selected table separately. `publish()` consumes the writable storage
+pointer on success or failure and returns `Expected<void>`; it rejects null
+pointers. The metadata pointer remains available after publication.
 
 Raster opening supplies the decoded metadata to the shared `store::open_index`
 overload. The shared opener resolves the metadata's codec selector through
@@ -66,7 +74,9 @@ the supplied callback; raster codec names and dimensions are handled in
 `raster_store`, while mesh callers retain their extension resolver.
 
 Manifest I/O lives in `raster_store/io/manifest.h` under
-`raster_store::io::manifest`. `raster_store/io/TileCodec.h` defines
+`raster_store::io::manifest`. `read_metadata(base_path)` and
+`write_metadata(metadata, base_path)` read and write the snapshot metadata file.
+`raster_store/io/TileCodec.h` defines
 `raster_store::io::TileCodec<PixelType>` and its supporting `tile_codec`
 namespace. Versioned payload structs belong to `manifest::detail::v1` and
 `tile_codec::detail::v1`, respectively. The XYZ layout lives in
@@ -171,9 +181,9 @@ Because hard links share inodes, a linked container must never be opened for
 in-place modification. Obsolete snapshots can be deleted; other hard links
 keep the data alive.
 
-Published snapshots are opened through `IndexedStorage`. Its API currently
-also exposes mutation, so immutability relies on caller discipline. Making
-the type truly read-only belongs to a separate work package.
+Published snapshots are opened through `std::unique_ptr<const IndexedStorage>`;
+normal access permits reads but not tile mutations or index checkpoints.
+Created snapshots retain writable storage until publication consumes it.
 
 Hard-link reuse may cross RF and TB roots. The calling tool decides whether
 a tile can be reused, including payload type, dimensions, encoding, and
@@ -187,7 +197,7 @@ the independent attribution table remain valid after removing the RF.
 ### Opening and checkpoints
 
 Normal opening rejects `.part` snapshot directories. The explicit
-`allow_incomplete` option opens one as `IndexedStorage` for cache reuse, using
+`allow_incomplete` option opens one as const `IndexedStorage` for cache reuse, using
 the last saved index and ignoring unindexed files. Checkpoint timing belongs
 to the builder, which explicitly saves the index periodically.
 

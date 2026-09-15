@@ -162,7 +162,6 @@ public:
     }
 
     const path_layout::Resolver<Key>& layout() const { return m_layout; }
-    const Codec<NodeData>& codec() const { return *m_codec; }
 
 private:
     path_layout::Resolver<Key> m_layout;

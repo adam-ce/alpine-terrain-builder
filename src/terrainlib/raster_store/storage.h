@@ -1,9 +1,11 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #include "io/utils.h"
 #include "raster_store/attribution.h"
@@ -46,15 +48,16 @@ namespace detail {
 
     // The owned handle is destroyed on return, before publication renames its directory.
     template <typename PixelType>
-    Expected<void> finish_output(IndexedStorage<PixelType> storage)
+    Expected<void> finish_output(std::unique_ptr<IndexedStorage<PixelType>> storage)
     {
-        return storage.save_index();
+        return storage->save_index();
     }
 
 } // namespace detail
 
 template <typename PixelType>
-Expected<IndexedStorage<PixelType>> open(const std::filesystem::path& base_path, const OpenOptions options = {})
+Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> open(
+    const std::filesystem::path& base_path, const OpenOptions options = {})
 {
     auto normalized_path = base_path.lexically_normal();
     if (!normalized_path.has_filename()) {
@@ -79,13 +82,21 @@ Expected<IndexedStorage<PixelType>> open(const std::filesystem::path& base_path,
     const auto resolve_codec = [&metadata](const std::string_view name) {
         return io::tile_codec::from_name<PixelType>(name, { metadata->width, metadata->height });
     };
-    return store::open_index<StoreTraits, Tile<PixelType>>(index_path, io::manifest::index_format(),
+    auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
+        io::manifest::index_format(),
         { std::move(*index), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
-        pixel_type::identifier<PixelType>(), resolve_codec);
+        pixel_type::identifier<PixelType>(),
+        resolve_codec);
+    if (!storage) {
+        return Error::propagate(std::move(storage));
+    }
+    return std::pair { std::make_unique<const IndexedStorage<PixelType>>(std::move(*storage)),
+        std::make_unique<const io::manifest::Metadata>(std::move(*metadata)) };
 }
 
 template <typename PixelType>
-Expected<IndexedStorage<PixelType>> create(const std::filesystem::path& final_path, const CreateOptions options = {})
+Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<const io::manifest::Metadata>>> create(
+    const std::filesystem::path& final_path, const CreateOptions options = {})
 {
     const auto destination = final_path.lexically_normal();
     if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || destination.extension() == ".part") {
@@ -127,14 +138,21 @@ Expected<IndexedStorage<PixelType>> create(const std::filesystem::path& final_pa
             return Error::propagate(std::move(copied));
         }
     }
-    const io::manifest::Metadata metadata { std::string(path_layout::zoom_xy_google::zoom_x_y_google().id), pixel_type::identifier<PixelType>(),
-        options.codec_selector, options.tile_dimensions.x, options.tile_dimensions.y };
-    auto written = ::io::envelope::write_to_path<io::manifest::MetadataSchema>(metadata, partial_path / io::manifest::metadata_file_name);
+    auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
+        pixel_type::identifier<PixelType>(),
+        options.codec_selector,
+        options.tile_dimensions.x,
+        options.tile_dimensions.y);
+    auto written = io::manifest::write_metadata(*metadata, partial_path);
     if (!written) {
         return Error::propagate(std::move(written), "create raster metadata");
     }
-    auto storage = store::make_storage<StoreTraits, Tile<PixelType>>(partial_path, io::manifest::index_format(), path_layout::zoom_xy_google::zoom_x_y_google(),
-        metadata.payload_type, metadata.codec_selector, std::move(*codec));
+    auto storage = store::make_storage<StoreTraits, Tile<PixelType>>(partial_path,
+        io::manifest::index_format(),
+        path_layout::zoom_xy_google::zoom_x_y_google(),
+        metadata->payload_type,
+        metadata->codec_selector,
+        std::move(*codec));
     if (!storage) {
         return Error::propagate(std::move(storage));
     }
@@ -142,15 +160,18 @@ Expected<IndexedStorage<PixelType>> create(const std::filesystem::path& final_pa
     if (auto saved = storage->save_index(); !saved) {
         return Error::propagate(std::move(saved), "create initial raster index");
     }
-    return IndexedStorage<PixelType>(std::move(*storage));
+    return std::pair { std::make_unique<IndexedStorage<PixelType>>(std::move(*storage)), std::move(metadata) };
 }
 
 // Consumes the output handle on success or failure. An unsuccessful publication
 // leaves the .part snapshot available for explicit incomplete opening.
 template <typename PixelType>
-Expected<void> publish(IndexedStorage<PixelType> storage)
+Expected<void> publish(std::unique_ptr<IndexedStorage<PixelType>> storage)
 {
-    const auto partial_path = storage.base_path().lexically_normal();
+    if (!storage) {
+        return Error::fail(Error::Code::InvalidInput, "publication requires an output handle");
+    }
+    const auto partial_path = storage->base_path().lexically_normal();
     if (partial_path.extension() != ".part") {
         return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
     }

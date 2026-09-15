@@ -226,8 +226,9 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
     const auto partial = directory.path() / "snapshot.part";
-    auto created = storage::create<float>(final, small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(final, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     CHECK_FALSE(storage::open<float>(partial));
     CHECK_FALSE(storage::open<float>(partial / ""));
     CHECK(storage::open<float>(partial, { .allow_incomplete = true }));
@@ -239,8 +240,9 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(created->save_index());
     CHECK(io::read_bytes_from_path(partial / manifest::metadata_file_name).value() == metadata_before);
-    auto checkpoint = storage::open<float>(partial, { .allow_incomplete = true });
-    REQUIRE(checkpoint);
+    auto checkpoint_result = storage::open<float>(partial, { .allow_incomplete = true });
+    REQUIRE(checkpoint_result);
+    auto [checkpoint, checkpoint_metadata] = std::move(*checkpoint_result);
     REQUIRE(checkpoint->load({ 0, { 0, 0 } }));
     CHECK(checkpoint->codec_selector().value() == "amort");
     auto metadata = manifest::read_metadata(partial);
@@ -249,11 +251,18 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     CHECK(metadata->height == 3);
     CHECK(metadata->payload_type == "float32");
     CHECK(metadata->codec_selector == "amort");
+    REQUIRE(created_metadata);
+    CHECK(created_metadata->width == metadata->width);
+    CHECK(created_metadata->height == metadata->height);
+    CHECK(created_metadata->layout_id == metadata->layout_id);
+    CHECK(created_metadata->payload_type == metadata->payload_type);
+    CHECK(created_metadata->codec_selector == metadata->codec_selector);
 
-    REQUIRE(storage::publish(std::move(*created)));
+    REQUIRE(storage::publish(std::move(created)));
     CHECK_FALSE(std::filesystem::exists(partial));
-    auto published = storage::open<float>(final);
-    REQUIRE(published);
+    auto published_result = storage::open<float>(final);
+    REQUIRE(published_result);
+    auto [published, published_metadata] = std::move(*published_result);
     CHECK(published->base_path() == final);
     check_bytes(published->load({ 0, { 0, 0 } })->data, tile.data);
     CHECK(storage::open<std::uint32_t>(final).error().code() == Error::Code::Unsupported);
@@ -263,19 +272,24 @@ TEST_CASE("failed checkpoints retain the previous index and ignore unindexed fil
 {
     TemporaryDirectory directory;
     write_table(directory.path());
-    auto created = storage::create<float>(directory.path() / "snapshot", small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(directory.path() / "snapshot", small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     const auto partial = created->base_path();
     REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
     std::filesystem::create_directory(partial / "raster_store.index.tmp");
     CHECK_FALSE(created->save_index());
-    auto checkpoint = storage::open<float>(partial, { .allow_incomplete = true });
-    REQUIRE(checkpoint);
+    auto checkpoint_result = storage::open<float>(partial, { .allow_incomplete = true });
+    REQUIRE(checkpoint_result);
+    auto [checkpoint, checkpoint_metadata] = std::move(*checkpoint_result);
     CHECK(checkpoint->index().empty());
     CHECK(checkpoint->load({ 0, { 0, 0 } }).error().code() == Error::Code::NotFound);
     std::filesystem::remove(partial / "raster_store.index.tmp");
     REQUIRE(created->save_index());
-    CHECK(storage::open<float>(partial, { .allow_incomplete = true })->index().size() == 1);
+    auto reopened_result = storage::open<float>(partial, { .allow_incomplete = true });
+    REQUIRE(reopened_result);
+    auto [reopened, reopened_metadata] = std::move(*reopened_result);
+    CHECK(reopened->index().size() == 1);
 }
 
 TEST_CASE("raster creation and publication reject destination collisions", "[raster-store][storage]")
@@ -283,13 +297,15 @@ TEST_CASE("raster creation and publication reject destination collisions", "[ras
     TemporaryDirectory directory;
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
-    auto created = storage::create<float>(final, small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(final, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     CHECK(storage::create<float>(final, small_options()).error().code() == Error::Code::AlreadyExists);
     SECTION("empty destination") { std::filesystem::create_directory(final); }
     SECTION("nonempty destination") { write_text(final / "keep", "keep"); }
     SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final); }
-    CHECK(storage::publish(std::move(*created)).error().code() == Error::Code::AlreadyExists);
+    CHECK(storage::publish(std::move(created)).error().code() == Error::Code::AlreadyExists);
+    CHECK_FALSE(created);
     CHECK(std::filesystem::exists(directory.path() / "snapshot.part"));
     CHECK(storage::create<float>(final, small_options()).error().code() == Error::Code::AlreadyExists);
 }
@@ -299,13 +315,15 @@ TEST_CASE("raster publication does not scan payloads or reopen output", "[raster
     TemporaryDirectory directory;
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
-    auto created = storage::create<float>(final, small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(final, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
     REQUIRE(std::filesystem::remove(created->path_for({ 0, { 0, 0 } }).value()));
-    REQUIRE(storage::publish(std::move(*created)));
-    auto opened = storage::open<float>(final);
-    REQUIRE(opened);
+    REQUIRE(storage::publish(std::move(created)));
+    auto opened_result = storage::open<float>(final);
+    REQUIRE(opened_result);
+    auto [opened, opened_metadata] = std::move(*opened_result);
     CHECK(opened->load({ 0, { 0, 0 } }).error().code() == Error::Code::NotFound);
 }
 
@@ -314,10 +332,11 @@ TEST_CASE("raster reader selection follows metadata instead of file endings", "[
     TemporaryDirectory directory;
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
-    auto created = storage::create<float>(final, small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(final, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
-    REQUIRE(storage::publish(std::move(*created)));
+    REQUIRE(storage::publish(std::move(created)));
     auto metadata = manifest::read_metadata(final).value();
     metadata.codec_selector = ".amort";
     REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
@@ -335,20 +354,23 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
     const auto rf = rf_root / "snapshot";
     const auto tb = tb_root / "snapshot";
     write_table(rf_root);
-    auto created = storage::create<float>(rf, small_options());
-    REQUIRE(created);
+    auto created_result = storage::create<float>(rf, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
     raster_store::Tile<float> tile(3);
     tile.data.fill(12.5f);
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(created->save({ 2, { 1, 1 } }, tile));
-    REQUIRE(storage::publish(std::move(*created)));
+    REQUIRE(storage::publish(std::move(created)));
     {
-        auto source = storage::open<float>(rf);
-        REQUIRE(source);
+        auto source_result = storage::open<float>(rf);
+        REQUIRE(source_result);
+        auto [source, source_metadata] = std::move(*source_result);
         auto options = small_options();
         options.copy_attribution_from_index = rf / manifest::index_file_name;
-        auto target = storage::create<float>(tb, options);
-        REQUIRE(target);
+        auto target_result = storage::create<float>(tb, options);
+        REQUIRE(target_result);
+        auto [target, target_metadata] = std::move(*target_result);
         for (const auto key : { radix::tile::Id { 0, { 0, 0 } }, radix::tile::Id { 2, { 1, 1 } } }) {
             REQUIRE(target->copy_from(key, *source));
             CHECK(std::filesystem::equivalent(source->path_for(key).value(), target->path_for(key).value()));
@@ -356,11 +378,12 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
         CHECK_FALSE(std::filesystem::equivalent(rf_root / attribution::file_name, target->base_path() / attribution::file_name));
         CHECK(io::read_bytes_from_path(rf_root / attribution::file_name).value()
             == io::read_bytes_from_path(target->base_path() / attribution::file_name).value());
-        REQUIRE(storage::publish(std::move(*target)));
+        REQUIRE(storage::publish(std::move(target)));
     }
     std::filesystem::remove_all(rf_root);
-    auto target = storage::open<float>(tb);
-    REQUIRE(target);
+    auto target_result = storage::open<float>(tb);
+    REQUIRE(target_result);
+    auto [target, target_metadata] = std::move(*target_result);
     CHECK(target->index().is(store::NodeStatus::Inner, { 0, { 0, 0 } }).value());
     CHECK(target->load({ 2, { 1, 1 } })->data.pixel({ 0, 0 }) == 12.5f);
     CHECK(attribution::read_table(tb / manifest::index_file_name));
@@ -431,9 +454,10 @@ TEST_CASE("raster opening retains metadata and index errors without creating a d
     const auto final = directory.path() / "snapshot";
     CHECK(storage::open<float>(final).error().code() == Error::Code::NotFound);
     CHECK_FALSE(std::filesystem::exists(final));
-    auto created = storage::create<float>(final, small_options());
-    REQUIRE(created);
-    REQUIRE(storage::publish(std::move(*created)));
+    auto created_result = storage::create<float>(final, small_options());
+    REQUIRE(created_result);
+    auto [created, created_metadata] = std::move(*created_result);
+    REQUIRE(storage::publish(std::move(created)));
     SECTION("missing metadata")
     {
         std::filesystem::remove(final / manifest::metadata_file_name);
@@ -494,12 +518,14 @@ TEST_CASE("abandoned raster output checkpoints but never publishes", "[raster-st
     const auto final = directory.path() / "snapshot";
     const auto partial = directory.path() / "snapshot.part";
     {
-        auto created = storage::create<float>(final, small_options());
-        REQUIRE(created);
+        auto created_result = storage::create<float>(final, small_options());
+        REQUIRE(created_result);
+        auto [created, created_metadata] = std::move(*created_result);
         REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
     }
     CHECK_FALSE(std::filesystem::exists(final));
-    auto abandoned = storage::open<float>(partial, { .allow_incomplete = true });
-    REQUIRE(abandoned);
+    auto abandoned_result = storage::open<float>(partial, { .allow_incomplete = true });
+    REQUIRE(abandoned_result);
+    auto [abandoned, abandoned_metadata] = std::move(*abandoned_result);
     CHECK(abandoned->load({ 0, { 0, 0 } }));
 }

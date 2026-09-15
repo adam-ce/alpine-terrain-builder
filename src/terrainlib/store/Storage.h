@@ -206,7 +206,6 @@ public:
 
     const std::filesystem::path& base_path() const { return m_raw.layout().base_path(); }
     const path_layout::Resolver<Key>& layout() const { return m_raw.layout(); }
-    const Codec<NodeData>& codec() const { return m_raw.codec(); }
     std::optional<std::string_view> codec_selector() const
     {
         if (!m_persistence.has_value()) {
@@ -232,7 +231,7 @@ public:
         return std::cref(m_index.value());
     }
 
-    Expected<void> save_index() const
+    Expected<void> save_index()
     {
         if (!m_dirty) {
             return {};

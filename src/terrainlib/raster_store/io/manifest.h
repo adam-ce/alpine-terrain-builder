@@ -44,6 +44,7 @@ using Metadata = MetadataSchema::latest_type;
 
 Expected<void> validate(const Metadata& metadata);
 Expected<Metadata> read_metadata(const std::filesystem::path& base_path);
+Expected<void> write_metadata(const Metadata& metadata, const std::filesystem::path& base_path);
 Expected<store::Index<StoreTraits>> read_hierarchy(const std::filesystem::path& index_path);
 Expected<store::Index<StoreTraits>> decode_index(const detail::v1::Hierarchy& encoded);
 detail::v1::Hierarchy encode_index(const store::Index<StoreTraits>& index);

@@ -7,6 +7,7 @@
 #include <cmath>
 #include <fmt/chrono.h>
 #include <limits>
+#include <memory>
 #include <sys/stat.h>
 
 namespace rf_builder::run {
@@ -77,21 +78,18 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     if (auto checked = validate_options(options); !checked) {
         return Error::propagate(std::move(checked));
     }
-    std::optional<raster_store::storage::IndexedStorage<PixelType>> cache;
+    std::unique_ptr<const raster_store::storage::IndexedStorage<PixelType>> cache;
     if (options.cache) {
         if (auto valid = source.validate_cache(*options.cache); !valid) {
             return Error::propagate(std::move(valid));
         }
-        auto metadata = raster_store::io::manifest::read_metadata(*options.cache);
-        if (!metadata) {
-            return Error::propagate(std::move(metadata));
-        }
-        if (metadata->width != options.tile_side || metadata->height != options.tile_side || metadata->codec_selector != "amort") {
-            return Error::fail(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions or codec");
-        }
         auto opened = raster_store::storage::open<PixelType>(*options.cache, { .allow_incomplete = true });
         if (!opened) {
             return Error::propagate(std::move(opened));
+        }
+        auto [input, metadata] = std::move(*opened);
+        if (metadata->width != options.tile_side || metadata->height != options.tile_side || metadata->codec_selector != "amort") {
+            return Error::fail(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions or codec");
         }
         auto table = raster_store::attribution::read_table(*options.cache / raster_store::io::manifest::index_file_name);
         if (!table) {
@@ -108,20 +106,21 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
             return Error::propagate(std::move(checked));
         }
         if (source.refine_cached) {
-            for (const auto& [key, status] : opened->index()) {
+            for (const auto& [key, status] : input->index()) {
                 if (status == store::NodeStatus::Inner) {
                     return Error::fail(Error::Code::CorruptData, "online RF cache contains overlapping physical ancestors/descendants at " + to_string(key));
                 }
             }
         }
-        cache.emplace(std::move(*opened));
+        cache = std::move(input);
     }
     raster_store::storage::CreateOptions create_options;
     create_options.tile_dimensions = glm::uvec2(options.tile_side);
-    auto output = raster_store::storage::create<PixelType>(options.output, create_options);
-    if (!output) {
-        return Error::propagate(std::move(output));
+    auto created = raster_store::storage::create<PixelType>(options.output, create_options);
+    if (!created) {
+        return Error::propagate(std::move(created));
     }
+    auto [output, metadata] = std::move(*created);
     const auto input_path = output->base_path() / "inputs.tmp";
     if (auto written = source.write_inputs(input_path); !written) {
         return Error::propagate(std::move(written));
@@ -412,7 +411,7 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     if (!std::filesystem::remove(input_path, error)) {
         return Error::fail(Error::Code::Io, "remove RF input record before publication", input_path, error);
     }
-    if (auto published = raster_store::storage::publish(std::move(*output)); !published) {
+    if (auto published = raster_store::storage::publish(std::move(output)); !published) {
         return Error::propagate(std::move(published));
     }
     return report;

@@ -192,8 +192,9 @@ TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-
         attribution.close();
         REQUIRE(attribution.good());
     }
-    auto output = raster_store::storage::create<float>(directory.path() / "tiles");
-    REQUIRE(output);
+    auto output_result = raster_store::storage::create<float>(directory.path() / "tiles");
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     constexpr unsigned side = 4096;
     // Western boundary, central city, and eastern exterior at the planned zoom.
     for (const auto key : { radix::tile::Id { 13, { 4464, 2840 } }, { 13, { 4468, 2840 } }, { 13, { 4473, 2840 } } }) {
@@ -215,7 +216,9 @@ TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-
         tile.data = std::move(samples->data);
         for (std::size_t i = 0; i < samples->valid.buffer().size(); ++i) { tile.source_attribution.buffer()[i] = samples->valid.buffer()[i] ? 1 : 0; }
         const auto accepted = std::ranges::count(samples->valid.buffer(), std::uint8_t(1));
-        if (accepted) { REQUIRE(output->save(key, tile)); }
+        if (accepted) {
+            REQUIRE(output->save(key, tile));
+        }
         const auto written = std::chrono::steady_clock::now();
         fmt::print("TILE_BENCHMARK key={} accepted={} read_ms={} mask_ms={} pack_write_ms={}\n", to_string(key), accepted,
             std::chrono::duration<double, std::milli>(read - started).count(),

@@ -242,8 +242,9 @@ TEST_CASE("Online adaptive RF keeps fine islands and fills coarse siblings witho
     INFO((report ? "success" : report.error().to_string()));
     REQUIRE(report);
     CHECK(report->tile_count == 7);
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     const auto physical = keys(*output);
     CHECK(physical.size() == 7);
     CHECK_FALSE(physical.contains(fixture.root));
@@ -275,8 +276,9 @@ TEST_CASE("Online RF native assembled pixels equal decoded JPEGs", "[rf-builder]
     auto report = tiles::build(fixture.options);
     REQUIRE(report);
     CHECK(report->tile_count == 1);
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     auto tile = output->load(fixture.root);
     REQUIRE(tile);
     const auto expected = tiles::jpeg::decode(fixture.pyramid.at(path({ 3, { 2, 2 } })), 8);
@@ -389,8 +391,9 @@ TEST_CASE("Online completed cache skips all HTTP and provider identity uses fiel
     REQUIRE(resumed);
     CHECK(resumed->reused_tiles == 7);
     CHECK(fixture.server.requests().empty());
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     for (const auto& key : keys(*output)) {
         const auto path = *output->path_for(key);
         CHECK(std::filesystem::equivalent(path, partial / path.lexically_relative(fixture.options.output.output)));
@@ -493,8 +496,9 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
     auto result = tiles::build(fixture.options);
     REQUIRE(result);
     CHECK(result->tile_count > 0);
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     for (const auto& key : keys(*output)) {
         CHECK(key.zoom_level == 4);
     }
@@ -515,8 +519,9 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
     auto holed = tiles::build(fixture.options);
     INFO((holed ? "success" : holed.error().to_string()));
     REQUIRE(holed);
-    auto hole_output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(hole_output);
+    auto hole_output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(hole_output_result);
+    auto [hole_output, hole_output_metadata] = std::move(*hole_output_result);
     CHECK_FALSE(keys(*hole_output).contains(Key { 4, { 5, 5 } }));
 }
 
@@ -529,8 +534,9 @@ TEST_CASE("Online partial cache preserves completed leaves while discovering unf
     auto cancelled = tiles::build(fixture.options, [&] { return std::filesystem::exists(partial / "4/4/4.amort"); });
     REQUIRE_FALSE(cancelled);
     CHECK(cancelled.error().code() == Error::Code::Cancelled);
-    auto cached = storage::open<glm::u8vec3>(partial, { .allow_incomplete = true });
-    REQUIRE(cached);
+    auto cached_result = storage::open<glm::u8vec3>(partial, { .allow_incomplete = true });
+    REQUIRE(cached_result);
+    auto [cached, cached_metadata] = std::move(*cached_result);
     const auto completed = keys(*cached);
     REQUIRE_FALSE(completed.empty());
     REQUIRE(completed.size() < 7);
@@ -545,8 +551,9 @@ TEST_CASE("Online partial cache preserves completed leaves while discovering unf
     REQUIRE(resumed);
     CHECK(resumed->tile_count == 7);
     CHECK(resumed->reused_tiles == completed.size());
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     const auto physical = keys(*output);
     for (const auto& key : completed) {
         CHECK(std::filesystem::equivalent(*output->path_for(key), *cached->path_for(key)));
@@ -665,8 +672,9 @@ TEST_CASE("Online coordinator ignores active subdivision after cancellation", "[
     REQUIRE_FALSE(result);
     CHECK(result.error().code() == Error::Code::Cancelled);
     CHECK(prepared == 1);
-    auto output = storage::open<glm::u8vec3>(fixture.options.output.output.string() + ".part", { .allow_incomplete = true });
-    REQUIRE(output);
+    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output.string() + ".part", { .allow_incomplete = true });
+    REQUIRE(output_result);
+    auto [output, output_metadata] = std::move(*output_result);
     CHECK(keys(*output).empty());
 }
 

@@ -149,12 +149,14 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
         CHECK(bytes == built->tile_bytes);
     };
     if (bands == 1) {
-        auto opened = storage::open<float>(fixture.options.output);
-        REQUIRE(opened);
+        auto opened_result = storage::open<float>(fixture.options.output);
+        REQUIRE(opened_result);
+        auto [opened, opened_metadata] = std::move(*opened_result);
         check(*opened);
     } else {
-        auto opened = storage::open<glm::u8vec3>(fixture.options.output);
-        REQUIRE(opened);
+        auto opened_result = storage::open<glm::u8vec3>(fixture.options.output);
+        REQUIRE(opened_result);
+        auto [opened, opened_metadata] = std::move(*opened_result);
         check(*opened);
     }
 }
@@ -272,8 +274,9 @@ TEST_CASE("RF antimeridian source reaches canonical tiles on both sides", "[rf-b
     auto built = rf_builder::gdal::build(fixture.options);
     INFO((built ? "" : built.error().to_string()));
     REQUIRE(built);
-    auto opened = storage::open<float>(fixture.options.output);
-    REQUIRE(opened);
+    auto opened_result = storage::open<float>(fixture.options.output);
+    REQUIRE(opened_result);
+    auto [opened, opened_metadata] = std::move(*opened_result);
     bool west = false, east = false;
     for (const auto& key : physical_keys(*opened)) {
         CHECK(raster_store::StoreTraits::is_valid(key));
@@ -328,16 +331,18 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     Fixture fixture;
     auto first = rf_builder::gdal::build(fixture.options);
     REQUIRE(first);
-    auto original = storage::open<float>(fixture.options.output);
-    REQUIRE(original);
+    auto original_result = storage::open<float>(fixture.options.output);
+    REQUIRE(original_result);
+    auto [original, original_metadata] = std::move(*original_result);
     const auto keys = physical_keys(*original);
     REQUIRE(keys.size() == 4);
     const auto cache_path = fixture.directory.path() / "cache";
     {
         storage::CreateOptions create_options;
         create_options.tile_dimensions = { 16, 16 };
-        auto cache = storage::create<float>(cache_path, create_options);
-        REQUIRE(cache);
+        auto cache_result = storage::create<float>(cache_path, create_options);
+        REQUIRE(cache_result);
+        auto [cache, cache_metadata] = std::move(*cache_result);
         REQUIRE(cache->copy_from(keys[0], *original));
         REQUIRE(cache->save_index());
         auto selected_table = raster_store::attribution::read_table(cache->base_path() / "raster_store.index");
@@ -362,10 +367,12 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         REQUIRE(second);
         CHECK(second->tile_count == first->tile_count);
         CHECK(second->reused_tiles == 1);
-        auto output = storage::open<float>(fixture.options.output);
-        auto cache = storage::open<float>(*fixture.options.cache, { .allow_incomplete = true });
-        REQUIRE(output);
-        REQUIRE(cache);
+        auto output_result = storage::open<float>(fixture.options.output);
+        auto cache_result = storage::open<float>(*fixture.options.cache, { .allow_incomplete = true });
+        REQUIRE(output_result);
+        auto [output, output_metadata] = std::move(*output_result);
+        REQUIRE(cache_result);
+        auto [cache, cache_metadata] = std::move(*cache_result);
         CHECK(std::filesystem::equivalent(*output->path_for(keys[0]), *cache->path_for(keys[0])));
     }
     SECTION("mismatching record") {
@@ -374,13 +381,15 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("missing indexed payload aborts without indexing the failed link") {
-        auto cache = storage::open<float>(*fixture.options.cache, { .allow_incomplete = true });
-        REQUIRE(cache);
+        auto cache_result = storage::open<float>(*fixture.options.cache, { .allow_incomplete = true });
+        REQUIRE(cache_result);
+        auto [cache, cache_metadata] = std::move(*cache_result);
         REQUIRE(std::filesystem::remove(*cache->path_for(keys[0])));
         auto failed = rf_builder::gdal::build(fixture.options);
         CHECK_FALSE(failed);
-        auto partial = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
-        REQUIRE(partial);
+        auto partial_result = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
+        REQUIRE(partial_result);
+        auto [partial, partial_metadata] = std::move(*partial_result);
         CHECK_FALSE(*partial->has(keys[0]));
         CHECK(std::filesystem::exists(partial->base_path() / "inputs.tmp"));
     }
@@ -478,8 +487,9 @@ TEST_CASE("RF mask is an output selection and not a source cutline", "[rf-builde
     mask(fixture.options.mask, rectangle(tiny));
     auto built = rf_builder::gdal::build(fixture.options);
     REQUIRE(built);
-    auto opened = storage::open<float>(fixture.options.output);
-    REQUIRE(opened);
+    auto opened_result = storage::open<float>(fixture.options.output);
+    REQUIRE(opened_result);
+    auto [opened, opened_metadata] = std::move(*opened_result);
     unsigned accepted = 0;
     for (const auto& key : physical_keys(*opened)) {
         auto tile = opened->load(key);
@@ -665,8 +675,9 @@ TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "
     REQUIRE(rf_builder::gdal::build(fixture.options));
     const auto baseline = fixture.options.output;
     const auto compare = [&]<typename PixelType>() {
-        auto original = storage::open<PixelType>(baseline);
-        REQUIRE(original);
+        auto original_result = storage::open<PixelType>(baseline);
+        REQUIRE(original_result);
+        auto [original, original_metadata] = std::move(*original_result);
         const auto keys = physical_keys(*original);
         for (const unsigned jobs : { 2u, 4u, 8u, 12u }) {
             fixture.options.jobs = jobs;
@@ -674,8 +685,9 @@ TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "
             auto built = rf_builder::gdal::build(fixture.options);
             INFO((built ? "" : built.error().to_string()));
             REQUIRE(built);
-            auto output = storage::open<PixelType>(fixture.options.output);
-            REQUIRE(output);
+            auto output_result = storage::open<PixelType>(fixture.options.output);
+            REQUIRE(output_result);
+            auto [output, output_metadata] = std::move(*output_result);
             CHECK(physical_keys(*output) == keys);
             for (const auto& key : keys) {
                 auto expected = original->load(key);
@@ -733,8 +745,9 @@ TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-bu
     CHECK(polls > 0);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output));
     CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
-    auto partial = storage::open<float>(partial_path, { .allow_incomplete = true });
-    REQUIRE(partial);
+    auto partial_result = storage::open<float>(partial_path, { .allow_incomplete = true });
+    REQUIRE(partial_result);
+    auto [partial, partial_metadata] = std::move(*partial_result);
     const auto keys = physical_keys(*partial);
     REQUIRE_FALSE(keys.empty());
     CHECK(keys.size() <= 5); // one consumed tile plus at most 2*jobs outstanding
@@ -755,8 +768,9 @@ TEST_CASE("RF cancellation during planning leaves an empty reusable checkpoint",
     const auto result = rf_builder::gdal::build(fixture.options, [] { return true; });
     REQUIRE_FALSE(result);
     CHECK(result.error().code() == Error::Code::Cancelled);
-    auto partial = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
-    REQUIRE(partial);
+    auto partial_result = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
+    REQUIRE(partial_result);
+    auto [partial, partial_metadata] = std::move(*partial_result);
     CHECK(physical_keys(*partial).empty());
     CHECK(std::filesystem::exists(partial->base_path() / "inputs.tmp"));
 }
@@ -777,8 +791,9 @@ TEST_CASE("RF parallel writer failure never publishes or indexes a failed payloa
     REQUIRE(blocked);
     REQUIRE_FALSE(result);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output));
-    auto partial = storage::open<float>(partial_path, { .allow_incomplete = true });
-    REQUIRE(partial);
+    auto partial_result = storage::open<float>(partial_path, { .allow_incomplete = true });
+    REQUIRE(partial_result);
+    auto [partial, partial_metadata] = std::move(*partial_result);
     CHECK(physical_keys(*partial).empty());
     CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
 }

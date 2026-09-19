@@ -1,4 +1,43 @@
 # Terminology
+
+The planned extraction and storage contract is in
+[Tiles with halo](tiles-with-halo.md).
+
+**Tile interior**:
+The square raster region corresponding to a tile ID's geographic extent,
+excluding its halo.
+
+**Stored tile size**:
+The side length in pixels of a persisted tile raster, including its halo.
+
+**Nominal tile size**:
+The side length in pixels of a tile's interior, excluding its halo.
+
+**Value mapping**:
+The interpretation of stored numeric values as linear values or sRGB-encoded
+colour channels with linear alpha where present. Linear values include
+elevation data as well as linear colour data.
+
+**Tile halo**:
+Additional raster pixels surrounding a tile interior on all four sides,
+including the corners, at the interior's pixel spacing.
+_Avoid_: Tile border
+
+**Halo width**:
+The number of halo pixels on each side of a tile interior.
+_Avoid_: Border width
+
+**Tile with halo**:
+A tile whose data and attribution rasters cover both its interior and halo.
+A halo width of zero is permitted.
+_Avoid_: Tile with borders, tile with border
+
+**Stored halo width**:
+The halo width of the tile rasters persisted in a raster-store snapshot.
+
+**Requested halo width**:
+The halo width of the tile requested by a consumer of the raster store.
+
 ** attribution raster **
 : A square data matrix (image), containing indices into the source-attribution table
 

@@ -152,34 +152,6 @@ resolves:
 The generator determines the requested halo and applies boundary conditions
 only at true dataset/world boundaries or NoData boundaries.
 
-## Mixed sources
-
-The raster store contains exactly one payload and one source ID for each
-stored pixel. A generator filter may span pixels attributed to several
-sources:
-
-```text
-store pixels:     A  A  A  B  B
-filter support:      [-------]
-output value:       blend of A and B payloads
-```
-
-This is allowed. A generated output pixel does not retain a source ID. The
-generated tile records tile-level provenance, at minimum the set of source IDs
-whose payload values contributed nonzero filter weight to any output pixel.
-
-Source IDs are categorical and are never averaged. Payload filtering and
-provenance collection are parallel operations:
-
-```text
-numeric payload samples → weighted filtered value
-source IDs              → contributing-source set
-```
-
-The exact handling of invalid/NoData samples requires a policy. A common
-continuous-raster rule is to normalize by the total weight of valid samples,
-but that must not be applied automatically to categorical data.
-
 ## Layer-specific filtering
 
 Sampling placement alone does not determine a correct filter:
@@ -240,7 +212,9 @@ Before production filtering is implemented, synthetic fixtures should prove:
 3. Two adjacent area-pixel tiles match a single equivalent metatile result.
 4. Two adjacent vertex-pixel tiles produce bit-identical shared edges.
 5. Filtering is unchanged when a store window is split into different chunks.
-6. A source boundary blends payloads but reports both tile-level sources.
+6. A source boundary blends valid payloads and reports representative
+   attribution according to the [scaling contract](scaling.md): local 2x2
+   selection for reduction and nearest-neighbour attribution for upscaling.
 7. A NoData boundary follows the configured validity rule.
 8. A coherent physical parent can be chosen instead of finer descendants.
 9. TMS and Slippy input IDs normalize to the same canonical spatial tile.

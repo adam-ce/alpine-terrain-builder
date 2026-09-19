@@ -15,6 +15,7 @@ TB generation and the tile server remain future work.
 
 ## Plans
 
+- [Tiles with halo: design in progress](tiles-with-halo.md)
 - [RF-builder design and implementation plan](rf-builder-design.md)
 - [Online tile import extension](rf-builder-downloader-design.md)
 

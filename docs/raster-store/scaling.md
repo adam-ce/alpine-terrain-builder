@@ -1,11 +1,9 @@
 # Raster scaling
 
 Status: behavioral design agreed on 2026-09-18, with the unified zoom-level
-API convention agreed on 2026-09-19. All design interview questions are
-resolved. The implementation plan below is proposed for
-approval; implementation has not been authorized. The sampling document,
-halo design, and representative attribution ADR have been aligned with the
-accepted decisions.
+API convention agreed on 2026-09-19. Implementation was authorized and
+completed on 2026-09-19. The scaler and its tests are implemented; halo
+extraction and its storage metadata remain separate work.
 
 ## Scope
 
@@ -128,8 +126,10 @@ intended.
 Otherwise, reduction filters use valid samples from their filter support and
 normalize by the sum of their weights. If that denominator is zero or
 numerically unstable, copy a valid pixel from the local block. Attribution
-still follows the local voting rule. The numerical stability threshold is
-not yet fixed.
+still follows the local voting rule. The implementation treats the denominator
+as unstable when `abs(sum(weights)) <= 32 * epsilon * sum(abs(weights))`,
+where `epsilon` belongs to the working component type. Negative stable sums
+are permitted. Zero-weight samples do not contribute payload arithmetic.
 
 Keep one representative attribution per output pixel. Complete provenance
 and contributing-source sets are not required. Apply attribution selection
@@ -170,9 +170,9 @@ produces a nonfinite result destined for integer storage.
 Filtering uses the specified working type, followed by rounding and
 clamping as applicable; results are subject to that type's floating-point
 precision. This also applies to weighted 64-bit integer results. Assess
-weight cancellation relative to the sum of absolute weights. Choose and
-verify the cancellation threshold and numerical test tolerances during
-implementation.
+weight cancellation relative to the sum of absolute weights using the
+threshold above. Numerical tests use tolerances appropriate to the working
+type and fixture, as recorded below.
 
 Each reduction step stores its result in the output pixel type, including
 rounding and sRGB re-encoding. A reduction by four therefore follows the
@@ -237,17 +237,16 @@ by the scaler's local fallback. The
 records why one representative source ID is retained rather than complete
 provenance, referring here for the selection rules.
 
-## Proposed implementation plan
+## Implementation
 
-This plan is awaiting approval. Implement the scaler and its tests in the
-current terrain-builder worktree. Halo extraction and its storage metadata
-remain a separate implementation task; their documentation already describes
-use of this facility.
+The scaler and tests were implemented in the terrain-builder worktree.
+Halo extraction and its storage metadata remain a separate implementation
+task; their documentation already describes use of this facility.
 
-### Public API proposal
+### Public API
 
-Place the API in `src/terrainlib/raster/algorithm.h`, in namespace
-`raster::algorithm`. The following declarations are proposed. The public
+The API is in `src/terrainlib/raster/algorithm.h`, in namespace
+`raster::algorithm`. The public
 `scale` and `required_halo` use the agreed signed direction convention;
 directional helpers and custom reduction use unsigned exponent counts.
 
@@ -312,12 +311,12 @@ templated call operators accepting the agreed spans. Constrain the custom
 reduction overload to a callable with that input and working-pixel result.
 Reuse the supplied functor through the repeated stages without type erasure.
 
-Keep the proposed scaler `ValueMapping` independent of snapshot metadata.
+The scaler `ValueMapping` is independent of snapshot metadata.
 The planned metadata enum does not exist in code yet; the future halo
 extractor can explicitly map its persisted selection to the scaler's enum.
 This implementation does not require changing the manifest schema.
 
-### Implementation sequence
+### Implementation sequence followed
 
 1. Add the public declarations, working-pixel traits, parameter validation,
    the unified dispatcher and required-halo query, zero-level cropping, and
@@ -379,3 +378,22 @@ The implementation plan should include:
 
 Vertex shared-edge tests, physical-source selection, world wrapping, and
 input tile-scheme normalization remain broader generator/extractor tests.
+
+### Verification results — 2026-09-19
+
+- Existing GCC Debug build: `unittests_terrainlib` builds successfully.
+- Focused `[raster-algorithm]` suite: 34 cases, 904 assertions, all passing.
+- Terrainlib regression suite, excluding the existing
+  `mesh::clip_on_bounds benchmark`: 519 cases, 25698 assertions, all passing.
+- The independent double-precision Lanczos reference agrees with the float
+  implementation within `3e-6` for the validity-aware fixture. Constant-7
+  Lanczos fixtures remain within `3e-5`; the high-frequency fixture at
+  0.4 cycles per input pixel has output magnitude below 0.03 for every radius.
+- Separately supplied reduction stages and tile/metatile results agree
+  exactly in the exercised fixtures. Endpoint, nonfinite, vector-precision,
+  sRGB, and invalid-input cases pass.
+- Qt C++ deterministic lint reports no findings; all six review missions
+  report no confirmed defects. An optional future profiling target is the
+  repeated sRGB decoding of overlapping Lanczos samples.
+- New C++ is formatted with `clang-format-21`; whitespace and Git-attribute
+  line-ending checks pass.

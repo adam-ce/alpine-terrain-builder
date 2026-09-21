@@ -159,6 +159,8 @@ add_library(terrainlib
     range/RangeTo.h
     range/RangeToInclusive.h
 
+    raster/algorithm.h
+
     raster_store/StoreTraits.h
     raster_store/Tile.h
     raster_store/attribution.h raster_store/attribution.cpp

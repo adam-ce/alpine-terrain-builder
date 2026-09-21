@@ -66,6 +66,7 @@ add_executable(unittests_terrainlib
     terrainlib/quantize.cpp
     terrainlib/range.cpp
     terrainlib/range_utils.cpp
+    terrainlib/raster_algorithm.cpp
     terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp

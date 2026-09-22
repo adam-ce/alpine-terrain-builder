@@ -2,6 +2,7 @@
 #include "io/envelope.h"
 #include "provider.h"
 #include "raster_store/attribution.h"
+#include "raster_store/pixel.h"
 #include <gdal_version.h>
 #include <opencv2/core/version.hpp>
 namespace rf_builder::tiles::inputs {
@@ -17,6 +18,8 @@ struct Record {
     std::string decoder_version = CV_VERSION;
     std::uint32_t processing_version = 1;
     std::uint32_t gdal_version = GDAL_VERSION_NUM;
+    raster_store::pixel::Mapping value_mapping = raster_store::pixel::Mapping::SRGBA;
+
     bool operator==(const Record&) const = default;
 };
 using Schema = io::envelope::PayloadSchema<"rf_builder.tiles.Inputs", io::envelope::Version<1, Record>>;

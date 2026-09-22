@@ -303,7 +303,7 @@ build/Desktop_Debug/src/rf_builder/rf-builder gdal \
 
 `--mode scalar` is the default and reads band 1. RGB band selection follows
 colour interpretations; use `--bands 3 2 1` to supply an explicit RGB order.
-`--tile-size 4096` is the default; other positive square sizes are accepted.
+`--tile-size 4096` is the default; other positive power-of-two sides are accepted.
 HTTP(S) dataset identifiers are opened through GDAL `/vsicurl/`.
 
 Use `--cache /data/rf/aborted-snapshot.part` to reuse an incomplete compatible
@@ -379,3 +379,18 @@ are separate phases, and variable tile costs can change the estimate.
 - Memory is bounded by worker scratch buffers, outstanding tile payloads,
   GDAL's cache, per-worker mask geometry, and the snapshot's sparse index.
   Default-size scalar payloads occupy 96 MiB each before compression.
+
+## Stored value mapping
+
+Both `rf-builder gdal` and `rf-builder tiles` accept
+`--value-mapping linear|srgba`. RGB8/RGBA8 output defaults to `srgba`; all other
+pixel representations default to `linear`. Alpha remains linear under SRGBA.
+An explicit override takes precedence. The resolved mapping is written to
+snapshot metadata and the incomplete-cache input record; an explicit option
+matching the default remains cache-compatible. RF stores always have zero
+halo, and cache metadata must match nominal/stored sizes, halo, mapping, and
+codec before any reuse or production.
+
+This option declares the stored values' interpretation. Existing GDAL sampling
+and online JPEG linear-light fallback interpolation retain their existing
+kernels; the option does not perform source-profile conversion.

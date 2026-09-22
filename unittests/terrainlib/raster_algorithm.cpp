@@ -132,7 +132,8 @@ TEST_CASE("raster scaling rejects invalid geometry and dimensions before allocat
     CHECK_FALSE(scale(data, attribution, 1, 0, Filter::Box, Interpolation::Bilinear));
     CHECK_FALSE(scale(data, attribution, -1, 0, Filter::Lanczos2));
     CHECK_FALSE(scale(data, attribution, 0, 0, Filter::Box, Interpolation::Bilinear, static_cast<ValueMapping>(99)));
-    CHECK(scale(data, attribution, 0, 0, Filter::Box, Interpolation::Bilinear, ValueMapping::SRGBA).error().code() == Error::Code::Unsupported);
+    CHECK(scale(data, attribution, 0, 0, Filter::Box, Interpolation::Bilinear, ValueMapping::SRGBA));
+    CHECK(scale(data, attribution, -1, 0, Filter::Box, Interpolation::Bilinear, ValueMapping::SRGBA).error().code() == Error::Code::Unsupported);
     CHECK(scale(data, attribution, 31).error().code() == Error::Code::ResourceExhausted);
     CHECK_FALSE(scaler::reduce(data, attribution, 0, (std::numeric_limits<unsigned>::max)(), algorithm::Max {}));
 }
@@ -712,4 +713,91 @@ TEST_CASE("scaling invokes encoders with const working values", "[raster-algorit
     for (const auto value : *up) {
         CHECK(value == 7);
     }
+}
+
+TEST_CASE("scaling windows match full output crops across stages and kernels", "[raster-algorithm]")
+{
+    for (int levels : { -2, 0, 2 })
+        for (auto filter : { Filter::Box, Filter::Lanczos2, Filter::Lanczos3, Filter::Lanczos4 })
+            for (auto interpolation : { Interpolation::NearestNeighbour, Interpolation::Bilinear }) {
+                const unsigned halo = *algorithm::required_halo(levels, interpolation, filter);
+                auto [data, attribution] = field({ 32, 24 }, halo);
+                auto full = scaler::scale(data, attribution, halo, levels, interpolation, filter, ValueMapping::Linear);
+                REQUIRE(full);
+                const glm::uvec2 offset(3, 1), size(3, 4);
+                auto window = scaler::scale(data, attribution, halo, levels, interpolation, filter, offset, size, ValueMapping::Linear);
+                REQUIRE(window);
+                same_raster(window->first, *algorithm::copy(*raster::make_view(full->first, offset, size)));
+                same_raster(window->second, *algorithm::copy(*raster::make_view(full->second, offset, size)));
+            }
+}
+
+TEST_CASE("scaling windows retain conversion tuples and per-stage encoded rounding", "[raster-algorithm]")
+{
+    radix::Raster<glm::u8vec4> data({ 32, 32 });
+    radix::Raster<std::uint16_t> attribution({ 32, 32 });
+    for (unsigned y = 0; y < 32; ++y)
+        for (unsigned x = 0; x < 32; ++x) {
+            data.pixel({ x, y }) = { x * 7, y * 7, (x * y) % 256, (x + 3 * y) % 256 };
+            attribution.pixel({ x, y }) = (x + y) % 3;
+        }
+    auto full = scaler::scale(data, attribution, 0, -2, Interpolation::NearestNeighbour, Filter::Box, ValueMapping::SRGBA);
+    auto window = scaler::scale(data, attribution, 0, -2, Interpolation::NearestNeighbour, Filter::Box, { 1, 2 }, { 4, 3 }, ValueMapping::SRGBA);
+    REQUIRE(full);
+    REQUIRE(window);
+    same_raster(window->first, *algorithm::copy(*raster::make_view(full->first, { 1, 2 }, { 4, 3 })));
+    same_raster(window->second, *algorithm::copy(*raster::make_view(full->second, { 1, 2 }, { 4, 3 })));
+}
+
+TEST_CASE("small upscale windows do not require a representable full raster", "[raster-algorithm]")
+{
+    radix::Raster<float> source({ 4096, 2 });
+    source.fill(17);
+    auto result = algorithm::scale(source, 0, 20, Interpolation::NearestNeighbour, Filter::Box, { 4000000000u, 37 }, { 2, 3 });
+    REQUIRE(result);
+    CHECK(result->pixel({ 1, 2 }) == 17);
+    auto clamped = *raster::make_clamped_view(source, { -1, -1 }, { 4098, 4 });
+    auto linear = algorithm::scale(clamped, 1, 20, Interpolation::Bilinear, Filter::Box, { 4000000000u, 37 }, { 2, 3 });
+    REQUIRE(linear);
+    CHECK(linear->pixel({ 1, 2 }) == 17);
+}
+
+TEST_CASE("scaling validates full destinations and windows before writing", "[raster-algorithm]")
+{
+    radix::Raster<float> source({ 4, 4 });
+    source.fill(1);
+    radix::Raster<float> destination({ 3, 3 });
+    destination.fill(99);
+    CHECK_FALSE(algorithm::scale(source, 0, 1, Interpolation::NearestNeighbour, Filter::Box, destination));
+    CHECK_FALSE(algorithm::scale(source, 0, 0, Interpolation::NearestNeighbour, Filter::Box, { 2, 2 }, destination));
+    CHECK_FALSE(algorithm::scale(source, 0, 0, Interpolation::NearestNeighbour, Filter::Box, { UINT_MAX, 0 }, destination));
+    CHECK(destination.pixel({ 0, 0 }) == 99);
+    radix::Raster<std::uint16_t> attribution({ 4, 4 });
+    radix::Raster<std::uint16_t> wrong({ 2, 2 });
+    CHECK_FALSE(scaler::scale(source, attribution, 0, 1, Interpolation::NearestNeighbour, Filter::Box, { 0, 0 }, ValueMapping::Linear, destination, wrong));
+    CHECK(destination.pixel({ 0, 0 }) == 99);
+}
+
+TEST_CASE("windowed scaling writes strided destinations and rejects overlap before writes", "[raster-algorithm]")
+{
+    auto [data, attribution] = field({ 16, 16 }, 1);
+    auto expected = scaler::scale(data, attribution, 1, 1, Interpolation::Bilinear, Filter::Box, { 3, 5 }, { 5, 7 }, ValueMapping::Linear);
+    REQUIRE(expected);
+    radix::Raster<float> output({ 10, 12 });
+    output.fill(-99);
+    radix::Raster<std::uint16_t> output_attribution({ 10, 12 });
+    output_attribution.fill(99);
+    auto view = *raster::make_view(output, { 2, 3 }, { 5, 7 });
+    auto attribution_view = *raster::make_view(output_attribution, { 2, 3 }, { 5, 7 });
+    REQUIRE(scaler::scale(data, attribution, 1, 1, Interpolation::Bilinear, Filter::Box, { 3, 5 }, ValueMapping::Linear, view, attribution_view));
+    same_raster(*algorithm::copy(view), expected->first);
+    same_raster(*algorithm::copy(attribution_view), expected->second);
+    CHECK(output.pixel({ 0, 0 }) == -99);
+    const auto before = data;
+    CHECK_FALSE(algorithm::scale(data, 1, 1, Interpolation::Bilinear, Filter::Box, { 3, 5 }, *raster::make_view(data, { 2, 3 }, { 5, 7 })));
+    same_raster(data, before);
+    radix::Raster<float> oversized({ 40, 40 });
+    oversized.fill(99);
+    CHECK_FALSE(algorithm::scale(data, 1, 1, Interpolation::Bilinear, Filter::Box, oversized));
+    CHECK(oversized.pixel({ 0, 0 }) == 99);
 }

@@ -587,6 +587,8 @@ TEST_CASE("Online CLI requires the subcommand and provider file and documents JS
     CHECK(help.find("--provider providers/basemap.json") != std::string::npos);
     CHECK(help.find("url_pattern") != std::string::npos);
     CHECK(help.find("ceiling") != std::string::npos);
+    CHECK(help.find("--value-mapping") != std::string::npos);
+    CHECK(help.find("linear alpha") != std::string::npos);
     CHECK(command(" --dataset absent") != 0);
     CHECK(command(" tiles --url https://example.org") != 0);
     CHECK(command(" tiles --provider absent") != 0);
@@ -594,7 +596,9 @@ TEST_CASE("Online CLI requires the subcommand and provider file and documents JS
     write_text(fixture.options.provider, json(fixture.server.base(), 3, 3));
     const auto args = " tiles --provider " + quote(fixture.options.provider.string()) + " --mask " + quote(fixture.options.mask) + " --output "
         + quote(fixture.options.output.output.string()) + " --attribution-index 1 --tile-size 16 --jobs 2";
-    REQUIRE(command(args) == 0);
+    CHECK(command(args + " --value-mapping invalid") != 0);
+    REQUIRE(command(args + " --value-mapping linear") == 0);
+    CHECK(raster_store::io::manifest::read_metadata(fixture.options.output.output)->value_mapping == raster_store::pixel::Mapping::Linear);
     std::ifstream persisted(fixture.options.output.output.string() + ".log");
     const std::string output { std::istreambuf_iterator<char>(persisted), {} };
     CHECK(output.find("estimated 100.0%") != std::string::npos);
@@ -616,6 +620,14 @@ TEST_CASE("Online source settings and cache failures abort before requests", "[r
         fixture.options.output.cache = fixture.directory.path() / "corrupt.part";
         std::filesystem::create_directory(*fixture.options.output.cache);
         write_text(*fixture.options.output.cache / "inputs.tmp", "broken");
+    }
+    SECTION("different value mapping")
+    {
+        fixture.options.output.cache = fixture.directory.path() / "changed.part";
+        std::filesystem::create_directory(*fixture.options.output.cache);
+        auto record = fixture.record();
+        record.value_mapping = raster_store::pixel::Mapping::Linear;
+        REQUIRE(io::envelope::write_to_path<tiles::inputs::Schema>(record, *fixture.options.output.cache / "inputs.tmp"));
     }
     SECTION("source settings mismatch")
     {

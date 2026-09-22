@@ -13,6 +13,12 @@ void configure(CLI::App& app, Options& options)
     app.add_option("--bands", options.bands, "One scalar band or three bands in RGB order")->expected(1, 3);
     app.add_option("--tile-size", options.tile_side, "Pixels per side")->check(CLI::PositiveNumber)->default_val(4096);
     app.add_option("--jobs", options.jobs, "Concurrent tile workers")->check(CLI::PositiveNumber)->default_val(1);
+    app.add_option_function<std::string>(
+           "--value-mapping",
+           [&options](
+               const auto& value) { options.value_mapping = value == "linear" ? raster_store::pixel::Mapping::Linear : raster_store::pixel::Mapping::SRGBA; },
+           "Stored value mapping override: RGB/RGBA uint8 defaults to srgba (linear alpha); all other pixels default to linear")
+        ->check(CLI::IsMember({ "linear", "srgba" }));
     app.add_option_function<std::string>("--cache", [&options](const auto& path) { options.cache = path; }, "Compatible incomplete .part snapshot to reuse");
 }
 } // namespace rf_builder::gdal::cli

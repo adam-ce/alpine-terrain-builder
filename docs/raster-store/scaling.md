@@ -2,8 +2,8 @@
 
 Status: the single-raster, view-based refactor was implemented on 2026-09-22,
 including paired raster-store wrappers, conversion tuples, rectangular strided
-windows, and separable box/Lanczos filtering. Halo extraction and its storage
-metadata remain separate work.
+windows, and separable box/Lanczos filtering. Output-window scaling, halo
+extraction, and snapshot halo metadata were implemented later the same day.
 
 ## Scope and ownership
 
@@ -124,6 +124,84 @@ Expected<unsigned> required_downscaling_halo(
 corresponding to the requested direction. The filter enum represents the three
 Lanczos support radii without a separate parameter for box filtering.
 
+## Agreed windowed scaling extension
+
+Implemented on 2026-09-22 after the view-based scaler refactor. Overloads of generic and paired
+`scale` select a window of their conceptual full output, in either
+scaling direction.
+
+Use `output_offset` (`glm::uvec2`) and, for allocating overloads,
+`output_size` (`glm::uvec2`) as direct parameters. The offset is measured in
+pixels of the conceptual scaled output, excluding the source halo; writing
+starts at destination-local `(0,0)`. Destination-taking overloads infer the
+window size from the destination. Paired destinations must have matching
+sizes and use the same offset.
+
+Calls without `output_offset` require destinations whose dimensions exactly
+match the full scaled output, excluding the source halo. A smaller destination
+does not request cropping; any size mismatch returns `InvalidInput` before
+writing. This applies to both generic and paired overloads. Only overloads
+with an explicit `output_offset` infer a crop size from the destination.
+
+Generic call shapes extend the existing convention:
+
+```cpp
+scale(source, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, destination);
+scale(source, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, output_size);
+scale(source, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, conversion, destination);
+scale(source, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, output_size, conversion);
+```
+
+The corresponding paired forms are:
+
+```cpp
+scale(data, attribution, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, value_mapping, data_destination, attribution_destination);
+scale(data, attribution, halo_width, n_zoom_levels, interpolation, filter,
+    output_offset, output_size, value_mapping);
+```
+
+The selected rectangle is `[output_offset, output_offset + output_size)`.
+Results must equal full scaling followed by cropping this rectangle, while
+computing only the necessary samples. Existing full-output overloads retain
+their behavior and share the processing implementation with windowed forms.
+Preserve existing return types, conversion defaults, signed zoom-level
+convention, interpolation/filter selection, and pixel semantics. Zero levels
+select an exact crop within the source interior, after excluding its halo.
+
+For upscaling, evaluate only requested output pixels with the sampling phase
+of their position in the conceptual full result. A source view alone cannot
+express arbitrary output offsets: they need not align with source-pixel
+boundaries. Use integer quotient/remainder calculations before converting
+the local interpolation phase to floating point.
+
+For downscaling, work backwards from the requested output window to the
+source and intermediate samples needed by each reduction step, including
+filter support. Preserve the existing globally aligned reduction stages,
+encoding/rounding after each stage, and independent attribution reduction.
+Do not clamp at processing-window edges or replace repeated reductions with
+a single larger filter. This extension does not add window overloads to
+custom `reduce` as a separate public feature.
+
+Validate the selected rectangle before writing; it must fit inside the
+conceptual full output. Use unsigned factor and coordinate arithmetic with
+overflow-safe shift and bounds checks. The full conceptual image
+need not fit raster dimensions or be allocated; only the requested output
+and necessary intermediate storage must fit their allocation limits.
+Preserve source-halo requirements and the existing overlap rules.
+
+Verification must compare windows against full-scale-then-crop for zero,
+positive, and negative levels, including non-aligned offsets, multi-step
+rounding, Lanczos support, paired attribution, and strided destinations.
+Verify that calls without `output_offset` reject both smaller and larger
+destinations without modifying them.
+Test bounded work for distant ancestors without allocating their conceptual
+full output, including a 20-level ancestor gap.
+
 ## Algorithms and reducers
 
 Upscaling offers nearest-neighbour and bilinear interpolation. Upscale directly
@@ -234,8 +312,9 @@ Reuse generic validation and processing helpers rather than duplicate kernels.
 
 `Mapping::Linear` selects the supplied linear conversion for `scale`;
 `Mapping::SRGBA` selects sRGB conversion for `scale` and requires RGB/RGBA
-unsigned 8-bit pixels. Validate mapping enumerators and compatibility before
-writing either output. Callers may explicitly supply the sRGB conversion tuple
+unsigned 8-bit pixels for numerical resampling. Zero-level and nearest-neighbour
+copies bypass conversion and do not impose that type restriction. Validate
+mapping enumerators, and compatibility when needed, before writing either output. Callers may explicitly supply the sRGB conversion tuple
 to paired `reduce`, just as they can supply custom lambdas.
 
 ### Shared pixel description
@@ -248,12 +327,11 @@ the new header and names.
 
 Define `pixel::Mapping { Linear, SRGBA }` in that same header. It replaces the
 former scaler `ValueMapping` name while retaining runtime mapping selection at
-the paired `scale` boundary. The planned snapshot metadata and creation options
+the paired `scale` boundary. Snapshot metadata and creation options
 use this same type for `value_mapping`; do not define a separate enum in the
 manifest's versioned namespace. Generic raster algorithms accept conversion
 tuples and do not depend on the raster-store pixel header or mapping enum.
-Adding the planned metadata field remains part of the separate halo/metadata
-implementation, not an implicit schema change in this refactor.
+The halo implementation added this field to version 1 metadata.
 
 ## Conversion tuples and numeric behavior
 
@@ -336,7 +414,7 @@ original larger block. Repeated rounding and encoding also prevent a general
 promise of agreement with a single larger numeric filter.
 
 The planned snapshot metadata uses `raster_store::pixel::Mapping` to describe
-linear or sRGB interpretation. The future halo extractor passes that value to
+linear or sRGB interpretation. The halo extractor passes that value to
 paired `scale`, which selects the corresponding tuple. Runtime mapping
 selection stays at this store boundary; generic `scale` and `reduce` receive
 only conversion callables. This refactor does not change the manifest schema.
@@ -359,7 +437,9 @@ auto padded = raster::make_clamped_view(source, {-1, -1}, {6, 6});
 
 An ordinary 6x6 source view can instead supply physical neighbours. The scaler
 does not construct clamped views implicitly. It rejects an insufficient logical
-halo for either source kind. Internal tile edges must not change filter support.
+halo for either source kind. Clamping bounds are caller policy: the halo
+extractor deliberately clamps interpolation support at the full supplying
+ancestor's edges. A smaller processing cutout must preserve those bounds.
 
 Compute the required halo for the complete operation, including all reduction
 steps. Retain enough intermediate halo for later steps and crop only the final
@@ -549,4 +629,4 @@ benchmark, on 2026-09-19. Its independent Lanczos fixtures, type conversions,
 Qt review, formatting, and line-ending checks passed. CI for commit `2a75fb4`
 subsequently passed GCC 14, Clang unity, ASan, and TSan; GCC 16 failed on the
 median sort diagnostic. These results are a baseline, not verification of the
-refactor specified above. Halo extraction remains unimplemented.
+refactor or halo implementation specified above.

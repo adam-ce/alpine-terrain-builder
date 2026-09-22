@@ -339,7 +339,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     const auto cache_path = fixture.directory.path() / "cache";
     {
         storage::CreateOptions create_options;
-        create_options.tile_dimensions = { 16, 16 };
+        create_options.nominal_tile_size = 16;
         auto cache_result = storage::create<float>(cache_path, create_options);
         REQUIRE(cache_result);
         auto [cache, cache_metadata] = std::move(*cache_result);
@@ -374,6 +374,27 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         REQUIRE(cache_result);
         auto [cache, cache_metadata] = std::move(*cache_result);
         CHECK(std::filesystem::equivalent(*output->path_for(keys[0]), *cache->path_for(keys[0])));
+    }
+    SECTION("equivalent explicit mapping reuses cache")
+    {
+        fixture.options.value_mapping = raster_store::pixel::Mapping::Linear;
+        auto second = rf_builder::gdal::build(fixture.options);
+        REQUIRE(second);
+        CHECK(second->reused_tiles == 1);
+    }
+    SECTION("different mapping rejects cache")
+    {
+        fixture.options.value_mapping = raster_store::pixel::Mapping::SRGBA;
+        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
+    }
+    SECTION("mismatched metadata rejects cache")
+    {
+        auto metadata = raster_store::io::manifest::read_metadata(*fixture.options.cache).value();
+        metadata.value_mapping = raster_store::pixel::Mapping::SRGBA;
+        REQUIRE(raster_store::io::manifest::write_metadata(metadata, *fixture.options.cache));
+        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("mismatching record") {
         fixture.options.tile_side = 8;
@@ -796,4 +817,22 @@ TEST_CASE("RF parallel writer failure never publishes or indexes a failed payloa
     auto [partial, partial_metadata] = std::move(*partial_result);
     CHECK(physical_keys(*partial).empty());
     CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
+}
+
+TEST_CASE("RF value mapping defaults and overrides persist without changing pixel representation", "[rf-builder]")
+{
+    const auto bands = GENERATE(1u, 3u);
+    Fixture fixture(bands);
+    SECTION("default") { }
+    SECTION("linear override") { fixture.options.value_mapping = raster_store::pixel::Mapping::Linear; }
+    SECTION("srgba override") { fixture.options.value_mapping = raster_store::pixel::Mapping::SRGBA; }
+    auto result = rf_builder::gdal::build(fixture.options);
+    REQUIRE(result);
+    auto metadata = raster_store::io::manifest::read_metadata(fixture.options.output);
+    REQUIRE(metadata);
+    CHECK(metadata->value_mapping
+        == fixture.options.value_mapping.value_or(bands == 3 ? raster_store::pixel::Mapping::SRGBA : raster_store::pixel::Mapping::Linear));
+    CHECK(metadata->halo_width == 0);
+    CHECK(metadata->nominal_tile_size == 16);
+    CHECK(metadata->stored_tile_size == 16);
 }

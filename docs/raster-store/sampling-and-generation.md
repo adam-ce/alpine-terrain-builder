@@ -112,7 +112,9 @@ extend beyond the four cells geometrically covered by the coarse cell.
 
 ## No duplicated height borders in the store
 
-The authoritative store does not persist overlapping rendering borders.
+RF snapshots store non-overlapping interiors. TB snapshots may persist filter
+halos, described by metadata, without changing interior geographic extents.
+These halos are distinct from overlapping vertex-pixel rendering borders.
 Pyramid generation constructs a vertex-pixel output only after reconstruction
 and filtering.
 
@@ -141,8 +143,8 @@ Any nontrivial low-pass filter needs samples outside the exact output bounds.
 The required halo is determined by the reconstruction and reduction filters,
 not by a fixed one-pixel border flag.
 
-The store reader should expose a logical raster window over the quadtree. It
-resolves:
+The physical-tile halo reader resolves a tile-centred window over the
+quadtree. It resolves:
 
 - physical chunks selected for the requested accuracy;
 - ancestor fallback where finer data is absent;
@@ -242,3 +244,10 @@ The [scaling contract](scaling.md) specifies coefficients and verification
 requirements for its area-pixel operations. Other layer-specific and
 vertex-pixel filters remain separate design decisions; tests should fix their
 numeric tolerances only after representative evaluation.
+
+The implemented [halo reader](tiles-with-halo.md) clamps bilinear ancestor
+support at the complete supplying physical tile's edge. This is its explicit
+fallback policy; it does not promise the seam-free vertex-generation invariant
+above. A future generator needing that invariant must assemble common support
+or generate metatiles. Halo attribution is representative and never masks
+numerical contributions; zero attribution triggers no resolution fallback.

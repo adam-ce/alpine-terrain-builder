@@ -1,6 +1,8 @@
 #include "raster_store/io/manifest.h"
 
 #include <algorithm>
+#include <bit>
+#include <limits>
 #include <system_error>
 #include <unordered_set>
 
@@ -13,7 +15,15 @@ Expected<void> validate(const Metadata& metadata)
     if (metadata.layout_id.empty() || metadata.payload_type.empty() || metadata.codec_selector.empty()) {
         return Error::fail(Error::Code::InvalidInput, "raster metadata requires layout, payload type, and codec selector");
     }
-    return validate_dimensions({ metadata.width, metadata.height });
+    if (!std::has_single_bit(metadata.nominal_tile_size) || metadata.halo_width > metadata.nominal_tile_size
+        || metadata.halo_width > ((std::numeric_limits<unsigned>::max)() - metadata.nominal_tile_size) / 2
+        || metadata.stored_tile_size != metadata.nominal_tile_size + 2 * metadata.halo_width) {
+        return Error::fail(Error::Code::InvalidInput, "invalid raster nominal size, stored size, or halo width");
+    }
+    if (metadata.value_mapping != pixel::Mapping::Linear && metadata.value_mapping != pixel::Mapping::SRGBA) {
+        return Error::fail(Error::Code::InvalidInput, "unknown raster value mapping");
+    }
+    return {};
 }
 
 Expected<Metadata> read_metadata(const std::filesystem::path& base_path)

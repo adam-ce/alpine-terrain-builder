@@ -181,6 +181,7 @@ add_library(terrainlib
     raster_store/path_layout.h
     raster_store/pixel.h
     raster_store/scaler.h
+    raster_store/read_tile_with_halo.h
     raster_store/storage.h
 
     sf/finalize_storage.h

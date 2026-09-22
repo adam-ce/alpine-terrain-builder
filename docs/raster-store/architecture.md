@@ -12,10 +12,11 @@ sampling and filtering policy.
 
 ## Current implementation scope
 
-The first raster-store library implementation covers tile storage only:
-typed tiles, attribution tables, codecs, persistent index and metadata,
-dataset opening, and snapshot publication. Spatial window reads, ancestor
-fallback, builders, merging, and sampling are outside this implementation.
+The raster-store library provides typed tiles, attribution tables, codecs,
+persistent index and metadata, snapshot publication, windowed scaling, and
+physical-tile halo extraction with neighbour/ancestor fallback. RF importers
+are implemented; arbitrary geographic window reads, TB generation, and merging
+remain future work.
 It remains part of the existing `terrainlib` target.
 
 ## Implementation status
@@ -44,11 +45,10 @@ Paired `scale` accepts `raster_store::pixel::Mapping` from the shared
 `raster_store/pixel.h`; paired `reduce` and generic algorithms receive
 decoder/encoder tuples. Paired `reduce` defaults to identity conversion.
 The same header provides `pixel::identifier<T>()` with its `Format` machinery
-in `pixel::detail`, replacing the former `pixel_type.h` API. Planned snapshot
-metadata uses the shared `pixel::Mapping` type as well.
+in `pixel::detail`, replacing the former `pixel_type.h` API. Snapshot metadata
+uses the shared `pixel::Mapping` type as well.
 Source NoData handling stays with importers, while physical-source selection
-and missing-coverage replication belong to the planned halo extractor.
-The scaler refactor is implemented; halo extraction and its metadata remain planned.
+and missing-coverage replication belong to the halo extractor.
 
 ### Raster storage API
 
@@ -60,13 +60,14 @@ whose selected table is copied unchanged into the output.
 
 ```cpp
 raster_store::storage::CreateOptions options;
-options.tile_dimensions = { 3, 3 };
+options.nominal_tile_size = 64;
+options.halo_width = 0;
 auto created = raster_store::storage::create<float>(snapshot_path, options);
 if (!created) {
     return Error::propagate(std::move(created));
 }
 auto [output, metadata] = std::move(*created);
-raster_store::Tile<float> tile(3); // Attribution defaults to zero (unattributed).
+raster_store::Tile<float> tile(metadata->stored_tile_size); // Attribution defaults to zero (unattributed).
 if (auto saved = output->save({ 0, { 0, 0 } }, tile); !saved) {
     return saved;
 }
@@ -101,6 +102,22 @@ namespace. Versioned payload structs belong to `manifest::detail::v1` and
 `raster_store/path_layout.h` under `raster_store::path_layout::zoom_xy_google`.
 Both raster and octree index decoding use `store::Index<Traits>::validate() const`
 to validate the decoded hierarchy.
+
+### Halo reads
+
+Include `raster_store/read_tile_with_halo.h` and call:
+
+```cpp
+auto tile = raster_store::read_tile_with_halo(*storage, *metadata, tile_id,
+    2, raster::algorithm::Interpolation::Bilinear);
+```
+
+The result is an ordinary `Tile<T>` with a two-pixel halo. The centre must be
+physical. Stored halos are cropped exactly; zero-halo snapshots resolve
+same-zoom neighbours, descend at most four levels, and use physical ancestors
+for remaining regions. Uncovered data replicates the central edge with zero
+attribution. Source assignment precedes payload reads, so each source is read
+at most once. See [Tiles with halo](tiles-with-halo.md) for the complete contract.
 
 ### Final public names
 

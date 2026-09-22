@@ -179,5 +179,31 @@ namespace detail {
         }
         return scaling_geometry(input, halo_width, static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels), levels >= 0, *required);
     }
+    // Bounds checks use division so a small window does not require representable full dimensions.
+    inline Expected<ScalingGeometry> window_geometry(
+        glm::uvec2 input, unsigned halo_width, int levels, Interpolation interpolation, Filter filter, glm::uvec2 offset, glm::uvec2 size)
+    {
+        auto required = required_halo(levels, interpolation, filter);
+        if (!required)
+            return Error::propagate(std::move(required));
+        auto factor = scale_factor(static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels));
+        if (!factor)
+            return Error::propagate(std::move(factor));
+        if (input.x == 0 || input.y == 0 || halo_width > ((std::min)(input.x, input.y) - 1) / 2 || halo_width < *required) {
+            return Error::fail(Error::Code::InvalidInput, "invalid raster interior or insufficient halo");
+        }
+        const auto interior = input - glm::uvec2(2 * halo_width);
+        for (unsigned axis = 0; axis < 2; ++axis) {
+            if (size[axis] == 0 || offset[axis] > (std::numeric_limits<unsigned>::max)() - (size[axis] - 1)) {
+                return Error::fail(Error::Code::InvalidInput, "invalid scaling output window");
+            }
+            const unsigned last = offset[axis] + size[axis] - 1;
+            if (levels >= 0 ? last / *factor >= interior[axis] : interior[axis] % *factor != 0 || last >= interior[axis] / *factor) {
+                return Error::fail(Error::Code::InvalidInput, "scaling output window exceeds output bounds");
+            }
+        }
+        return ScalingGeometry { interior, size, *factor };
+    }
+
 } // namespace detail
 } // namespace raster::algorithm

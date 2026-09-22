@@ -88,8 +88,10 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
             return Error::propagate(std::move(opened));
         }
         auto [input, metadata] = std::move(*opened);
-        if (metadata->width != options.tile_side || metadata->height != options.tile_side || metadata->codec_selector != "amort") {
-            return Error::fail(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions or codec");
+        if (metadata->nominal_tile_size != options.tile_side || metadata->stored_tile_size != options.tile_side || metadata->halo_width != 0
+            || metadata->value_mapping != options.value_mapping.value_or(raster_store::pixel::default_mapping<PixelType>)
+            || metadata->codec_selector != "amort") {
+            return Error::fail(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions, halo, mapping, or codec");
         }
         auto table = raster_store::attribution::read_table(*options.cache / raster_store::io::manifest::index_file_name);
         if (!table) {
@@ -115,7 +117,9 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
         cache = std::move(input);
     }
     raster_store::storage::CreateOptions create_options;
-    create_options.tile_dimensions = glm::uvec2(options.tile_side);
+    create_options.nominal_tile_size = options.tile_side;
+    create_options.halo_width = 0;
+    create_options.value_mapping = options.value_mapping;
     auto created = raster_store::storage::create<PixelType>(options.output, create_options);
     if (!created) {
         return Error::propagate(std::move(created));

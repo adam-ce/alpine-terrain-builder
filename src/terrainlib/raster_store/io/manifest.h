@@ -8,6 +8,7 @@
 #include "io/envelope.h"
 #include "raster_store/StoreTraits.h"
 #include "raster_store/Tile.h"
+#include "raster_store/pixel.h"
 #include "store/IndexFormat.h"
 
 namespace raster_store::io::manifest {
@@ -23,8 +24,10 @@ namespace detail::v1 {
         std::string layout_id;
         std::string payload_type;
         std::string codec_selector;
-        std::uint32_t width = default_tile_side;
-        std::uint32_t height = default_tile_side;
+        unsigned stored_tile_size = default_tile_side;
+        unsigned nominal_tile_size = default_tile_side;
+        unsigned halo_width = 0;
+        pixel::Mapping value_mapping = pixel::Mapping::Linear;
     };
 
     struct IndexEntry {

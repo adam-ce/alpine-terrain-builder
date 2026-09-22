@@ -1,10 +1,9 @@
 # Tiles with halo
 
-Status: design interview in progress. Decisions were recorded during
-2026-09-13 through 2026-09-15, with scaling integration revised on 2026-09-18
-and physical-coverage filling revised on 2026-09-22;
-implementation has not been authorized. This design revises version 1
-directly; no existing snapshots require compatibility.
+Status: implemented on 2026-09-22. Decisions were recorded during
+2026-09-13 through 2026-09-15, with scaling and physical-coverage integration
+revised on 2026-09-22. Version 1 is revised directly; no existing snapshots
+require compatibility.
 
 ## Accepted contract
 
@@ -60,8 +59,8 @@ untagged TIFF/VRT imagery.
 
 Add an RF CLI override, `--value-mapping linear|srgba`. CLI help must explain
 the type-based defaults, the explicit override, and that SRGBA leaves alpha
-linear and also applies to three-channel RGB. This is an implementation
-requirement; the CLI has not been changed during the interview.
+linear and also applies to three-channel RGB. Both RF commands implement this option. It declares the stored payload mapping;
+it does not alter import filtering or perform source-profile conversion.
 
 See [GDAL value-mapping research](gdal-value-mapping-research.md) for the
 metadata available from GDAL and the inspected Swissimage reference TIFF.
@@ -82,13 +81,42 @@ follows the scaling API. Pass metadata explicitly as
 `const io::manifest::Metadata&`, allowing callers to read it once and reuse
 it across extractions. No metadata member is added to `Raster` or `Tile`.
 
-Perform resolution changes through the planned paired wrappers in
+Perform resolution changes through the implemented paired wrappers in
 `terrainlib/raster_store/scaler.h`, which delegate to the generic algorithms
 exposed by `terrainlib/raster/algorithm.h`, using these selections.
 The [scaling contract](scaling.md) owns algorithm behavior, attribution
 selection, conversion-tuple contracts, and required source halos;
 do not duplicate those rules here. The extractor
 provides the source windows and required halos for the selected operation.
+
+Use `raster::make_view` and `raster::algorithm::copy` for central and
+same-zoom copies and for stored-halo cropping. Use a `raster::ClampedView`
+of the complete central interior with `copy` for missing-coverage replication;
+do not make a narrow source strip its own clamping boundary. Use the scaler's
+explicit-destination overloads with output subviews wherever the geometry
+matches, keeping fetched source tiles alive until their views are consumed.
+
+Extend the existing `scale` operations with output-window overloads as
+specified in [Windowed scaling](scaling.md#agreed-windowed-scaling-extension).
+Use `output_offset` and infer window size from the destination; allocating
+overloads take `output_size` explicitly. This permits whole source tiles to
+feed destination subviews without full scaled intermediates or a separate
+crop/copy step. The extension applies to upscaling and downscaling. The
+four-level descent limit bounds downscaling from finer tiles; it does not
+bound upscaling from ancestors. Verify bounded work with a 20-level ancestor gap.
+
+Bilinear ancestor interpolation requires a one-source-pixel halo. Source
+support uses a clamped view of the supplying ancestor's complete interior.
+Do not fetch neighbouring tiles to extend interpolation support. If processing
+a smaller cutout, preserve the full ancestor's clamping bounds rather than
+clamping at the cutout edges. Clamping at the supplying ancestor's physical
+edge is intentional, even if another tile exists beyond it. This avoids
+recursive support dependencies and preserves once-per-source reads.
+
+Reject unsupported mapping/type combinations only in the operation that
+does not support them. Do not impose the paired scaler's RGB8/RGBA8 SRGBA
+restriction on metadata creation/opening or exact-copy paths. Other metadata
+and geometry validation remains applicable.
 
 Validate the requested tile ID and require a physical tile. Both `Leaf` and
 `Inner` qualify; `Virtual` and missing tiles do not. Reading or decoding an
@@ -182,11 +210,12 @@ The `Mixed sources` section has been removed from
 attribution. Further alignment of the existing storage/sampling documents
 with the final halo contract belongs to the implementation plan.
 
-## Open decisions
+## Implementation
 
-- Remaining scaling details are tracked in [Raster scaling](scaling.md).
-- Cache reuse and validation/error details.
-- Implementation sequence and approval.
+Conversion tuples remain in the scaling interface. The staged
+[implementation plan](halo-implementation-plan.md) records the completed stages
+and verification results. The public implementation is
+`src/terrainlib/raster_store/read_tile_with_halo.h`.
 
 ## Required verification
 
@@ -197,6 +226,8 @@ with the final halo contract belongs to the implementation plan.
   descent limit with ancestor fallback, and partial coverage.
 - At-most-once ancestor fetches and preservation of selected finer samples,
   including zero-attribution regions, when ancestor fallback is also used.
+- Bilinear support clamps at the full supplying ancestor's edges, not a
+  processing cutout's edges, without reading neighbouring support tiles.
 - Numerical contributions from zero-attribution pixels, representative
   attribution, and preservation of supplied or resampled zero-attribution
   payloads even when all source attributions are zero.
@@ -216,3 +247,5 @@ with the final halo contract belongs to the implementation plan.
 - Revised version-1 metadata and payload round trips.
 - Integration with the scaling facility, including sufficient source halos,
   multi-level reductions, and the extractor's missing-coverage replication.
+- Windowed upscaling/downscaling into assigned output views, preserving full
+  result sampling phase and reduction stages while limiting computed samples.

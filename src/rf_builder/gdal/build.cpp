@@ -104,8 +104,9 @@ Expected<Report> produce(
         return run::Prepared<PixelType>(std::move(**prepared));
     };
     source.weight = [](const auto&) { return 1.; };
-    return run::execute<PixelType>(
-        { options.output, options.tile_side, options.jobs, options.cache, options.attribution_index }, std::move(source), stop_requested);
+    return run::execute<PixelType>({ options.output, options.tile_side, options.jobs, options.cache, options.attribution_index, options.value_mapping },
+        std::move(source),
+        stop_requested);
 }
 }
 
@@ -136,8 +137,9 @@ Expected<Report> build(const Options& options, const std::function<bool()>& stop
     if (!table) { return Error::propagate(std::move(table)); }
     auto entry = table->at(options.attribution_index);
     if (!entry) { return Error::propagate(std::move(entry)); }
-    const inputs::Record record { *dataset_identifier, *mask_identifier, *bands,
-        options.mode, options.attribution_index, options.tile_side, **entry };
+    inputs::Record record { *dataset_identifier, *mask_identifier, *bands, options.mode, options.attribution_index, options.tile_side, **entry };
+    record.value_mapping = options.value_mapping.value_or(
+        options.mode == Mode::Colour ? raster_store::pixel::default_mapping<glm::u8vec3> : raster_store::pixel::default_mapping<float>);
     if (options.mode == Mode::Scalar) {
         return produce<float>(options, *transform, *mask, record, stop_requested);
     }

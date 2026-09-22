@@ -1,5 +1,36 @@
 # Raster-store implementation status
 
+## Halo extraction — 2026-09-22
+
+Implemented windowed generic/paired scaling, physical-tile halo extraction,
+V1 nominal/stored/halo metadata, and resolved value mappings. Both RF commands
+accept the mapping override and validate its effective value for cache reuse.
+Conversion tuples remain supported. GDAL NoData filling and driver research
+are separate work and are excluded from this change.
+
+Verification:
+
+- Focused raster algorithms/storage/halo tests: 93 cases, 206,738 assertions.
+- Terrainlib regression: 567 cases, 231,409 assertions, excluding the existing
+  `mesh::clip_on_bounds benchmark`.
+- RF builder: 48 cases, 54,030 assertions; DAG builder: 76 cases, 479 assertions.
+- ASan/LSan/UBSan: the same 93 focused cases pass, plus all 48 RF cases
+  (54,029 assertions), with leak detection, halt-on-error, and the existing
+  `misc/suppression/ubsan.txt` enabled. An initial RF run without that list
+  reported the already documented CGAL facade downcasts; the configured run
+  has no sanitizer diagnostics.
+- Seven affected public headers compile independently with warnings as errors.
+- GCC 16 compiles both algorithm and halo test translation units at `-O3`
+  with warnings as errors. An additional GCC 14 `-O3 -Werror` probe hits the
+  previously documented `std::sort`/median array-bounds warning in unchanged
+  reducer code; no unrelated reducer change or warning suppression was added.
+- Qt C++ lint and six read-only review passes found no confirmed new defects.
+  Existing lint notices remain on unchanged code; the new optional ancestor
+  is explicitly initialized. Nonconstant integration tests verify box samples,
+  bilinear phase/full-ancestor clamping, exact payload bits, and strided windows.
+- Changed C++ sections use `clang-format-21`; diff checks and changed-file
+  Git line-ending checks pass.
+
 ## Online RF import — 2026-09-12
 
 The [online import plan](rf-builder-downloader-design.md) was approved in the

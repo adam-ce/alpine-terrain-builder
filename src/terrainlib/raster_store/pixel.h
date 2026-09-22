@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <type_traits>
 
@@ -40,6 +41,12 @@ namespace detail {
     };
 
 } // namespace detail
+
+template <typename PixelType>
+inline constexpr Mapping default_mapping = Mapping::Linear;
+
+template <glm::length_t Length, glm::qualifier Qualifier>
+inline constexpr Mapping default_mapping<glm::vec<Length, std::uint8_t, Qualifier>> = Length == 3 || Length == 4 ? Mapping::SRGBA : Mapping::Linear;
 
 template <typename PixelType>
 std::string identifier()

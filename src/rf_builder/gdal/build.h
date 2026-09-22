@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Error.h"
+#include "raster_store/pixel.h"
 #include "run.h"
 #include <cstdint>
 #include <filesystem>
@@ -23,6 +24,7 @@ struct Options {
     unsigned tile_side = 4096;
     unsigned jobs = 1;
     std::optional<std::filesystem::path> cache = std::nullopt;
+    std::optional<raster_store::pixel::Mapping> value_mapping = std::nullopt;
 };
 
 using Report = run::Report;

@@ -40,7 +40,7 @@ void write_table(const std::filesystem::path& directory)
 storage::CreateOptions small_options()
 {
     storage::CreateOptions options;
-    options.tile_dimensions = { 3, 3 };
+    options.nominal_tile_size = 4;
     return options;
 }
 
@@ -233,7 +233,7 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     CHECK_FALSE(storage::open<float>(partial / ""));
     CHECK(storage::open<float>(partial, { .allow_incomplete = true }));
     const auto metadata_before = io::read_bytes_from_path(partial / manifest::metadata_file_name).value();
-    raster_store::Tile<float> tile(3);
+    raster_store::Tile<float> tile(4);
     tile.data.fill(12.5f);
     // Reference checks belong to RF builder, not storage reads or writes.
     tile.source_attribution.fill(65534);
@@ -247,13 +247,13 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     CHECK(checkpoint->codec_selector().value() == "amort");
     auto metadata = manifest::read_metadata(partial);
     REQUIRE(metadata);
-    CHECK(metadata->width == 3);
-    CHECK(metadata->height == 3);
+    CHECK(metadata->stored_tile_size == 4);
+    CHECK(metadata->nominal_tile_size == 4);
     CHECK(metadata->payload_type == "float32");
     CHECK(metadata->codec_selector == "amort");
     REQUIRE(created_metadata);
-    CHECK(created_metadata->width == metadata->width);
-    CHECK(created_metadata->height == metadata->height);
+    CHECK(created_metadata->stored_tile_size == metadata->stored_tile_size);
+    CHECK(created_metadata->nominal_tile_size == metadata->nominal_tile_size);
     CHECK(created_metadata->layout_id == metadata->layout_id);
     CHECK(created_metadata->payload_type == metadata->payload_type);
     CHECK(created_metadata->codec_selector == metadata->codec_selector);
@@ -276,7 +276,7 @@ TEST_CASE("failed checkpoints retain the previous index and ignore unindexed fil
     REQUIRE(created_result);
     auto [created, created_metadata] = std::move(*created_result);
     const auto partial = created->base_path();
-    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
+    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(4)));
     std::filesystem::create_directory(partial / "raster_store.index.tmp");
     CHECK_FALSE(created->save_index());
     auto checkpoint_result = storage::open<float>(partial, { .allow_incomplete = true });
@@ -318,7 +318,7 @@ TEST_CASE("raster publication does not scan payloads or reopen output", "[raster
     auto created_result = storage::create<float>(final, small_options());
     REQUIRE(created_result);
     auto [created, created_metadata] = std::move(*created_result);
-    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
+    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(4)));
     REQUIRE(std::filesystem::remove(created->path_for({ 0, { 0, 0 } }).value()));
     REQUIRE(storage::publish(std::move(created)));
     auto opened_result = storage::open<float>(final);
@@ -335,7 +335,7 @@ TEST_CASE("raster reader selection follows metadata instead of file endings", "[
     auto created_result = storage::create<float>(final, small_options());
     REQUIRE(created_result);
     auto [created, created_metadata] = std::move(*created_result);
-    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
+    REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(4)));
     REQUIRE(storage::publish(std::move(created)));
     auto metadata = manifest::read_metadata(final).value();
     metadata.codec_selector = ".amort";
@@ -357,7 +357,7 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
     auto created_result = storage::create<float>(rf, small_options());
     REQUIRE(created_result);
     auto [created, created_metadata] = std::move(*created_result);
-    raster_store::Tile<float> tile(3);
+    raster_store::Tile<float> tile(4);
     tile.data.fill(12.5f);
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(created->save({ 2, { 1, 1 } }, tile));
@@ -478,7 +478,7 @@ TEST_CASE("raster opening retains metadata and index errors without creating a d
     SECTION("rectangular metadata")
     {
         auto metadata = manifest::read_metadata(final).value();
-        metadata.height = 2;
+        metadata.stored_tile_size = 2;
         REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(metadata, final / manifest::metadata_file_name));
         CHECK(storage::open<float>(final).error().code() == Error::Code::CorruptData);
     }
@@ -521,11 +521,54 @@ TEST_CASE("abandoned raster output checkpoints but never publishes", "[raster-st
         auto created_result = storage::create<float>(final, small_options());
         REQUIRE(created_result);
         auto [created, created_metadata] = std::move(*created_result);
-        REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(3)));
+        REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(4)));
     }
     CHECK_FALSE(std::filesystem::exists(final));
     auto abandoned_result = storage::open<float>(partial, { .allow_incomplete = true });
     REQUIRE(abandoned_result);
     auto [abandoned, abandoned_metadata] = std::move(*abandoned_result);
     CHECK(abandoned->load({ 0, { 0, 0 } }));
+}
+
+TEMPLATE_TEST_CASE("snapshot mappings and stored halos round trip", "[raster-store]", float, glm::u8vec3, glm::u8vec4)
+{
+    TemporaryDirectory directory;
+    write_table(directory.path());
+    auto options = small_options();
+    options.halo_width = 1;
+    SECTION("type default") { }
+    SECTION("explicit linear") { options.value_mapping = raster_store::pixel::Mapping::Linear; }
+    SECTION("explicit srgba") { options.value_mapping = raster_store::pixel::Mapping::SRGBA; }
+    auto created = storage::create<TestType>(directory.path() / "snapshot", options);
+    REQUIRE(created);
+    CHECK(created->second->nominal_tile_size == 4);
+    CHECK(created->second->stored_tile_size == 6);
+    CHECK(created->second->halo_width == 1);
+    CHECK(created->second->value_mapping == options.value_mapping.value_or(raster_store::pixel::default_mapping<TestType>));
+    raster_store::Tile<TestType> tile(6);
+    tile.data.fill(TestType(7));
+    REQUIRE(created->first->save({ 0, { 0, 0 } }, tile));
+    REQUIRE(storage::publish(std::move(created->first)));
+    auto opened = storage::open<TestType>(directory.path() / "snapshot");
+    REQUIRE(opened);
+    CHECK(opened->second->value_mapping == created->second->value_mapping);
+    check_bytes(opened->first->load({ 0, { 0, 0 } })->data, tile.data);
+}
+
+TEST_CASE("snapshot geometry and mapping validation precede creation", "[raster-store]")
+{
+    TemporaryDirectory directory;
+    write_table(directory.path());
+    auto options = small_options();
+    SECTION("nonpower interior") { options.nominal_tile_size = 3; }
+    SECTION("zero interior") { options.nominal_tile_size = 0; }
+    SECTION("excessive halo") { options.halo_width = 5; }
+    SECTION("overflow")
+    {
+        options.nominal_tile_size = 1u << 31;
+        options.halo_width = 1u << 31;
+    }
+    SECTION("unknown mapping") { options.value_mapping = static_cast<raster_store::pixel::Mapping>(99); }
+    CHECK_FALSE(storage::create<float>(directory.path() / "snapshot", options));
+    CHECK_FALSE(std::filesystem::exists(directory.path() / "snapshot.part"));
 }

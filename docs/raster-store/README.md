@@ -2,7 +2,8 @@
 
 This directory describes authoritative raster tile storage and the planned
 generation of delivery tile pyramids from it. Storage format version 1 is
-documented alongside the implementation status. RF import is implemented;
+documented alongside the implementation status. Halo extraction, windowed
+scaling, and RF import are implemented;
 TB generation and the tile server remain future work.
 
 ## Documents
@@ -15,7 +16,8 @@ TB generation and the tile server remain future work.
 
 ## Plans
 
-- [Tiles with halo: design in progress](tiles-with-halo.md)
+- [Tiles with halo: design](tiles-with-halo.md)
+- [Halo extraction implementation plan](halo-implementation-plan.md)
 - [RF-builder design and implementation plan](rf-builder-design.md)
 - [Online tile import extension](rf-builder-downloader-design.md)
 

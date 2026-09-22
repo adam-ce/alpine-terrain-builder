@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -24,7 +25,9 @@ struct OpenOptions {
 };
 
 struct CreateOptions {
-    glm::uvec2 tile_dimensions { default_tile_side };
+    unsigned nominal_tile_size = default_tile_side;
+    unsigned halo_width = 0;
+    std::optional<pixel::Mapping> value_mapping = std::nullopt;
     std::string codec_selector = "amort";
     ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum;
     ::io::envelope::ChecksumAlgorithm checksum_algorithm = ::io::envelope::ChecksumAlgorithm::HandledByCompressionLib;
@@ -79,9 +82,8 @@ Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique
     if (!table) {
         return Error::propagate(std::move(table), "open raster snapshot attribution");
     }
-    const auto resolve_codec = [&metadata](const std::string_view name) {
-        return io::tile_codec::from_name<PixelType>(name, { metadata->width, metadata->height });
-    };
+    const auto resolve_codec
+        = [&metadata](const std::string_view name) { return io::tile_codec::from_name<PixelType>(name, glm::uvec2(metadata->stored_tile_size)); };
     auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
         io::manifest::index_format(),
         { std::move(*index), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
@@ -102,11 +104,21 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (destination.filename().empty() || destination.filename() == "." || destination.filename() == ".." || destination.extension() == ".part") {
         return Error::fail(Error::Code::InvalidInput, "creation requires a final snapshot path without a .part suffix", final_path);
     }
-    if (auto valid = validate_dimensions(options.tile_dimensions); !valid) {
+    if (options.halo_width > ((std::numeric_limits<unsigned>::max)() - options.nominal_tile_size) / 2) {
+        return Error::fail(Error::Code::InvalidInput, "stored raster size overflows");
+    }
+    auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
+        pixel::identifier<PixelType>(),
+        options.codec_selector,
+        options.nominal_tile_size + 2 * options.halo_width,
+        options.nominal_tile_size,
+        options.halo_width,
+        options.value_mapping.value_or(pixel::default_mapping<PixelType>));
+    if (auto valid = io::manifest::validate(*metadata); !valid) {
         return Error::propagate(std::move(valid));
     }
     auto codec = io::tile_codec::from_name<PixelType>(
-        options.codec_selector, options.tile_dimensions, options.compression_algorithm, options.checksum_algorithm);
+        options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm, options.checksum_algorithm);
     if (!codec) {
         return Error::propagate(std::move(codec));
     }
@@ -138,11 +150,6 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
             return Error::propagate(std::move(copied));
         }
     }
-    auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
-        pixel::identifier<PixelType>(),
-        options.codec_selector,
-        options.tile_dimensions.x,
-        options.tile_dimensions.y);
     auto written = io::manifest::write_metadata(*metadata, partial_path);
     if (!written) {
         return Error::propagate(std::move(written), "create raster metadata");

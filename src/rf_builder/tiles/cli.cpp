@@ -11,6 +11,13 @@ void configure(CLI::App& app, Options& options)
         ->default_val(4096);
     app.add_option("--jobs", options.output.jobs, "Concurrent tile workers and maximum simultaneous requests")->check(CLI::PositiveNumber)->default_val(1);
     app.add_option_function<std::string>(
+           "--value-mapping",
+           [&options](const auto& value) {
+               options.output.value_mapping = value == "linear" ? raster_store::pixel::Mapping::Linear : raster_store::pixel::Mapping::SRGBA;
+           },
+           "Stored value mapping override: RGB/RGBA uint8 defaults to srgba (linear alpha); all other pixels default to linear")
+        ->check(CLI::IsMember({ "linear", "srgba" }));
+    app.add_option_function<std::string>(
         "--cache", [&options](const auto& path) { options.output.cache = path; }, "Compatible incomplete .part snapshot to reuse");
     app.footer(R"(Example:
   rf-builder tiles --provider providers/basemap.json --mask validity.gpkg --output new-rf --attribution-index 1

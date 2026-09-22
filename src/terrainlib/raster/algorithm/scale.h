@@ -14,21 +14,23 @@ namespace detail {
         const ScalingGeometry& geometry,
         Interpolation interpolation,
         const Conversion& conversion,
-        const View<T>& destination)
+        const View<T>& destination,
+        glm::uvec2 output_offset = {})
     {
         using W = DecodedPixel<Conversion, T>;
         using S = typename PixelTraits<W>::Scalar;
         const unsigned factor = geometry.factor;
         for (unsigned y = 0; y < destination.height(); ++y) {
             for (unsigned x = 0; x < destination.width(); ++x) {
-                const glm::uvec2 nearest(x / factor + halo_width, y / factor + halo_width);
+                const glm::uvec2 position = output_offset + glm::uvec2(x, y);
+                const glm::uvec2 nearest = position / factor + glm::uvec2(halo_width);
                 if (interpolation == Interpolation::NearestNeighbour) {
                     std::memcpy(std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel(nearest)), sizeof(T));
                     continue;
                 }
                 // Keep integer coordinates out of the working pixel's phase precision.
-                const double phase_x = (double(x % factor) + 0.5) / factor - 0.5;
-                const double phase_y = (double(y % factor) + 0.5) / factor - 0.5;
+                const double phase_x = (double(position.x % factor) + 0.5) / factor - 0.5;
+                const double phase_y = (double(position.y % factor) + 0.5) / factor - 0.5;
                 const glm::uvec2 origin(nearest.x - (phase_x < 0 ? 1u : 0u), nearest.y - (phase_y < 0 ? 1u : 0u));
                 const S fraction_x = S(phase_x < 0 ? phase_x + 1 : phase_x);
                 const S fraction_y = S(phase_y < 0 ? phase_y + 1 : phase_y);
@@ -174,5 +176,73 @@ requires detail::NumericPixel<detail::SourcePixel<Source>>
     Source&& source, unsigned halo_width, int n_zoom_levels, Interpolation interpolation, Filter filter)
 {
     return scale(std::forward<Source>(source), halo_width, n_zoom_levels, interpolation, filter, linear_conversion<detail::SourcePixel<Source>>());
+}
+/// Select a window of the conceptual full output; the destination determines its size.
+template <detail::ViewSource Source, typename Conversion, detail::WritableViewDestination Destination>
+requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingConversion<Conversion, detail::SourcePixel<Source>>
+    && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
+[[nodiscard]] Expected<void> scale(Source&& source,
+    unsigned halo_width,
+    int levels,
+    Interpolation interpolation,
+    Filter filter,
+    glm::uvec2 output_offset,
+    const Conversion& conversion,
+    Destination&& destination)
+{
+    const auto input = detail::read_only_view(raster::make_view(source));
+    const auto output = raster::make_view(destination);
+    auto geometry = detail::window_geometry(input.size(), halo_width, levels, interpolation, filter, output_offset, output.size());
+    if (!geometry)
+        return Error::propagate(std::move(geometry));
+    if (levels == 0) {
+        return detail::copy_views(*raster::make_view(input, output_offset + glm::uvec2(halo_width), output.size()), output);
+    }
+    if (auto valid = detail::validate_view_overlap(input, output, false); !valid)
+        return valid;
+    if (levels > 0)
+        return detail::upscale(input, halo_width, *geometry, interpolation, conversion, output, output_offset);
+    // An aligned source crop with the complete cumulative kernel support has
+    // exactly the same stage alignment and rounding as full-output reduction.
+    const unsigned support = *required_halo(levels, interpolation, filter);
+    auto region = raster::make_view(
+        input, output_offset * geometry->factor + glm::uvec2(halo_width - support), output.size() * geometry->factor + glm::uvec2(2 * support));
+    if (!region)
+        return Error::propagate(std::move(region));
+    return detail::scale_views(*region, support, levels, interpolation, filter, conversion, output);
+}
+
+template <detail::ViewSource Source, typename Conversion>
+requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingConversion<Conversion, detail::SourcePixel<Source>>
+[[nodiscard]] Expected<radix::Raster<detail::SourcePixel<Source>>> scale(Source&& source,
+    unsigned halo_width,
+    int levels,
+    Interpolation interpolation,
+    Filter filter,
+    glm::uvec2 output_offset,
+    glm::uvec2 output_size,
+    const Conversion& conversion)
+{
+    auto geometry = detail::window_geometry(source.size(), halo_width, levels, interpolation, filter, output_offset, output_size);
+    if (!geometry)
+        return Error::propagate(std::move(geometry));
+    return detail::produce_raster<detail::SourcePixel<Source>>(
+        output_size, [&](const auto& destination) { return scale(source, halo_width, levels, interpolation, filter, output_offset, conversion, destination); });
+}
+
+template <detail::ViewSource Source, detail::WritableViewDestination Destination>
+requires detail::NumericPixel<detail::SourcePixel<Source>> && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
+[[nodiscard]] Expected<void> scale(
+    Source&& source, unsigned halo_width, int levels, Interpolation interpolation, Filter filter, glm::uvec2 output_offset, Destination&& destination)
+{
+    return scale(source, halo_width, levels, interpolation, filter, output_offset, linear_conversion<detail::SourcePixel<Source>>(), destination);
+}
+
+template <detail::ViewSource Source>
+requires detail::NumericPixel<detail::SourcePixel<Source>>
+[[nodiscard]] Expected<radix::Raster<detail::SourcePixel<Source>>> scale(
+    Source&& source, unsigned halo_width, int levels, Interpolation interpolation, Filter filter, glm::uvec2 output_offset, glm::uvec2 output_size)
+{
+    return scale(source, halo_width, levels, interpolation, filter, output_offset, output_size, linear_conversion<detail::SourcePixel<Source>>());
 }
 } // namespace raster::algorithm

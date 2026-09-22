@@ -2,8 +2,9 @@
 
 #include "build.h"
 #include "io/envelope.h"
-#include "raster_store/attribution.h"
 #include "planning.h"
+#include "raster_store/attribution.h"
+#include "raster_store/pixel.h"
 #include <gdal_version.h>
 
 namespace rf_builder::gdal::inputs {
@@ -23,6 +24,8 @@ struct Record {
     std::string resampling = "lanczos/base/exact/all-channels-valid";
     std::uint32_t processing_version = 1;
     std::uint32_t gdal_version = GDAL_VERSION_NUM;
+
+    raster_store::pixel::Mapping value_mapping = raster_store::pixel::Mapping::Linear;
 
     bool operator==(const Record&) const = default;
 };

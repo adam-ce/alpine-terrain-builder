@@ -3,6 +3,7 @@
 #include "Error.h"
 #include "raster_store/Tile.h"
 #include "raster_store/attribution.h"
+#include "raster_store/pixel.h"
 #include <cstdint>
 #include <filesystem>
 #include <functional>
@@ -21,6 +22,7 @@ struct Options {
     unsigned jobs = 1;
     std::optional<std::filesystem::path> cache = std::nullopt;
     std::uint32_t attribution_index = 0;
+    std::optional<raster_store::pixel::Mapping> value_mapping = std::nullopt;
 };
 struct Report {
     std::uint64_t tile_count = 0;

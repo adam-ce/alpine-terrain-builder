@@ -79,19 +79,19 @@ tiles use an abbreviated form of attribution information.
 `raster_store.index` and `raster_store.metadata` use separate versioned
 `io::envelope` payloads. The index contains the sparse hierarchy. Metadata
 contains the layout ID, codec selector, exact payload-type identifier, and
-tile dimensions. Tile dimensions default to 4096x4096 pixels and apply to all
-tiles in that snapshot. Any positive square dimensions are permitted; side
-lengths need not be powers of two. Both tile rasters must match the metadata
-dimensions.
+nominal/stored tile sizes, halo width, and resolved value mapping. All tiles
+in a snapshot share these values. `nominal_tile_size` defaults to 4096 and
+must be a positive power of two; `halo_width` defaults to zero and cannot
+exceed the nominal size. `stored_tile_size = nominal_tile_size + 2 * halo_width`.
+Both square tile rasters must match the stored size, which need not be a
+power of two. Halo extraction asserts a nominal size of at least 64.
 
-The pixel API consolidates the payload identifier in
-`raster_store/pixel.h`, exposed as `raster_store::pixel::identifier<T>()`, with
-its `Format` implementation in `pixel::detail`. The same header defines
-`pixel::Mapping { Linear, SRGBA }` for the raster-store scaler wrappers and
-the planned snapshot `value_mapping` field. This mapping describes value
-interpretation separately from the payload-type identifier. The metadata
-extension is specified in [Tiles with halo](tiles-with-halo.md); it is not
-part of the currently implemented version 1 representation below.
+`raster_store/pixel.h` exposes `pixel::identifier<T>()` and
+`pixel::Mapping { Linear, SRGBA }`. Creation defaults RGB8/RGBA8 to SRGBA and
+other types to Linear; an explicit override takes precedence. Metadata stores
+the resolved mapping. SRGBA treats RGB channels as sRGB and alpha as linear.
+Storage validates the enum, while numerical operations validate whether the
+pixel type supports the requested mapping. Exact copies do not need conversion.
 
 The codec selector is a codec name string, independent of file extensions.
 Opening resolves a reader from this metadata string. A future resolver may
@@ -101,11 +101,14 @@ for the first codec. Existing mesh stores retain extension-based selectors.
 ### Version 1 representation
 
 The metadata codec selector is `amort`; payload filenames end in `.amort`.
-The versioned payloads use the existing `io::envelope` serialization:
+The versioned payloads use the existing `io::envelope` serialization. Version 1
+was revised directly for halo metadata; no compatibility with earlier V1
+metadata is provided. Size fields are 32-bit unsigned on supported platforms;
+mapping enum values are 0 for Linear and 1 for SRGBA:
 
 | Envelope class | Version | Payload fields in serialization order |
 |---|---|---|
-| `raster_store.Metadata` | 1 | layout ID string, payload-type string, codec-selector string, `uint32_t` width, `uint32_t` height |
+| `raster_store.Metadata` | 1 | layout ID string, payload-type string, codec-selector string, `unsigned` stored_tile_size, nominal_tile_size, halo_width, `pixel::Mapping` value_mapping |
 | `raster_store.Index` | 1 | vector of entries: `uint32_t` zoom, x, y, then `uint8_t` status |
 | `raster_store.Tile` | 1 | `uint32_t` width, height, data byte vector, attribution byte vector |
 

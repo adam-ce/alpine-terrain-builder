@@ -24,6 +24,7 @@ Expected<run::Report> build(const Options& options, const std::function<bool()>&
         return Error::propagate(std::move(entry));
     }
     inputs::Record record;
+    record.value_mapping = options.output.value_mapping.value_or(raster_store::pixel::default_mapping<glm::u8vec3>);
     record.provider = *provider;
     record.tile_side = options.output.tile_side;
     record.mask = *identifier;

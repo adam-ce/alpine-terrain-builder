@@ -6,7 +6,7 @@
 
 #include "io/envelope.h"
 #include "raster_store/Tile.h"
-#include "raster_store/pixel_type.h"
+#include "raster_store/pixel.h"
 #include "store/Codec.h"
 
 namespace raster_store::io {
@@ -30,7 +30,7 @@ namespace tile_codec {
 
 template <typename PixelType>
 class TileCodec final : public store::Codec<Tile<PixelType>> {
-    static_assert(sizeof(pixel_type::Format<PixelType>) > 0);
+    static_assert(sizeof(pixel::detail::Format<PixelType>) > 0);
 
 public:
     explicit TileCodec(const glm::uvec2 dimensions = glm::uvec2(default_tile_side),

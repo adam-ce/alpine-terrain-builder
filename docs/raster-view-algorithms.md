@@ -2,6 +2,7 @@
 
 Status: design agreed on 2026-09-21 and extended and implemented on 2026-09-22,
 including overloads that allocate and return rasters.
+The scaling refactor also implements rectangular kernels and per-axis strides.
 
 ## Scope
 
@@ -12,7 +13,7 @@ input and output views or whole rasters:
 - `transform`: invoke a callable on each input pixel to produce an output pixel.
 - `zip_transform`: invoke a callable with one pixel from each of two or more
   input views to produce an output pixel. Input pixel types may differ.
-- `window_transform`: invoke a callable with a square, kernel-sized input
+- `window_transform`: invoke a callable with a rectangular, kernel-sized input
   view to produce one output pixel.
 
 Inputs may also be read-only clamped views that replicate source-edge pixels.
@@ -20,9 +21,10 @@ Destinations must be writable ordinary views or rasters.
 
 Pointwise operations require matching view widths and heights. Source and
 destination pixel types may differ for transforms. The windowed operation
-uses an odd kernel size and no border treatment: for a kernel side length
-`k`, output dimensions are `input_width - (k - 1)` by
-`input_height - (k - 1)`.
+uses positive `glm::uvec2` kernel sizes and strides with no border treatment.
+Each output dimension is `1 + (input_size - kernel_size) / stride`, using
+integer division independently on each axis. Omitted stride means `{1, 1}`.
+There are no scalar kernel-size or scalar-stride overloads.
 
 ## Agreed view model
 
@@ -62,8 +64,9 @@ borrowed descriptor, and its destruction does not destroy the backing raster.
 
 Zero-width or zero-height views are valid. Pointwise operations with matching
 empty dimensions succeed without invoking the callable. Window transforms
-require a positive, odd kernel size that fits both input dimensions. A kernel
-size of one is valid; an oversized kernel is an error.
+require positive kernel dimensions that fit the corresponding input dimensions
+and positive strides on both axes. A `{1, 1}` kernel is valid; an oversized
+kernel is an error.
 
 ## Clamped views
 
@@ -86,9 +89,33 @@ a region of a clamped view through `make_view` requires that region to fit its
 logical dimensions and preserves the original clamping bounds. In particular,
 a window-transform kernel must not clamp independently at its own edges.
 
-The window transform itself retains its existing geometry and border behavior.
+The window transform does not add border treatment.
 For example, extending an input by three pixels on each side allows a 7x7
-window transform to produce output with the original input's dimensions.
+window transform at stride `{1, 1}` to produce output with the original input's dimensions.
+
+### Agreed window-transform extension
+
+The [scaling refactor](raster-store/scaling.md#agreed-window-transform-reuse)
+uses rectangular kernels for separable passes. Both `kernel_size` and `stride`
+are `glm::uvec2`; explicit-stride forms place the stride after the kernel size:
+
+```cpp
+window_transform(source, kernel_size, stride, function, destination);
+auto filtered = window_transform(source, kernel_size, stride, function);
+```
+
+For each input dimension `n`, kernel dimension `k`, and stride `s`, the output
+dimension is `1 + (n - k) / s`, using integer division. Validate that the kernel
+fits and that the stride is positive before calculating dimensions. Windows
+start at `(x * stride.x, y * stride.y)`; trailing pixels that cannot form a complete window
+are omitted. Both overload forms use the same rule, and supplied destinations
+must already have the resulting dimensions. No destination view is resized.
+A 2x2 kernel with stride two maps an 8x6 input to a 4x3 output. Larger kernels
+consume more border pixels; stride two alone does not guarantee half-size output.
+
+Box and Lanczos downscaling use horizontal and vertical passes with an intermediate
+raster of working pixels. Encoding happens only after both passes. Overlap
+and clamped-view semantics are unchanged.
 
 ## Access and call syntax
 
@@ -118,7 +145,7 @@ window_transform(source, kernel_size, function, destination);
 Each call also has an overload omitting the destination, returning
 `Expected<radix::Raster<T>>`. Copy preserves the source pixel type; transforms
 infer `T` from the callable's exact return type. Pointwise output dimensions
-match the inputs; window output dimensions follow the kernel shrinkage rule.
+match the inputs; window output dimensions follow the kernel-and-stride rule.
 Validate input dimensions and kernel parameters before allocating. Invalid
 geometry returns an error; unrepresentable storage sizes or allocation failure
 return `ResourceExhausted`. Callable exceptions retain their existing contract.
@@ -233,7 +260,7 @@ the absence of external side effects.
 Pointwise callbacks receive stored input pixels through const references.
 Window callbacks receive a read-only input view with local coordinates
 starting at `(0, 0)`. The kernel for output pixel `(x, y)` starts at input-view
-coordinate `(x, y)` and covers `k` pixels along each axis.
+coordinate `(x * stride.x, y * stride.y)` and covers `kernel_size` pixels.
 The kernel preserves the source's ordinary or clamped view type; a callback
 such as `[](const auto& window) { ... }` can handle either.
 
@@ -263,14 +290,27 @@ colour encoding, or numeric conversion policy. Callables receive stored
 pixels unchanged and control interpretation and conversion. Copy preserves
 pixels exactly.
 
-The existing scaling algorithms retain their separate attribution and value
-mapping semantics.
+The [scaling refactor agreed on 2026-09-22](raster-store/scaling.md) adopts
+the same raster/view normalization, clamped sources, destination and allocating
+overloads, and header placement. Generic scaling has no attribution, validity
+mask, or value-mapping enum. A supplied decoder/encoder tuple determines the
+working type and conversion; linear numeric conversion is the default for
+`scale`, and identity is the default for `reduce`. Reducers receive exactly
+four decoded working pixels through a read-only span. Numerical paths require
+finite, encodable values as a caller precondition; NN/crop bypass conversions
+and preserve pixels exactly. Empty inputs and interiors remain errors for
+scaling. Paired `raster_store::scaler::scale` accepts the shared
+`raster_store::pixel::Mapping` and selects the data conversion tuple; paired
+`reduce` accepts a custom conversion tuple with identity as its default.
+Both compose independent data and attribution operations.
 
 ## Verification
 
-The GCC Debug build passes all 48 raster test cases (1,140 assertions),
-including 14 new view/algorithm cases. The terrainlib regression suite passes
-533 cases (25,934 assertions), excluding the existing mesh clipping benchmark.
-Each public header also compiles independently without a precompiled header
-under GCC with `-Wall -Wextra -Werror`. New C++ is formatted with
-`clang-format-21`; Qt C++ lint and Git-attribute line-ending checks pass.
+The refactor's focused scaler/view suite passes 61 cases (1,347 assertions).
+The terrainlib, RF builder, and DAG builder regression suites pass. Eleven
+public headers compile independently with warnings as errors. GCC 16 Release
+compilation of the scaler tests at `-O3 -Werror` passes, including median
+instantiations that previously triggered an array-bounds diagnostic.
+Changed C++ is formatted with `clang-format-21`; Qt lint reports only an
+existing warning on unchanged `storage.h` code. See the
+[scaler verification record](raster-store/scaling.md#refactor-verification--2026-09-22).

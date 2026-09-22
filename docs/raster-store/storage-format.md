@@ -66,8 +66,8 @@ Attribution indices must be strictly less than 65535; indices at or above
 65535 produce an `Unsupported` error at checked table/API boundaries. The RF
 builder validates attribution references before producing tiles, including references outside the selected table. Storage does
 not scan attribution rasters to check indices on each tile read or write.
-Pixel validity and the reserved meaning of
-index 0 are defined under [NoData](#nodata-and-payload-preservation).
+The reserved meaning of index 0 is defined under
+[Attribution and payload preservation](#attribution-and-payload-preservation).
 
 Table lookup checks beside the index first, then the index directory's parent,
 then its grandparent. It stops at the first table found and does not search
@@ -83,6 +83,15 @@ tile dimensions. Tile dimensions default to 4096x4096 pixels and apply to all
 tiles in that snapshot. Any positive square dimensions are permitted; side
 lengths need not be powers of two. Both tile rasters must match the metadata
 dimensions.
+
+The pixel API consolidates the payload identifier in
+`raster_store/pixel.h`, exposed as `raster_store::pixel::identifier<T>()`, with
+its `Format` implementation in `pixel::detail`. The same header defines
+`pixel::Mapping { Linear, SRGBA }` for the raster-store scaler wrappers and
+the planned snapshot `value_mapping` field. This mapping describes value
+interpretation separately from the payload-type identifier. The metadata
+extension is specified in [Tiles with halo](tiles-with-halo.md); it is not
+part of the currently implemented version 1 representation below.
 
 The codec selector is a codec name string, independent of file extensions.
 Opening resolves a reader from this metadata string. A future resolver may
@@ -175,11 +184,16 @@ equally sized types such as `float` and `uint32_t`.
 
 See [the native-buffer decision](../adr/0002-native-raster-pixel-buffers.md).
 
-### NoData and payload preservation
+### Attribution and payload preservation
 
-Attribution rasters default to index 0, the sole indicator of NoData. The
-fields of attribution entry 0 do not determine pixel validity. A NaN with a
-nonzero attribution index remains an attributed value, while an ordinary
-numeric value with index 0 is NoData.
-Storage preserves payloads losslessly, including NaNs and values underneath
-NoData pixels. Consumers are responsible for interpreting these values.
+Attribution rasters default to index 0, meaning unattributed. Neither that
+index nor the fields of attribution entry 0 determine payload usability.
+Attribution is not a validity mask: an ordinary numeric value with index 0
+participates in generic scaling just like any other supplied data value.
+
+Storage preserves all payloads losslessly, including NaNs and values with
+attribution zero. Callers of numerical algorithms must supply usable values;
+storage does not repair or validate payloads for them. Source NoData remains
+an importer concern, separate from stored attribution. The single-raster
+[scaling refactor](scaling.md) specifies this separation; the design is agreed,
+while the existing coupled scaler still awaits replacement.

@@ -151,16 +151,24 @@ GDAL Lanczos policy and future TB filtering.
 Resolve fallback neighbours consistently across source and RF tile edges.
 Neighbours outside the validity mask may contribute. At a missing neighbour,
 use available ancestor data where possible; at a true coverage edge extend
-available edge samples. Do not create valid output where the output centre
-itself has no source coverage. Interpolation must not independently clamp at
-every RF tile edge. Longitude neighbours wrap at the canonical world seam;
-latitude never wraps across the poles.
+available edge samples. Do not assign the import's attribution where the
+output centre itself has no source coverage. Interpolation must not
+independently clamp at every RF tile edge. Longitude neighbours wrap at the
+canonical world seam; latitude never wraps across the poles.
 
 All successfully decoded JPEG pixels are valid before the mask, including
 black pixels. An accepted valid pixel receives the one configured attribution
 index; other pixels have attribution zero. Keep the existing mask centre
 selection, boundary/hole rules, simplification, CRS behavior, and requirement
 for caller-split antimeridian polygons. The mask is not a filter cutline.
+
+Attribution zero in a stored tile means unattributed, not an invalid payload.
+Source discovery and mask acceptance remain importer concerns. Callers using
+the [generic scaling algorithms](scaling.md) must first supply usable data
+values throughout their input windows; those algorithms and the paired store
+wrappers do not infer source coverage or skip samples from attribution zero.
+The planned raster-store halo extractor separately fills missing physical
+coverage through clamped views; it preserves existing zero-attribution pixels.
 
 ## Shared coordinator interface
 

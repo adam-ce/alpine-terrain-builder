@@ -47,8 +47,15 @@ The halo width of the tile requested by a consumer of the raster store.
 **Attribution entry**
 : A source attribution identified by its position in the applicable source-attribution table, kept stable while referenced. Several imports and validity masks may use the same entry.
 
-**NoData pixel**
-: A stored pixel with attribution index 0, regardless of its payload value. A numeric sentinel such as NaN alone does not make a pixel NoData.
+**Unattributed pixel**
+: A stored pixel with attribution index 0. Missing attribution makes no claim
+  about the usability of its payload and does not exclude it from arithmetic.
+_Avoid_: NoData pixel, invalid pixel (for a stored zero-attribution pixel)
+
+**Source NoData**
+: Missing or invalid samples declared by an input dataset, such as through a
+  GDAL NoData value or source validity mask. This is an import concern, distinct
+  from missing attribution in stored rasters.
 
 **Validity mask**
 : A temporary RF-builder input defining the spatial region selecting the centres

@@ -149,8 +149,13 @@ resolves:
 - chunk and source-map decoding; and
 - neighbouring data needed by the window.
 
-The generator determines the requested halo and applies boundary conditions
-only at true dataset/world boundaries or NoData boundaries.
+The generator determines the requested halo. The planned raster-store halo
+extractor applies replication only where physical coverage is missing,
+including vertical world limits, using clamped views as described in
+[Tiles with halo](tiles-with-halo.md). Zero attribution within a physical
+source is not a boundary and does not trigger replacement of its data.
+Callers prepare usable values before invoking the generic scaler; the scaler
+neither assembles neighbours nor invents boundary conditions.
 
 ## Layer-specific filtering
 
@@ -163,7 +168,12 @@ Sampling placement alone does not determine a correct filter:
 | Categorical | mode, coverage, or another categorical policy |
 | Probability/coverage | conservative area averaging may be appropriate |
 | Vector/normal | component filtering followed by normalization where needed |
-| Mask/NoData | validity-aware weights and explicit coverage rules |
+| Source mask/NoData | importer validity and coverage rules before generic scaling |
+
+Source NoData handling remains an importer concern. Once a raster is supplied
+to the [single-raster scaling facility](scaling.md), attribution does not mask
+any numerical input. Missing attribution and missing physical coverage are
+distinct; neither should be inferred from a numeric sentinel by the scaler.
 
 The current `radix::raster::generate_mipmap` performs a component-wise 2x2
 box average. It may be a reference for simple area-pixel aggregation, but it
@@ -197,11 +207,16 @@ The generator needs explicit rules for:
 - horizontal wrapping at the Web Mercator antimeridian;
 - north/south limits of the Web Mercator world;
 - areas with no physical ancestor or descendant;
-- NoData holes inside otherwise covered chunks; and
+- zero-attribution pixels inside physically covered chunks; and
 - filters whose support crosses a layer's coverage boundary.
 
-These rules are not yet decided. Tests must distinguish true boundaries from
-ordinary internal chunk and delivery-tile boundaries.
+The planned raster-store halo rules are specified in
+[Tiles with halo](tiles-with-halo.md): preserve physically supplied
+zero-attribution payloads and replicate only missing physical coverage through
+clamped views. Other generator-specific boundary policies remain separate
+design work. Tests must distinguish true coverage boundaries from ordinary
+internal chunk and delivery-tile boundaries. Source dataset NoData/mask
+boundaries are handled during import, not by generic scaling.
 
 ## Required golden tests
 
@@ -212,12 +227,18 @@ Before production filtering is implemented, synthetic fixtures should prove:
 3. Two adjacent area-pixel tiles match a single equivalent metatile result.
 4. Two adjacent vertex-pixel tiles produce bit-identical shared edges.
 5. Filtering is unchanged when a store window is split into different chunks.
-6. A source boundary blends valid payloads and reports representative
-   attribution according to the [scaling contract](scaling.md): local 2x2
-   selection for reduction and nearest-neighbour attribution for upscaling.
-7. A NoData boundary follows the configured validity rule.
+6. A source boundary blends supplied payloads independently of attribution.
+   Paired wrappers report representative attribution according to the
+   [scaling contract](scaling.md): repeated local 2x2 mode reduction, including
+   zero in the vote, and nearest-neighbour attribution for upscaling.
+7. Existing zero-attribution pixels contribute normally and retain their
+   supplied or resampled payloads; missing physical coverage follows the
+   caller's explicit clamped-view policy. Import fixtures separately verify
+   source NoData and mask handling.
 8. A coherent physical parent can be chosen instead of finer descendants.
 9. TMS and Slippy input IDs normalize to the same canonical spatial tile.
 
-The filter coefficients and acceptable numeric tolerances remain open design
-decisions. The tests should lock them only after representative evaluation.
+The [scaling contract](scaling.md) specifies coefficients and verification
+requirements for its area-pixel operations. Other layer-specific and
+vertex-pixel filters remain separate design decisions; tests should fix their
+numeric tolerances only after representative evaluation.

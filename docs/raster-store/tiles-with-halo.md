@@ -1,7 +1,8 @@
 # Tiles with halo
 
 Status: design interview in progress. Decisions were recorded during
-2026-09-13 through 2026-09-15, with scaling integration revised on 2026-09-18;
+2026-09-13 through 2026-09-15, with scaling integration revised on 2026-09-18
+and physical-coverage filling revised on 2026-09-22;
 implementation has not been authorized. This design revises version 1
 directly; no existing snapshots require compatibility.
 
@@ -40,10 +41,12 @@ Both rasters remain square.
 Revise the existing version-1 representation directly. No metadata upgrade
 or legacy-snapshot compatibility path is required.
 
-Define `ValueMapping` with values `Linear` and `SRGBA` in
-`raster_store::io::manifest::detail::v1`, export it into the `manifest`
-namespace, and use it as `value_mapping` in metadata and
-`storage::CreateOptions`. This is a
+Use `raster_store::pixel::Mapping`, with values `Linear` and `SRGBA`, as
+`value_mapping` in metadata and `storage::CreateOptions`. Define it in
+`raster_store/pixel.h`, alongside the public `pixel::identifier<T>()` and
+internal `pixel::detail::Format`; do not define a duplicate mapping enum in
+the versioned manifest namespace. The paired wrappers in
+`raster_store/scaler.h` use this same type. This is a
 value mapping rather than a colour-space label: linear data also includes
 elevation. `SRGBA` applies to RGB as well as RGBA: RGB channels use the sRGB
 transfer function; alpha, when present, is linear.
@@ -79,10 +82,12 @@ follows the scaling API. Pass metadata explicitly as
 `const io::manifest::Metadata&`, allowing callers to read it once and reuse
 it across extractions. No metadata member is added to `Raster` or `Tile`.
 
-Perform resolution changes through `terrainlib/raster/algorithm.h`, using
-these selections. The [scaling contract](scaling.md) owns algorithm
-behavior, attribution selection, value mapping, numeric conversion, and
-required source halos; do not duplicate those rules here. The extractor
+Perform resolution changes through the planned paired wrappers in
+`terrainlib/raster_store/scaler.h`, which delegate to the generic algorithms
+exposed by `terrainlib/raster/algorithm.h`, using these selections.
+The [scaling contract](scaling.md) owns algorithm behavior, attribution
+selection, conversion-tuple contracts, and required source halos;
+do not duplicate those rules here. The extractor
 provides the source windows and required halos for the selected operation.
 
 Validate the requested tile ID and require a physical tile. Both `Leaf` and
@@ -96,7 +101,7 @@ For `H = 0`:
 
 1. Allocate the two result rasters with side `N + 2h`.
 2. Copy the central tile's data and attribution into the interior exactly,
-   including payload values under NoData pixels. Do not resample the centre.
+   including payload values with attribution zero. Do not resample the centre.
 3. Fill the halo from spatial neighbours, including diagonal neighbours.
    Prefer a physical tile at the requested zoom.
 4. If that tile is not physical, descend into intersecting child regions,
@@ -110,8 +115,8 @@ For `H = 0`:
 
 Fetch each supplying ancestor at most once per extraction. Ancestor samples
 must not overwrite regions supplied by selected same-zoom or descendant
-tiles. This protection includes selected NoData samples: NoData is not an
-invitation to fill the region from another level.
+tiles. This protection includes selected pixels with attribution zero:
+missing attribution does not trigger fallback to another level.
 
 Resolve the source regions before reading their payloads. Partition the
 halo into disjoint regions assigned to source tile IDs using the accepted
@@ -127,36 +132,43 @@ Consequently an output cell's geometric footprint need not combine different
 selected tile resolutions. The scaling facility determines any additional
 source samples required by the selected operation.
 
-Selection is based on physical coverage, not pixel validity. NoData holes
-inside a selected physical tile do not trigger a search at other levels.
-Attribution zero is the sole NoData marker, regardless of the payload value.
-Resampled validity and representative attribution follow the scaling
-contract. Complete provenance is not required.
+Selection is based on physical coverage, not attribution. Pixels with
+attribution zero in a selected physical tile are valid inputs to scaling and
+do not trigger a search at other levels. Preserve their supplied or resampled
+payloads. The caller is responsible for supplying usable data values;
+attribution does not mask numerical contributions. Representative attribution
+follows the scaling contract. Complete provenance is not required.
 
-If a generated halo pixel has attribution zero, retain that attribution and copy
-the data value of the closest pixel in the central tile. In coordinates
-relative to the interior, this is one constant-time lookup at
-`(clamp(x, 0, N-1), clamp(y, 0, N-1))`. Do not search for a valid replacement:
-the chosen central pixel may itself be NoData. Do not copy its attribution
-into the halo pixel.
+Only regions without a selected physical source use central-tile replication.
+Read their data through a `raster::ClampedView` of the central tile's interior,
+with the uncovered region's coordinates relative to that interior. The view
+replicates the closest central pixel without allocating a padded source.
+Set attribution to zero for these synthesized pixels, independently of the
+central pixel's attribution. Do not replace a supplied or resampled payload
+merely because its attribution is zero.
 
 Wrap horizontally at the antimeridian. Do not wrap vertically. Beyond the
-vertical world limits, and wherever no neighbour representation supplies a
-valid contribution, use the same central-tile replication with attribution
+vertical world limits, and wherever no selected physical representation covers
+a region, use the same clamped-view replication with attribution
 zero. The central interior remains unchanged.
 
-Pass the metadata's value mapping to the scaling facility. Native copies
-remain bit-preserving. Rescaling uses the facility's numeric and validity
-contract; no separate radix rescaling refactor is required for extraction.
+Pass the metadata's `pixel::Mapping` to the paired scaling wrappers, which
+select the supplied linear or sRGB decoder/encoder tuple. Do not pass a
+value-mapping enum into the generic algorithms. Native and
+nearest-neighbour copies bypass conversion and remain bit-preserving.
+For numerical resampling, callers must supply finite decoded values and keep
+intermediate results finite and encodable. Rescaling follows the facility's
+numeric and attribution contract; no separate radix rescaling refactor is
+required for extraction.
 
 ### Stores with a stored halo
 
 For `H > 0`, fail if `h > H`. Otherwise crop both stored rasters to the
 requested halo width, removing `H-h` pixels on each side. Preserve the
-retained payload and attribution exactly, including NoData and stored halo
-values. Do not fetch neighbours or repair the stored halo. A request for
-zero halo width returns the interior; requesting the full stored width
-returns all stored pixels.
+retained payload and attribution exactly, including zero-attribution pixels
+and stored halo values. Do not fetch neighbours or repair the stored halo.
+A request for zero halo width returns the interior; requesting the full
+stored width returns all stored pixels.
 
 ## Relationship to existing documents
 
@@ -179,22 +191,28 @@ with the final halo contract belongs to the implementation plan.
 ## Required verification
 
 - Invalid, missing, and virtual centre IDs; physical leaf and inner centres.
-- Bit-exact central copies, including NoData payloads, and zero-width results.
+- Bit-exact central copies, including zero-attribution payloads, and requests
+  for zero halo width.
 - Same-zoom edges/corners, first-physical descendant selection, four-level
   descent limit with ancestor fallback, and partial coverage.
 - At-most-once ancestor fetches and preservation of selected finer samples,
-  including NoData regions, when ancestor fallback is also used.
-- Validity-aware averaging, representative attribution, all-invalid support,
-  and replication from central pixels that may themselves be NoData.
+  including zero-attribution regions, when ancestor fallback is also used.
+- Numerical contributions from zero-attribution pixels, representative
+  attribution, and preservation of supplied or resampled zero-attribution
+  payloads even when all source attributions are zero.
+- Clamped-view replication only for missing physical coverage, including
+  replication from zero-attribution central pixels; synthesized attribution
+  remains zero even when the replicated central pixel has nonzero attribution.
 - Horizontal wrapping, vertical limits, and uncovered dataset regions.
-- Using box downscaling and forwarding RF value mapping and the selected
-  interpolation parameter to the scaling facility, and exact native copies.
+- Using box downscaling, forwarding the shared `pixel::Mapping` and the
+  interpolation parameter to the paired scaling wrappers,
+  and exact native/nearest-neighbour copies without invoking conversion.
 - Type-based mapping defaults, explicit overrides, persistence of the
   resolved mapping, linear alpha, and CLI help documenting the policy.
 - Stored-halo cropping at zero, partial, and full width; rejection of requests
-  exceeding the stored halo; preservation of stored invalid samples.
+  exceeding the stored halo; preservation of stored zero-attribution samples.
 - Power-of-two interiors, the minimum side of 64, halo-width bounds, and
   dimension overflow.
 - Revised version-1 metadata and payload round trips.
 - Integration with the scaling facility, including sufficient source halos,
-  multi-level reductions, and the extractor's invalid-pixel replication.
+  multi-level reductions, and the extractor's missing-coverage replication.

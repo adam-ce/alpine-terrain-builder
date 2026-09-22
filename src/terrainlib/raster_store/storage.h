@@ -85,7 +85,7 @@ Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique
     auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
         io::manifest::index_format(),
         { std::move(*index), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
-        pixel_type::identifier<PixelType>(),
+        pixel::identifier<PixelType>(),
         resolve_codec);
     if (!storage) {
         return Error::propagate(std::move(storage));
@@ -139,7 +139,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
         }
     }
     auto metadata = std::make_unique<const io::manifest::Metadata>(std::string(path_layout::zoom_xy_google::zoom_x_y_google().id),
-        pixel_type::identifier<PixelType>(),
+        pixel::identifier<PixelType>(),
         options.codec_selector,
         options.tile_dimensions.x,
         options.tile_dimensions.y);

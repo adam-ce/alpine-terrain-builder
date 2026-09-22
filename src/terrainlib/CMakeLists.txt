@@ -163,6 +163,11 @@ add_library(terrainlib
     raster/View.h
     raster/ClampedView.h
     raster/algorithm/detail.h
+    raster/algorithm/conversion.h
+    raster/algorithm/reduce.h
+    raster/algorithm/reducers.h
+    raster/algorithm/scale.h
+    raster/algorithm/scaling_detail.h
     raster/algorithm/copy.h
     raster/algorithm/transform.h
     raster/algorithm/window_transform.h
@@ -174,7 +179,8 @@ add_library(terrainlib
     raster_store/io/TileCodec.h
     raster_store/io/manifest.h raster_store/io/manifest.cpp
     raster_store/path_layout.h
-    raster_store/pixel_type.h
+    raster_store/pixel.h
+    raster_store/scaler.h
     raster_store/storage.h
 
     sf/finalize_storage.h

@@ -35,7 +35,8 @@ Tile storage is implemented and verified on Linux/GCC as of 2026-09-08.
 | Accepted decisions and documentation | Verified | Attribution ownership, JSON contract, version-1 encoding, codec selection, API usage, and shared I/O fix recorded |
 | Typed tiles and attribution tables | Verified | `raster_store/Tile.h`, `attribution.h/.cpp`; zero attribution, verbatim fields, malformed slots, lookup precedence, and boundary indices |
 | XYZ layout, index, and metadata | Verified | `raster_store/path_layout.h`, `raster_store/io/manifest.h/.cpp`; boundary paths, mixed hierarchy, corrupt topology, metadata errors, and checkpoint persistence |
-| AMORT codec | Verified | `raster_store/io/TileCodec.h`; native scalar/packed-GLM bytes, NaN bits, NoData payload preservation, dimensions, byte counts, compression, checksum, and version errors |
+| AMORT codec | Verified | `raster_store/io/TileCodec.h`; native scalar/packed-GLM bytes, NaN bits, zero-attribution payload preservation, dimensions, byte counts, compression, checksum, and version errors |
+| Raster scaling and paired attribution | Verified | `raster/algorithm/*.h`, `raster_store/scaler.h`, and `pixel.h`; single-raster conversion/reduction, rectangular strided windows, separable filtering, independent attribution; see [scaling verification](scaling.md#refactor-verification--2026-09-22) |
 | Creation, opening, checkpoints, publication | Verified | `raster_store/storage.h`; metadata codec selection, incomplete opening, checkpoint failures, no implicit publication, collision rejection, no payload scan, and `/dev/full` write failure |
 | Hard-link integration and regression tests | Verified | `unittests/terrainlib/raster_store.cpp`; cross-root hard links and independent attribution survive RF deletion; all six regression suites pass |
 

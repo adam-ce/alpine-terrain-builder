@@ -80,6 +80,15 @@ The mask selects output pixels; it is not a filter cutline. Otherwise valid
 source samples outside the mask may contribute to a selected output pixel.
 Source NoData and validity information still apply to filtering.
 
+These are source-import rules, not a validity convention for stored rasters.
+Stored attribution zero means unattributed and does not make the payload
+invalid. Under the [single-raster scaling contract](scaling.md), every supplied
+data sample participates regardless of attribution. A caller reusing imported
+data must prepare usable values before invoking those generic algorithms;
+neither the scaler nor its paired store wrappers fills or masks source gaps.
+This distinction does not change GDAL's source NoData handling or the mask's
+selection of attributed output pixels.
+
 Planning must not prune a region solely because a coarse candidate tile has
 no selected pixel centres: finer descendants can have centres inside the mask.
 Use conservative spatial intersection during candidate traversal and apply
@@ -339,7 +348,8 @@ are separate phases, and variable tile costs can change the estimate.
   query. Boundary-adjacent spans subdivide and eventually use individual
   indexed queries. Enclosures use the actual transformed, source-valid centres,
   preserving curved-projection behavior, holes, and boundary inclusion.
-  Source-invalid pixels remain invalid. There is no pre-transform whole-tile shortcut.
+  Source-invalid pixels remain ineligible for the import's attribution.
+  There is no pre-transform whole-tile shortcut.
 - Sampling uses quarter-output-pixel finite differences and the largest
   singular value, starting with 3x3 points over each candidate's coverage.
   It increases to 9x9 and 17x17 for variation above 5% or ratios within 10% of

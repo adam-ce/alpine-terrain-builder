@@ -45,7 +45,7 @@ concept CanTransform = requires(Source&& source, const Function& function, Desti
 
 template <typename Source, typename Function, typename Destination>
 concept CanWindowTransform = requires(Source&& source, const Function& function, Destination&& destination) {
-    algorithm::window_transform(std::forward<Source>(source), 3, function, std::forward<Destination>(destination));
+    algorithm::window_transform(std::forward<Source>(source), glm::uvec2(3), function, std::forward<Destination>(destination));
 };
 
 template <typename Sources, typename Function, typename Destination>
@@ -348,7 +348,7 @@ TEST_CASE("window transforms traverse strided kernels and convert output types",
         }
         return result;
     };
-    REQUIRE(algorithm::window_transform(source, 3, sum, output));
+    REQUIRE(algorithm::window_transform(source, glm::uvec2(3), sum, output));
     for (unsigned y = 0; y < 2; ++y) {
         for (unsigned x = 0; x < 3; ++x) {
             CHECK(output.pixel({ x, y }) == 9. * (10 * (y + 2) + x + 2));
@@ -357,7 +357,7 @@ TEST_CASE("window transforms traverse strided kernels and convert output types",
     CHECK(destination.pixel({ 0, 0 }) == -1.);
     CHECK(destination.pixel({ 4, 3 }) == -1.);
     Raster identity(source.size());
-    REQUIRE(algorithm::window_transform(source, 1, Centre {}, identity));
+    REQUIRE(algorithm::window_transform(source, glm::uvec2(1), Centre {}, identity));
     CHECK(identity.pixel({ 4, 3 }) == 45);
 }
 
@@ -375,7 +375,7 @@ TEST_CASE("clamped window kernels retain the original source bounds", "[raster-v
         }
         return result;
     };
-    REQUIRE(algorithm::window_transform(padded, 7, sum, output));
+    REQUIRE(algorithm::window_transform(padded, glm::uvec2(7), sum, output));
     for (unsigned y = 0; y < source.height(); ++y) {
         for (unsigned x = 0; x < source.width(); ++x) {
             int expected = 0;
@@ -400,14 +400,14 @@ TEST_CASE("window validation precedes processing and rejects all overlapping out
         return 0;
     };
     for (const auto kernel : { 0u, 2u, 4u, 7u, (std::numeric_limits<unsigned>::max)() }) {
-        CHECK_FALSE(algorithm::window_transform(source, kernel, never, output));
+        CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(kernel), never, output));
     }
-    CHECK_FALSE(algorithm::window_transform(source, 1, never, output));
+    CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(1), never, output));
     CHECK(std::ranges::all_of(output, [](int value) { return value == -1; }));
     auto overlapping = make_view(source, { 1, 1 }, { 3, 3 }).value();
     const auto before = source;
-    CHECK_FALSE(algorithm::window_transform(source, 3, never, overlapping));
-    CHECK_FALSE(algorithm::window_transform(source, 1, never, source));
+    CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(3), never, overlapping));
+    CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(1), never, source));
     CHECK(std::ranges::equal(source, before));
 }
 
@@ -426,7 +426,7 @@ TEST_CASE("matching empty views are pointwise no-ops but cannot supply a kernel"
     auto clamped = make_clamped_view(empty, { -3, -3 }, { 0, 3 }).value();
     REQUIRE(algorithm::copy(clamped, output));
     CHECK_FALSE(algorithm::copy(empty, mismatched));
-    CHECK_FALSE(algorithm::window_transform(empty, 1, never, output));
+    CHECK_FALSE(algorithm::window_transform(empty, glm::uvec2(1), never, output));
 }
 
 TEST_CASE("destination-free operations infer output types and allocate matching rasters", "[raster-view]")
@@ -451,11 +451,11 @@ TEST_CASE("destination-free operations infer output types and allocate matching 
     REQUIRE(replicated);
     CHECK(replicated->size() == padded.size());
     CHECK(replicated->pixel({ 5, 4 }) == 23);
-    auto filtered = algorithm::window_transform(padded, 3, Centre {});
+    auto filtered = algorithm::window_transform(padded, glm::uvec2(3), Centre {});
     REQUIRE(filtered);
     CHECK(filtered->size() == source.size());
     CHECK(std::ranges::equal(*filtered, source));
-    auto cropped = algorithm::window_transform(source, 3, [](const auto& window) { return double(window.pixel({ 1, 1 })); });
+    auto cropped = algorithm::window_transform(source, glm::uvec2(3), [](const auto& window) { return double(window.pixel({ 1, 1 })); });
     STATIC_REQUIRE(std::same_as<decltype(cropped), Expected<radix::Raster<double>>>);
     REQUIRE(cropped);
     CHECK(cropped->size() == glm::uvec2(2, 1));
@@ -487,9 +487,9 @@ TEST_CASE("allocating overloads reject invalid geometry and unrepresentable stor
     CHECK_FALSE(algorithm::zip_transform(source, other, never));
     CHECK_FALSE(algorithm::zip_transform(source, source, other, never));
     CHECK_FALSE(algorithm::zip_transform(std::tie(source, source, source, other), never));
-    CHECK_FALSE(algorithm::window_transform(source, 0, never));
-    CHECK_FALSE(algorithm::window_transform(source, 2, never));
-    CHECK_FALSE(algorithm::window_transform(source, 5, never));
+    CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(0), never));
+    CHECK_FALSE(algorithm::window_transform(source, { 2, 0 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, glm::uvec2(5), never));
 
     const auto maximum = (std::numeric_limits<unsigned>::max)();
     auto huge = make_clamped_view(source, { 0, 0 }, { maximum, maximum }).value();
@@ -498,7 +498,7 @@ TEST_CASE("allocating overloads reject invalid geometry and unrepresentable stor
     CHECK(failed.error().code() == Error::Code::ResourceExhausted);
     CHECK_FALSE(algorithm::transform(huge, never));
     CHECK_FALSE(algorithm::zip_transform(huge, huge, never));
-    CHECK_FALSE(algorithm::window_transform(huge, 1, never));
+    CHECK_FALSE(algorithm::window_transform(huge, glm::uvec2(1), never));
 
     Raster empty({ 0, maximum });
     auto copied = algorithm::copy(empty);
@@ -506,4 +506,40 @@ TEST_CASE("allocating overloads reject invalid geometry and unrepresentable stor
     CHECK(copied->size() == empty.size());
     REQUIRE(algorithm::transform(empty, never));
     REQUIRE(algorithm::zip_transform(empty, empty, never));
+}
+
+TEST_CASE("rectangular windows use independent strides and omit incomplete trailing windows", "[raster-view]")
+{
+    auto source = numbered({ 8, 6 });
+    const auto top_left = [](const auto& window) { return window.pixel({ 0, 0 }); };
+    auto result = algorithm::window_transform(source, { 2, 2 }, { 2, 2 }, top_left);
+    REQUIRE(result);
+    CHECK(result->size() == glm::uvec2(4, 3));
+    for (unsigned y = 0; y < 3; ++y) {
+        for (unsigned x = 0; x < 4; ++x) {
+            CHECK(result->pixel({ x, y }) == source.pixel({ 2 * x, 2 * y }));
+        }
+    }
+    Raster output({ 4, 3 }, -1);
+    REQUIRE(algorithm::window_transform(source, { 2, 2 }, { 2, 2 }, top_left, output));
+    CHECK(std::ranges::equal(output, *result));
+    const auto horizontal = algorithm::window_transform(source, { 3, 1 }, { 2, 1 }, top_left);
+    REQUIRE(horizontal);
+    CHECK(horizontal->size() == glm::uvec2(3, 6));
+    CHECK(horizontal->pixel({ 2, 5 }) == source.pixel({ 4, 5 }));
+    const auto vertical = algorithm::window_transform(source, { 1, 4 }, { 1, 2 }, top_left);
+    REQUIRE(vertical);
+    CHECK(vertical->size() == glm::uvec2(8, 2));
+    CHECK(vertical->pixel({ 7, 1 }) == source.pixel({ 7, 2 }));
+    const auto never = [](const auto&) -> int {
+        FAIL("invalid geometry must not invoke callback");
+        return 0;
+    };
+    CHECK_FALSE(algorithm::window_transform(source, { 0, 1 }, { 1, 1 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 1, 0 }, { 1, 1 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 1, 1 }, { 0, 1 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 1, 1 }, { 1, 0 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 9, 1 }, { 1, 1 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 1, 7 }, { 1, 1 }, never));
+    CHECK_FALSE(algorithm::window_transform(source, { 2, 2 }, { 1, 2 }, never, output));
 }

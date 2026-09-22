@@ -134,15 +134,15 @@ Expected<void> validate_pointwise_views(const InputView& source, const View<T>& 
 }
 
 template <typename T>
-auto window_view(const View<T>& source, glm::uvec2 origin, unsigned size)
+auto window_view(const View<T>& source, glm::uvec2 origin, glm::uvec2 size)
 {
-    return view_details::Access::region(source, origin, glm::uvec2(size));
+    return view_details::Access::region(source, origin, size);
 }
 
 template <typename T>
-auto window_view(const ClampedView<T>& source, glm::uvec2 origin, unsigned size)
+auto window_view(const ClampedView<T>& source, glm::uvec2 origin, glm::uvec2 size)
 {
-    return view_details::ClampedAccess::region(source, origin, glm::uvec2(size));
+    return view_details::ClampedAccess::region(source, origin, size);
 }
 
 } // namespace raster::algorithm::detail

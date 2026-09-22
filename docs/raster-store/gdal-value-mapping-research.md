@@ -44,7 +44,7 @@ JPEG/YCbCr decoding and sRGB linearization are separate operations. GDAL's
 JPEG driver describes conversion from YCbCr/CMYK to RGB and reports the source
 model through `IMAGE_STRUCTURE:SOURCE_COLOR_SPACE`. This does not promise
 linear-light output. Compression and channel roles are therefore insufficient
-evidence for selecting `ValueMapping`.
+evidence for selecting `raster_store::pixel::Mapping`.
 [JPEG reading behaviour](https://gdal.org/en/stable/drivers/raster/jpeg.html)
 
 ## VRT mosaics
@@ -88,10 +88,12 @@ this reference file, not every swisstopo product or delivery.
 ## Selected policy — 2026-09-15
 
 The user selected a type-based convention: default three- and four-component
-unsigned 8-bit pixels to `ValueMapping::SRGBA`, otherwise `Linear`, with an
+unsigned 8-bit pixels to `pixel::Mapping::SRGBA`, otherwise `Linear`, with an
 explicit override. RGB channels use the sRGB transfer function; alpha, if
 present, remains linear. Persist the resolved mapping in store metadata and
-document the defaults and override in RF CLI help. See
+document the defaults and override in RF CLI help. The shared mapping type
+belongs in `raster_store/pixel.h` and is used by both the planned snapshot
+metadata and raster-store scaler wrappers. See
 [Tiles with halo](tiles-with-halo.md) for the accepted contract.
 
 This replaces the earlier recommendation below; it does not change the
@@ -100,7 +102,7 @@ findings about what GDAL metadata can establish.
 ## Earlier recommendation — superseded
 
 Allow an explicit RF input mapping for the prepared dataset, including a VRT.
-Persist the resolved `ValueMapping::{Linear, SRGB}` in the raster-store
+Persist the resolved linear or sRGB interpretation in the raster-store
 manifest. Keep unknown/automatic selection at the import boundary if needed;
 it need not become a third stored mapping value.
 

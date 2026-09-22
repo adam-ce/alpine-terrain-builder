@@ -32,6 +32,24 @@ The 3D octree stores use versioned envelopes. Raster persistence implementation
 and verification progress is tracked in
 [implementation-status.md](implementation-status.md).
 
+### Scaling responsibility
+
+The [scaling refactor agreed on 2026-09-22](scaling.md) separates numerical
+operations from attribution policy. Generic `raster::algorithm` operations
+resample a single raster through ordinary or clamped views; paired
+`raster_store::scaler` wrappers compose those operations for data and
+representative attribution. Zero attribution means unattributed and does not
+mask numerical inputs. Callers must prepare usable payloads before scaling.
+Paired `scale` accepts `raster_store::pixel::Mapping` from the shared
+`raster_store/pixel.h`; paired `reduce` and generic algorithms receive
+decoder/encoder tuples. Paired `reduce` defaults to identity conversion.
+The same header provides `pixel::identifier<T>()` with its `Format` machinery
+in `pixel::detail`, replacing the former `pixel_type.h` API. Planned snapshot
+metadata uses the shared `pixel::Mapping` type as well.
+Source NoData handling stays with importers, while physical-source selection
+and missing-coverage replication belong to the planned halo extractor.
+The scaler refactor is implemented; halo extraction and its metadata remain planned.
+
 ### Raster storage API
 
 Include `raster_store/storage.h`. `raster_store::storage::create<PixelType>()`
@@ -48,7 +66,7 @@ if (!created) {
     return Error::propagate(std::move(created));
 }
 auto [output, metadata] = std::move(*created);
-raster_store::Tile<float> tile(3); // Attribution defaults to NoData.
+raster_store::Tile<float> tile(3); // Attribution defaults to zero (unattributed).
 if (auto saved = output->save({ 0, { 0, 0 } }, tile); !saved) {
     return saved;
 }

@@ -20,6 +20,10 @@
 #include <radix/raster.h>
 
 #include "Error.h"
+#include "algorithm/copy.h"
+#include "algorithm/transform.h"
+#include "algorithm/window_transform.h"
+#include "algorithm/zip_transform.h"
 
 namespace raster::algorithm {
 

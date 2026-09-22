@@ -160,6 +160,13 @@ add_library(terrainlib
     range/RangeToInclusive.h
 
     raster/algorithm.h
+    raster/View.h
+    raster/ClampedView.h
+    raster/algorithm/detail.h
+    raster/algorithm/copy.h
+    raster/algorithm/transform.h
+    raster/algorithm/window_transform.h
+    raster/algorithm/zip_transform.h
 
     raster_store/StoreTraits.h
     raster_store/Tile.h

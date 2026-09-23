@@ -19,6 +19,7 @@ TB generation and the tile server remain future work.
 - [Tiles with halo: design](tiles-with-halo.md)
 - [Halo extraction implementation plan](halo-implementation-plan.md)
 - [RF-builder design and implementation plan](rf-builder-design.md)
+- [GDAL import NoData filling: policy and verification](gdal-nodata-filling.md)
 - [Online tile import extension](rf-builder-downloader-design.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)

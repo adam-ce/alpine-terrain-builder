@@ -14,6 +14,7 @@ add_library(rfbuilderlib
     gdal/build.h gdal/build.cpp
     gdal/inputs.h gdal/inputs.cpp
     gdal/planning.h gdal/planning.cpp
+    gdal/nodata.h gdal/nodata.cpp
 )
 target_include_directories(rfbuilderlib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(rfbuilderlib PUBLIC terrainlib CLI11::CLI11 CURL::libcurl)

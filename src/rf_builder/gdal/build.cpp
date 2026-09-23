@@ -54,8 +54,9 @@ Expected<Report> produce(
     const Options& options, const RasterTransform& transform, const Mask& mask, const inputs::Record& record, const std::function<bool()>& stop_requested)
 {
     std::vector<TileWorker<PixelType>> workers;
-    const auto source_pixel = [&](glm::dvec2 point) { return transform.source_pixel(point); };
-    planning::Cursor cursor(options.tile_side, transform.bounds(), mask.bounds(), source_pixel);
+    const auto source_pixel = [&](glm::dvec2 point) { return transform.source_pixel(point, false); };
+    const auto halo = *nodata::halo(options.tile_side, record.nodata_search_radius, record.nodata_smoothing_kernel_size);
+    planning::Cursor cursor(options.tile_side, transform.bounds(), mask.bounds(), source_pixel, halo);
     run::Source<PixelType> source;
     source.attribution = record.attribution;
     source.validate_cache = [&](const auto& path) { return inputs::validate_cache(path, record); };
@@ -72,7 +73,8 @@ Expected<Report> produce(
                 ++total;
                 return {};
             },
-            poll);
+            poll,
+            halo);
         if (!counted) {
             return Error::propagate(std::move(counted));
         }
@@ -119,6 +121,22 @@ Expected<Report> build(const Options& options, const std::function<bool()>& stop
         || options.attribution_index == 0 || options.attribution_index >= raster_store::attribution::index_limit) {
         return Error::fail(Error::Code::InvalidInput, "RF import requires positive tile dimensions and an attribution index in 1..65534");
     }
+    auto halo = nodata::halo(options.tile_side, options.nodata_search_radius, options.nodata_smoothing_kernel_size);
+    if (!halo) {
+        return Error::propagate(std::move(halo));
+    }
+    if (options.nodata_default_value.size() != 1 && !(options.mode == Mode::Colour && options.nodata_default_value.size() == 3)) {
+        return Error::fail(Error::Code::InvalidInput, "NoData fallback requires one scalar value or one/three RGB values");
+    }
+    std::array<float, 3> fallback {};
+    for (unsigned channel = 0; channel < 3; ++channel) {
+        const double value = options.nodata_default_value[options.nodata_default_value.size() == 1 ? 0 : channel];
+        if (!std::isfinite(value) || std::abs(value) > (std::numeric_limits<float>::max)()
+            || (options.mode == Mode::Colour && (value < 0 || value > 255 || value != std::round(value)))) {
+            return Error::fail(Error::Code::InvalidInput, "NoData fallback must be finite float data or RGB integers in 0..255");
+        }
+        fallback[channel] = float(value);
+    }
     auto dataset_identifier = inputs::identifier(options.dataset);
     auto mask_identifier = inputs::identifier(options.mask);
     if (!dataset_identifier) { return Error::propagate(std::move(dataset_identifier)); }
@@ -138,6 +156,9 @@ Expected<Report> build(const Options& options, const std::function<bool()>& stop
     auto entry = table->at(options.attribution_index);
     if (!entry) { return Error::propagate(std::move(entry)); }
     inputs::Record record { *dataset_identifier, *mask_identifier, *bands, options.mode, options.attribution_index, options.tile_side, **entry };
+    record.nodata_search_radius = options.nodata_search_radius;
+    record.nodata_smoothing_kernel_size = options.nodata_smoothing_kernel_size;
+    record.nodata_default_value = fallback;
     record.value_mapping = options.value_mapping.value_or(
         options.mode == Mode::Colour ? raster_store::pixel::default_mapping<glm::u8vec3> : raster_store::pixel::default_mapping<float>);
     if (options.mode == Mode::Scalar) {

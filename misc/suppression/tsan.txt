@@ -8,3 +8,8 @@ race:__itt_init_ittlib
 # a dependency patch. TSan matches stack frames, so other races through Touch()
 # are also excluded by this rule.
 race:GDALRasterBlock::Touch()
+
+# Q12 accepts GDAL 3.10's same-value MEM creation callback race. Independent
+# RF fill datasets still share the registered driver. This stack suppression
+# also excludes other races reached through Create(); no fill-wide lock is used.
+race:GDALDriver::Create(

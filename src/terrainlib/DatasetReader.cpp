@@ -229,19 +229,20 @@ namespace {
 struct WarpCoordinates {
     const RasterTransform* source;
     radix::tile::SrsBounds bounds;
-    unsigned side;
+    glm::uvec2 size;
     bool failed = false;
     unsigned column_padding = 0;
+    double source_columns_per_metre = 0;
+    double centre_source_column = 0;
 };
 
 int transform_import(void* argument, int destination_to_source, int count,
     double* x, double* y, double*, int* success)
 {
     auto& coordinates = *static_cast<WarpCoordinates*>(argument);
-    const double spacing = coordinates.bounds.width() / coordinates.side;
+    const glm::dvec2 spacing { coordinates.bounds.width() / coordinates.size.x, coordinates.bounds.height() / coordinates.size.y };
     for (int i = 0; i < count; ++i) {
-        const glm::dvec2 destination { coordinates.bounds.min.x + x[i] * spacing,
-            coordinates.bounds.max.y - y[i] * spacing };
+        const glm::dvec2 destination { coordinates.bounds.min.x + x[i] * spacing.x, coordinates.bounds.max.y - y[i] * spacing.y };
         glm::dvec2 canonical = destination;
         const double world_period = 2 * RasterTransform::world_half_extent;
         canonical.x -= world_period * std::floor((canonical.x + RasterTransform::world_half_extent) / world_period);
@@ -259,26 +260,33 @@ int transform_import(void* argument, int destination_to_source, int count,
             coordinates.failed = coordinates.failed || !destination_to_source || in_coverage;
             x[i] = y[i] = HUGE_VAL;
         } else if (destination_to_source) {
-            x[i] = point->x + coordinates.column_padding;
+            const double centre = (coordinates.bounds.min.x + coordinates.bounds.max.x) / 2;
+            x[i] = point->x;
+            if (coordinates.source_columns_per_metre != 0) {
+                const double expected = coordinates.centre_source_column + (destination.x - centre) * coordinates.source_columns_per_metre;
+                const double columns = std::abs(coordinates.source_columns_per_metre) * world_period;
+                x[i] += columns * std::round((expected - x[i]) / columns);
+            }
+            x[i] += coordinates.column_padding;
             y[i] = point->y;
         } else {
             // Choose the equivalent Mercator branch nearest this output window.
             const double period = 2 * RasterTransform::world_half_extent;
             const double centre = (coordinates.bounds.min.x + coordinates.bounds.max.x) / 2;
             const double world_x = point->x + period * std::round((centre - point->x) / period);
-            x[i] = (world_x - coordinates.bounds.min.x) / spacing;
-            y[i] = (coordinates.bounds.max.y - point->y) / spacing;
+            x[i] = (world_x - coordinates.bounds.min.x) / spacing.x;
+            y[i] = (coordinates.bounds.max.y - point->y) / spacing.y;
         }
     }
     return TRUE;
 }
 }
 
-Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& dataset,
-    const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const unsigned side, const unsigned band)
+Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(
+    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const glm::uvec2 size, const unsigned band)
 {
-    if (side == 0 || side > unsigned((std::numeric_limits<int>::max)())
-        || band == 0 || band > unsigned(dataset.GetRasterCount())) {
+    if (size.x == 0 || size.y == 0 || size.x > unsigned((std::numeric_limits<int>::max)()) || size.y > unsigned((std::numeric_limits<int>::max)())
+        || std::size_t(size.x) > std::vector<float>().max_size() / size.y || band == 0 || band > unsigned(dataset.GetRasterCount())) {
         return Error::fail(Error::Code::InvalidInput, "invalid RF read dimensions or source band");
     }
     auto* source_band = dataset.GetRasterBand(int(band));
@@ -294,7 +302,28 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& 
     const bool periodic = affine[2] == 0 && affine[4] == 0
         && (transform.reference().IsGeographic() || (transform.reference().GetAuthorityCode(nullptr) && std::string_view(transform.reference().GetAuthorityCode(nullptr)) == "3857"))
         && std::abs(std::abs(affine[1]) * dataset.GetRasterXSize() - period) < period * 1e-10;
-    const unsigned padding = periodic ? (std::min)(8, dataset.GetRasterXSize()) : 0;
+    double columns_per_metre = 0;
+    double centre_column = 0;
+    unsigned padding = 0;
+    if (periodic) {
+        // Keep global source addressing continuous across its longitude seam.
+        // The VRT repeats just the required edge strips, including filter support.
+        const double centre = (bounds.min.x + bounds.max.x) / 2;
+        auto pixel = transform.source_pixel({ centre, (bounds.min.y + bounds.max.y) / 2 });
+        if (!pixel) {
+            return Error::propagate(std::move(pixel));
+        }
+        centre_column = pixel->x;
+        columns_per_metre = std::copysign(double(dataset.GetRasterXSize()) / (2 * RasterTransform::world_half_extent), affine[1]);
+        const double half_columns = std::abs(bounds.width() * columns_per_metre) / 2;
+        const double filter_support = 3 * (std::max)(1., 2 * half_columns / size.x);
+        const double required = std::ceil(
+            (std::max)({ 8., half_columns - centre_column + filter_support, centre_column + half_columns - dataset.GetRasterXSize() + filter_support }));
+        if (!std::isfinite(required) || required > ((std::numeric_limits<int>::max)() - dataset.GetRasterXSize()) / 2) {
+            return Error::fail(Error::Code::InvalidInput, "periodic RF source view exceeds GDAL dimensions");
+        }
+        padding = unsigned(required);
+    }
     VRTDataset source(dataset.GetRasterXSize() + int(2 * padding), dataset.GetRasterYSize());
     if (source.AddBand(source_band->GetRasterDataType(), nullptr) != CE_None
         || source.AddBand(GDT_Byte, nullptr) != CE_None) {
@@ -308,13 +337,17 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& 
         if (destination_band->AddSimpleSource(input_band, 0, 0, width, height, padding, 0, width, height) != CE_None) {
             return false;
         }
-        // A periodic global grid needs the opposite edge in the filter halo.
-        // Seam-crossing regional grids already have contiguous source columns.
-        return padding == 0
-            || (destination_band->AddSimpleSource(input_band, width - int(padding), 0, padding, height,
-                    0, 0, padding, height) == CE_None
-                && destination_band->AddSimpleSource(input_band, 0, 0, padding, height,
-                       width + padding, 0, padding, height) == CE_None);
+        for (const auto& [begin, end] : { std::pair { 0, int(padding) }, std::pair { width + int(padding), width + int(2 * padding) } }) {
+            for (int destination = begin; destination < end;) {
+                const int source_column = int(((std::int64_t(destination) - padding) % width + width) % width);
+                const int count = (std::min)(end - destination, width - source_column);
+                if (destination_band->AddSimpleSource(input_band, source_column, 0, count, height, destination, 0, count, height) != CE_None) {
+                    return false;
+                }
+                destination += count;
+            }
+        }
+        return true;
     };
     if (!attach(values, source_band) || !attach(validity, source_band->GetMaskBand())) {
         return Error::fail(Error::Code::Io, "attach source values and validity to RF view");
@@ -328,8 +361,11 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& 
         // Only creation needs serialization; each resulting dataset is private.
         static std::mutex creation_mutex;
         const std::lock_guard lock(creation_mutex);
-        return driver->Create("", int(side), int(side), 2, GDT_Float32, nullptr);
+        return driver->Create("", int(size.x), int(size.y), 2, GDT_Float32, nullptr);
     }());
+    if (!destination.gdalDataset()) {
+        return Error::fail(Error::Code::Io, "create RF warp destination");
+    }
     auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
     options->hSrcDS = &source;
     options->hDstDS = destination.gdalDataset();
@@ -355,52 +391,60 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(GDALDataset& 
         options->padfSrcNoDataReal = static_cast<double*>(CPLMalloc(sizeof(double)));
         options->padfSrcNoDataReal[0] = nodata;
     }
-    WarpCoordinates coordinates { &transform, bounds, side, false, padding };
+    WarpCoordinates coordinates { &transform, bounds, size, false, padding, columns_per_metre, centre_column };
     options->pfnTransformer = transform_import;
     options->pTransformerArg = &coordinates;
     GDALWarpOperation operation;
-    if (operation.Initialize(options.get()) != CE_None
-        || operation.ChunkAndWarpImage(0, 0, int(side), int(side)) != CE_None || coordinates.failed) {
+    if (operation.Initialize(options.get()) != CE_None || operation.ChunkAndWarpImage(0, 0, int(size.x), int(size.y)) != CE_None || coordinates.failed) {
         return Error::fail(Error::Code::Io, "warp RF source band: " + std::string(CPLGetLastErrorMsg()));
     }
-    Samples<float> result { radix::Raster<float>(side), radix::Raster<std::uint8_t>(side) };
+    Samples<float> result { radix::Raster<float>(size), radix::Raster<std::uint8_t>(size) };
     auto* output = destination.gdalDataset();
-    if (output->GetRasterBand(1)->RasterIO(GF_Read, 0, 0, int(side), int(side), result.data.buffer().data(),
-            int(side), int(side), GDT_Float32, 0, 0) != CE_None) {
+    if (output->GetRasterBand(1)->RasterIO(GF_Read, 0, 0, int(size.x), int(size.y), result.data.buffer().data(), int(size.x), int(size.y), GDT_Float32, 0, 0)
+        != CE_None) {
         return Error::fail(Error::Code::Io, "read RF warped values and validity");
     }
-    std::vector<float> alpha(side);
-    for (unsigned row = 0; row < side; ++row) {
-        if (output->GetRasterBand(2)->RasterIO(GF_Read, 0, int(row), int(side), 1, alpha.data(),
-                int(side), 1, GDT_Float32, 0, 0) != CE_None) {
+    std::vector<float> alpha(size.x);
+    for (unsigned row = 0; row < size.y; ++row) {
+        if (output->GetRasterBand(2)->RasterIO(GF_Read, 0, int(row), int(size.x), 1, alpha.data(), int(size.x), 1, GDT_Float32, 0, 0) != CE_None) {
             return Error::fail(Error::Code::Io, "read RF destination validity");
         }
-        for (unsigned column = 0; column < side; ++column) {
-            result.valid.buffer()[std::size_t(row) * side + column] = alpha[column] > 0;
+        for (unsigned column = 0; column < size.x; ++column) {
+            result.valid.buffer()[std::size_t(row) * size.x + column]
+                = alpha[column] > 0 && std::isfinite(result.data.buffer()[std::size_t(row) * size.x + column]);
         }
     }
     return result;
 }
 
-Expected<DatasetReader::Samples<glm::u8vec3>> DatasetReader::read_colour(GDALDataset& dataset,
-    const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const unsigned side,
-    const std::array<unsigned, 3>& bands)
+Expected<DatasetReader::Samples<glm::u8vec3>> DatasetReader::read_colour(
+    GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const glm::uvec2 size, const std::array<unsigned, 3>& bands)
 {
-    if (side == 0 || side > unsigned((std::numeric_limits<int>::max)())) {
+    if (size.x == 0 || size.y == 0 || size.x > unsigned((std::numeric_limits<int>::max)()) || size.y > unsigned((std::numeric_limits<int>::max)())
+        || std::size_t(size.x) > std::vector<glm::u8vec3>().max_size() / size.y) {
         return Error::fail(Error::Code::InvalidInput, "invalid RF RGB read dimensions");
     }
-    Samples<glm::u8vec3> result { radix::Raster<glm::u8vec3>(side),
-        radix::Raster<std::uint8_t>(glm::uvec2(side), 255) };
+    Samples<glm::u8vec3> result { radix::Raster<glm::u8vec3>(size), radix::Raster<std::uint8_t>(size, 255) };
     for (unsigned channel = 0; channel < 3; ++channel) {
-        auto samples = read_scalar(dataset, transform, bounds, side, bands[channel]);
+        auto samples = read_scalar(dataset, transform, bounds, size, bands[channel]);
         if (!samples) {
             return Error::propagate(std::move(samples), "read RGB channel " + std::to_string(channel));
         }
+        for (std::size_t i = 0; i < samples->data.buffer().size(); ++i) {
+            if (!samples->valid.buffer()[i]) {
+                samples->data.buffer()[i] = 0;
+            }
+        }
         // Convert one row at a time to keep GDAL's signed word count in range.
-        for (unsigned row = 0; row < side; ++row) {
-            const std::size_t offset = std::size_t(row) * side;
-            GDALCopyWords(samples->data.buffer().data() + offset, GDT_Float32, sizeof(float),
-                &result.data.buffer()[offset][channel], GDT_Byte, sizeof(glm::u8vec3), int(side));
+        for (unsigned row = 0; row < size.y; ++row) {
+            const std::size_t offset = std::size_t(row) * size.x;
+            GDALCopyWords(samples->data.buffer().data() + offset,
+                GDT_Float32,
+                sizeof(float),
+                &result.data.buffer()[offset][channel],
+                GDT_Byte,
+                sizeof(glm::u8vec3),
+                int(size.x));
         }
         for (std::size_t pixel = 0; pixel < result.data.buffer().size(); ++pixel) {
             result.valid.buffer()[pixel] = result.valid.buffer()[pixel] && samples->valid.buffer()[pixel];

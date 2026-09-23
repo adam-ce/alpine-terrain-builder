@@ -63,8 +63,9 @@ Expected<double> estimate(const Bounds& region, const double pixel_spacing, cons
     return maximum;
 }
 
-Cursor::Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const std::vector<Bounds>& mask_bounds, Transform transform)
+Cursor::Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const std::vector<Bounds>& mask_bounds, Transform transform, unsigned halo_width)
     : m_side(side)
+    , m_halo_width(halo_width)
     , m_transform(std::move(transform))
     , m_pending { raster_store::StoreTraits::root() }
 {
@@ -92,15 +93,41 @@ Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expect
         const auto tile_bounds = RasterTransform::tile_bounds(key);
         bool intersects = false;
         double ratio = 0;
+        const double spacing = tile_bounds.width() / m_side;
+        const double half = RasterTransform::world_half_extent;
+        const double extent = m_halo_width * spacing;
+        const Bounds expanded { tile_bounds.min - glm::dvec2(extent), tile_bounds.max + glm::dvec2(extent) };
+        // Compare canonical coverage against shifted copies of the expanded
+        // candidate. Halo widths >= one world simply cover every longitude.
         for (const auto& region : m_coverage) {
-            const auto overlap = intersection(tile_bounds, region);
-            if (!overlap) { continue; }
-            intersects = true;
-            auto estimated = estimate(*overlap, tile_bounds.width() / m_side, m_transform);
-            if (!estimated) {
-                return Error::propagate(std::move(estimated), "estimate resolution for RF tile " + to_string(key));
+            for (int branch : { -1, 0, 1 }) {
+                Bounds candidate = expanded;
+                if (expanded.width() >= 2 * half) {
+                    if (branch != 0) {
+                        continue;
+                    }
+                    candidate.min.x = -half;
+                    candidate.max.x = half;
+                } else {
+                    candidate.min.x += branch * 2 * half;
+                    candidate.max.x += branch * 2 * half;
+                }
+                candidate.min.y = (std::max)(candidate.min.y, -half);
+                candidate.max.y = (std::min)(candidate.max.y, half);
+                const auto overlap = intersection(candidate, region);
+                if (!overlap) {
+                    continue;
+                }
+                intersects = true;
+                auto estimated = estimate(*overlap, spacing, m_transform);
+                if (!estimated) {
+                    return Error::propagate(std::move(estimated), "estimate resolution for RF tile " + to_string(key));
+                }
+                ratio = (std::max)(ratio, *estimated);
+                if (ratio > sampling_limit) {
+                    break;
+                }
             }
-            ratio = (std::max)(ratio, *estimated);
             if (ratio > sampling_limit) { break; }
         }
         if (!intersects) { continue; }
@@ -123,9 +150,10 @@ Expected<void> traverse(const unsigned side,
     const std::vector<Bounds>& mask_bounds,
     const Transform& transform,
     const Visit& visit,
-    const std::function<Expected<void>()>& checkpoint)
+    const std::function<Expected<void>()>& checkpoint,
+    unsigned halo_width)
 {
-    Cursor cursor(side, source_bounds, mask_bounds, transform);
+    Cursor cursor(side, source_bounds, mask_bounds, transform, halo_width);
     for (;;) {
         auto key = cursor.next(checkpoint);
         if (!key) {

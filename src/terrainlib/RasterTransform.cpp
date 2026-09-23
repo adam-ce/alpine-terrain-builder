@@ -139,14 +139,14 @@ RasterTransform::Bounds RasterTransform::tile_bounds(const radix::tile::Id& key)
             world_half_extent - double(key.coords.y) * side } };
 }
 
-Expected<glm::dvec2> RasterTransform::source_pixel(glm::dvec2 point) const
+Expected<glm::dvec2> RasterTransform::source_pixel(glm::dvec2 point, bool wrap_longitude) const
 {
     if (!m_to_source->Transform(1, &point.x, &point.y) || !std::isfinite(point.x) || !std::isfinite(point.y)) {
         return Error::fail(Error::Code::InvalidInput, "transform RF position into source CRS");
     }
     // Keep a seam-crossing affine grid continuous in its own source coordinates.
     // This is source addressing only; RF coordinates remain canonical.
-    if (m_period > 0) {
+    if (wrap_longitude && m_period > 0) {
         point.x = m_centre_x + std::remainder(point.x - m_centre_x, m_period);
     }
     glm::dvec2 pixel;

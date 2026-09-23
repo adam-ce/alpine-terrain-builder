@@ -4,6 +4,7 @@
 #include "Mask.h"
 #include "gdal/build.h"
 #include "gdal/inputs.h"
+#include "gdal/nodata.h"
 #include "gdal/planning.h"
 #include "init.h"
 #include "io/bytes.h"
@@ -33,8 +34,12 @@ void table(const std::filesystem::path& directory)
     write_text(directory / raster_store::attribution::file_name, "[" + entity + "," + entity + "]");
 }
 
-Dataset raster(const std::filesystem::path& path, const unsigned side, const unsigned bands,
-    std::array<double, 6> affine, int epsg = 3857, GDALDataType type = GDT_Float32)
+Dataset source_raster(const std::filesystem::path& path,
+    const unsigned side,
+    const unsigned bands,
+    std::array<double, 6> affine,
+    int epsg = 3857,
+    GDALDataType type = GDT_Float32)
 {
     initialize_gdal_once();
     auto* driver = GetGDALDriverManager()->GetDriverByName(path.empty() ? "MEM" : "GTiff");
@@ -106,7 +111,9 @@ struct Fixture {
         options.attribution_index = 1;
         options.tile_side = 16;
         options.mode = bands == 1 ? rf_builder::gdal::Mode::Scalar : rf_builder::gdal::Mode::Colour;
-        { auto dataset = raster(options.dataset, 32, bands, affine_for(bounds, 32), 3857, bands == 3 ? GDT_Byte : GDT_Float32); }
+        {
+            auto dataset = source_raster(options.dataset, 32, bands, affine_for(bounds, 32), 3857, bands == 3 ? GDT_Byte : GDT_Float32);
+        }
         mask(options.mask, rectangle(bounds));
     }
 };
@@ -129,7 +136,7 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
     auto built = rf_builder::gdal::build(fixture.options);
     INFO((built ? "" : built.error().to_string()));
     REQUIRE(built);
-    CHECK(built->tile_count == 4);
+    CHECK(built->tile_count == 16);
     CHECK(built->tile_bytes > 0);
     CHECK(built->reused_tiles == 0);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
@@ -142,7 +149,12 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
             CHECK(key.zoom_level == 4);
             auto tile = snapshot.load(key);
             REQUIRE(tile);
-            CHECK(std::ranges::any_of(tile->source_attribution.buffer(), [](auto value) { return value == 1; }));
+            const bool original_coverage = key.coords.x >= 8 && key.coords.x <= 9 && key.coords.y >= 6 && key.coords.y <= 7;
+            CHECK(std::ranges::any_of(tile->source_attribution.buffer(), [](auto value) { return value == 1; }) == original_coverage);
+            CHECK(key.coords.x >= 7);
+            CHECK(key.coords.x <= 10);
+            CHECK(key.coords.y >= 5);
+            CHECK(key.coords.y <= 8);
             CHECK(std::ranges::all_of(tile->source_attribution.buffer(), [](auto value) { return value <= 1; }));
             bytes += std::filesystem::file_size(*snapshot.path_for(key));
         }
@@ -164,7 +176,7 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
 TEST_CASE("RF reader uses per-channel validity and preserves ordinary black and sentinel values", "[rf-builder]")
 {
     const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
-    auto source = raster({}, 32, 3, affine_for(bounds, 32));
+    auto source = source_raster({}, 32, 3, affine_for(bounds, 32));
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     for (int band = 1; band <= 3; ++band) { REQUIRE(source.gdalDataset()->GetRasterBand(band)->Fill(0) == CE_None); }
@@ -205,7 +217,7 @@ TEST_CASE("RF mask selection includes boundaries and excludes hole interiors", "
 
 TEST_CASE("RF affine transforms support rotation and skew and reject unsupported georeferencing", "[rf-builder]")
 {
-    auto source = raster({}, 32, 1, { 1000, 10, 2, 2000, 3, -10 });
+    auto source = source_raster({}, 32, 1, { 1000, 10, 2, 2000, 3, -10 });
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     const glm::dvec2 pixel { 9.5, 18.5 };
@@ -229,10 +241,19 @@ TEST_CASE("RF planning measures directional stretch and chooses disjoint mixed z
     CHECK(directional_stretch({ 2, 0 }, { 0, 0.5 }) == Catch::Approx(2));
     const auto world = RasterTransform::tile_bounds({ 0, { 0, 0 } });
     const double half = RasterTransform::world_half_extent;
+    const unsigned halo = GENERATE(0u, 7u);
     std::vector<Key> selected;
-    REQUIRE(traverse(16, { world }, { world }, [half](glm::dvec2 point) -> Expected<glm::dvec2> {
-        return glm::dvec2(point.x / half * (point.x < 0 ? 4 : 64), point.y / half * 4);
-    }, [&](const Key& key) -> Expected<void> { selected.push_back(key); return {}; }));
+    REQUIRE(traverse(
+        16,
+        { world },
+        { world },
+        [half](glm::dvec2 point) -> Expected<glm::dvec2> { return glm::dvec2(point.x / half * (point.x < 0 ? 4 : 256), point.y / half * 4); },
+        [&](const Key& key) -> Expected<void> {
+            selected.push_back(key);
+            return {};
+        },
+        {},
+        halo));
     REQUIRE_FALSE(selected.empty());
     std::set<unsigned> levels;
     for (const auto& key : selected) {
@@ -268,7 +289,9 @@ TEST_CASE("RF planning retains narrow masks until the selected resolution", "[rf
 TEST_CASE("RF antimeridian source reaches canonical tiles on both sides", "[rf-builder]")
 {
     Fixture fixture;
-    { auto source = raster(fixture.options.dataset, 32, 1, { 170, 0.625, 0, 5, 0, -0.3125 }, 4326); }
+    {
+        auto source = source_raster(fixture.options.dataset, 32, 1, { 170, 0.625, 0, 5, 0, -0.3125 }, 4326);
+    }
     std::filesystem::remove(fixture.options.mask);
     mask(fixture.options.mask, "MULTIPOLYGON (((170 -5,180 -5,180 5,170 5,170 -5)),((-180 -5,-170 -5,-170 5,-180 5,-180 -5)))", 4326);
     auto built = rf_builder::gdal::build(fixture.options);
@@ -292,11 +315,13 @@ TEST_CASE("RF empty and polar-only coverage publishes an empty snapshot", "[rf-b
     Fixture fixture;
     SECTION("source nodata") {
         // Recreate in update-capable form to set nodata.
-        auto source = raster(fixture.options.dataset, 32, 1, affine_for(fixture.bounds, 32));
+        auto source = source_raster(fixture.options.dataset, 32, 1, affine_for(fixture.bounds, 32));
         REQUIRE(source.gdalDataset()->GetRasterBand(1)->SetNoDataValue(10) == CE_None);
     }
     SECTION("polar cutoff") {
-        { auto source = raster(fixture.options.dataset, 32, 1, { 10, 0.1, 0, 89, 0, -0.02 }, 4326); }
+        {
+            auto source = source_raster(fixture.options.dataset, 32, 1, { 10, 0.1, 0, 89, 0, -0.02 }, 4326);
+        }
         std::filesystem::remove(fixture.options.mask);
         mask(fixture.options.mask, "POLYGON ((10 86,14 86,14 89,10 89,10 86))", 4326);
     }
@@ -312,6 +337,21 @@ TEST_CASE("RF rejects bad attribution and requested caches before tile productio
 {
     Fixture fixture;
     SECTION("zero attribution") { fixture.options.attribution_index = 0; }
+    SECTION("even Gaussian kernel") { fixture.options.nodata_smoothing_kernel_size = 4; }
+    SECTION("zero Gaussian kernel") { fixture.options.nodata_smoothing_kernel_size = 0; }
+    SECTION("halo overflow") { fixture.options.nodata_search_radius = (std::numeric_limits<unsigned>::max)(); }
+    SECTION("nonfinite fallback") { fixture.options.nodata_default_value = { NAN }; }
+    SECTION("scalar rejects RGB fallback") { fixture.options.nodata_default_value = { 1, 2, 3 }; }
+    SECTION("RGB rejects out of range fallback")
+    {
+        fixture.options.mode = rf_builder::gdal::Mode::Colour;
+        fixture.options.nodata_default_value = { 256 };
+    }
+    SECTION("RGB rejects fractional fallback")
+    {
+        fixture.options.mode = rf_builder::gdal::Mode::Colour;
+        fixture.options.nodata_default_value = { 1.5 };
+    }
     SECTION("zero workers") { fixture.options.jobs = 0; }
     SECTION("unsupported attribution") { fixture.options.attribution_index = 65535; }
     SECTION("absent attribution") { fixture.options.attribution_index = 2; }
@@ -335,7 +375,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     REQUIRE(original_result);
     auto [original, original_metadata] = std::move(*original_result);
     const auto keys = physical_keys(*original);
-    REQUIRE(keys.size() == 4);
+    REQUIRE(keys.size() == 16);
     const auto cache_path = fixture.directory.path() / "cache";
     {
         storage::CreateOptions create_options;
@@ -382,6 +422,30 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         REQUIRE(second);
         CHECK(second->reused_tiles == 1);
     }
+    SECTION("different NoData settings reject cache")
+    {
+        const unsigned setting = GENERATE(0u, 1u, 2u);
+        if (setting == 0) {
+            fixture.options.nodata_search_radius = 3;
+        }
+        if (setting == 1) {
+            fixture.options.nodata_smoothing_kernel_size = 3;
+        }
+        if (setting == 2) {
+            fixture.options.nodata_default_value = { 8 };
+        }
+        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
+    }
+    SECTION("old input schema is rejected")
+    {
+        auto record = io::envelope::read_from_path<inputs::Schema>(*fixture.options.cache / "inputs.tmp");
+        REQUIRE(record);
+        using OldSchema = io::envelope::PayloadSchema<"rf_builder.Inputs", io::envelope::Version<1, inputs::Record>>;
+        REQUIRE(io::envelope::write_to_path<OldSchema>(*record, *fixture.options.cache / "inputs.tmp"));
+        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
+    }
     SECTION("different mapping rejects cache")
     {
         fixture.options.value_mapping = raster_store::pixel::Mapping::SRGBA;
@@ -425,8 +489,8 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
     test::TemporaryDirectory directory;
     const Bounds bounds { { 0, 0 }, { 32, 16 } };
     {
-        auto left = raster(directory.path() / "left.tif", 16, 1, { 0, 1, 0, 16, 0, -1 });
-        auto right = raster(directory.path() / "right.tif", 16, 1, { 16, 1, 0, 16, 0, -1 });
+        auto left = source_raster(directory.path() / "left.tif", 16, 1, { 0, 1, 0, 16, 0, -1 });
+        auto right = source_raster(directory.path() / "right.tif", 16, 1, { 16, 1, 0, 16, 0, -1 });
         REQUIRE(right.gdalDataset()->GetRasterBand(1)->Fill(50) == CE_None);
         REQUIRE(left.gdalDataset()->FlushCache() == CE_None);
         REQUIRE(right.gdalDataset()->FlushCache() == CE_None);
@@ -444,7 +508,7 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
     const Bounds window { { 8.25, 0.25 }, { 24.25, 16.25 } };
     auto combined = DatasetReader::read_scalar(*mosaic.gdalDataset(), *transform, window, 16, 1);
     REQUIRE(combined);
-    auto reference = raster({}, 32, 1, { 0, 1, 0, 16, 0, -1 });
+    auto reference = source_raster({}, 32, 1, { 0, 1, 0, 16, 0, -1 });
     std::vector<float> values(32 * 32, 10);
     for (unsigned y = 0; y < 32; ++y) {
         for (unsigned x = 16; x < 32; ++x) { values[y * 32 + x] = 50; }
@@ -469,7 +533,7 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
 
 TEST_CASE("RF filtering agrees across output windows and a longitude seam", "[rf-builder]")
 {
-    auto source = raster({}, 64, 1, { 170, 20. / 64, 0, 10, 0, -20. / 64 }, 4326);
+    auto source = source_raster({}, 64, 1, { 170, 20. / 64, 0, 10, 0, -20. / 64 }, 4326);
     std::vector<float> values(64 * 64);
     for (unsigned y = 0; y < 64; ++y) {
         for (unsigned x = 0; x < 64; ++x) { values[y * 64 + x] = float(x); }
@@ -528,8 +592,8 @@ TEST_CASE("RF mask is an output selection and not a source cutline", "[rf-builde
 TEST_CASE("rf-builder command reports a published snapshot and rejects invalid bands", "[rf-builder][cli]")
 {
     Fixture fixture;
-    unsigned expected_tiles = 4;
-    unsigned expected_candidates = 4;
+    unsigned expected_tiles = 16;
+    unsigned expected_candidates = 16;
     SECTION("populated snapshot") { }
     SECTION("all candidates have no valid pixels") {
         Dataset source(static_cast<GDALDataset*>(GDALOpen(fixture.options.dataset.c_str(), GA_Update)));
@@ -581,8 +645,10 @@ TEST_CASE("RF imports rotated and skewed grids through the command pipeline", "[
 {
     Fixture fixture;
     const double spacing = fixture.bounds.width() / 32;
-    { auto source = raster(fixture.options.dataset, 32, 1,
-          { fixture.bounds.min.x, spacing, spacing * 0.2, fixture.bounds.max.y, spacing * 0.3, -spacing }); }
+    {
+        auto source
+            = source_raster(fixture.options.dataset, 32, 1, { fixture.bounds.min.x, spacing, spacing * 0.2, fixture.bounds.max.y, spacing * 0.3, -spacing });
+    }
     auto result = rf_builder::gdal::build(fixture.options);
     INFO((result ? "" : result.error().to_string()));
     REQUIRE(result);
@@ -643,7 +709,7 @@ TEST_CASE("RF ignores GDAL threading environment for its synchronous transformer
     const Configuration threads("GDAL_NUM_THREADS", "2");
     const Configuration chunks("WARP_THREAD_CHUNK_SIZE", "1");
     const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
-    auto source = raster({}, 32, 1, affine_for(bounds, 32));
+    auto source = source_raster({}, 32, 1, affine_for(bounds, 32));
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     CPLErrorReset();
@@ -655,7 +721,7 @@ TEST_CASE("RF ignores GDAL threading environment for its synchronous transformer
 
 TEST_CASE("RF excludes invalid projection probes outside a coarse source footprint", "[rf-builder]")
 {
-    auto source = raster({}, 4, 1, { -3500000, 2000000, 0, 4000000, 0, -2000000 }, 32632);
+    auto source = source_raster({}, 4, 1, { -3500000, 2000000, 0, 4000000, 0, -2000000 }, 32632);
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform,
@@ -666,7 +732,7 @@ TEST_CASE("RF excludes invalid projection probes outside a coarse source footpri
 
 TEST_CASE("RF default-size tile can contain a source smaller than GDAL probe spacing", "[rf-builder]")
 {
-    auto source = raster({}, 32, 1, { 100, 1, 0, 200, 0, -1 });
+    auto source = source_raster({}, 32, 1, { 100, 1, 0, 200, 0, -1 });
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform, { { 0, 0 }, { 4096, 4096 } }, 4096, 1);
@@ -743,7 +809,7 @@ TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-bu
     Fixture fixture;
     fixture.options.jobs = 2;
     {
-        auto source = raster(fixture.options.dataset, 128, 1, affine_for(fixture.bounds, 128));
+        auto source = source_raster(fixture.options.dataset, 128, 1, affine_for(fixture.bounds, 128));
     }
     const auto partial_path = std::filesystem::path(fixture.options.output.string() + ".part");
     unsigned polls = 0;
@@ -780,7 +846,7 @@ TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-bu
     auto resumed = rf_builder::gdal::build(fixture.options);
     REQUIRE(resumed);
     CHECK(resumed->reused_tiles == keys.size());
-    CHECK(resumed->tile_count == 64);
+    CHECK(resumed->tile_count == 100);
 }
 
 TEST_CASE("RF cancellation during planning leaves an empty reusable checkpoint", "[rf-builder][parallel]")
@@ -835,4 +901,61 @@ TEST_CASE("RF value mapping defaults and overrides persist without changing pixe
     CHECK(metadata->halo_width == 0);
     CHECK(metadata->nominal_tile_size == 16);
     CHECK(metadata->stored_tile_size == 16);
+}
+
+TEST_CASE("RF warped nonfinite samples are invalid before RGB byte conversion", "[rf-builder][rf-nodata]")
+{
+    const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
+    auto source = source_raster({}, 32, 3, affine_for(bounds, 32));
+    auto transform = RasterTransform::create(*source.gdalDataset());
+    REQUIRE(transform);
+    REQUIRE(source.gdalDataset()->GetRasterBand(2)->Fill(GENERATE(double(NAN), double(INFINITY))) == CE_None);
+    auto scalar = DatasetReader::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 2);
+    REQUIRE(scalar);
+    CHECK(std::ranges::none_of(scalar->valid.buffer(), [](auto value) { return value != 0; }));
+    auto rgb = DatasetReader::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
+    REQUIRE(rgb);
+    CHECK(std::ranges::none_of(rgb->valid.buffer(), [](auto value) { return value != 0; }));
+    auto processor = rf_builder::gdal::nodata::Processor::create(5, 5);
+    REQUIRE(processor);
+    auto completed = processor->process(*rgb, { 7, 7 }, 16, { 128, 64, 32 });
+    REQUIRE(completed);
+    CHECK(std::ranges::all_of(completed->buffer(), [](auto value) { return value == glm::u8vec3(128, 64, 32); }));
+}
+
+TEST_CASE("RF import stores configured replacements with zero attribution", "[rf-builder][rf-nodata]")
+{
+    const unsigned bands = GENERATE(1u, 3u);
+    Fixture fixture(bands);
+    {
+        auto source = source_raster(fixture.options.dataset, 32, bands, affine_for(fixture.bounds, 32));
+        auto* missing = source.gdalDataset()->GetRasterBand(bands == 1 ? 1 : 2);
+        REQUIRE(missing->SetNoDataValue(-9999) == CE_None);
+        std::vector<float> hole(16 * 16, -9999);
+        REQUIRE(missing->RasterIO(GF_Write, 8, 8, 16, 16, hole.data(), 16, 16, GDT_Float32, 0, 0) == CE_None);
+    }
+    fixture.options.nodata_default_value = bands == 1 ? std::vector<double> { 12 } : std::vector<double> { 128, 64, 32 };
+    auto built = rf_builder::gdal::build(fixture.options);
+    REQUIRE(built);
+    const auto check = [&](const auto& tile, const auto& original, const auto& fallback) {
+        CHECK(tile.data.pixel({ 1, 1 }) == original);
+        CHECK(tile.source_attribution.pixel({ 1, 1 }) == 1);
+        CHECK(tile.data.pixel({ 15, 15 }) == fallback);
+        CHECK(tile.source_attribution.pixel({ 15, 15 }) == 0);
+        CHECK(tile.source_attribution.pixel({ 8, 8 }) == 0);
+        CHECK(tile.data.pixel({ 8, 8 }) != fallback);
+    };
+    if (bands == 1) {
+        auto opened = storage::open<float>(fixture.options.output);
+        REQUIRE(opened);
+        auto tile = opened->first->load({ 4, { 8, 6 } });
+        REQUIRE(tile);
+        check(*tile, 10.f, 12.f);
+    } else {
+        auto opened = storage::open<glm::u8vec3>(fixture.options.output);
+        REQUIRE(opened);
+        auto tile = opened->first->load({ 4, { 8, 6 } });
+        REQUIRE(tile);
+        check(*tile, glm::u8vec3(10, 20, 30), glm::u8vec3(128, 64, 32));
+    }
 }

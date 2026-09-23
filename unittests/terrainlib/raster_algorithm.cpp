@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -800,4 +801,22 @@ TEST_CASE("windowed scaling writes strided destinations and rejects overlap befo
     oversized.fill(99);
     CHECK_FALSE(algorithm::scale(data, 1, 1, Interpolation::Bilinear, Filter::Box, oversized));
     CHECK(oversized.pixel({ 0, 0 }) == 99);
+}
+
+TEST_CASE("Gaussian kernels are normalized symmetric and reject invalid sizes", "[raster][algorithm]")
+{
+    CHECK_FALSE(raster::algorithm::gaussian_kernel(0));
+    CHECK_FALSE(raster::algorithm::gaussian_kernel(4));
+    REQUIRE(*raster::algorithm::gaussian_kernel(1) == std::vector<double> { 1 });
+    for (unsigned size : { 3u, 5u, 9u }) {
+        auto kernel = raster::algorithm::gaussian_kernel(size);
+        REQUIRE(kernel);
+        double sum = 0;
+        for (unsigned i = 0; i < size; ++i) {
+            CHECK((*kernel)[i] > 0);
+            CHECK((*kernel)[i] == (*kernel)[size - i - 1]);
+            sum += (*kernel)[i];
+        }
+        CHECK(sum == Catch::Approx(1));
+    }
 }

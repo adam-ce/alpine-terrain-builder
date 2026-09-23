@@ -13,6 +13,16 @@ void configure(CLI::App& app, Options& options)
     app.add_option("--bands", options.bands, "One scalar band or three bands in RGB order")->expected(1, 3);
     app.add_option("--tile-size", options.tile_side, "Pixels per side")->check(CLI::PositiveNumber)->default_val(4096);
     app.add_option("--jobs", options.jobs, "Concurrent tile workers")->check(CLI::PositiveNumber)->default_val(1);
+    app.add_option("--nodata-search-radius", options.nodata_search_radius, "Fill search radius in RF pixels; zero disables filling")
+        ->check(CLI::NonNegativeNumber)
+        ->default_val(5);
+    app.add_option("--nodata-smoothing-kernel-size", options.nodata_smoothing_kernel_size, "Odd Gaussian kernel size in RF pixels; one disables smoothing")
+        ->check(CLI::PositiveNumber)
+        ->default_val(5);
+    app.add_option("--nodata-default-value", options.nodata_default_value, "Fallback value; RGB also accepts R,G,B")
+        ->delimiter(',')
+        ->expected(1, 3)
+        ->default_str("0");
     app.add_option_function<std::string>(
            "--value-mapping",
            [&options](

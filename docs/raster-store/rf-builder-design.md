@@ -58,6 +58,13 @@ Do not add tests of GDAL's filter mathematics merely to duplicate upstream
 coverage. Tests of our configuration, reading, coverage, tile selection, and
 boundary handling are still needed.
 
+NoData postprocessing runs after the warp in RF pixel coordinates, with defaults
+`--nodata-search-radius 5`, `--nodata-smoothing-kernel-size 5`, and
+`--nodata-default-value 0`. The default halo is seven RF pixels. Valid warped
+values remain unchanged, and all replacement pixels remain unattributed.
+See [GDAL import NoData filling](gdal-nodata-filling.md) for the full policy,
+RGB fallback syntax, world borders, and cache compatibility.
+
 ### Mask and coverage
 
 Reuse the mesh-mask reader in `src/sf_merger/mask.h`, generalizing it where
@@ -72,8 +79,10 @@ An output pixel is selected when its centre lies in the mask. It also needs
 valid source data to receive the import's attribution index. RGB output
 requires valid results for all three selected channels; otherwise attribution
 is zero. Other output
-pixels have attribution zero. Keep a tile when it contains at least one
-accepted valid output pixel. A narrow region containing no output pixel
+pixels have attribution zero. Keep a tile when its expanded read window
+contains at least one originally valid, mask-selected RF pixel, even if its
+stored interior has entirely zero attribution. The temporary halo follows the
+[GDAL NoData filling policy](gdal-nodata-filling.md). A narrow region containing no output pixel
 centres can disappear under this rule.
 
 The mask selects output pixels; it is not a filter cutline. Otherwise valid
@@ -83,9 +92,10 @@ Source NoData and validity information still apply to filtering.
 These are source-import rules, not a validity convention for stored rasters.
 Stored attribution zero means unattributed and does not make the payload
 invalid. Under the [single-raster scaling contract](scaling.md), every supplied
-data sample participates regardless of attribution. A caller reusing imported
-data must prepare usable values before invoking those generic algorithms;
-neither the scaler nor its paired store wrappers fills or masks source gaps.
+data sample participates regardless of attribution. The GDAL importer prepares
+usable values with bounded filling, a configurable fallback, and Gaussian
+smoothing of originally invalid pixels. Neither the scaler nor its paired
+store wrappers fills or masks source gaps.
 This distinction does not change GDAL's source NoData handling or the mask's
 selection of attributed output pixels.
 

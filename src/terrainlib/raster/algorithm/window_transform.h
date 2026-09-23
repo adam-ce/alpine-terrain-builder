@@ -1,8 +1,31 @@
 #pragma once
 
 #include "detail.h"
+#include <cmath>
+#include <vector>
 
 namespace raster::algorithm {
+
+/// Normalized one-dimensional Gaussian weights for an odd window; size one is identity.
+[[nodiscard]] inline Expected<std::vector<double>> gaussian_kernel(unsigned size)
+{
+    if (size == 0 || size % 2 == 0) {
+        return Error::fail(Error::Code::InvalidInput, "Gaussian kernel size must be positive and odd");
+    }
+    if (size == 1) {
+        return std::vector<double> { 1 };
+    }
+    const double sigma = double(size - 1) / 4;
+    std::vector<double> weights(size);
+    double sum = 0;
+    for (unsigned i = 0; i < size; ++i) {
+        const double distance = (double(i) - double(size / 2)) / sigma;
+        weights[i] = std::exp(-0.5 * distance * distance);
+        sum += weights[i];
+    }
+    std::ranges::transform(weights, weights.begin(), [sum](double weight) { return weight / sum; });
+    return weights;
+}
 
 namespace detail {
     inline Expected<glm::uvec2> window_output_size(glm::uvec2 input_size, glm::uvec2 kernel_size, glm::uvec2 stride = glm::uvec2(1))

@@ -1,5 +1,26 @@
 # Raster-store implementation status
 
+## GDAL import NoData filling — 2026-09-23
+
+Implemented the [agreed filling policy](gdal-nodata-filling.md): configurable
+five-pixel GDAL fill search, five-pixel separable Gaussian kernel, and scalar
+or RGB fallback (default zero). Original valid values and attribution are
+preserved; replacements remain unattributed. Planning and reads include the
+required temporary halo, world borders are handled explicitly, and periodic
+source addressing avoids full-width seam reads. Input schema and processing
+versions are 2, rejecting older caches. The Gaussian-kernel helper lives in
+`raster/algorithm/window_transform.h`.
+
+Verification: all targets build in the existing Debug configuration; RF builder
+57 cases, terrainlib 568 cases, tile builder 14 cases, SF builder 16 cases,
+DAG builder 76 cases, and SF merger 13 cases pass. Focused fixtures verify
+source-read counts, in-memory fill scratch, original-value preservation,
+nonfinite samples, RGB validity, split windows, polar borders, mixed zooms,
+cache rejection/reuse, and parallel operation. Debug timing and peak-memory
+measurements, with their scope and limitations, are recorded in the filling
+policy document. The accepted driver callback race has a TSan stack suppression;
+the existing warp-destination creation lock is unchanged.
+
 ## Halo extraction — 2026-09-22
 
 Implemented windowed generic/paired scaling, physical-tile halo extraction,

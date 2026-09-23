@@ -19,7 +19,9 @@ public:
     static Expected<std::vector<Bounds>> coverage(const OGRSpatialReference& reference, const Bounds& bounds);
     static Bounds tile_bounds(const radix::tile::Id& key);
 
-    Expected<glm::dvec2> source_pixel(glm::dvec2 mercator) const;
+    // Sampling estimates can omit source-branch wrapping to keep derivatives
+    // continuous at a global raster's longitude seam.
+    Expected<glm::dvec2> source_pixel(glm::dvec2 mercator, bool wrap_longitude = true) const;
     Expected<glm::dvec2> mercator(glm::dvec2 source_pixel) const;
     const std::vector<Bounds>& bounds() const { return m_bounds; }
     const OGRSpatialReference& reference() const { return m_reference; }

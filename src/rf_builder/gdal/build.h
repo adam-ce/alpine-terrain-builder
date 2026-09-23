@@ -25,6 +25,9 @@ struct Options {
     unsigned jobs = 1;
     std::optional<std::filesystem::path> cache = std::nullopt;
     std::optional<raster_store::pixel::Mapping> value_mapping = std::nullopt;
+    unsigned nodata_search_radius = 5;
+    unsigned nodata_smoothing_kernel_size = 5;
+    std::vector<double> nodata_default_value { 0 };
 };
 
 using Report = run::Report;

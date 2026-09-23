@@ -41,10 +41,21 @@ public:
 
     // RF import: Lanczos at base resolution, exact coordinates, declared source
     // validity. RGB requires a valid filtered result in every selected channel.
-    static Expected<Samples<float>> read_scalar(GDALDataset& dataset, const RasterTransform& transform,
-        const radix::tile::SrsBounds& bounds, unsigned side, unsigned band);
-    static Expected<Samples<glm::u8vec3>> read_colour(GDALDataset& dataset, const RasterTransform& transform,
-        const radix::tile::SrsBounds& bounds, unsigned side, const std::array<unsigned, 3>& bands);
+    static Expected<Samples<float>> read_scalar(
+        GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, unsigned side, unsigned band)
+    {
+        return read_scalar(dataset, transform, bounds, glm::uvec2(side), band);
+    }
+    static Expected<Samples<glm::u8vec3>> read_colour(
+        GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, unsigned side, const std::array<unsigned, 3>& bands)
+    {
+        return read_colour(dataset, transform, bounds, glm::uvec2(side), bands);
+    }
+
+    static Expected<Samples<float>> read_scalar(
+        GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, unsigned band);
+    static Expected<Samples<glm::u8vec3>> read_colour(
+        GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, const std::array<unsigned, 3>& bands);
 
     DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews = true);
 

@@ -13,11 +13,12 @@ using Visit = std::function<Expected<void>(const radix::tile::Id&)>;
 
 class Cursor {
 public:
-    Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const std::vector<Bounds>& mask_bounds, Transform transform);
+    Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const std::vector<Bounds>& mask_bounds, Transform transform, unsigned halo_width = 0);
     Expected<std::optional<radix::tile::Id>> next(const std::function<Expected<void>()>& poll = {});
 
 private:
     unsigned m_side;
+    unsigned m_halo_width;
     Transform m_transform;
     std::vector<Bounds> m_coverage;
     std::vector<radix::tile::Id> m_pending;
@@ -26,8 +27,12 @@ private:
 // Largest singular value of the Jacobian whose columns are the two vectors.
 double directional_stretch(glm::dvec2 column, glm::dvec2 row);
 Expected<double> estimate(const Bounds& region, double pixel_spacing, const Transform& transform);
-Expected<void> traverse(unsigned side, const std::vector<Bounds>& source_bounds,
-    const std::vector<Bounds>& mask_bounds, const Transform& transform, const Visit& visit,
-    const std::function<Expected<void>()>& checkpoint = {});
+Expected<void> traverse(unsigned side,
+    const std::vector<Bounds>& source_bounds,
+    const std::vector<Bounds>& mask_bounds,
+    const Transform& transform,
+    const Visit& visit,
+    const std::function<Expected<void>()>& checkpoint = {},
+    unsigned halo_width = 0);
 
 } // namespace rf_builder::gdal::planning

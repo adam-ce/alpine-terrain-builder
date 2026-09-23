@@ -22,15 +22,18 @@ struct Record {
     double sampling_limit = planning::sampling_limit;
     double mask_simplification_metres = 0.1;
     std::string resampling = "lanczos/base/exact/all-channels-valid";
-    std::uint32_t processing_version = 1;
+    std::uint32_t processing_version = 2;
     std::uint32_t gdal_version = GDAL_VERSION_NUM;
 
     raster_store::pixel::Mapping value_mapping = raster_store::pixel::Mapping::Linear;
+    unsigned nodata_search_radius = 5;
+    unsigned nodata_smoothing_kernel_size = 5;
+    std::array<float, 3> nodata_default_value {};
 
     bool operator==(const Record&) const = default;
 };
 
-using Schema = io::envelope::PayloadSchema<"rf_builder.Inputs", io::envelope::Version<1, Record>>;
+using Schema = io::envelope::PayloadSchema<"rf_builder.Inputs", io::envelope::Version<2, Record>>;
 
 using run::check_link_filesystem;
 using run::gdal_identifier;

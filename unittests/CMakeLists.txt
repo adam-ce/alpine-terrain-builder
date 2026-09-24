@@ -12,6 +12,14 @@ function(atb_configure_test target)
     )
 endfunction()
 
+if(TARGET rftile2imagelib)
+    add_executable(unittests_rf_tile2image rf_tile2image/convert.cpp)
+    target_link_libraries(unittests_rf_tile2image PRIVATE rftile2imagelib Catch2::Catch2WithMain)
+    atb_configure_test(unittests_rf_tile2image)
+    add_dependencies(unittests_rf_tile2image rf-tile2image)
+    target_compile_definitions(unittests_rf_tile2image PRIVATE ALP_RF_TILE2IMAGE_PATH="$<TARGET_FILE:rf-tile2image>")
+endif()
+
 add_executable(unittests_terrainlib
     catch2_helpers.h
     opencv_helpers.h

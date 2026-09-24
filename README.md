@@ -6,6 +6,9 @@ The [RF builder](docs/raster-store/rf-builder-design.md#command-usage) imports p
 GDAL rasters with `rf-builder gdal` and [online JPEG tile pyramids](docs/raster-store/rf-builder-downloader-design.md)
 with `rf-builder tiles` into immutable raster-store snapshots.
 
+Use `rf-tile2image` to export an RF tile's
+data as JPEG and its source attribution as a coloured PNG.
+
 Sanitizer exclusions are maintained in `misc/suppression/`. CI's ASan job also
 enables UBSan and loads [ubsan.txt](misc/suppression/ubsan.txt) for the known CGAL
 arrangement downcasts and the ignored old Boolean value in

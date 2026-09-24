@@ -4,6 +4,7 @@ project(alpine-terrain-builder LANGUAGES C CXX)
 
 # Executable targets
 option(ALP_BUILD_RF_BUILDER "Build rf-builder" ON)
+option(ALP_BUILD_RF_TILE2IMAGE "Build rf-tile2image" ON)
 option(ALP_BUILD_TILE_BUILDER "Build tile-builder" ON)
 option(ALP_BUILD_SF_MERGER "Build sf-merger" ON)
 option(ALP_BUILD_SF_BUILDER "Build sf-builder" ON)

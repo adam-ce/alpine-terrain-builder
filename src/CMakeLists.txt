@@ -79,6 +79,7 @@ alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMM
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_RF_BUILDER
+    ALP_BUILD_RF_TILE2IMAGE
     ALP_BUILD_SF_MERGER
     ALP_BUILD_SF_BUILDER
     ALP_BUILD_TILE_DOWNLOADER
@@ -159,6 +160,10 @@ add_subdirectory(terrainlib)
 
 if(ALP_BUILD_RF_BUILDER)
     add_subdirectory(rf_builder)
+endif()
+
+if(ALP_BUILD_RF_TILE2IMAGE)
+    add_subdirectory(rf_tile2image)
 endif()
 
 if(ALP_BUILD_TILE_BUILDER)

@@ -31,6 +31,7 @@ add_executable(unittests_terrainlib
     terrainlib/hybrid_index_pair_map.cpp
     terrainlib/hybrid_vector.cpp
     terrainlib/io_conversion.cpp
+    terrainlib/io_image.cpp
     terrainlib/offset_table.cpp
     terrainlib/segmented_buffer.cpp
     terrainlib/sf_validate_index.cpp
@@ -67,6 +68,7 @@ add_executable(unittests_terrainlib
     terrainlib/range.cpp
     terrainlib/range_utils.cpp
     terrainlib/raster_algorithm.cpp
+    terrainlib/raster_fold.cpp
     terrainlib/raster_view.cpp
     terrainlib/raster_store.cpp
     terrainlib/raster_halo.cpp

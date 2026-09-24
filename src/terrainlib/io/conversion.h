@@ -162,7 +162,8 @@ Expected<radix::Raster<Pixel>> to_raster(const cv::Mat& source)
         } catch (const std::bad_alloc&) {
             return detail::allocation_error();
         } catch (const cv::Exception& error) {
-            return Error::fail(Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
+            return Error::fail(
+                error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
         }
     }
 }
@@ -188,7 +189,8 @@ Expected<cv::Mat> to_mat(const radix::Raster<Pixel>& source)
         } catch (const std::bad_alloc&) {
             return detail::allocation_error();
         } catch (const cv::Exception& error) {
-            return Error::fail(Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
+            return Error::fail(
+                error.code == cv::Error::StsNoMem ? Error::Code::ResourceExhausted : Error::Code::Internal, "OpenCV raster conversion failed: " + error.msg);
         }
     }
 }

@@ -9,6 +9,11 @@ namespace io {
 
 Expected<void> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path& path, bool make_dirs)
 {
+    return write_bytes_to_path(bytes, path, WriteMode::Overwrite, make_dirs);
+}
+
+Expected<void> write_bytes_to_path(const std::span<const uint8_t> bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs)
+{
     LOG_TRACE("Writing bytes to path {}", path);
 
     if (make_dirs) {
@@ -18,8 +23,12 @@ Expected<void> write_bytes_to_path(const std::span<const uint8_t> bytes, const s
         }
     }
 
-    std::ofstream file(path, std::ios::binary);
+    std::ofstream file(path, std::ios::binary | (mode == WriteMode::CreateNew ? std::ios::noreplace : std::ios::trunc));
     if (!file.is_open()) {
+        std::error_code error;
+        if (mode == WriteMode::CreateNew && std::filesystem::exists(std::filesystem::symlink_status(path, error))) {
+            return Error::fail(Error::Code::AlreadyExists, "create file", path);
+        }
         return Error::fail(Error::Code::Io, "open file for writing", path);
     }
 

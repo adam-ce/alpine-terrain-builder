@@ -60,6 +60,7 @@ add_library(terrainlib
     io/bytes.h io/bytes.cpp
     io/compression.h io/compression.cpp
     io/conversion.h
+    io/image.h io/image.cpp
     io/envelope.h
     io/glm_serialization.h
     io/utils.h io/utils.cpp
@@ -169,6 +170,7 @@ add_library(terrainlib
     raster/algorithm/scale.h
     raster/algorithm/scaling_detail.h
     raster/algorithm/copy.h
+    raster/algorithm/fold.h
     raster/algorithm/transform.h
     raster/algorithm/window_transform.h
     raster/algorithm/zip_transform.h

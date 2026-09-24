@@ -20,32 +20,23 @@
 
 #include "image_writer.h"
 
-#include "io/conversion.h"
-
-#include <opencv2/opencv.hpp>
+#include "io/image.h"
 
 Expected<void> image::save_image_as_png(const radix::Raster<glm::u8vec3>& input_image, const std::string& path)
 {
-    auto converted = io::conversion::to_mat(input_image);
-    if (!converted) {
-        return Error::propagate(std::move(converted), "convert raster for PNG output");
+    if (input_image.width() == 0 || input_image.height() == 0) {
+        return Error::fail(Error::Code::InvalidInput, "cannot write an empty tile builder image");
     }
-
-    cv::Mat flipped;
-    cv::Mat image;
     try {
-        cv::flip(*converted, flipped, 0);
-        cv::cvtColor(flipped, image, cv::COLOR_RGB2BGR);
-    } catch (const cv::Exception& error) {
-        return Error::fail(Error::Code::Internal, "prepare PNG image: " + error.msg);
-    }
-
-    try {
-        if (!cv::imwrite(path, image)) {
-            return Error::fail(Error::Code::Io, "write PNG image to \"" + path + "\"");
+        // The legacy tile builder stores its first row at the bottom.
+        auto flipped = input_image;
+        for (unsigned y = 0; y < input_image.height(); ++y) {
+            std::copy_n(input_image.data() + std::size_t(y) * input_image.width(),
+                input_image.width(),
+                flipped.data() + std::size_t(input_image.height() - 1 - y) * input_image.width());
         }
-    } catch (const cv::Exception& error) {
-        return Error::fail(Error::Code::Io, "write PNG image to \"" + path + "\": " + error.msg);
+        return io::image::write(flipped, path, { .overwrite = true, .make_dirs = false });
+    } catch (const std::bad_alloc&) {
+        return Error::fail(Error::Code::ResourceExhausted, "flip tile builder image");
     }
-    return {};
 }

@@ -2,6 +2,7 @@
 
 #include "algorithm/conversion.h"
 #include "algorithm/copy.h"
+#include "algorithm/fold.h"
 #include "algorithm/reduce.h"
 #include "algorithm/scale.h"
 #include "algorithm/transform.h"

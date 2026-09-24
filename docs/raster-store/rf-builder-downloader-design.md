@@ -213,7 +213,7 @@ Online input records include the parsed provider settings: URL template, Y
 direction, both source zoom limits, and source dimensions. Also record RF
 dimensions, mask identifier and
 processing settings, attribution index and selected entry, RGB/decoding and
-fallback policies, relevant decoder version, and a processing version. Jobs,
+fallback policies, and a processing version. Jobs,
 logging, output path, and operational retry settings do not change pixel
 compatibility. A mismatch or corrupt/missing record aborts explicitly.
 
@@ -293,9 +293,9 @@ Use existing libcurl with a small online-module wrapper. Make curl discovery
 conditional on RF builder or tile-downloader being enabled, and link
 `CURL::libcurl` to RF explicitly. Do not require RF to include old-tool headers.
 
-Use existing OpenCV in-memory JPEG decoding, explicitly preserving raster
-orientation and converting BGR to RGB. Validate JPEG format, decode success,
-and expected dimensions. OpenCV 4.11.0 is already fetched by project CMake;
+Use shared `io::image::decode_rgb8` in-memory decoding, accepting JPEG and
+PNG while preserving raster orientation and converting BGR to RGB. Validate
+decode success and expected dimensions. OpenCV 4.11.0 is already fetched by project CMake;
 add `-DBUILD_JPEG=ON` in `cmake/SetupOpenCV.cmake` so its bundled libjpeg-turbo
 source is built instead of finding a system JPEG package. Local fetched
 OpenCV sources establish that this option bypasses `FindJPEG`; the current
@@ -399,8 +399,10 @@ check and review the exact changed files.
 
 - Each worker has a 64 MiB decoded/missing-result LRU budget. Missing entries
   are charged too. The in-flight response is capped at the larger of 1 MiB or
-  eight bytes per configured source pixel plus 64 KiB. Decode dimensions are
-  checked in the JPEG header before allocating the image.
+  eight bytes per configured source pixel plus 64 KiB. OpenCV enforces its
+  configured image-size limits before allocating the output matrix; the
+  provider's expected dimensions are checked after decoding. JPEG and PNG
+  responses are accepted through the shared raster image decoder.
 - Total worker memory also includes the current response/decode buffers,
   bounded ancestor references, interpolation neighbourhood, mask geometry and
   RF output/validity buffers. The LRU budget is not a total-process RSS limit.
@@ -417,9 +419,10 @@ check and review the exact changed files.
   outstanding candidate and a depth-first sibling stack, bounding the frontier
   by tile-key depth even when completions arrive out of order. Idle lanes take
   pending sibling subtrees, allowing parallel processing below a single root.
-- Online input records include OpenCV's version and JPEG build identity, as
-  well as the shared mask reader's GDAL version. Provider file paths and JSON
-  formatting do not affect compatibility.
+- Online input records include the shared mask reader's GDAL version.
+  Decoder versions, provider file paths and JSON formatting do not affect
+  compatibility. Online input schema version 2 removes the decoder-version
+  field; older online cache snapshots cannot be resumed.
 
 Provider GET verification on 2026-09-12 at Vienna (16.3738 E, 48.2082 N)
 returned 256x256 JPEGs at Basemap zooms 1..20 and Gataki zooms 4..20. Zooms

@@ -1,6 +1,5 @@
 #include "build.h"
 #include "TileWorker.h"
-#include "jpeg.h"
 namespace rf_builder::tiles {
 Expected<run::Report> build(const Options& options, const std::function<bool()>& stop_requested)
 {
@@ -30,7 +29,6 @@ Expected<run::Report> build(const Options& options, const std::function<bool()>&
     record.mask = *identifier;
     record.attribution_index = options.output.attribution_index;
     record.attribution = *entry;
-    record.decoder_version = jpeg::version();
     // Fail incompatible cache records before even loading the mask's geometry.
     if (options.output.cache) {
         if (auto checked = inputs::validate_cache(*options.output.cache, record); !checked) {
@@ -74,13 +72,12 @@ Expected<run::Report> build(const Options& options, const std::function<bool()>&
     source.weight = [&](const auto& key) { return coverage.weight(key); };
     source.network_stats
         = [&] { return run::NetworkStats { counters.requests.load(std::memory_order_relaxed), counters.bytes.load(std::memory_order_relaxed) }; };
-    LOG_INFO("RF online source: {}..{}, {} pixels; RF/source zoom offset {}; retained source cache budget {} bytes per worker; JPEG {}",
+    LOG_INFO("RF online source: {}..{}, {} pixels; RF/source zoom offset {}; retained source cache budget {} bytes per worker",
         provider->min_zoom,
         provider->max_zoom,
         provider->tile_size,
         *offset,
-        options.source_cache_bytes,
-        record.decoder_version);
+        options.source_cache_bytes);
     return run::execute(options.output, std::move(source), stop_requested);
 }
 } // namespace rf_builder::tiles

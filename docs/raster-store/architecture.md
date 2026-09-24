@@ -292,7 +292,7 @@ accurate descendants, for example at zoom 15.
 
 The implemented [RF builder](rf-builder-design.md) consumes one prepared GDAL
 dataset, including a VRT mosaic, through `rf-builder gdal`. The
-[online module](rf-builder-downloader-design.md) imports a provider-defined JPEG
+[online module](rf-builder-downloader-design.md) imports a provider-defined JPEG/PNG
 tile pyramid through `rf-builder tiles`. Each builder import produces disjoint
 physical leaves, without physical parent/descendant overlap. An import
 supplies a data source, an existing attribution index, and a vector validity

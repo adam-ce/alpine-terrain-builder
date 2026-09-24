@@ -5,6 +5,7 @@
 #include "planning.h"
 #include <list>
 #include <memory>
+#include <radix/raster.h>
 #include <unordered_map>
 
 namespace rf_builder::tiles {
@@ -19,18 +20,19 @@ public:
     std::size_t retained_bytes() const { return m_retained_bytes; }
 
 private:
+    using Image = std::shared_ptr<const radix::Raster<glm::u8vec3>>;
     struct Entry {
         run::Key key;
-        cv::Mat image;
+        Image image;
         std::size_t bytes;
     };
     struct Supplier {
         run::Key key;
-        cv::Mat image;
+        Image image;
     };
     TileWorker(
         const inputs::Record& record, const planning::Coverage& coverage, NetworkCounters& counters, Mask mask, std::size_t cache_bytes, RetryPolicy retry);
-    Expected<cv::Mat> image(const run::Key& key);
+    Expected<Image> image(const run::Key& key);
     Expected<std::optional<Supplier>> available(const run::Key& key);
     Expected<bool> finer(const run::Key& source, const run::Key& candidate, unsigned matching_zoom);
     Expected<glm::dvec3> linear_pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge);

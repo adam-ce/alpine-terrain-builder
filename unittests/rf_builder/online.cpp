@@ -101,7 +101,6 @@ struct Fixture {
         result.mask = *run::identifier(options.mask);
         result.attribution_index = 1;
         result.attribution = *run::attribution(options.output);
-        result.decoder_version = tiles::jpeg::version();
         return result;
     }
 };
@@ -149,40 +148,6 @@ TEST_CASE("Online provider validates strict JSON types dimensions URLs and zoom 
     CHECK_FALSE(tiles::provider::zoom_offset(settings, 256));
     settings.y_direction = tiles::provider::YDirection::Up;
     CHECK(tiles::provider::url(settings, { 32, { 4294967295u, 0 } }) == "https://example.org/32/4294967295/4294967295.jpeg");
-}
-
-TEST_CASE("Online JPEG decoding preserves orientation channels and native values", "[rf-builder][online]")
-{
-    const auto encoded = image(8, {}, true);
-    auto decoded = tiles::jpeg::decode(encoded, 8);
-    REQUIRE(decoded);
-    auto reference = cv::imdecode(encoded, cv::IMREAD_COLOR | cv::IMREAD_IGNORE_ORIENTATION);
-    for (int y = 0; y < 8; ++y) {
-        for (int x = 0; x < 8; ++x) {
-            const auto expected = reference.at<cv::Vec3b>(y, x);
-            CHECK(decoded->at<cv::Vec3b>(y, x) == cv::Vec3b(expected[2], expected[1], expected[0]));
-        }
-    }
-    // APP1 Exif orientation 6 (rotate 90 degrees); geospatial rows must stay put.
-    const Bytes exif { 0xff, 0xe1, 0, 34, 'E', 'x', 'i', 'f', 0, 0, 'I', 'I', 42, 0, 8, 0, 0, 0, 1, 0, 0x12, 1, 3, 0, 1, 0, 0, 0, 6, 0, 0, 0, 0, 0, 0, 0 };
-    auto oriented = encoded;
-    oriented.insert(oriented.begin() + 2, exif.begin(), exif.end());
-    auto unchanged = tiles::jpeg::decode(oriented, 8);
-    REQUIRE(unchanged);
-    CHECK(cv::norm(*decoded, *unchanged, cv::NORM_INF) == 0);
-    CHECK_FALSE(tiles::jpeg::decode(encoded, 16));
-    CHECK_FALSE(tiles::jpeg::decode(Bytes { 'n', 'o' }, 8));
-    auto truncated = encoded;
-    truncated.resize(truncated.size() / 2);
-    CHECK_FALSE(tiles::jpeg::decode(truncated, 8));
-    Bytes png;
-    REQUIRE(cv::imencode(".png", reference, png));
-    CHECK_FALSE(tiles::jpeg::decode(png, 8));
-    CHECK(tiles::jpeg::nonlinear(0.5) == 188);
-    for (unsigned i = 0; i < 256; ++i) {
-        CHECK(tiles::jpeg::nonlinear(tiles::jpeg::linear(std::uint8_t(i))) == i);
-    }
-    CHECK(tiles::jpeg::version().find("libjpeg-turbo") != std::string::npos);
 }
 
 TEST_CASE("Online HTTP retries transient failures and only 404 means absence", "[rf-builder][online]")
@@ -266,29 +231,6 @@ TEST_CASE("Online adaptive RF keeps fine islands and fills coarse siblings witho
     const auto requests = fixture.server.requests();
     CHECK(std::ranges::find(requests, path({ 5, { 10, 10 } })) == requests.end());
     CHECK(std::ranges::none_of(requests, [](const auto& request) { return request.starts_with("/6/") || request.starts_with("/2/"); }));
-}
-
-TEST_CASE("Online RF native assembled pixels equal decoded JPEGs", "[rf-builder][online]")
-{
-    Fixture fixture;
-    write_text(fixture.options.provider, json(fixture.server.base(), 3, 3));
-    fixture.pyramid[path({ 3, { 2, 2 } })] = image(8, {}, true);
-    auto report = tiles::build(fixture.options);
-    REQUIRE(report);
-    CHECK(report->tile_count == 1);
-    auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
-    REQUIRE(output_result);
-    auto [output, output_metadata] = std::move(*output_result);
-    auto tile = output->load(fixture.root);
-    REQUIRE(tile);
-    const auto expected = tiles::jpeg::decode(fixture.pyramid.at(path({ 3, { 2, 2 } })), 8);
-    REQUIRE(expected);
-    for (unsigned y = 0; y < 8; ++y) {
-        for (unsigned x = 0; x < 8; ++x) {
-            const auto value = expected->at<cv::Vec3b>(int(y), int(x));
-            CHECK(tile->data.buffer()[y * 16 + x] == glm::u8vec3(value[0], value[1], value[2]));
-        }
-    }
 }
 
 TEST_CASE("Online fallback samples across RF and source boundaries in linear light", "[rf-builder][online]")

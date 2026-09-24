@@ -1,4 +1,5 @@
 #include "TileWorker.h"
+#include "io/image.h"
 #include "jpeg.h"
 #include "raster_store/StoreTraits.h"
 #include <algorithm>
@@ -6,11 +7,6 @@
 
 namespace rf_builder::tiles {
 namespace {
-    glm::u8vec3 pixel(const cv::Mat& image, unsigned x, unsigned y)
-    {
-        const auto value = image.at<cv::Vec3b>(int(y), int(x));
-        return { value[0], value[1], value[2] };
-    }
     glm::dvec3 linear(glm::u8vec3 value) { return { jpeg::linear(value.x), jpeg::linear(value.y), jpeg::linear(value.z) }; }
 } // namespace
 TileWorker::TileWorker(
@@ -35,7 +31,7 @@ Expected<std::unique_ptr<TileWorker>> TileWorker::open(
     }
     return std::unique_ptr<TileWorker>(new TileWorker(record, coverage, counters, std::move(*mask), cache_bytes, retry));
 }
-Expected<cv::Mat> TileWorker::image(const run::Key& key)
+Expected<TileWorker::Image> TileWorker::image(const run::Key& key)
 {
     if (auto found = m_lookup.find(key); found != m_lookup.end()) {
         m_cache.splice(m_cache.begin(), m_cache, found->second);
@@ -45,17 +41,20 @@ Expected<cv::Mat> TileWorker::image(const run::Key& key)
     if (!fetched) {
         return Error::propagate(std::move(fetched), "fetch source tile " + to_string(key));
     }
-    cv::Mat decoded;
+    Image decoded;
     if (*fetched) {
-        auto result = jpeg::decode(**fetched, m_record.provider.tile_size);
+        auto result = io::image::decode_rgb8(**fetched);
         if (!result) {
             return Error::propagate(std::move(result), "decode source tile " + to_string(key));
         }
-        decoded = std::move(*result);
+        if (result->size() != glm::uvec2(m_record.provider.tile_size)) {
+            return Error::fail(Error::Code::CorruptData, "source tile dimensions disagree with provider configuration: " + to_string(key));
+        }
+        decoded = std::make_shared<const radix::Raster<glm::u8vec3>>(std::move(*result));
     }
     // Budget also charges entries for missing responses, list nodes and lookup
     // overhead, so an all-404 region cannot accumulate an unbounded journal.
-    const std::size_t bytes = decoded.total() * decoded.elemSize() + 256;
+    const std::size_t bytes = (decoded ? decoded->bytes().size() : 0) + 256;
     while (!m_cache.empty() && bytes > m_cache_bytes - m_retained_bytes) {
         m_retained_bytes -= m_cache.back().bytes;
         m_lookup.erase(m_cache.back().key);
@@ -78,7 +77,7 @@ Expected<std::optional<TileWorker::Supplier>> TileWorker::available(const run::K
         if (!decoded) {
             return Error::propagate(std::move(decoded));
         }
-        if (decoded->empty()) {
+        if (!*decoded) {
             break;
         }
         result = Supplier { ancestor, std::move(*decoded) };
@@ -94,7 +93,7 @@ Expected<bool> TileWorker::finer(const run::Key& source, const run::Key& candida
     if (!decoded) {
         return Error::propagate(std::move(decoded));
     }
-    if (decoded->empty()) {
+    if (!*decoded) {
         return false;
     }
     if (source.zoom_level > matching_zoom) {
@@ -104,7 +103,7 @@ Expected<bool> TileWorker::finer(const run::Key& source, const run::Key& candida
         return false;
     }
     // Release this decoded reference before descent; the bounded LRU owns reuse.
-    decoded->release();
+    decoded->reset();
     const auto children = raster_store::StoreTraits::children(source);
     for (const auto& child : *children) {
         auto found = finer(child, candidate, matching_zoom);
@@ -125,7 +124,7 @@ Expected<glm::dvec3> TileWorker::linear_pixel(unsigned zoom, std::int64_t x, std
     const auto clipped_y = std::clamp(y, std::int64_t(0), extent - 1);
     const run::Key key { zoom, { unsigned(wrapped_x / side), unsigned(clipped_y / side) } };
     if (key == edge.key) {
-        return linear(pixel(edge.image, unsigned(wrapped_x % side), unsigned(clipped_y % side)));
+        return linear(edge.image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) }));
     }
     auto supplier = available(key);
     if (!supplier) {
@@ -135,10 +134,10 @@ Expected<glm::dvec3> TileWorker::linear_pixel(unsigned zoom, std::int64_t x, std
         // True coverage edge: extend this supplying tile's nearest sample.
         const auto local_x = std::clamp(x - std::int64_t(edge.key.coords.x) * side, std::int64_t(0), side - 1);
         const auto local_y = std::clamp(y - std::int64_t(edge.key.coords.y) * side, std::int64_t(0), side - 1);
-        return linear(pixel(edge.image, unsigned(local_x), unsigned(local_y)));
+        return linear(edge.image->pixel({ unsigned(local_x), unsigned(local_y) }));
     }
     if ((**supplier).key.zoom_level == zoom) {
-        return linear(pixel((**supplier).image, unsigned(wrapped_x % side), unsigned(clipped_y % side)));
+        return linear((**supplier).image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) }));
     }
     return sample(**supplier, { (wrapped_x + 0.5) / extent, (clipped_y + 0.5) / extent });
 }
@@ -175,7 +174,7 @@ Expected<void> TileWorker::assemble(
         for (unsigned y = 0; y < side; ++y) {
             for (unsigned x = 0; x < side; ++x) {
                 const auto index = (top + y) * m_record.tile_side + left + x;
-                tile.data.buffer()[index] = pixel(supplier.image, x, y);
+                tile.data.buffer()[index] = supplier.image->pixel({ x, y });
                 valid[index] = 1;
             }
         }

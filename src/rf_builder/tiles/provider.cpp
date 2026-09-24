@@ -141,7 +141,7 @@ Expected<Settings> parse(const std::string& json)
     }
     if (result.min_zoom > result.max_zoom || result.max_zoom > raster_store::StoreTraits::max_zoom_level || !std::has_single_bit(result.tile_size)
         || result.tile_size > 65535) {
-        return Error::fail(Error::Code::InvalidInput, "invalid provider zoom range or power-of-two JPEG dimensions (maximum 65535)");
+        return Error::fail(Error::Code::InvalidInput, "invalid provider zoom range or power-of-two tile dimensions (maximum 65535)");
     }
     if ((!result.url_pattern.starts_with("http://") && !result.url_pattern.starts_with("https://"))
         || result.url_pattern.find_first_of(" \t\r\n") != std::string::npos || result.url_pattern.find('\0') != std::string::npos) {

@@ -3,6 +3,7 @@
 #include "Mask.h"
 #include "inputs.h"
 #include "planning.h"
+#include "raster/View.h"
 #include <list>
 #include <memory>
 #include <radix/raster.h>
@@ -35,8 +36,8 @@ private:
     Expected<Image> image(const run::Key& key);
     Expected<std::optional<Supplier>> available(const run::Key& key);
     Expected<bool> finer(const run::Key& source, const run::Key& candidate, unsigned matching_zoom);
-    Expected<glm::dvec3> linear_pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge);
-    Expected<glm::dvec3> sample(const Supplier& supplier, glm::dvec2 position);
+    Expected<glm::u8vec3> pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge);
+    Expected<void> sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 origin, const raster::View<glm::u8vec3>& destination);
     Expected<void> assemble(
         raster_store::Tile<glm::u8vec3>& tile, std::vector<std::uint8_t>& valid, const run::Key& candidate, const run::Key& source, const Supplier& supplier);
     inputs::Record m_record;

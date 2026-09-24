@@ -29,8 +29,8 @@ namespace detail {
                     continue;
                 }
                 // Keep integer coordinates out of the working pixel's phase precision.
-                const double phase_x = (double(position.x % factor) + 0.5) / factor - 0.5;
-                const double phase_y = (double(position.y % factor) + 0.5) / factor - 0.5;
+                const S phase_x = (S(position.x % factor) + S(0.5)) / S(factor) - S(0.5);
+                const S phase_y = (S(position.y % factor) + S(0.5)) / S(factor) - S(0.5);
                 const glm::uvec2 origin(nearest.x - (phase_x < 0 ? 1u : 0u), nearest.y - (phase_y < 0 ? 1u : 0u));
                 const S fraction_x = S(phase_x < 0 ? phase_x + 1 : phase_x);
                 const S fraction_y = S(phase_y < 0 ? phase_y + 1 : phase_y);

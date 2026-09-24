@@ -3,7 +3,6 @@
 #include "raster_store/storage.h"
 #include "tiles/TileWorker.h"
 #include "tiles/build.h"
-#include "tiles/jpeg.h"
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -253,7 +252,7 @@ TEST_CASE("Online fallback samples across RF and source boundaries in linear lig
     auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
     REQUIRE(tile);
     const auto value = tile->data.buffer()[8 * 16 + 15];
-    CHECK(value == glm::u8vec3(tiles::jpeg::nonlinear(0.375)));
+    CHECK(value == glm::u8vec3(165)); // Linear-light 0.375 encoded as sRGB8.
     CHECK(value.x != 96); // Nonlinear interpolation would be too dark.
     CHECK((*worker)->retained_bytes() <= 4096);
     const auto requests = fixture.server.requests();
@@ -375,7 +374,7 @@ TEST_CASE("Online fallback wraps longitude extends true coverage edges and never
     REQUIRE(tile);
     CHECK((*worker)->retained_bytes() <= 256); // Every decoded image exceeds this budget and is evicted/not retained.
     if (scenario == 0) {
-        CHECK(tile->data.buffer()[8 * 16 + 15] == glm::u8vec3(tiles::jpeg::nonlinear(0.375)));
+        CHECK(tile->data.buffer()[8 * 16 + 15] == glm::u8vec3(165)); // Linear-light 0.375 encoded as sRGB8.
     } else {
         CHECK(std::ranges::all_of(tile->data.buffer(), [](const auto& pixel) { return pixel == glm::u8vec3(0); }));
     }

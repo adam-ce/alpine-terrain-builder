@@ -4,7 +4,6 @@ add_library(rfbuilderlib
     run.h run.cpp
     tiles/provider.h tiles/provider.cpp
     tiles/HttpClient.h tiles/HttpClient.cpp
-    tiles/jpeg.h tiles/jpeg.cpp
     tiles/planning.h tiles/planning.cpp
     tiles/inputs.h tiles/inputs.cpp
     tiles/TileWorker.h tiles/TileWorker.cpp

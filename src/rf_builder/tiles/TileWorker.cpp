@@ -1,14 +1,10 @@
 #include "TileWorker.h"
 #include "io/image.h"
-#include "jpeg.h"
+#include "raster/algorithm/scale.h"
 #include "raster_store/StoreTraits.h"
 #include <algorithm>
-#include <cmath>
 
 namespace rf_builder::tiles {
-namespace {
-    glm::dvec3 linear(glm::u8vec3 value) { return { jpeg::linear(value.x), jpeg::linear(value.y), jpeg::linear(value.z) }; }
-} // namespace
 TileWorker::TileWorker(
     const inputs::Record& record, const planning::Coverage& coverage, NetworkCounters& counters, Mask mask, std::size_t cache_bytes, RetryPolicy retry)
     : m_record(record)
@@ -116,7 +112,7 @@ Expected<bool> TileWorker::finer(const run::Key& source, const run::Key& candida
     }
     return false;
 }
-Expected<glm::dvec3> TileWorker::linear_pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge)
+Expected<glm::u8vec3> TileWorker::pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge)
 {
     const std::int64_t side = m_record.provider.tile_size;
     const std::int64_t extent = side * (std::int64_t(1) << zoom);
@@ -124,7 +120,7 @@ Expected<glm::dvec3> TileWorker::linear_pixel(unsigned zoom, std::int64_t x, std
     const auto clipped_y = std::clamp(y, std::int64_t(0), extent - 1);
     const run::Key key { zoom, { unsigned(wrapped_x / side), unsigned(clipped_y / side) } };
     if (key == edge.key) {
-        return linear(edge.image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) }));
+        return edge.image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) });
     }
     auto supplier = available(key);
     if (!supplier) {
@@ -134,35 +130,54 @@ Expected<glm::dvec3> TileWorker::linear_pixel(unsigned zoom, std::int64_t x, std
         // True coverage edge: extend this supplying tile's nearest sample.
         const auto local_x = std::clamp(x - std::int64_t(edge.key.coords.x) * side, std::int64_t(0), side - 1);
         const auto local_y = std::clamp(y - std::int64_t(edge.key.coords.y) * side, std::int64_t(0), side - 1);
-        return linear(edge.image->pixel({ unsigned(local_x), unsigned(local_y) }));
+        return edge.image->pixel({ unsigned(local_x), unsigned(local_y) });
     }
     if ((**supplier).key.zoom_level == zoom) {
-        return linear((**supplier).image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) }));
+        return (**supplier).image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) });
     }
-    return sample(**supplier, { (wrapped_x + 0.5) / extent, (clipped_y + 0.5) / extent });
+    radix::Raster<glm::u8vec3> result(1);
+    if (auto sampled = sample(**supplier, zoom, { wrapped_x, clipped_y }, raster::make_view(result)); !sampled) {
+        return Error::propagate(std::move(sampled));
+    }
+    return result.pixel({ 0, 0 });
 }
-Expected<glm::dvec3> TileWorker::sample(const Supplier& supplier, glm::dvec2 position)
+Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 origin, const raster::View<glm::u8vec3>& destination)
 {
-    const auto zoom = supplier.key.zoom_level;
-    const double extent = std::ldexp(double(m_record.provider.tile_size), int(zoom));
-    const auto coordinate = position * extent - 0.5;
-    const auto x = std::int64_t(std::floor(coordinate.x)), y = std::int64_t(std::floor(coordinate.y));
-    const auto fraction = coordinate - glm::floor(coordinate);
-    glm::dvec3 result(0);
-    for (unsigned dy = 0; dy < 2; ++dy) {
-        for (unsigned dx = 0; dx < 2; ++dx) {
-            const double weight = (dx ? fraction.x : 1 - fraction.x) * (dy ? fraction.y : 1 - fraction.y);
-            if (weight == 0) {
-                continue;
-            }
-            auto value = linear_pixel(zoom, x + dx, y + dy, supplier);
+    const unsigned levels = zoom - supplier.key.zoom_level;
+    const std::uint64_t factor = std::uint64_t(1) << levels;
+    const auto first = origin / factor;
+    const auto last = origin + glm::u64vec2(destination.size()) - std::uint64_t(1);
+    const glm::uvec2 interior(last / factor - first + std::uint64_t(1));
+    // Crop before scaling so even a distant ancestor needs only this window
+    // and its one-pixel halo. Keep global coordinates entirely in integers.
+    radix::Raster<glm::u8vec3> neighbourhood(interior + glm::uvec2(2));
+    const glm::i64vec2 start = glm::i64vec2(first) - std::int64_t(1);
+    // A partial output window may not use both sides of the halo. Fetch only
+    // contributing samples so an unrelated neighbour cannot fail this tile.
+    const glm::uvec2 begin { origin.x % factor < factor / 2 ? 0u : 1u, origin.y % factor < factor / 2 ? 0u : 1u };
+    const glm::uvec2 end = interior + glm::uvec2(last.x % factor >= factor / 2 ? 1u : 0u, last.y % factor >= factor / 2 ? 1u : 0u);
+    for (unsigned y = begin.y; y <= end.y; ++y) {
+        for (unsigned x = begin.x; x <= end.x; ++x) {
+            auto value = pixel(supplier.key.zoom_level, start.x + x, start.y + y, supplier);
             if (!value) {
                 return Error::propagate(std::move(value));
             }
-            result += *value * weight;
+            neighbourhood.pixel({ x, y }) = *value;
         }
     }
-    return result;
+    for (unsigned y = 0; y < neighbourhood.height(); ++y) {
+        for (unsigned x = 0; x < neighbourhood.width(); ++x) {
+            neighbourhood.pixel({ x, y }) = neighbourhood.pixel(glm::clamp(glm::uvec2(x, y), begin, end));
+        }
+    }
+    return raster::algorithm::scale(neighbourhood,
+        1,
+        int(levels),
+        raster::algorithm::Interpolation::Bilinear,
+        raster::algorithm::Filter::Box,
+        glm::uvec2(origin % factor),
+        raster::algorithm::srgb_conversion<glm::u8vec3>(),
+        destination);
 }
 Expected<void> TileWorker::assemble(
     raster_store::Tile<glm::u8vec3>& tile, std::vector<std::uint8_t>& valid, const run::Key& candidate, const run::Key& source, const Supplier& supplier)
@@ -180,32 +195,16 @@ Expected<void> TileWorker::assemble(
         }
         return {};
     }
-    const double scale = std::ldexp(1., int(source.zoom_level - supplier.key.zoom_level));
-    const glm::dvec2 origin = (glm::dvec2(source.coords) * double(side) + 0.5) / scale - 0.5;
-    const auto x0 = std::int64_t(std::floor(origin.x)), y0 = std::int64_t(std::floor(origin.y));
-    const unsigned width = unsigned(std::floor(origin.x + (side - 1) / scale) - x0) + 2;
-    const unsigned height = unsigned(std::floor(origin.y + (side - 1) / scale) - y0) + 2;
-    std::vector<glm::dvec3> neighbourhood(std::size_t(width) * height);
-    for (unsigned y = 0; y < height; ++y) {
-        for (unsigned x = 0; x < width; ++x) {
-            auto value = linear_pixel(supplier.key.zoom_level, x0 + x, y0 + y, supplier);
-            if (!value) {
-                return Error::propagate(std::move(value));
-            }
-            neighbourhood[std::size_t(y) * width + x] = *value;
-        }
+    auto destination = raster::make_view(tile.data, { unsigned(left), unsigned(top) }, glm::uvec2(side));
+    if (!destination) {
+        return Error::propagate(std::move(destination));
+    }
+    if (auto sampled = sample(supplier, source.zoom_level, glm::u64vec2(source.coords) * std::uint64_t(side), *destination); !sampled) {
+        return Error::propagate(std::move(sampled));
     }
     for (unsigned y = 0; y < side; ++y) {
         for (unsigned x = 0; x < side; ++x) {
-            const auto coordinate = origin + glm::dvec2(x, y) / scale;
-            const auto low = glm::floor(coordinate);
-            const auto fraction = coordinate - low;
-            const auto offset = std::size_t(low.y - y0) * width + std::size_t(low.x - x0);
-            const auto value = glm::mix(glm::mix(neighbourhood[offset], neighbourhood[offset + 1], fraction.x),
-                glm::mix(neighbourhood[offset + width], neighbourhood[offset + width + 1], fraction.x),
-                fraction.y);
             const auto index = (top + y) * m_record.tile_side + left + x;
-            tile.data.buffer()[index] = { jpeg::nonlinear(value.x), jpeg::nonlinear(value.y), jpeg::nonlinear(value.z) };
             valid[index] = 1;
         }
     }

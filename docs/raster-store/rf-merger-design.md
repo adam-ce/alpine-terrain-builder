@@ -1,0 +1,294 @@
+# RF merger design
+
+Status: implementation proposal, reconciled with shared functionality on
+2026-09-26. Shared-function reuse and support-coverage preservation are agreed.
+Whole-tile attribution precedence was agreed on 2026-09-27; implementation
+is authorized following the documentation commit.
+
+This design uses the code on `main` at `2be4343`.
+[Storage format](storage-format.md) defines the shared RF/TB format;
+[architecture](architecture.md#rf_merger) records the rationale and tradeoffs
+for disjoint merger output.
+
+## Policy
+
+### Inputs and attribution
+
+Merge two published RF snapshots into a new snapshot. Initially support
+float32 scalar and RGB8 payloads. Require matching payload types, nominal
+pixel dimensions and `value_mapping`; different RF zoom levels are supported.
+RF inputs and output have zero stored halo and follow the shared
+[tile-dimension contract](tiles-with-halo.md). Reject unsupported types,
+metadata mismatches, and physical `Inner` nodes: inputs must have disjoint
+physical leaves. Virtual ancestors remain valid traversal nodes. Accept
+`.part` snapshots only through the recovery-cache option.
+
+The caller guarantees that attribution IDs are valid and have consistent
+meaning across both inputs, the output and any recovery cache. Preserve IDs
+without renumbering. The merger does not look up or compare source-attribution
+tables or validate IDs against their entries. Existing storage opening and
+creation requirements still apply. Several imports may share an attribution.
+
+The caller supplies a priority table as a JSON array of attribution IDs,
+highest priority first, for example `[7, 3, 12]`. Reject duplicates, index 0
+and IDs outside the supported range. Each listed ID has a distinct rank.
+The list may be empty or omit IDs present in the inputs; omitted IDs share
+one rank below all listed IDs.
+
+### Pixel selection and output hierarchy
+
+Attribution 0 means unattributed. Classify each original input tile by whether
+it contains any nonzero attribution. A tile with attribution wins as a whole
+over a tile with no attribution, regardless of zoom, including its unattributed
+pixels. If neither tile has attribution, select the finer tile, then the right
+input at equal zoom.
+
+When both original tiles have attribution, compare pixels using the attribution
+at the source pixel containing each comparison centre. Prefer nonzero attribution,
+then priority rank, higher original RF zoom, and finally the right input.
+Equal attribution and two unlisted IDs are equal-rank cases. Where both pixel
+attributions are zero, prefer higher zoom, then the right input, on the selected
+output grid. A missing physical supplier contributes no candidate. Selection
+is deterministic for fixed ordered inputs and settings.
+
+Produce disjoint physical leaves. Determine attributed refinement from
+winning regions on the finer native input grid, so that even one winning
+fine pixel can require subdivision. The winning supplier's original RF tile
+zoom sets its resolution requirement. Fully overridden fine tiles and
+support-only tiles do not refine the partition required by attributed winners.
+Resample surviving coarse data into the selected finer leaves where needed.
+
+Preserve physical support coverage, including entirely unattributed tiles
+prepared by the [GDAL importer](gdal-nodata-filling.md#agreed-decisions).
+Within a retained coarse tile, preserve its existing unattributed payload;
+do not downscale losing finer data into it. Outside the attributed output
+partition, retain support-only leaves at the zoom selected by the whole-tile
+rule above. Split covering leaves around selected descendants and retain
+needed siblings; never retain a physical parent alongside descendants.
+Synthesized halo pixels alone do not create additional output coverage.
+
+### Shared raster operations
+
+Use windowed [`raster_store::scaler::scale`](../../src/terrainlib/raster_store/scaler.h)
+with fixed `raster::algorithm::Resampling::Lanczos3`, passing the input metadata's
+value mapping and preserving it in output metadata. Obtain support from the
+corresponding input snapshot with
+[`read_tile_with_halo`](../../src/terrainlib/raster_store/read_tile_with_halo.h).
+Delegate filtering, conversion, alignment and representative attribution to
+the [scaling contract](scaling.md), and neighbour selection, fallback and
+boundary treatment to the [halo contract](tiles-with-halo.md).
+
+Attribution-zero samples contribute numerically; centre eligibility follows
+the selection policy above. The shared
+[numerical preconditions and exact-copy behavior](scaling.md#conversion-tuples-and-numeric-behavior)
+apply; add no merger-specific nonfinite validation or propagation guarantee.
+Subsequent merges rank a resampled value by its stored representative
+attribution, as specified in the
+[attribution decision](../adr/0004-representative-attribution-for-halo-samples.md).
+
+Use the [windowed scaling interface](scaling.md#agreed-windowed-scaling-extension)
+and its `required_halo` / `required_source_window` queries for bounded
+preparation and evaluation. The merger supplies tile-to-window geometry,
+following the halo reader's distant-ancestor preparation for local phase and
+preserving extracted support when creating subviews. Observe shared geometry
+and allocation limits; do not allocate a full zoom-expanded source tile.
+Scale original input suppliers directly to the required grid, not through
+intermediate child results. Repeated merges may resample previous outputs;
+merge grouping need not preserve numerical results. No original-source pyramid
+or exhaustive per-pixel contribution history is retained.
+
+Use [raster views and algorithms](../raster-view-algorithms.md) for pixel
+operations: `copy` for native regions within newly assembled tiles,
+`transform` / `zip_transform` for pointwise selection, and
+[`fold`](../../src/terrainlib/raster/algorithm/fold.h) for winner summaries.
+Transform callbacks remain pure; validation and accumulation occur outside
+them. Filter kernels remain owned by shared scaling.
+
+### Whole-tile reuse
+
+Hard-link an unchanged whole input tile with
+[`Storage::copy_from()`](../../src/terrainlib/store/Storage.h) when the output
+key, grid, type, dimensions and encoding permit reuse of its complete data
+and attribution payload. All-left or all-right selection at the same native
+grid qualifies; resampling entirely from one coarse supplier does not.
+Compatible completed recovery tiles use the same hard-link mechanism.
+
+All other tiles are newly encoded. A matching extension alone does not
+establish compatibility. Never modify a linked payload in place. Hard-link
+failure is explicit, with no silent file-copy fallback; report read, write
+and link failures with key/path context.
+
+### Recovery compatibility
+
+Recover into a new output using completed, indexed tiles from an explicitly
+supplied compatible `.part` snapshot. Do not mutate the old output. Initially
+reject published snapshots as recovery caches. Ignore unindexed payloads.
+
+Validate the recovery record against ordered input paths, metadata/index
+fingerprints, ordered priority IDs and processing settings. Trust published
+payloads to remain immutable at their paths; do not hash or scan every payload
+for cache validation. Compare priority IDs rather than JSON formatting.
+Source-attribution table contents are not part of cache identity.
+
+Record pixel type, nominal/stored dimensions, halo width, resampling method,
+value mapping, centre-selection and support-retention policies, and a semantic
+processing version covering the shared scaling and halo contracts. Output
+path, job count and logging do not affect compatibility. Small rounding
+differences are acceptable, including cache reuse and equivalent Lanczos-3
+implementations; only semantic changes invalidate otherwise compatible tiles.
+
+## Proposed implementation
+
+### 1. Command and preflight
+
+Add `src/rf_merger` with an `rf-merger` executable and a small library target
+for tests, following CLI11 and the existing executable/library structure.
+Use `ALP_BUILD_RF_MERGER` and `unittests_rfmerger`. Keep command parsing,
+validation/recovery records, planning, source-window preparation, selection
+and execution within the merger; do not introduce a generic merge framework.
+
+```sh
+rf-merger --left /data/rf/a --right /data/rf/b \
+    --priorities /data/priority.json --output /data/rf/merged \
+    --jobs 1
+```
+
+`--cache /data/rf/interrupted.part` is optional; `--jobs` defaults to one.
+Infer payload type and tile dimensions from input metadata. There are no
+mask, resampling-method, type-conversion or output-dimension options.
+
+Open inputs through existing storage functions, retaining their read-only
+metadata, and validate the [input policy](#inputs-and-attribution). Delegate
+metadata/index/codec parsing and validation to existing modules; check
+allocation and geometry limits before narrowing dimensions or zoom arithmetic.
+Require absent final and `.part` output paths. Preflight hard-link support
+from both inputs and any recovery cache to the output filesystem.
+
+Check any recovery index and record against
+[recovery compatibility](#recovery-compatibility); missing, corrupt or
+mismatching records abort. Then create the new `.part` snapshot and write
+`inputs.tmp` through `io::envelope`, with a merger-specific schema/class
+identifier, before producing payloads. A builder record is not a merger record.
+
+### 2. Plan the output partition
+
+Walk the two sparse hierarchies in spatial depth-first order, carrying a
+covering coarse leaf into descendants while following the other tree. Each
+overlap region has at most one physical supplier from each input; an absent
+descendant key does not negate coverage from a coarse leaf.
+
+Apply whole-tile attribution precedence first. When both suppliers have
+attribution, align both inputs over each overlap to the finer supplier's native grid,
+using the [paired scaler](#shared-raster-operations) when resampling is needed
+and native rasters/views otherwise. This prepares data and attribution
+together. Apply the [selection policy](#pixel-selection-and-output-hierarchy)
+with `zip_transform`, then summarize winners with `fold`. Retain original
+supplier IDs and compact per-leaf resolution requirements, tracking physical
+support coverage separately rather than storing a world-sized pixel map.
+
+Overlay attributed resolution requirements, splitting covering leaves along
+paths to winning finer leaves and retaining needed siblings. Complete the
+partition with remaining physical support coverage under the same policy.
+This does not require a uniform-resolution raster or a full quadtree expansion.
+
+Seed planning with compatible completed recovery leaves and exclude their
+coverage from new work. A virtual cache ancestor with completed descendants
+must prevent an overlapping parent output. Uncached empty regions may be
+recomputed.
+
+Use ordinary storage reads. The traversal may favor locality, but do not
+implement a bespoke decoded-tile cache. If profiling later identifies disk
+traffic as a bottleneck, address it through the external cache work.
+
+### 3. Produce tiles
+
+For each planned leaf, locate its original suppliers and apply the selection
+policy on the final grid. Take the [whole-tile reuse](#whole-tile-reuse) path
+when eligible, without assembling or encoding a replacement. Otherwise use
+shared raster operations to prepare candidate windows and select data and
+attribution into the new tile.
+
+Read only original suppliers covering the final leaf at the same or a coarser
+zoom. Finer tiles that imposed no output refinement are losers and contribute
+nothing to that leaf. Merger production therefore needs only native copies or
+upscaling; internal halo extraction follows its own shared contract. Output
+eligibility comes from the partition, not an attributed-pixel count, so
+support-only leaves are written too.
+
+The generic store already supplies exact-key reads, sparse topology, traversal
+and hard links. Use `store::traverse` and `Storage::copy_from()` directly,
+as `sf_merger` does. Do not extract a shared subtree-copy helper now; revisit
+that only if both mergers need substantially the same coordination loop.
+Keep the mesh-specific merge driver separate.
+
+### 4. Execute and publish
+
+Move the existing [`rf_builder::TilePool`](../../src/rf_builder/TilePool.h)
+to `terrainlib/raster_store/TilePool.h` as `raster_store::TilePool`, and use
+it from both RF builder and RF merger. Preserve its payload template, raster
+tile keys, scheduling, stop and error behavior. Adapt builder includes and
+namespace references without changing its behavior. Do not generalize the
+builder coordinator or introduce a separate merger worker pool.
+
+Use private read/scaling state per worker and bound queued, active and completed
+jobs together to at most twice the worker count. Indices and compact planning
+summaries may grow with the hierarchy; payload buffers must not grow with
+snapshot size. One coordinator owns writes, hard links, index mutation,
+checkpoints and progress, completing each payload operation before indexing it.
+
+Use RF import as the reference for bounded scheduling, first-error handling,
+cancellation and publication. Its coordinator assumes one attribution entry;
+do not change builder behavior to accommodate merger selection or tile reuse.
+
+Log to stderr and `<output>.log`. Report scanned regions during planning and
+completed/reused candidates during production, with elapsed time, periodic
+updates during long work, and a labelled ETA when enough production data
+exists. On success report written/reused tile counts and stored payload bytes.
+
+Checkpoint completed writes at the existing two-minute target. On cancellation,
+stop scheduling, finish and save successful active work, checkpoint, and retain
+the incomplete output and recovery record. On error, stop new work and do not
+publish. Finish active work before finalization. On success, remove the input
+record immediately before publication and use existing final-index writing
+and no-replace rename. Empty results follow the same lifecycle. The existing
+normal-operation guarantee applies; no crash-durability mechanism is added.
+
+## Verification checklist
+
+Existing scaler and halo suites own filter arithmetic, conversion, alignment,
+window phase, allocation behavior and neighbour lookup. Add merger integration
+coverage without duplicating those suites:
+
+- **Inputs:** empty/partial priority lists; duplicate, zero and out-of-range
+  IDs; payload/dimension/mapping mismatches; physical `Inner` rejection;
+  storage-opening failures and destination clashes.
+- **Scaling integration:** original-supplier selection; native-value
+  preservation; metadata mapping; centre eligibility and representative
+  attribution; interior/edge windows, subpixel regions and large zoom gaps;
+  bounded output and agreement with direct shared-function calls.
+- **Selection and partitioning:** fully overridden fine tiles; one winning
+  fine pixel missed by coarse-centre sampling; equal-attribution and unlisted
+  ties; coarse holes filled by fine data; asymmetric deep branches; coarse
+  sibling preservation and empty inputs.
+- **Support:** entirely unattributed snapshots and ties; support surrounding
+  attributed leaves; fine support that neither overrides attributed candidates
+  nor refines their output leaf; preservation of the winning coarse tile
+  including its unattributed pixels; retained support available to later halo reads and
+  zero-attribution values participating in filtering.
+- **Production and reuse:** mixed-source tiles; hard-link identity for unchanged
+  attributed and support-only tiles; newly encoded resampled tiles; scalar/RGB
+  serial-versus-parallel agreement within the accepted tolerance; bounded
+  outstanding work and payload-before-index ordering. Run existing RF builder
+  parallel/cancellation/error regressions after moving the shared pool.
+- **Recovery and lifecycle:** identity changes for input order, metadata/index,
+  priorities and semantic/support policies; rounding-only compatibility;
+  completed attributed/support leaves, unfinished siblings and unindexed files;
+  read/link/write errors; cancellation and recovery; empty publication and
+  collisions at publication.
+
+Run the focused merger suite and affected storage/RF regressions using this
+terrain-builder repository's existing native CMake configuration. The
+renderer-only `dev_driver.py` does not support this repository, as recorded in
+[implementation status](implementation-status.md). Run Qt C++ lint on new code,
+format new sections with `clang-format-21`, and verify Git-attribute line endings.
+Update architecture/status documentation after implementation and verification.

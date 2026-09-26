@@ -8,6 +8,7 @@
 #include <system_error>
 #include <type_traits>
 
+#include "build_config.h"
 #include "raster/algorithm/fold.h"
 #include "raster/algorithm/transform.h"
 #include "raster_store/attribution.h"
@@ -151,7 +152,9 @@ namespace {
     Expected<Images> dispatch_scalar(const Options& options, const manifest::Metadata& metadata)
     {
         Expected<Images> result = Error::fail(Error::Code::Unsupported, "unsupported scalar payload type: " + metadata.payload_type);
-        ((metadata.payload_type == raster_store::pixel::identifier<PixelTypes>() ? (result = read_typed<PixelTypes>(options, metadata), true) : false) || ...);
+        ALP_UNUSED(
+            ((metadata.payload_type == raster_store::pixel::identifier<PixelTypes>() ? (result = read_typed<PixelTypes>(options, metadata), true) : false)
+                || ...));
         return result;
     }
 

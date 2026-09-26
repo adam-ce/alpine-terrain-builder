@@ -103,9 +103,13 @@ overloads take `output_size` explicitly. This permits whole source tiles to
 feed destination subviews without full scaled intermediates or a separate
 crop/copy step. The extension applies to upscaling and downscaling. The
 four-level descent limit bounds downscaling from finer tiles; it does not
-bound upscaling from ancestors. Verify bounded work with a 20-level ancestor gap.
+bound upscaling from ancestors. Ancestor fallback supports gaps up to 30 levels;
+larger gaps return an error before calculating local scaling offsets.
+Verify bounded work with a 20-level ancestor gap and the 30-level limit.
 
-Bilinear ancestor interpolation requires a one-source-pixel halo. Source
+Bilinear ancestor interpolation requires one source pixel of support;
+Lanczos-2/3/4 requires two/three/four respectively. Select the method with
+`Resampling`. Finer-source reduction remains Box. Source
 support uses a clamped view of the supplying ancestor's complete interior.
 Do not fetch neighbouring tiles to extend interpolation support. If processing
 a smaller cutout, preserve the full ancestor's clamping bounds rather than
@@ -226,7 +230,7 @@ and verification results. The public implementation is
   descent limit with ancestor fallback, and partial coverage.
 - At-most-once ancestor fetches and preservation of selected finer samples,
   including zero-attribution regions, when ancestor fallback is also used.
-- Bilinear support clamps at the full supplying ancestor's edges, not a
+- Bilinear and Lanczos support clamp at the full supplying ancestor's edges, not a
   processing cutout's edges, without reading neighbouring support tiles.
 - Numerical contributions from zero-attribution pixels, representative
   attribution, and preservation of supplied or resampled zero-attribution

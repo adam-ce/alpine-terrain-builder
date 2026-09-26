@@ -141,14 +141,17 @@ patch; preserving fine data takes priority over avoiding that expansion.
 ## Pixels, fallback, and mask
 
 Copy decoded source values exactly where grids align at native resolution.
-Use bilinear interpolation in linear-light RGB for enlarged ancestor fallback:
+Use fixed Lanczos-3 interpolation in linear-light RGB for enlarged ancestor fallback:
 Treat decoded RGB as sRGB without ICC-profile conversion. Use the standard sRGB
 transfer function to convert to linear light, interpolate, then encode back to
 sRGB8 for storage. OpenCV JPEG decoding does not perform this linearization. Native-resolution copies do
 not undergo this conversion round trip. This is separate from the existing
 GDAL Lanczos policy and future TB filtering.
 
-Resolve fallback neighbours consistently across source and RF tile edges.
+Prepare three source pixels of support per side and fetch only samples
+contributing to the requested window. Resolve fallback neighbours consistently
+across source and RF tile edges. Ancestor fallback supports zoom gaps up to 30
+levels; larger gaps return an error before calculating local scaling offsets.
 Neighbours outside the validity mask may contribute. At a missing neighbour,
 use available ancestor data where possible; at a true coverage edge extend
 available edge samples. Do not assign the import's attribution where the
@@ -357,7 +360,7 @@ do not introduce a general imagery/sampling framework.
    order and orientation. Do not rely on a live provider for correctness tests.
 3. **Implement incremental adaptive selection and preparation.** Add
    mask-bounded roots, source ancestry/404 handling, refinement, native pixel
-   assembly and bilinear fallback. Test a Vienna-like fine island among
+   assembly and Lanczos-3 fallback. Test a Vienna-like fine island among
    coarse regions, asymmetric children, minimum/maximum limits, missing
    minimum tiles, stopping at a missing intermediate tile despite an existing
    deeper fixture, and strict absence of physical parent/descendant overlap.

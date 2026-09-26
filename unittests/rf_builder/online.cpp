@@ -9,6 +9,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <fstream>
 #include <map>
+#include <numbers>
 #include <opencv2/imgcodecs.hpp>
 #include <set>
 #include <spdlog/sinks/ostream_sink.h>
@@ -40,6 +41,30 @@ Bytes image(unsigned side, cv::Scalar colour = { 0, 0, 0 }, bool pattern = false
     Bytes result;
     REQUIRE(cv::imencode(".jpg", pixels, result));
     return result;
+}
+// Independent Lanczos-3 reference: white tile at x=[8,16), y=[0,8),
+// black elsewhere, sampled on row y=1.625 (output row 8 of this fixture).
+std::uint8_t lanczos3_edge(double coordinate)
+{
+    const auto sinc = [](double x) { return x == 0 ? 1. : std::sin(std::numbers::pi * x) / (std::numbers::pi * x); };
+    double value = 0, normalization = 0;
+    for (int x = int(std::floor(coordinate)) - 2; x <= int(std::floor(coordinate)) + 3; ++x) {
+        const double distance = x - coordinate;
+        const double weight = sinc(distance) * sinc(distance / 3);
+        normalization += weight;
+        if (x >= 8)
+            value += weight;
+    }
+    double vertical = 0, vertical_normalization = 0;
+    for (int y = -1; y <= 4; ++y) {
+        const double distance = y - 1.625;
+        const double weight = sinc(distance) * sinc(distance / 3);
+        vertical_normalization += weight;
+        if (y >= 0)
+            vertical += weight;
+    }
+    value = std::clamp(value / normalization * vertical / vertical_normalization, 0., 1.);
+    return std::uint8_t(std::round(255 * (value <= 0.0031308 ? 12.92 * value : 1.055 * std::pow(value, 1. / 2.4) - 0.055)));
 }
 std::string json(const std::string& base, unsigned minimum = 3, unsigned maximum = 5, unsigned side = 8)
 {
@@ -252,7 +277,9 @@ TEST_CASE("Online fallback samples across RF and source boundaries in linear lig
     auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
     REQUIRE(tile);
     const auto value = tile->data.buffer()[8 * 16 + 15];
-    CHECK(value == glm::u8vec3(165)); // Linear-light 0.375 encoded as sRGB8.
+    for (unsigned x = 0; x < 16; ++x)
+        CHECK(tile->data.pixel({ x, 8 }) == glm::u8vec3(lanczos3_edge(4 + (x + 0.5) / 4 - 0.5)));
+    CHECK(value.x != 165); // Distinguish Lanczos from the previous bilinear output.
     CHECK(value.x != 96); // Nonlinear interpolation would be too dark.
     CHECK((*worker)->retained_bytes() <= 4096);
     const auto requests = fixture.server.requests();
@@ -374,7 +401,7 @@ TEST_CASE("Online fallback wraps longitude extends true coverage edges and never
     REQUIRE(tile);
     CHECK((*worker)->retained_bytes() <= 256); // Every decoded image exceeds this budget and is evicted/not retained.
     if (scenario == 0) {
-        CHECK(tile->data.buffer()[8 * 16 + 15] == glm::u8vec3(165)); // Linear-light 0.375 encoded as sRGB8.
+        CHECK(tile->data.buffer()[8 * 16 + 15] == glm::u8vec3(lanczos3_edge(7.375)));
     } else {
         CHECK(std::ranges::all_of(tile->data.buffer(), [](const auto& pixel) { return pixel == glm::u8vec3(0); }));
     }
@@ -722,4 +749,69 @@ TEST_CASE("Online mixed-resolution import measurement", "[.][online-benchmark]")
         result->tile_bytes,
         fixture.server.requests().size(),
         result->tile_count);
+}
+
+TEST_CASE("Online fallback supports zoom gaps through 30 and rejects larger gaps", "[rf-builder][online]")
+{
+    Fixture fixture;
+    const unsigned gap = GENERATE(30u, 31u, 32u);
+    const Key candidate { gap, { (1u << 27) - 1, (1u << 27) - 1 } };
+    fixture.options.output.tile_side = 8;
+    mask(fixture.options.mask, RasterTransform::tile_bounds({ 0, { 0, 0 } }));
+    write_text(fixture.options.provider, json(fixture.server.base(), 0, gap));
+    fixture.pyramid.clear();
+    fixture.pyramid[path({ 0, { 0, 0 } })] = image(8, { 255, 255, 255 });
+    const auto record = fixture.record();
+    auto selection = rf_builder::Mask::open(record.mask);
+    REQUIRE(selection);
+    const tiles::planning::Coverage coverage(selection->bounds());
+    tiles::NetworkCounters counters;
+    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
+    REQUIRE(worker);
+    auto result = (*worker)->prepare(candidate);
+    if (gap <= 30) {
+        REQUIRE(result);
+        const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+        REQUIRE(tile);
+        CHECK(std::ranges::all_of(tile->data, [](auto value) { return value == glm::u8vec3(255); }));
+    } else {
+        REQUIRE_FALSE(result);
+        CHECK(result.error().code() == Error::Code::InvalidInput);
+        CHECK(result.error().to_string().find("ancestor fallback zoom gap") != std::string::npos);
+    }
+}
+
+TEST_CASE("Online Lanczos fallback fetches outer support and ignores unrelated neighbours", "[rf-builder][online]")
+{
+    Fixture fixture;
+    const bool broken_support = GENERATE(false, true);
+    const Key candidate { 5, { 9, 8 } };
+    fixture.options.output.tile_side = 8;
+    mask(fixture.options.mask, RasterTransform::tile_bounds(candidate));
+    fixture.pyramid.clear();
+    fixture.pyramid[path({ 3, { 2, 2 } })] = image(8);
+    const auto west = path({ 3, { 1, 2 } });
+    const auto east = path({ 3, { 3, 2 } });
+    fixture.pyramid[east] = { 'b', 'a', 'd' }; // Outside this window's support.
+    if (broken_support)
+        fixture.pyramid[west] = { 'b', 'a', 'd' }; // Reached by Lanczos, but not bilinear.
+    const auto record = fixture.record();
+    auto selection = rf_builder::Mask::open(record.mask);
+    REQUIRE(selection);
+    const tiles::planning::Coverage coverage(selection->bounds());
+    tiles::NetworkCounters counters;
+    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
+    REQUIRE(worker);
+    auto result = (*worker)->prepare(candidate);
+    if (broken_support) {
+        CHECK_FALSE(result);
+    } else {
+        REQUIRE(result);
+        const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+        REQUIRE(tile);
+        CHECK(std::ranges::all_of(tile->data, [](auto value) { return value == glm::u8vec3(0); }));
+    }
+    const auto requests = fixture.server.requests();
+    CHECK(std::ranges::find(requests, east) == requests.end());
+    CHECK(std::ranges::find(requests, west) != requests.end());
 }

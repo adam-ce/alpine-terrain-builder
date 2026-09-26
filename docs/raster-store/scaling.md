@@ -5,6 +5,44 @@ including paired raster-store wrappers, conversion tuples, rectangular strided
 windows, and separable box/Lanczos filtering. Output-window scaling, halo
 extraction, and snapshot halo metadata were implemented later the same day.
 
+## Lanczos upscaling and halo windows
+
+Implemented on 2026-09-25. One `Resampling` enum selects behavior in both
+scaling directions:
+
+| Selection | Upscaling | Downscaling |
+|---|---|---|
+| `NearestNeighbourAndBox` | Nearest-neighbour | Box |
+| `BiliinearAndBox` | Bilinear | Box |
+| `Lanczos2` | Lanczos-2 | Lanczos-2 |
+| `Lanczos3` | Lanczos-3 | Lanczos-3 |
+| `Lanczos4` | Lanczos-4 | Lanczos-4 |
+
+Window offsets are `glm::ivec2`, relative to the scaled interior. They can
+include the source halo in either scaling direction and at zero levels.
+Every contributing source sample must be available within the supplied
+logical source; otherwise validation fails before any destination writes.
+Full-output overloads are convenience wrappers around the windowed operation.
+
+`required_source_window(input_size, halo_width, levels, method, output_offset,
+output_size)` queries the same source-support calculation without reading pixels.
+It returns a `SourceWindow` with `origin` and `size` in source pixels, measured
+from the supplied raster's top-left corner, including its halo. Invalid geometry
+or insufficient support returns an error. RF-builder uses this public query to
+fetch only contributing source pixels before scaling.
+
+Tile dimensions are at most 2^30 and offset components lie in
+[-2^30, 2^30), enforced as assertions. Ancestor fallback in RF-builder and the
+halo reader supports gaps up to 30 levels; larger gaps return an error.
+Products, source-footprint calculations, pixel
+counts, and storage offsets use wider arithmetic. In particular, dimensions
+such as 2^17 by 2^17 are supported subject to actual storage capacity.
+
+`rf-builder tiles` uses fixed Lanczos-3 for enlarged ancestor fallback, with
+no command-line selector. Its existing fallback description records that
+choice; there is no new cache field or migration mechanism. The standalone
+`tile-downloader` is unchanged.
+
 ## Scope and ownership
 
 Generic scaling and reduction operate on one raster, without interpreting
@@ -48,8 +86,8 @@ Normalize source and destination independently; do not multiply overloads for
 every raster/view combination. Both overloads share a view-based implementation.
 
 Inputs are rectangular, with a symmetric `halo_width` on all four sides. Both
-axes scale by the same factor. The output contains only the scaled interior;
-all input halo pixels are excluded from its extent. Reject empty inputs and
+axes scale by the same factor. Full-output calls contain only the scaled
+interior; explicit output windows may also include halo pixels. Reject empty inputs and
 empty interiors after removing the halo, even though the view model permits
 empty views. Destination overloads avoid allocating the final output, but
 separable passes and repeated reductions still allocate intermediate rasters.
@@ -59,7 +97,7 @@ Express scaling amounts as `n_zoom_levels`, the exponent of two. Public
 negative means downscaling, and zero means cropping only. For example, `+2`
 upscales by four and `-2` downscales by four. Directional helpers and custom
 `reduce` use unsigned exponent counts. Zero levels crop without invoking a
-reducer. Keep `upscale`, `downscale`, and directional halo queries in `detail`.
+reducer. Keep `upscale` and `downscale` in `detail`.
 
 For reduction, both interior dimensions must be divisible by the factor.
 Validate geometry, halo bounds, algorithm enum selections, zoom-level counts,
@@ -74,10 +112,8 @@ independently on each axis. Halo offsets affect addressing, not sampling phase.
 
 ### Generic API
 
-The algorithm enums remain `Interpolation { NearestNeighbour, Bilinear }` and
-`Filter { Box, Lanczos2, Lanczos3, Lanczos4 }`. Remove the scaler's `ValueMapping`
-enum and the fixed source-to-working-type policy from generic `scale` and
-`reduce`. Instead accept a tuple `(value_decoder, value_encoder)`; the decoder's
+The `Resampling` enum above selects the paired upscaling/downscaling method.
+Generic `scale` and `reduce` accept a tuple `(value_decoder, value_encoder)`; the decoder's
 return type determines the working pixel type. The encoder returns exactly
 the original stored pixel type, so neither operation changes the raster's type.
 
@@ -87,10 +123,10 @@ forms delegate to the same processing implementation. Keep destinations last
 and constrain conversion tuples and destinations so the forms are unambiguous.
 
 ```cpp
-scale(source, halo_width, n_zoom_levels, interpolation, filter);
-scale(source, halo_width, n_zoom_levels, interpolation, filter, destination);
-scale(source, halo_width, n_zoom_levels, interpolation, filter, conversion);
-scale(source, halo_width, n_zoom_levels, interpolation, filter, conversion,
+scale(source, halo_width, n_zoom_levels, method);
+scale(source, halo_width, n_zoom_levels, method, destination);
+scale(source, halo_width, n_zoom_levels, method, conversion);
+scale(source, halo_width, n_zoom_levels, method, conversion,
     destination);
 
 reduce(source, halo_width, n_zoom_levels, reducer);
@@ -109,20 +145,14 @@ The halo queries are independent of conversion:
 namespace raster::algorithm {
 
 Expected<unsigned> required_halo(
-    int n_zoom_levels, Interpolation interpolation, Filter filter);
+    int n_zoom_levels, Resampling method);
 
-namespace detail {
-Expected<unsigned> required_upscaling_halo(
-    unsigned n_zoom_levels, Interpolation interpolation);
-Expected<unsigned> required_downscaling_halo(
-    unsigned n_zoom_levels, Filter filter);
-} // namespace detail
 } // namespace raster::algorithm
 ```
 
-`scale` and `required_halo` receive both algorithm selections and use the one
-corresponding to the requested direction. The filter enum represents the three
-Lanczos support radii without a separate parameter for box filtering.
+`scale` and `required_halo` receive one method selection. The halo query
+covers a full interior output; explicit windows validate their actual source
+footprint, including any additional support needed by output halo pixels.
 
 ## Agreed windowed scaling extension
 
@@ -130,10 +160,10 @@ Implemented on 2026-09-22 after the view-based scaler refactor. Overloads of gen
 `scale` select a window of their conceptual full output, in either
 scaling direction.
 
-Use `output_offset` (`glm::uvec2`) and, for allocating overloads,
+Use `output_offset` (`glm::ivec2`) and, for allocating overloads,
 `output_size` (`glm::uvec2`) as direct parameters. The offset is measured in
-pixels of the conceptual scaled output, excluding the source halo; writing
-starts at destination-local `(0,0)`. Destination-taking overloads infer the
+pixels relative to the conceptual scaled interior; negative coordinates lie
+before its top/left edges. Writing starts at destination-local `(0,0)`. Destination-taking overloads infer the
 window size from the destination. Paired destinations must have matching
 sizes and use the same offset.
 
@@ -146,32 +176,32 @@ with an explicit `output_offset` infer a crop size from the destination.
 Generic call shapes extend the existing convention:
 
 ```cpp
-scale(source, halo_width, n_zoom_levels, interpolation, filter,
+scale(source, halo_width, n_zoom_levels, method,
     output_offset, destination);
-scale(source, halo_width, n_zoom_levels, interpolation, filter,
+scale(source, halo_width, n_zoom_levels, method,
     output_offset, output_size);
-scale(source, halo_width, n_zoom_levels, interpolation, filter,
+scale(source, halo_width, n_zoom_levels, method,
     output_offset, conversion, destination);
-scale(source, halo_width, n_zoom_levels, interpolation, filter,
+scale(source, halo_width, n_zoom_levels, method,
     output_offset, output_size, conversion);
 ```
 
 The corresponding paired forms are:
 
 ```cpp
-scale(data, attribution, halo_width, n_zoom_levels, interpolation, filter,
+scale(data, attribution, halo_width, n_zoom_levels, method,
     output_offset, value_mapping, data_destination, attribution_destination);
-scale(data, attribution, halo_width, n_zoom_levels, interpolation, filter,
+scale(data, attribution, halo_width, n_zoom_levels, method,
     output_offset, output_size, value_mapping);
 ```
 
 The selected rectangle is `[output_offset, output_offset + output_size)`.
-Results must equal full scaling followed by cropping this rectangle, while
-computing only the necessary samples. Existing full-output overloads retain
+Results must equal filtering a sufficiently large surrounding raster and
+cropping this rectangle, while computing only the necessary samples. Existing full-output overloads retain
 their behavior and share the processing implementation with windowed forms.
 Preserve existing return types, conversion defaults, signed zoom-level
-convention, interpolation/filter selection, and pixel semantics. Zero levels
-select an exact crop within the source interior, after excluding its halo.
+convention and pixel semantics. Zero levels select an exact crop, including
+supplied halo pixels when requested.
 
 For upscaling, evaluate only requested output pixels with the sampling phase
 of their position in the conceptual full result. A source view alone cannot
@@ -187,12 +217,14 @@ Do not clamp at processing-window edges or replace repeated reductions with
 a single larger filter. This extension does not add window overloads to
 custom `reduce` as a separate public feature.
 
-Validate the selected rectangle before writing; it must fit inside the
-conceptual full output. Use unsigned factor and coordinate arithmetic with
-overflow-safe shift and bounds checks. The full conceptual image
+Validate the selected rectangle's complete source footprint before writing;
+it must fit inside the supplied logical source. Use signed 32-bit offsets,
+unsigned dimensions/factors, and wider products with checked shifts and bounds.
+The full conceptual image
 need not fit raster dimensions or be allocated; only the requested output
 and necessary intermediate storage must fit their allocation limits.
-Preserve source-halo requirements and the existing overlap rules.
+Preserve the existing overlap rules. An interior window may require less
+source halo than a full-output operation; validate the actual requested taps.
 
 Verification must compare windows against full-scale-then-crop for zero,
 positive, and negative levels, including non-aligned offsets, multi-step
@@ -204,7 +236,14 @@ full output, including a 20-level ancestor gap.
 
 ## Algorithms and reducers
 
-Upscaling offers nearest-neighbour and bilinear interpolation. Upscale directly
+Lanczos upscaling uses normalized `sinc(x) * sinc(x/a)` weights with `2a`
+taps per axis. Kernel evaluation and normalization are shared with downscaling;
+2x downscaling evaluates that kernel at half the input distance and uses `4a`
+taps. Horizontal upscaling coefficients are cached only for the requested
+output width. Fractional phases use integer quotient/remainder calculations,
+including floor division for negative output positions.
+
+Upscaling offers nearest-neighbour, bilinear, and Lanczos-2/3/4 interpolation. Upscale directly
 from the input to the final resolution rather than repeating interpolation by
 two. Nearest-neighbour sampling copies the selected stored pixel exactly, without
 a decoder/encoder round trip; neither callable is invoked. Bilinear interpolation
@@ -288,9 +327,9 @@ identity conversion, and has no mapping enum parameter:
 
 ```cpp
 scale(data, attribution, halo_width, n_zoom_levels,
-    interpolation, filter, value_mapping);
+    method, value_mapping);
 scale(data, attribution, halo_width, n_zoom_levels,
-    interpolation, filter, value_mapping, data_destination, attribution_destination);
+    method, value_mapping, data_destination, attribution_destination);
 
 reduce(data, attribution, halo_width, n_zoom_levels, reducer);
 reduce(data, attribution, halo_width, n_zoom_levels, reducer,
@@ -450,6 +489,7 @@ result. Minimum widths, in input pixels on each side including corners, are:
 | Zero levels (crop only) | 0 |
 | Nearest-neighbour upscaling | 0 |
 | Bilinear upscaling, positive levels | 1 |
+| Lanczos upscaling, radius `a`, positive levels | `a` |
 | Box or custom 2x2 reduction, including repeated steps | 0 |
 | Lanczos reduction by total factor `F`, radius `a` | `(2a - 1) * (F - 1)` |
 
@@ -458,6 +498,12 @@ from `1 - 2a` through `2a`, giving a halo of `2a - 1`. Retaining output halo
 `h` needs input halo `2h + (2a - 1)`; repeated application yields the formula.
 Lanczos-3 therefore requires 5 input halo pixels for reduction by two and 15
 for reduction by four. Halo queries validate parameters and arithmetic overflow.
+
+For Lanczos upscaling by factor `F`, a symmetric output halo `h` needs input
+halo `ceil(a - 0.5 + (h - 0.5) / F)`. Thus Lanczos-3 at 2x can preserve five
+halo pixels: a 266x266 source with a 256x256 interior produces a 522x522
+window at offset `{-5, -5}`. Filtering uses the original interior's sampling
+phase; it does not resize the whole padded rectangle onto the output extent.
 
 There is no `required_reduction_halo`: custom block reduction always needs zero
 halo, though its supplied halo is still cropped and its geometry validated.

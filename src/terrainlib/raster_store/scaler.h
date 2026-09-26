@@ -80,83 +80,6 @@ namespace detail {
     }
 } // namespace detail
 
-/// Scale data numerically and attribution independently, including attribution zero.
-template <typename Data, typename Attribution, typename Destination, typename AttributionDestination>
-requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
-[[nodiscard]] Expected<void> scale(Data&& data,
-    Attribution&& attribution,
-    unsigned halo_width,
-    int n_zoom_levels,
-    raster::algorithm::Interpolation interpolation,
-    raster::algorithm::Filter filter,
-    pixel::Mapping mapping,
-    Destination&& destination,
-    AttributionDestination&& attribution_destination)
-{
-    namespace algorithm = raster::algorithm;
-    using T = algorithm::detail::SourcePixel<Data>;
-    if (auto valid
-        = detail::validate_mapping<T>(mapping, n_zoom_levels < 0 || (n_zoom_levels > 0 && interpolation == raster::algorithm::Interpolation::Bilinear));
-        !valid) {
-        return valid;
-    }
-    const auto input = algorithm::detail::read_only_view(raster::make_view(data));
-    const auto input_attribution = algorithm::detail::read_only_view(raster::make_view(attribution));
-    const auto output = raster::make_view(destination);
-    const auto output_attribution = raster::make_view(attribution_destination);
-    auto geometry = algorithm::detail::scale_geometry(input.size(), halo_width, n_zoom_levels, interpolation, filter);
-    if (!geometry) {
-        return Error::propagate(std::move(geometry));
-    }
-    if (auto valid = detail::validate_destinations(input, input_attribution, halo_width, *geometry, output, output_attribution); !valid) {
-        return valid;
-    }
-    const auto scale_data = [&]() -> Expected<void> {
-        if constexpr (algorithm::detail::srgb_pixel<T>) {
-            if (mapping == pixel::Mapping::SRGBA) {
-                return algorithm::scale(input, halo_width, n_zoom_levels, interpolation, filter, algorithm::srgb_conversion<T>(), output);
-            }
-        }
-        return algorithm::scale(input, halo_width, n_zoom_levels, interpolation, filter, output);
-    };
-    if (auto result = scale_data(); !result) {
-        return result;
-    }
-    if (n_zoom_levels < 0) {
-        return algorithm::reduce(input_attribution, halo_width, static_cast<unsigned>(-std::int64_t(n_zoom_levels)), algorithm::Mode {}, output_attribution);
-    }
-    return algorithm::scale(
-        input_attribution, halo_width, n_zoom_levels, algorithm::Interpolation::NearestNeighbour, algorithm::Filter::Box, output_attribution);
-}
-
-template <typename Data, typename Attribution>
-requires detail::PairedSources<Data, Attribution>
-[[nodiscard]] Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>> scale(Data&& data,
-    Attribution&& attribution,
-    unsigned halo_width,
-    int n_zoom_levels,
-    raster::algorithm::Interpolation interpolation,
-    raster::algorithm::Filter filter,
-    pixel::Mapping mapping)
-{
-    using T = raster::algorithm::detail::SourcePixel<Data>;
-    if (auto valid
-        = detail::validate_mapping<T>(mapping, n_zoom_levels < 0 || (n_zoom_levels > 0 && interpolation == raster::algorithm::Interpolation::Bilinear));
-        !valid) {
-        return Error::propagate(std::move(valid));
-    }
-    if (data.size() != attribution.size()) {
-        return Error::fail(Error::Code::InvalidInput, "data and attribution dimensions differ");
-    }
-    auto geometry = raster::algorithm::detail::scale_geometry(data.size(), halo_width, n_zoom_levels, interpolation, filter);
-    if (!geometry) {
-        return Error::propagate(std::move(geometry));
-    }
-    return detail::produce_pair<T>(geometry->output, [&](auto& output, auto& output_attribution) {
-        return scale(data, attribution, halo_width, n_zoom_levels, interpolation, filter, mapping, output, output_attribution);
-    });
-}
-
 /// Scale only the selected conceptual output window.
 template <typename Data, typename Attribution, typename Destination, typename AttributionDestination>
 requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
@@ -164,29 +87,29 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
     Attribution&& attribution,
     unsigned halo_width,
     int levels,
-    raster::algorithm::Interpolation interpolation,
-    raster::algorithm::Filter filter,
-    glm::uvec2 output_offset,
+    raster::algorithm::Resampling method,
+    glm::ivec2 output_offset,
     pixel::Mapping mapping,
     Destination&& destination,
     AttributionDestination&& attribution_destination)
 {
     namespace algorithm = raster::algorithm;
     using T = algorithm::detail::SourcePixel<Data>;
-    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && interpolation == raster::algorithm::Interpolation::Bilinear)); !valid)
+    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
+        !valid)
         return valid;
     const auto input = algorithm::detail::read_only_view(raster::make_view(data));
     const auto input_attribution = algorithm::detail::read_only_view(raster::make_view(attribution));
     const auto output = raster::make_view(destination);
     const auto output_attribution = raster::make_view(attribution_destination);
-    auto geometry = algorithm::detail::window_geometry(input.size(), halo_width, levels, interpolation, filter, output_offset, output.size());
+    auto geometry = algorithm::detail::window_geometry(input.size(), halo_width, levels, method, output_offset, output.size());
     if (!geometry)
         return Error::propagate(std::move(geometry));
     if (input.size() != input_attribution.size() || output.size() != output_attribution.size())
         return Error::fail(Error::Code::InvalidInput, "data and attribution dimensions differ");
     const auto check_input = [&](const auto& source, const auto& target) {
         if (levels == 0)
-            return algorithm::detail::validate_view_overlap(*raster::make_view(source, output_offset + glm::uvec2(halo_width), output.size()), target, true);
+            return algorithm::detail::validate_view_overlap(*raster::make_view(source, geometry->source_origin, output.size()), target, true);
         return algorithm::detail::validate_view_overlap(source, target, false);
     };
     if (auto valid = check_input(input, output); !valid)
@@ -202,20 +125,21 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
     const auto scale_data = [&]() -> Expected<void> {
         if constexpr (algorithm::detail::srgb_pixel<T>) {
             if (mapping == pixel::Mapping::SRGBA)
-                return algorithm::scale(input, halo_width, levels, interpolation, filter, output_offset, algorithm::srgb_conversion<T>(), output);
+                return algorithm::scale(input, halo_width, levels, method, output_offset, algorithm::srgb_conversion<T>(), output);
         }
-        return algorithm::scale(input, halo_width, levels, interpolation, filter, output_offset, output);
+        return algorithm::scale(input, halo_width, levels, method, output_offset, output);
     };
     if (auto result = scale_data(); !result)
         return result;
     if (levels < 0) {
-        auto region = raster::make_view(input_attribution, output_offset * geometry->factor + glm::uvec2(halo_width), output.size() * geometry->factor);
+        const auto attribution_geometry = *algorithm::detail::window_geometry(
+            input_attribution.size(), halo_width, levels, algorithm::Resampling::NearestNeighbourAndBox, output_offset, output.size());
+        auto region = raster::make_view(input_attribution, attribution_geometry.source_origin, attribution_geometry.source_size);
         if (!region)
             return Error::propagate(std::move(region));
         return algorithm::reduce(*region, 0, static_cast<unsigned>(-std::int64_t(levels)), algorithm::Mode {}, output_attribution);
     }
-    return algorithm::scale(
-        input_attribution, halo_width, levels, algorithm::Interpolation::NearestNeighbour, algorithm::Filter::Box, output_offset, output_attribution);
+    return algorithm::scale(input_attribution, halo_width, levels, algorithm::Resampling::NearestNeighbourAndBox, output_offset, output_attribution);
 }
 
 template <typename Data, typename Attribution>
@@ -224,23 +148,62 @@ requires detail::PairedSources<Data, Attribution>
     Attribution&& attribution,
     unsigned halo_width,
     int levels,
-    raster::algorithm::Interpolation interpolation,
-    raster::algorithm::Filter filter,
-    glm::uvec2 output_offset,
+    raster::algorithm::Resampling method,
+    glm::ivec2 output_offset,
     glm::uvec2 output_size,
     pixel::Mapping mapping)
 {
     using T = raster::algorithm::detail::SourcePixel<Data>;
-    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && interpolation == raster::algorithm::Interpolation::Bilinear)); !valid)
+    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
+        !valid)
         return Error::propagate(std::move(valid));
-    auto geometry = raster::algorithm::detail::window_geometry(data.size(), halo_width, levels, interpolation, filter, output_offset, output_size);
+    auto geometry = raster::algorithm::detail::window_geometry(data.size(), halo_width, levels, method, output_offset, output_size);
     if (!geometry)
         return Error::propagate(std::move(geometry));
     if (data.size() != attribution.size())
         return Error::fail(Error::Code::InvalidInput, "data and attribution dimensions differ");
     return detail::produce_pair<T>(output_size, [&](auto& output, auto& output_attribution) {
-        return scale(data, attribution, halo_width, levels, interpolation, filter, output_offset, mapping, output, output_attribution);
+        return scale(data, attribution, halo_width, levels, method, output_offset, mapping, output, output_attribution);
     });
+}
+
+/// Full-output convenience overloads use the same windowed scaling implementation.
+template <typename Data, typename Attribution, typename Destination, typename AttributionDestination>
+requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
+[[nodiscard]] Expected<void> scale(Data&& data,
+    Attribution&& attribution,
+    unsigned halo_width,
+    int levels,
+    raster::algorithm::Resampling method,
+    pixel::Mapping mapping,
+    Destination&& destination,
+    AttributionDestination&& attribution_destination)
+{
+    auto geometry = raster::algorithm::detail::scale_geometry(data.size(), halo_width, levels, method);
+    if (!geometry)
+        return Error::propagate(std::move(geometry));
+    if (destination.size() != geometry->output || attribution_destination.size() != geometry->output)
+        return Error::fail(Error::Code::InvalidInput, "raster scaling output dimensions do not match");
+    return scale(std::forward<Data>(data),
+        std::forward<Attribution>(attribution),
+        halo_width,
+        levels,
+        method,
+        glm::ivec2(0),
+        mapping,
+        std::forward<Destination>(destination),
+        std::forward<AttributionDestination>(attribution_destination));
+}
+
+template <typename Data, typename Attribution>
+requires detail::PairedSources<Data, Attribution>
+[[nodiscard]] Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>> scale(
+    Data&& data, Attribution&& attribution, unsigned halo_width, int levels, raster::algorithm::Resampling method, pixel::Mapping mapping)
+{
+    auto geometry = raster::algorithm::detail::scale_geometry(data.size(), halo_width, levels, method);
+    if (!geometry)
+        return Error::propagate(std::move(geometry));
+    return scale(std::forward<Data>(data), std::forward<Attribution>(attribution), halo_width, levels, method, glm::ivec2(0), geometry->output, mapping);
 }
 
 /// Custom data reduction uses the supplied conversion; attribution always uses identity and Mode.

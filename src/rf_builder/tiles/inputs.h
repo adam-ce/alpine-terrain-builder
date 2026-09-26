@@ -13,7 +13,7 @@ struct Record {
     raster_store::attribution::Entity attribution;
     double mask_simplification_metres = 0.1;
     std::string decoding = "opencv/jpeg8/ignore-orientation/rgb/no-icc";
-    std::string fallback = "bilinear/srgb-linear-light/ancestor-neighbours/wrap-x/extend-edges";
+    std::string fallback = "lanczos3/srgb-linear-light/ancestor-neighbours/wrap-x/extend-edges";
     std::uint32_t processing_version = 1;
     std::uint32_t gdal_version = GDAL_VERSION_NUM;
     raster_store::pixel::Mapping value_mapping = raster_store::pixel::Mapping::SRGBA;

@@ -47,10 +47,12 @@ Expected<Tile<T>> read_tile_with_halo(const storage::IndexedStorage<T>& storage,
     const io::manifest::Metadata& metadata,
     const radix::tile::Id& id,
     unsigned halo_width,
-    raster::algorithm::Interpolation interpolation)
+    raster::algorithm::Resampling method)
 {
     namespace algorithm = raster::algorithm;
     using namespace halo_detail;
+    if (auto valid = algorithm::required_halo(0, method); !valid)
+        return Error::propagate(std::move(valid));
     if (auto valid = io::manifest::validate(metadata); !valid)
         return Error::propagate(std::move(valid));
     if (!StoreTraits::is_valid(id))
@@ -174,8 +176,7 @@ Expected<Tile<T>> read_tile_with_halo(const storage::IndexedStorage<T>& storage,
                     source.source_attribution,
                     0,
                     -int(source_id.zoom_level - id.zoom_level),
-                    interpolation,
-                    algorithm::Filter::Box,
+                    algorithm::Resampling::NearestNeighbourAndBox,
                     assignment.region.origin - assignment.source_origin,
                     metadata.value_mapping,
                     data,
@@ -184,23 +185,24 @@ Expected<Tile<T>> read_tile_with_halo(const storage::IndexedStorage<T>& storage,
                     return Error::propagate(std::move(result));
             } else {
                 const unsigned gap = id.zoom_level - source_id.zoom_level;
-                auto factor = algorithm::detail::scale_factor(gap);
-                if (!factor)
-                    return Error::propagate(std::move(factor));
-                const auto tile_offset = assignment.neighbour.coords & glm::uvec2(*factor - 1);
+                if (gap > 30)
+                    return Error::fail(Error::Code::InvalidInput, "ancestor fallback zoom gap exceeds 30 levels");
+                const unsigned factor = 1u << gap;
+                const auto tile_offset = assignment.neighbour.coords & glm::uvec2(factor - 1);
                 const unsigned side_bits = std::countr_zero(side);
                 glm::uvec2 source_origin;
                 glm::uvec2 phase;
                 if (gap <= side_bits) {
-                    source_origin = tile_offset * (side >> gap) + assignment.region.origin / *factor;
-                    phase = assignment.region.origin % *factor;
+                    source_origin = tile_offset * (side >> gap) + assignment.region.origin / factor;
+                    phase = assignment.region.origin % factor;
                 } else {
                     source_origin = tile_offset >> (gap - side_bits);
                     phase = (tile_offset & glm::uvec2((1u << (gap - side_bits)) - 1)) * side + assignment.region.origin;
                 }
                 const auto last = phase + assignment.region.size - glm::uvec2(1);
-                const auto interior = last / *factor + glm::uvec2(1);
-                const unsigned support = interpolation == algorithm::Interpolation::Bilinear ? 1 : 0;
+                const auto interior = last / factor + glm::uvec2(1);
+                const unsigned support = *algorithm::required_halo(int(gap), method);
+                const glm::ivec2 offset(phase);
                 // Clamping bounds remain those of the complete supplying tile.
                 auto input = raster::make_clamped_view(source.data, glm::ivec2(source_origin) - glm::ivec2(support), interior + glm::uvec2(2 * support));
                 auto input_attribution
@@ -209,8 +211,7 @@ Expected<Tile<T>> read_tile_with_halo(const storage::IndexedStorage<T>& storage,
                     return Error::propagate(std::move(input));
                 if (!input_attribution)
                     return Error::propagate(std::move(input_attribution));
-                auto result = scaler::scale(
-                    *input, *input_attribution, support, int(gap), interpolation, algorithm::Filter::Box, phase, metadata.value_mapping, data, attribution);
+                auto result = scaler::scale(*input, *input_attribution, support, int(gap), method, offset, metadata.value_mapping, data, attribution);
                 if (!result)
                     return Error::propagate(std::move(result));
             }

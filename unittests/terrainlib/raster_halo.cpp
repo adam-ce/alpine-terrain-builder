@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "../temporary_directory.h"
@@ -6,7 +7,7 @@
 namespace {
 using Tile = raster_store::Tile<float>;
 using Id = radix::tile::Id;
-using Interpolation = raster::algorithm::Interpolation;
+using Resampling = raster::algorithm::Resampling;
 struct MemoryCodec final : store::Codec<Tile> {
     mutable std::map<std::filesystem::path, Tile> tiles;
     mutable std::map<std::filesystem::path, unsigned> reads;
@@ -49,7 +50,7 @@ struct Fixture {
         tile.source_attribution.fill(attribution);
         REQUIRE(storage->save(id, tile));
     }
-    auto read(Id id, unsigned halo = 2, Interpolation interpolation = Interpolation::NearestNeighbour)
+    auto read(Id id, unsigned halo = 2, Resampling interpolation = Resampling::NearestNeighbourAndBox)
     {
         return raster_store::read_tile_with_halo(*storage, metadata, id, halo, interpolation);
     }
@@ -171,15 +172,16 @@ TEST_CASE("halo propagates indexed payload errors", "[raster-halo]")
     CHECK(result.error().code() == Error::Code::Io);
 }
 
-TEST_CASE("halo distant ancestor samples use bounded windows with either interpolation", "[raster-halo]")
+TEST_CASE("halo distant ancestor samples use bounded windows with every resampling method", "[raster-halo]")
 {
-    for (auto interpolation : { Interpolation::NearestNeighbour, Interpolation::Bilinear }) {
+    for (auto interpolation :
+        { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         Fixture f;
         f.add({ 0, { 0, 0 } }, 23, 3);
         f.add({ 20, { 400000, 500000 } }, 42, 4);
         auto result = f.read({ 20, { 400000, 500000 } }, 2, interpolation);
         REQUIRE(result);
-        CHECK(result->data.pixel({ 0, 0 }) == 23);
+        CHECK(result->data.pixel({ 0, 0 }) == Catch::Approx(23).margin(1e-4));
         CHECK(result->source_attribution.pixel({ 0, 0 }) == 3);
         CHECK(result->data.pixel({ 2, 2 }) == 42);
         f.once();
@@ -188,7 +190,8 @@ TEST_CASE("halo distant ancestor samples use bounded windows with either interpo
 
 TEST_CASE("halo ancestor windows match complete-ancestor scaling at edges and cutouts", "[raster-halo]")
 {
-    for (auto interpolation : { Interpolation::NearestNeighbour, Interpolation::Bilinear }) {
+    for (auto interpolation :
+        { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
         Fixture f;
         Tile ancestor(64);
         for (unsigned y = 0; y < 64; ++y)
@@ -201,10 +204,10 @@ TEST_CASE("halo ancestor windows match complete-ancestor scaling at edges and cu
         f.add(centre, -1, 9);
         auto tile = f.read(centre, 64, interpolation);
         REQUIRE(tile);
-        const auto padded = *raster::make_clamped_view(ancestor.data, { -1, -1 }, { 66, 66 });
-        const auto padded_attribution = *raster::make_clamped_view(ancestor.source_attribution, { -1, -1 }, { 66, 66 });
-        auto full = raster_store::scaler::scale(
-            padded, padded_attribution, 1, 2, interpolation, raster::algorithm::Filter::Box, raster_store::pixel::Mapping::Linear);
+        const unsigned support = *raster::algorithm::required_halo(2, interpolation);
+        const auto padded = *raster::make_clamped_view(ancestor.data, glm::ivec2(-int(support)), glm::uvec2(64 + 2 * support));
+        const auto padded_attribution = *raster::make_clamped_view(ancestor.source_attribution, glm::ivec2(-int(support)), glm::uvec2(64 + 2 * support));
+        auto full = raster_store::scaler::scale(padded, padded_attribution, support, 2, interpolation, raster_store::pixel::Mapping::Linear);
         REQUIRE(full);
         for (unsigned y = 0; y < 192; ++y)
             for (unsigned x = 0; x < 192; ++x) {
@@ -264,10 +267,40 @@ TEST_CASE("halo nonconstant distant ancestor preserves fractional phase", "[rast
     REQUIRE(f.storage->save({ 0, { 0, 0 } }, ancestor));
     const Id centre { 20, { 400000, 500000 } };
     f.add(centre, -1);
-    auto tile = f.read(centre, 2, Interpolation::Bilinear);
+    auto tile = f.read(centre, 2, Resampling::BiliinearAndBox);
     REQUIRE(tile);
     // The left halo begins two requested pixels before the centre's boundary.
     const double expected = (400000.0 * 64 - 2 + 0.5) / double(1u << 20) - 0.5;
     CHECK(std::abs(tile->data.pixel({ 0, 2 }) - expected) < 0.00001);
     f.once();
+}
+
+TEST_CASE("halo ancestor fallback supports a zoom gap of 30 without rebasing", "[raster-halo]")
+{
+    for (auto method : { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos3 }) {
+        Fixture f;
+        f.add({ 0, { 0, 0 } }, 23, 3);
+        const Id centre { 30, { (1u << 24) - 1, (1u << 24) - 1 } };
+        f.add(centre, 42, 4);
+        auto result = f.read(centre, 2, method);
+        REQUIRE(result);
+        CHECK(result->data.pixel({ 0, 0 }) == Catch::Approx(23).margin(1e-4));
+        CHECK(result->data.pixel({ 67, 32 }) == Catch::Approx(23).margin(1e-4));
+        CHECK(result->source_attribution.pixel({ 67, 32 }) == 3);
+        f.once();
+    }
+}
+
+TEST_CASE("halo ancestor fallback rejects zoom gaps above 30", "[raster-halo]")
+{
+    for (unsigned gap : { 31u, 32u }) {
+        Fixture f;
+        f.add({ 0, { 0, 0 } }, 23, 3);
+        const Id centre { gap, { 1u << 24, 1u << 24 } };
+        f.add(centre, 42, 4);
+        auto result = f.read(centre, 2, Resampling::Lanczos3);
+        REQUIRE_FALSE(result);
+        CHECK(result.error().code() == Error::Code::InvalidInput);
+        CHECK(result.error().to_string().find("ancestor fallback zoom gap") != std::string::npos);
+    }
 }

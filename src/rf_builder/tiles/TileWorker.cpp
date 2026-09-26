@@ -144,21 +144,29 @@ Expected<glm::u8vec3> TileWorker::pixel(unsigned zoom, std::int64_t x, std::int6
 Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 origin, const raster::View<glm::u8vec3>& destination)
 {
     const unsigned levels = zoom - supplier.key.zoom_level;
-    const std::uint64_t factor = std::uint64_t(1) << levels;
+    if (levels > 30)
+        return Error::fail(Error::Code::InvalidInput, "ancestor fallback zoom gap exceeds 30 levels");
+    const std::uint64_t factor = 1u << levels;
     const auto first = origin / factor;
     const auto last = origin + glm::u64vec2(destination.size()) - std::uint64_t(1);
     const glm::uvec2 interior(last / factor - first + std::uint64_t(1));
+    const glm::ivec2 offset(origin % factor);
     // Crop before scaling so even a distant ancestor needs only this window
-    // and its one-pixel halo. Keep global coordinates entirely in integers.
-    radix::Raster<glm::u8vec3> neighbourhood(interior + glm::uvec2(2));
-    const glm::i64vec2 start = glm::i64vec2(first) - std::int64_t(1);
-    // A partial output window may not use both sides of the halo. Fetch only
-    // contributing samples so an unrelated neighbour cannot fail this tile.
-    const glm::uvec2 begin { origin.x % factor < factor / 2 ? 0u : 1u, origin.y % factor < factor / 2 ? 0u : 1u };
-    const glm::uvec2 end = interior + glm::uvec2(last.x % factor >= factor / 2 ? 1u : 0u, last.y % factor >= factor / 2 ? 1u : 0u);
+    // and its Lanczos support. Keep global coordinates entirely in integers.
+    constexpr unsigned support = 3;
+    const auto size = interior + glm::uvec2(2 * support);
+    auto source_window
+        = raster::algorithm::required_source_window(size, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, destination.size());
+    if (!source_window)
+        return Error::propagate(std::move(source_window));
+    radix::Raster<glm::u8vec3> neighbourhood(size);
+    const glm::i64vec2 global_source_pixel_origin = glm::i64vec2(first) - std::int64_t(support);
+    // Fetch only contributing samples so an unrelated neighbour cannot fail this tile.
+    const auto begin = source_window->origin;
+    const auto end = begin + source_window->size - glm::uvec2(1);
     for (unsigned y = begin.y; y <= end.y; ++y) {
         for (unsigned x = begin.x; x <= end.x; ++x) {
-            auto value = pixel(supplier.key.zoom_level, start.x + x, start.y + y, supplier);
+            auto value = pixel(supplier.key.zoom_level, global_source_pixel_origin.x + x, global_source_pixel_origin.y + y, supplier);
             if (!value) {
                 return Error::propagate(std::move(value));
             }
@@ -170,14 +178,8 @@ Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::
             neighbourhood.pixel({ x, y }) = neighbourhood.pixel(glm::clamp(glm::uvec2(x, y), begin, end));
         }
     }
-    return raster::algorithm::scale(neighbourhood,
-        1,
-        int(levels),
-        raster::algorithm::Interpolation::Bilinear,
-        raster::algorithm::Filter::Box,
-        glm::uvec2(origin % factor),
-        raster::algorithm::srgb_conversion<glm::u8vec3>(),
-        destination);
+    return raster::algorithm::scale(
+        neighbourhood, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, raster::algorithm::srgb_conversion<glm::u8vec3>(), destination);
 }
 Expected<void> TileWorker::assemble(
     raster_store::Tile<glm::u8vec3>& tile, std::vector<std::uint8_t>& valid, const run::Key& candidate, const run::Key& source, const Supplier& supplier)

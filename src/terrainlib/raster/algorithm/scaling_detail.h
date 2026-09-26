@@ -5,12 +5,9 @@
 
 namespace raster::algorithm {
 
-enum class Interpolation {
-    NearestNeighbour,
-    Bilinear,
-};
-enum class Filter {
-    Box,
+enum class Resampling {
+    NearestNeighbourAndBox,
+    BiliinearAndBox,
     Lanczos2,
     Lanczos3,
     Lanczos4,
@@ -25,60 +22,57 @@ namespace detail {
         return 1u << n_zoom_levels;
     }
 
-    inline Expected<unsigned> filter_radius(Filter filter)
+    inline Expected<unsigned> filter_radius(Resampling method)
     {
-        switch (filter) {
-        case Filter::Box:
+        switch (method) {
+        case Resampling::NearestNeighbourAndBox:
+        case Resampling::BiliinearAndBox:
             return 0;
-        case Filter::Lanczos2:
+        case Resampling::Lanczos2:
             return 2;
-        case Filter::Lanczos3:
+        case Resampling::Lanczos3:
             return 3;
-        case Filter::Lanczos4:
+        case Resampling::Lanczos4:
             return 4;
         }
-        return Error::fail(Error::Code::InvalidInput, "invalid raster reduction filter");
+        return Error::fail(Error::Code::InvalidInput, "invalid raster resampling method");
     }
 
-    inline Expected<unsigned> required_upscaling_halo(unsigned n_zoom_levels, Interpolation interpolation)
+    // Floor division, including negative output coordinates and factors above INT_MAX.
+    inline int source_cell(int position, unsigned factor)
     {
-        if (auto factor = scale_factor(n_zoom_levels); !factor) {
-            return Error::propagate(std::move(factor));
-        }
-        switch (interpolation) {
-        case Interpolation::NearestNeighbour:
-            return 0;
-        case Interpolation::Bilinear:
-            return n_zoom_levels == 0 ? 0u : 1u;
-        }
-        return Error::fail(Error::Code::InvalidInput, "invalid raster interpolation");
+        return position >= 0 ? int(unsigned(position) / factor) : -1 - int(unsigned(-(position + 1)) / factor);
     }
 
-    inline Expected<unsigned> required_downscaling_halo(unsigned n_zoom_levels, Filter filter)
+    inline unsigned source_phase(int position, unsigned factor)
     {
-        auto factor = scale_factor(n_zoom_levels);
-        if (!factor) {
-            return Error::propagate(std::move(factor));
-        }
-        auto radius = filter_radius(filter);
-        if (!radius) {
-            return Error::propagate(std::move(radius));
-        }
-        const auto width = *radius == 0 ? 0 : std::uint64_t(2 * *radius - 1) * (*factor - 1);
-        if (width > (std::numeric_limits<unsigned>::max)()) {
-            return Error::fail(Error::Code::ResourceExhausted, "required raster halo exceeds representable dimensions");
-        }
-        return static_cast<unsigned>(width);
+        return unsigned(std::int64_t(position) - std::int64_t(source_cell(position, factor)) * factor);
+    }
+
+    inline int upscaling_origin(int position, unsigned factor, unsigned radius)
+    {
+        const int cell = source_cell(position, factor);
+        if (radius == 0)
+            return cell;
+        return cell - (source_phase(position, factor) < factor / 2 ? 1 : 0) - int(radius) + 1;
+    }
+
+    inline unsigned upscaling_radius(Resampling method)
+    {
+        return method == Resampling::NearestNeighbourAndBox ? 0 : method == Resampling::BiliinearAndBox ? 1 : *filter_radius(method);
     }
 
     struct ScalingGeometry {
         glm::uvec2 interior;
         glm::uvec2 output;
         unsigned factor;
+        glm::uvec2 source_origin {};
+        glm::uvec2 source_size {};
     };
 
     inline Expected<ScalingGeometry> scaling_geometry(glm::uvec2 input, unsigned halo_width, unsigned levels, bool up, unsigned required_width)
     {
+        assert(input.x <= (1u << 30) && input.y <= (1u << 30));
         auto factor = scale_factor(levels);
         if (!factor) {
             return Error::propagate(std::move(factor));
@@ -156,54 +150,89 @@ namespace detail {
 } // namespace detail
 
 /// Positive levels upscale, negative levels downscale, and zero only crops.
-inline Expected<unsigned> required_halo(int n_zoom_levels, Interpolation interpolation, Filter filter)
+/// This query covers the full interior; a requested output halo needs additional support.
+inline Expected<unsigned> required_halo(int n_zoom_levels, Resampling method)
 {
-    if (auto valid = detail::required_upscaling_halo(0, interpolation); !valid) {
-        return Error::propagate(std::move(valid));
-    }
-    if (auto valid = detail::filter_radius(filter); !valid) {
-        return Error::propagate(std::move(valid));
-    }
-    if (n_zoom_levels < 0) {
-        return detail::required_downscaling_halo(static_cast<unsigned>(-std::int64_t(n_zoom_levels)), filter);
-    }
-    return detail::required_upscaling_halo(static_cast<unsigned>(n_zoom_levels), interpolation);
+    auto radius = detail::filter_radius(method);
+    if (!radius)
+        return Error::propagate(std::move(radius));
+    auto factor = detail::scale_factor(static_cast<unsigned>(n_zoom_levels < 0 ? -std::int64_t(n_zoom_levels) : n_zoom_levels));
+    if (!factor)
+        return Error::propagate(std::move(factor));
+    if (n_zoom_levels >= 0)
+        return n_zoom_levels == 0 ? 0 : detail::upscaling_radius(method);
+    const auto width = *radius == 0 ? 0 : std::uint64_t(2 * *radius - 1) * (*factor - 1);
+    if (width > (std::numeric_limits<unsigned>::max)())
+        return Error::fail(Error::Code::ResourceExhausted, "required raster halo exceeds representable dimensions");
+    return static_cast<unsigned>(width);
 }
 
 namespace detail {
-    inline Expected<ScalingGeometry> scale_geometry(glm::uvec2 input, unsigned halo_width, int levels, Interpolation interpolation, Filter filter)
+    inline Expected<ScalingGeometry> scale_geometry(glm::uvec2 input, unsigned halo_width, int levels, Resampling method)
     {
-        auto required = required_halo(levels, interpolation, filter);
-        if (!required) {
-            return Error::propagate(std::move(required));
-        }
-        return scaling_geometry(input, halo_width, static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels), levels >= 0, *required);
-    }
-    // Bounds checks use division so a small window does not require representable full dimensions.
-    inline Expected<ScalingGeometry> window_geometry(
-        glm::uvec2 input, unsigned halo_width, int levels, Interpolation interpolation, Filter filter, glm::uvec2 offset, glm::uvec2 size)
-    {
-        auto required = required_halo(levels, interpolation, filter);
+        auto required = required_halo(levels, method);
         if (!required)
             return Error::propagate(std::move(required));
-        auto factor = scale_factor(static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels));
-        if (!factor)
-            return Error::propagate(std::move(factor));
-        if (input.x == 0 || input.y == 0 || halo_width > ((std::min)(input.x, input.y) - 1) / 2 || halo_width < *required) {
-            return Error::fail(Error::Code::InvalidInput, "invalid raster interior or insufficient halo");
-        }
-        const auto interior = input - glm::uvec2(2 * halo_width);
+        return scaling_geometry(input, halo_width, static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels), levels >= 0, *required);
+    }
+
+    // Validate actual source support, including windows outside the scaled interior.
+    inline Expected<ScalingGeometry> window_geometry(glm::uvec2 input, unsigned halo_width, int levels, Resampling method, glm::ivec2 offset, glm::uvec2 size)
+    {
+        assert(input.x <= (1u << 30) && input.y <= (1u << 30));
+        assert(size.x <= (1u << 30) && size.y <= (1u << 30));
+        assert(offset.x >= -(1 << 30) && offset.x < (1 << 30) && offset.y >= -(1 << 30) && offset.y < (1 << 30));
+        auto required = required_halo(levels, method);
+        if (!required)
+            return Error::propagate(std::move(required));
+        const auto factor = *scale_factor(static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels));
+        if (input.x == 0 || input.y == 0 || halo_width > ((std::min)(input.x, input.y) - 1) / 2)
+            return Error::fail(Error::Code::InvalidInput, "invalid raster interior");
+        ScalingGeometry result { input - glm::uvec2(2 * halo_width), size, factor };
         for (unsigned axis = 0; axis < 2; ++axis) {
-            if (size[axis] == 0 || offset[axis] > (std::numeric_limits<unsigned>::max)() - (size[axis] - 1)) {
-                return Error::fail(Error::Code::InvalidInput, "invalid scaling output window");
+            if (size[axis] == 0)
+                return Error::fail(Error::Code::InvalidInput, "empty scaling output window");
+            const int last = offset[axis] + int(size[axis] - 1);
+            std::int64_t first_source;
+            std::int64_t last_source;
+            if (levels > 0) {
+                const unsigned radius = upscaling_radius(method);
+                first_source = std::int64_t(halo_width) + upscaling_origin(offset[axis], factor, radius);
+                last_source = std::int64_t(halo_width) + upscaling_origin(last, factor, radius) + (radius == 0 ? 0 : 2 * radius - 1);
+            } else if (levels < 0) {
+                if (result.interior[axis] % factor != 0)
+                    return Error::fail(Error::Code::InvalidInput, "raster interior dimensions must be divisible by the reduction factor");
+                first_source = std::int64_t(halo_width) + std::int64_t(offset[axis]) * factor - *required;
+                last_source = std::int64_t(halo_width) + (std::int64_t(last) + 1) * factor + *required - 1;
+            } else {
+                first_source = std::int64_t(halo_width) + offset[axis];
+                last_source = std::int64_t(halo_width) + last;
             }
-            const unsigned last = offset[axis] + size[axis] - 1;
-            if (levels >= 0 ? last / *factor >= interior[axis] : interior[axis] % *factor != 0 || last >= interior[axis] / *factor) {
-                return Error::fail(Error::Code::InvalidInput, "scaling output window exceeds output bounds");
-            }
+            if (first_source < 0 || last_source >= input[axis])
+                return Error::fail(Error::Code::InvalidInput, "insufficient raster support for scaling output window");
+            result.source_origin[axis] = unsigned(first_source);
+            result.source_size[axis] = unsigned(last_source - first_source + 1);
         }
-        return ScalingGeometry { interior, size, *factor };
+        return result;
     }
 
 } // namespace detail
+
+struct SourceWindow {
+    glm::uvec2 origin;
+    glm::uvec2 size;
+};
+
+/// Query the source rectangle read by scaling an output window, without accessing pixels.
+/// The returned origin includes the source halo; output_offset is relative to the scaled interior.
+/// Rejects invalid geometry or insufficient source support, just like windowed scale().
+[[nodiscard]] inline Expected<SourceWindow> required_source_window(
+    glm::uvec2 input_size, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, glm::uvec2 output_size)
+{
+    auto geometry = detail::window_geometry(input_size, halo_width, levels, method, output_offset, output_size);
+    if (!geometry)
+        return Error::propagate(std::move(geometry));
+    return SourceWindow { geometry->source_origin, geometry->source_size };
+}
+
 } // namespace raster::algorithm

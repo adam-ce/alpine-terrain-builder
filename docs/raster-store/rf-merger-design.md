@@ -3,7 +3,9 @@
 Status: implementation proposal, reconciled with shared functionality on
 2026-09-26. Shared-function reuse and support-coverage preservation are agreed.
 Whole-tile attribution precedence was agreed on 2026-09-27; implementation
-is authorized following the documentation commit.
+is authorized following the documentation commit. Topology-only output
+partitioning, output codec checks and recovery fingerprints were agreed on
+2026-09-28.
 
 This design uses the code on `main` at `2be4343`.
 [Storage format](storage-format.md) defines the shared RF/TB format;
@@ -17,9 +19,12 @@ for disjoint merger output.
 Merge two published RF snapshots into a new snapshot. Initially support
 float32 scalar and RGB8 payloads. Require matching payload types, nominal
 pixel dimensions and `value_mapping`; different RF zoom levels are supported.
+Each input's codec selector must equal the output codec; initially the output
+uses the default `amort` codec, so this cannot fail yet. Input layout and
+compression may differ from the output.
 RF inputs and output have zero stored halo and follow the shared
 [tile-dimension contract](tiles-with-halo.md). Reject unsupported types,
-metadata mismatches, and physical `Inner` nodes: inputs must have disjoint
+metadata or codec mismatches, and physical `Inner` nodes: inputs must have disjoint
 physical leaves. Virtual ancestors remain valid traversal nodes. Accept
 `.part` snapshots only through the recovery-cache option.
 
@@ -51,20 +56,26 @@ attributions are zero, prefer higher zoom, then the right input, on the selected
 output grid. A missing physical supplier contributes no candidate. Selection
 is deterministic for fixed ordered inputs and settings.
 
-Produce disjoint physical leaves. Determine attributed refinement from
-winning regions on the finer native input grid, so that even one winning
-fine pixel can require subdivision. The winning supplier's original RF tile
-zoom sets its resolution requirement. Fully overridden fine tiles and
-support-only tiles do not refine the partition required by attributed winners.
-Resample surviving coarse data into the selected finer leaves where needed.
+Produce disjoint physical leaves, partitioned from input topology alone,
+regardless of attribution or selection outcome. Wherever either input has a
+physical leaf, the output is at least that fine: split a covering coarser
+leaf of the other input along the paths to its finer descendants and retain
+the needed siblings. Never retain a physical parent alongside descendants.
+Output leaves are therefore never coarser than an input leaf at the same
+location, and production never downscales. Resample surviving coarse data
+into finer leaves where needed.
+
+A fine tile that wins no pixel still refines the output; its leaf and the
+split siblings are filled from the coarser supplier. We accept the larger
+output to avoid a payload-reading planning pass and undoing speculative
+subdivision; few entirely unattributed tiles are expected. Tile-accurate
+pruning from stored per-tile attribution sets could later reduce this
+without changing pixel selection, but it requires a storage-format extension
+and is deferred.
 
 Preserve physical support coverage, including entirely unattributed tiles
 prepared by the [GDAL importer](gdal-nodata-filling.md#agreed-decisions).
-Within a retained coarse tile, preserve its existing unattributed payload;
-do not downscale losing finer data into it. Outside the attributed output
-partition, retain support-only leaves at the zoom selected by the whole-tile
-rule above. Split covering leaves around selected descendants and retain
-needed siblings; never retain a physical parent alongside descendants.
+Support-only tiles take part in partitioning like any other tile.
 Synthesized halo pixels alone do not create additional output coverage.
 
 ### Shared raster operations
@@ -108,10 +119,12 @@ them. Filter kernels remain owned by shared scaling.
 
 Hard-link an unchanged whole input tile with
 [`Storage::copy_from()`](../../src/terrainlib/store/Storage.h) when the output
-key, grid, type, dimensions and encoding permit reuse of its complete data
-and attribution payload. All-left or all-right selection at the same native
-grid qualifies; resampling entirely from one coarse supplier does not.
-Compatible completed recovery tiles use the same hard-link mechanism.
+key and grid permit reuse of its complete data and attribution payload.
+All-left or all-right selection at the same native grid qualifies; resampling
+entirely from one coarse supplier does not. Reuse depends only on codec
+compatibility, which the input check guarantees; payload path, layout and
+envelope compression may differ from the output's. Compatible completed
+recovery tiles use the same hard-link mechanism.
 
 All other tiles are newly encoded. A matching extension alone does not
 establish compatibility. Never modify a linked payload in place. Hard-link
@@ -125,15 +138,17 @@ supplied compatible `.part` snapshot. Do not mutate the old output. Initially
 reject published snapshots as recovery caches. Ignore unindexed payloads.
 
 Validate the recovery record against ordered input paths, metadata/index
-fingerprints, ordered priority IDs and processing settings. Trust published
+fingerprints, ordered priority IDs and processing settings. An input's
+fingerprint identifies the dataset: its canonical snapshot path and a content
+hash of its `raster_store.metadata` and `raster_store.index` files. Trust published
 payloads to remain immutable at their paths; do not hash or scan every payload
 for cache validation. Compare priority IDs rather than JSON formatting.
 Source-attribution table contents are not part of cache identity.
 
 Record pixel type, nominal/stored dimensions, halo width, resampling method,
-value mapping, centre-selection and support-retention policies, and a semantic
+value mapping, centre-selection and partitioning policies, and a semantic
 processing version covering the shared scaling and halo contracts. Output
-path, job count and logging do not affect compatibility. Small rounding
+path, compression, job count and logging do not affect compatibility. Small rounding
 differences are acceptable, including cache reuse and equivalent Lanczos-3
 implementations; only semantic changes invalidate otherwise compatible tiles.
 
@@ -154,8 +169,12 @@ rf-merger --left /data/rf/a --right /data/rf/b \
 ```
 
 `--cache /data/rf/interrupted.part` is optional; `--jobs` defaults to one.
-Infer payload type and tile dimensions from input metadata. There are no
-mask, resampling-method, type-conversion or output-dimension options.
+Optional `--compression` selects the output envelope compression and
+defaults to the storage default, standard Zstandard with checksum.
+Infer payload type and tile dimensions from input metadata. The output uses
+the default layout and codec; add layout and codec options only when
+alternatives exist. There are no mask, resampling-method, type-conversion or
+output-dimension options.
 
 Open inputs through existing storage functions, retaining their read-only
 metadata, and validate the [input policy](#inputs-and-attribution). Delegate
@@ -177,28 +196,19 @@ covering coarse leaf into descendants while following the other tree. Each
 overlap region has at most one physical supplier from each input; an absent
 descendant key does not negate coverage from a coarse leaf.
 
-Apply whole-tile attribution precedence first. When both suppliers have
-attribution, align both inputs over each overlap to the finer supplier's native grid,
-using the [paired scaler](#shared-raster-operations) when resampling is needed
-and native rasters/views otherwise. This prepares data and attribution
-together. Apply the [selection policy](#pixel-selection-and-output-hierarchy)
-with `zip_transform`, then summarize winners with `fold`. Retain original
-supplier IDs and compact per-leaf resolution requirements, tracking physical
-support coverage separately rather than storing a world-sized pixel map.
-
-Overlay attributed resolution requirements, splitting covering leaves along
-paths to winning finer leaves and retaining needed siblings. Complete the
-partition with remaining physical support coverage under the same policy.
-This does not require a uniform-resolution raster or a full quadtree expansion.
+Derive the [partition](#pixel-selection-and-output-hierarchy) from the two
+indices without reading payloads. A key is an output leaf when at least one
+input supplies it at the same or a coarser zoom and neither input has a
+physical tile strictly below it. Where one input has finer physical
+descendants, descend towards them and emit the siblings that are still
+covered. Emit leaves lazily to production together with their original
+suppliers; do not materialize the full partition. This does not require a
+uniform-resolution raster or a full quadtree expansion.
 
 Seed planning with compatible completed recovery leaves and exclude their
 coverage from new work. A virtual cache ancestor with completed descendants
 must prevent an overlapping parent output. Uncached empty regions may be
 recomputed.
-
-Use ordinary storage reads. The traversal may favor locality, but do not
-implement a bespoke decoded-tile cache. If profiling later identifies disk
-traffic as a bottleneck, address it through the external cache work.
 
 ### 3. Produce tiles
 
@@ -206,14 +216,26 @@ For each planned leaf, locate its original suppliers and apply the selection
 policy on the final grid. Take the [whole-tile reuse](#whole-tile-reuse) path
 when eligible, without assembling or encoding a replacement. Otherwise use
 shared raster operations to prepare candidate windows and select data and
-attribution into the new tile.
+attribution into the new tile. Read each supplier that must be resampled,
+together with the halo required by the windowed scaler, from its input
+snapshot with
+[`raster_store::read_tile_with_halo`](../../src/terrainlib/raster_store/read_tile_with_halo.h);
+native suppliers need no halo. Where both suppliers are present, align both
+to the leaf grid, using the [paired scaler](#shared-raster-operations) on the
+halo tiles when resampling is needed and native rasters/views otherwise, and
+apply the [selection policy](#pixel-selection-and-output-hierarchy) with
+`zip_transform`. This prepares data and attribution together.
 
-Read only original suppliers covering the final leaf at the same or a coarser
-zoom. Finer tiles that imposed no output refinement are losers and contribute
-nothing to that leaf. Merger production therefore needs only native copies or
+By construction, every original supplier of a leaf covers it at the same or a
+coarser zoom. Merger production therefore needs only native copies or
 upscaling; internal halo extraction follows its own shared contract. Output
 eligibility comes from the partition, not an attributed-pixel count, so
-support-only leaves are written too.
+support-only leaves and leaves won entirely by a coarser supplier are
+written too.
+
+Use ordinary storage reads. The traversal may favor locality, but do not
+implement a bespoke decoded-tile cache. If profiling later identifies disk
+traffic as a bottleneck, address it through the external cache work.
 
 The generic store already supplies exact-key reads, sparse topology, traversal
 and hard links. Use `store::traverse` and `Storage::copy_from()` directly,
@@ -231,8 +253,8 @@ namespace references without changing its behavior. Do not generalize the
 builder coordinator or introduce a separate merger worker pool.
 
 Use private read/scaling state per worker and bound queued, active and completed
-jobs together to at most twice the worker count. Indices and compact planning
-summaries may grow with the hierarchy; payload buffers must not grow with
+jobs together to at most twice the worker count. Indices and the traversal
+frontier may grow with the hierarchy; payload buffers must not grow with
 snapshot size. One coordinator owns writes, hard links, index mutation,
 checkpoints and progress, completing each payload operation before indexing it.
 
@@ -240,17 +262,35 @@ Use RF import as the reference for bounded scheduling, first-error handling,
 cancellation and publication. Its coordinator assumes one attribution entry;
 do not change builder behavior to accommodate merger selection or tile reuse.
 
-Log to stderr and `<output>.log`. Report scanned regions during planning and
-completed/reused candidates during production, with elapsed time, periodic
-updates during long work, and a labelled ETA when enough production data
-exists. On success report written/reused tile counts and stored payload bytes.
+Log to stderr and `<output>.log`. An index-only count of output leaves may
+precede production to provide totals. Report completed/reused leaves during
+production, with elapsed time, periodic updates during long work, and a
+labelled ETA when enough production data exists.
 
-Checkpoint completed writes at the existing two-minute target. On cancellation,
+On success, report output statistics per category: whole left tiles
+hard-linked, whole right tiles hard-linked, and newly encoded tiles with
+pixels from both inputs, only the left input or only the right input. A large
+single-input count indicates that the other input caused subdivision without
+winning. For each category report the tile count, its percentage of all output
+tiles, the stored payload bytes and their percentage of all output bytes.
+Linked tiles count their full payload size, labelled as shared with the input.
+Show all byte values in one binary unit, MiB, GiB or TiB, chosen from the
+total. Derive the pixel origin from the selection result, without extra reads.
+
+Checkpoint completed writes at the existing two-minute target. Each checkpoint
+writes the statistics totals of the indexed tiles to `statistics.tmp` in the
+`.part` snapshot through `io::envelope`, with a merger-specific schema, before
+the index. Like the index, write it to a temporary file and rename it into
+place. Recovery restores these totals for the reused cache tiles, which keep
+their original categories. The two files are not updated atomically together;
+a small discrepancy after abnormal termination is acceptable. A missing or
+corrupt statistics file does not abort recovery; warn and report the
+statistics as incomplete. On cancellation,
 stop scheduling, finish and save successful active work, checkpoint, and retain
 the incomplete output and recovery record. On error, stop new work and do not
 publish. Finish active work before finalization. On success, remove the input
-record immediately before publication and use existing final-index writing
-and no-replace rename. Empty results follow the same lifecycle. The existing
+record and statistics file immediately before publication and use existing
+final-index writing and no-replace rename. Empty results follow the same lifecycle. The existing
 normal-operation guarantee applies; no crash-durability mechanism is added.
 
 ## Verification checklist
@@ -260,30 +300,34 @@ window phase, allocation behavior and neighbour lookup. Add merger integration
 coverage without duplicating those suites:
 
 - **Inputs:** empty/partial priority lists; duplicate, zero and out-of-range
-  IDs; payload/dimension/mapping mismatches; physical `Inner` rejection;
+  IDs; payload/dimension/mapping/codec mismatches; physical `Inner` rejection;
   storage-opening failures and destination clashes.
 - **Scaling integration:** original-supplier selection; native-value
   preservation; metadata mapping; centre eligibility and representative
   attribution; interior/edge windows, subpixel regions and large zoom gaps;
   bounded output and agreement with direct shared-function calls.
-- **Selection and partitioning:** fully overridden fine tiles; one winning
-  fine pixel missed by coarse-centre sampling; equal-attribution and unlisted
-  ties; coarse holes filled by fine data; asymmetric deep branches; coarse
-  sibling preservation and empty inputs.
+- **Selection and partitioning:** partition derived without payload reads;
+  fully overridden fine tiles still refining the output and filled from the
+  coarse supplier; a single winning fine pixel; equal-attribution and unlisted
+  ties; coarse holes filled by fine data; asymmetric deep branches; split
+  siblings filled from the coarse supplier; empty inputs.
 - **Support:** entirely unattributed snapshots and ties; support surrounding
-  attributed leaves; fine support that neither overrides attributed candidates
-  nor refines their output leaf; preservation of the winning coarse tile
-  including its unattributed pixels; retained support available to later halo reads and
-  zero-attribution values participating in filtering.
+  attributed leaves; fine support below an attributed coarse tile refining the
+  output without contributing pixels; whole-tile precedence of the attributed
+  coarse tile, including its unattributed pixels; retained support available
+  to later halo reads and zero-attribution values participating in filtering.
 - **Production and reuse:** mixed-source tiles; hard-link identity for unchanged
-  attributed and support-only tiles; newly encoded resampled tiles; scalar/RGB
+  attributed and support-only tiles, including with differing input and output
+  compression; newly encoded resampled tiles; scalar/RGB
   serial-versus-parallel agreement within the accepted tolerance; bounded
-  outstanding work and payload-before-index ordering. Run existing RF builder
+  outstanding work and payload-before-index ordering; statistics categories,
+  percentages and unit selection. Run existing RF builder
   parallel/cancellation/error regressions after moving the shared pool.
 - **Recovery and lifecycle:** identity changes for input order, metadata/index,
-  priorities and semantic/support policies; rounding-only compatibility;
+  priorities and semantic/partitioning policies; rounding-only compatibility;
   completed attributed/support leaves, unfinished siblings and unindexed files;
-  read/link/write errors; cancellation and recovery; empty publication and
+  read/link/write errors; cancellation and recovery, including restored,
+  missing and corrupt statistics; empty publication and
   collisions at publication.
 
 Run the focused merger suite and affected storage/RF regressions using this

@@ -312,9 +312,9 @@ Implementation: `src/rf_builder/*`, executable `rf-builder`.
 
 The planned merger accepts two disjoint RF snapshots and produces disjoint
 physical leaves, selecting attributed pixels by an attribution priority list.
-Winning finer attributed data determines refinement; surviving coarse data
-is resampled into the selected finer leaves. Support-only coverage is retained
-under the selection and resolution rules in the
+The output partition follows input topology: wherever either input has a
+physical leaf, the output is at least that fine, and surviving coarse data is
+resampled into the finer leaves. Selection and support retention follow the
 [merger plan](rf-merger-design.md).
 
 Disjoint output keeps one physical representation over each covered region,
@@ -322,7 +322,9 @@ following the RF builders' output policy. Retaining physical parents beneath
 finer descendants would preserve coarse values and avoid some resampling,
 but would require interpreting overlapping representations. We accept that
 repeated merges can resample previous results and that different merge
-groupings can produce different numeric values. Discarded sources cannot be
+groupings can produce different numeric values. Partitioning by topology
+rather than by selection outcome avoids a payload-reading planning pass, at
+the cost of refining regions where a finer input wins no pixel. Discarded sources cannot be
 recovered from the output; changing priorities requires rebuilding from the
 original imports. The merger plan defines selection, reuse and execution.
 

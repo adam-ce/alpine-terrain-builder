@@ -5,7 +5,8 @@ Status: implementation proposal, reconciled with shared functionality on
 Whole-tile attribution precedence was agreed on 2026-09-27; implementation
 is authorized following the documentation commit. Topology-only output
 partitioning, output codec checks and recovery fingerprints were agreed on
-2026-09-28.
+2026-09-28. Implemented on 2026-09-28; see
+[implementation status](implementation-status.md#rf-merger--2026-09-28).
 
 This design uses the code on `main` at `2be4343`.
 [Storage format](storage-format.md) defines the shared RF/TB format;

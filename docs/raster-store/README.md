@@ -21,12 +21,12 @@ TB generation and the tile server remain future work.
 - [RF-builder design and implementation plan](rf-builder-design.md)
 - [GDAL import NoData filling: policy and verification](gdal-nodata-filling.md)
 - [Online tile import extension](rf-builder-downloader-design.md)
-- [RF-merger design and implementation proposal](rf-merger-design.md)
+- [RF-merger design](rf-merger-design.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)
 
 ## Scope
 
-The documents describe the storage format, implemented import tools, and
-proposed merger and delivery-generation behavior.
+The documents describe the storage format, implemented import and merge
+tools, and proposed delivery-generation behavior.

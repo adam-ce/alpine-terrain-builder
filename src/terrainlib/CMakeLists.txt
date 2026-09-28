@@ -176,6 +176,7 @@ add_library(terrainlib
     raster/algorithm/zip_transform.h
 
     raster_store/StoreTraits.h
+    raster_store/TilePool.h
     raster_store/Tile.h
     raster_store/attribution.h raster_store/attribution.cpp
     raster_store/io/TileCodec.h

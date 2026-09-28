@@ -14,9 +14,10 @@
 #include <utility>
 #include <vector>
 
-namespace rf_builder {
+namespace raster_store {
 
-// RF's internal scheduling module. The coordinator alone submits/takes results.
+// RF tile scheduling shared by the RF builder and merger. The coordinator alone
+// submits/takes results.
 // Fixed slots bound queued + active + completed tiles, not merely the job queue.
 template <typename Payload>
 class TilePool {
@@ -175,4 +176,4 @@ private:
     // thread creation throws halfway through construction.
     std::vector<std::jthread> m_threads;
 };
-} // namespace rf_builder
+} // namespace raster_store

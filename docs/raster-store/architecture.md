@@ -288,7 +288,7 @@ rebuilt.
 Raster-fundamentalis is the worldwide authoritative dataset, assembled from
 sources with different coverage and accuracy. RF has no downsampled overview
 levels. Different regions may use different RF zoom levels. RF imports and
-the planned merger output use disjoint physical leaves, without physical
+merger output use disjoint physical leaves, without physical
 parent/descendant overlap. The shared storage format still permits overlapping
 physical ancestors and descendants for other uses.
 
@@ -310,7 +310,7 @@ Implementation: `src/rf_builder/*`, executable `rf-builder`.
 
 ### rf_merger
 
-The planned merger accepts two disjoint RF snapshots and produces disjoint
+The merger accepts two disjoint RF snapshots and produces disjoint
 physical leaves, selecting attributed pixels by an attribution priority list.
 The output partition follows input topology: wherever either input has a
 physical leaf, the output is at least that fine, and surviving coarse data is
@@ -327,6 +327,8 @@ rather than by selection outcome avoids a payload-reading planning pass, at
 the cost of refining regions where a finer input wins no pixel. Discarded sources cannot be
 recovered from the output; changing priorities requires rebuilding from the
 original imports. The merger plan defines selection, reuse and execution.
+
+Implementation: `src/rf_merger/*`, executable `rf-merger`.
 
 ### tb_builder
 

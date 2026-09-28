@@ -1,5 +1,43 @@
 # Raster-store implementation status
 
+## RF merger — 2026-09-28
+
+Implemented the [merger design](rf-merger-design.md) as `src/rf_merger` with
+the `rf-merger` executable, `rfmergerlib` and `unittests_rfmerger`.
+`rf_builder::TilePool` moved unchanged to `raster_store::TilePool`.
+
+- The partition is a lazy depth-first cursor over both indices,
+  `rf_merger::partition::Cursor`, rather than `store::traverse`: the generic
+  traversal visits one index through callbacks and cannot feed the pool
+  lazily. An index-only count pass supplies progress totals.
+- Leaves with a single native supplier and completed cache leaves are
+  hard-linked by the coordinator without payload reads; all other leaves are
+  produced by workers.
+- A supplier that must be upscaled is read with `read_tile_with_halo` only when
+  the Lanczos-3 support window leaves its interior; otherwise an ordinary load
+  suffices. Zoom gaps above 30 levels are rejected, as in the halo reader.
+- Fingerprints hash the complete metadata and index files with 64-bit FNV-1a.
+- `--compression` accepts `zstd` (default), `zstd-best` and `none`; `none`
+  writes a CRC32C checksum.
+- If cache statistics are missing or corrupt, restored tiles are reported as
+  "restored without statistics" and the statistics as incomplete.
+- After a production error, statistics and index are checkpointed on a
+  best-effort basis before returning the error; nothing is published.
+
+Verification: Debug build of all merger and RF builder targets. The merger
+suite has 15 cases covering priority parsing, selection, partitioning,
+whole-tile precedence, overridden and single-pixel fine tiles, attribution
+holes, agreement with direct halo-reader and paired-scaler calls, RGB8,
+input and destination rejection, serial/parallel agreement, hard links with
+different output compression, cancellation, recovery with restored, missing
+and mismatching records, empty inputs, statistics formatting and the command
+line. RF builder: 57 cases pass after the pool move. clazy (levels 0-2) and
+clang-tidy (bugprone, performance) report only the codebase's existing
+`const Key&` convention and the exception-escape note shared with `rf-builder`'s
+`main`. A RelWithDebInfo ThreadSanitizer build passes the merger suite and the
+10 RF builder `[parallel]` cases with the existing suppressions. Not measured:
+memory and runtime at production tile sizes.
+
 ## GDAL import NoData filling — 2026-09-23
 
 Implemented the [agreed filling policy](gdal-nodata-filling.md): configurable
@@ -97,7 +135,7 @@ Tile storage is implemented and verified on Linux/GCC as of 2026-09-08.
 RF builder validation rejects unsupported attribution indices and indices
 outside the selected table before producing tiles. Storage does not scan tile
 attribution rasters on reads or writes. Clearing entries is not a library
-operation. TB builders, merging, sampling, window reads, and enforced read-only access
+operation. TB builders, sampling, window reads, and enforced read-only access
 remain separate work. RF import is tracked below.
 
 Publication currently uses Linux `renameat2(RENAME_NOREPLACE)`; other platforms

@@ -4,7 +4,9 @@ See the project [code style](docs/code-style.md) before contributing.
 
 The [RF builder](docs/raster-store/rf-builder-design.md#command-usage) imports prepared
 GDAL rasters with `rf-builder gdal` and [online JPEG tile pyramids](docs/raster-store/rf-builder-downloader-design.md)
-with `rf-builder tiles` into immutable raster-store snapshots.
+with `rf-builder tiles` into immutable raster-store snapshots. The
+[RF merger](docs/raster-store/rf-merger-design.md) combines two RF snapshots by
+attribution priority with `rf-merger`.
 
 Use `rf-tile2image` to export an RF tile's
 data as JPEG and its source attribution as a coloured PNG.

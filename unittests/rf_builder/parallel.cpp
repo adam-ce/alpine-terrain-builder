@@ -1,4 +1,4 @@
-#include "TilePool.h"
+#include "raster_store/TilePool.h"
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -32,7 +32,7 @@ TEST_CASE("RF workers return ready tiles without waiting for the first tile", "[
 {
     std::promise<void> release;
     const auto gate = release.get_future().share();
-    rf_builder::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
         if (key.coords.x == 0) {
             gate.wait();
         }
@@ -52,7 +52,7 @@ TEST_CASE("RF cancellation drops queued tiles and finishes active tiles within t
     std::promise<void> release;
     const auto gate = release.get_future().share();
     std::atomic_uint started = 0;
-    rf_builder::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
         ++started;
         gate.wait();
         return key.coords.x;
@@ -87,7 +87,7 @@ TEST_CASE("RF retains the first worker error when later failures occupy earlier 
     const auto first_gate = release_first_slot.get_future().share();
     const auto second_gate = release_second_slot.get_future().share();
     std::atomic_uint started = 0;
-    rf_builder::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
         ++started;
         if (key.coords.x == 0) {
             first_gate.wait();
@@ -117,7 +117,7 @@ TEST_CASE("RF worker errors and exceptions stop queued work and join active work
     std::promise<void> release;
     const auto gate = release.get_future().share();
     std::atomic_uint started = 0;
-    rf_builder::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
         ++started;
         gate.wait();
         if (throws) {

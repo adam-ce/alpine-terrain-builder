@@ -1,5 +1,5 @@
 #include "run.h"
-#include "TilePool.h"
+#include "raster_store/TilePool.h"
 #include "raster_store/storage.h"
 #include <algorithm>
 #include <cerrno>
@@ -208,7 +208,7 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     if (auto initialized = source.initialize(jobs, initial_poll); !initialized) {
         return Error::propagate(std::move(initialized));
     }
-    TilePool<Prepared<PixelType>> pool(jobs, source.prepare);
+    raster_store::TilePool<Prepared<PixelType>> pool(jobs, source.prepare);
     // Each lane traverses depth first and has only one outstanding preparation.
     // Thus each stack retains at most three siblings per level, independently of
     // completion order. Pool slots bound all queued/active/completed payloads.
@@ -281,7 +281,7 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
         lane.pending.insert(lane.pending.end(), division.children.rbegin(), division.children.rend());
         return {};
     };
-    const auto consume = [&](typename TilePool<Prepared<PixelType>>::Completed done) -> Expected<void> {
+    const auto consume = [&](typename raster_store::TilePool<Prepared<PixelType>>::Completed done) -> Expected<void> {
         auto lane = std::ranges::find_if(lanes, [&](const auto& item) { return item.active == done.key; });
         if (lane == lanes.end()) {
             return Error::fail(Error::Code::Internal, "completed RF candidate has no scheduling lane");

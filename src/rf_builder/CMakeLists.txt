@@ -1,6 +1,6 @@
 add_library(rfbuilderlib
     Mask.h Mask.cpp
-    gdal/TileWorker.h TilePool.h
+    gdal/TileWorker.h
     run.h run.cpp
     tiles/provider.h tiles/provider.cpp
     tiles/HttpClient.h tiles/HttpClient.cpp

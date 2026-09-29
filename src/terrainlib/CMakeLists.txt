@@ -176,6 +176,7 @@ add_library(terrainlib
     raster/algorithm/zip_transform.h
 
     raster_store/StoreTraits.h
+    raster_store/TilePool.h
     raster_store/Tile.h
     raster_store/attribution.h raster_store/attribution.cpp
     raster_store/io/TileCodec.h
@@ -262,6 +263,9 @@ target_link_libraries(terrainlib PUBLIC
     igl_restricted::triangle
     xatlas
 )
+
+# Error captures stack traces; libassert already links cpptrace publicly.
+target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)

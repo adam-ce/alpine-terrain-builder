@@ -93,6 +93,23 @@ _Avoid_: NoData pixel, invalid pixel (for a stored zero-attribution pixel)
 : A physical RF tile with no physical descendants. A disjoint RF import has
   neither a physical ancestor nor a physical descendant of any retained tile.
 
+**Disjoint RF snapshot**
+: An RF snapshot in which no physical tile has a physical ancestor or
+  descendant. Different regions may have different RF zoom levels.
+
+**Attribution priority**
+: The explicit preference assigned to an attribution entry when competing
+  valid raster values cover the same location.
+
+**Priority table**
+: The common ordered list of attribution entries used to select between the
+  two inputs of an RF merge. It need not list every attribution present.
+
+**Representative attribution**
+: The single attribution index retained for a resampled value under the
+  [shared scaling rules](scaling.md#paired-raster-store-wrappers). It is not
+  a complete record of the sources contributing to that value.
+
 **Ancestor fallback**
 : Coarser source imagery supplying a region where finer source imagery is
   absent. The supplying source ancestor need not be retained as an RF tile.

@@ -287,8 +287,10 @@ rebuilt.
 
 Raster-fundamentalis is the worldwide authoritative dataset, assembled from
 sources with different coverage and accuracy. RF has no downsampled overview
-levels. Coarse physical tiles, for example at zoom 10, may coexist with more
-accurate descendants, for example at zoom 15.
+levels. Different regions may use different RF zoom levels. RF imports and
+merger output use disjoint physical leaves, without physical
+parent/descendant overlap. The shared storage format still permits overlapping
+physical ancestors and descendants for other uses.
 
 The implemented [RF builder](rf-builder-design.md) consumes one prepared GDAL
 dataset, including a VRT mosaic, through `rf-builder gdal`. The
@@ -308,10 +310,25 @@ Implementation: `src/rf_builder/*`, executable `rf-builder`.
 
 ### rf_merger
 
-The merger combines two RF stores using an attribution priority list. It
-reuses tiles from the preferred source where possible and resolves conflicts
-per texel where necessary. New boundary tiles use the higher resolution of
-the inputs.
+The merger accepts two disjoint RF snapshots and produces disjoint
+physical leaves, selecting attributed pixels by an attribution priority list.
+The output partition follows input topology: wherever either input has a
+physical leaf, the output is at least that fine, and surviving coarse data is
+resampled into the finer leaves. Selection and support retention follow the
+[merger plan](rf-merger-design.md).
+
+Disjoint output keeps one physical representation over each covered region,
+following the RF builders' output policy. Retaining physical parents beneath
+finer descendants would preserve coarse values and avoid some resampling,
+but would require interpreting overlapping representations. We accept that
+repeated merges can resample previous results and that different merge
+groupings can produce different numeric values. Partitioning by topology
+rather than by selection outcome avoids a payload-reading planning pass, at
+the cost of refining regions where a finer input wins no pixel. Discarded sources cannot be
+recovered from the output; changing priorities requires rebuilding from the
+original imports. The merger plan defines selection, reuse and execution.
+
+Implementation: `src/rf_merger/*`, executable `rf-merger`.
 
 ### tb_builder
 

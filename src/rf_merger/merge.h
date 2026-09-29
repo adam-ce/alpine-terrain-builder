@@ -29,7 +29,10 @@ struct Report {
 };
 
 // Merges two published RF snapshots into a new published snapshot at
-// options.output. Cancellation retains the incomplete .part snapshot.
-Expected<Report> run(const Options& options, const std::function<bool()>& stop_requested = {});
+// options.output. Throws Error::Exception for invalid inputs and failures; a
+// failure during production retains the incomplete .part snapshot with its
+// completed tiles indexed. When stop_requested returns true, active tiles are
+// finished and saved, then an Error::Exception with code Cancelled is thrown.
+Report run(const Options& options, const std::function<bool()>& stop_requested = {});
 
 } // namespace rf_merger::merge

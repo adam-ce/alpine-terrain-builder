@@ -259,8 +259,8 @@ frontier may grow with the hierarchy; payload buffers must not grow with
 snapshot size. One coordinator owns writes, hard links, index mutation,
 checkpoints and progress, completing each payload operation before indexing it.
 
-Use RF import as the reference for bounded scheduling, first-error handling,
-cancellation and publication. Its coordinator assumes one attribution entry;
+Use RF import as the reference for bounded scheduling and publication; error
+and interruption handling follow the lifecycle below. Its coordinator assumes one attribution entry;
 do not change builder behavior to accommodate merger selection or tile reuse.
 
 Log to stderr and `<output>.log`. An index-only count of output leaves may
@@ -286,13 +286,22 @@ place. Recovery restores these totals for the reused cache tiles, which keep
 their original categories. The two files are not updated atomically together;
 a small discrepancy after abnormal termination is acceptable. A missing or
 corrupt statistics file does not abort recovery; warn and report the
-statistics as incomplete. On cancellation,
-stop scheduling, finish and save successful active work, checkpoint, and retain
-the incomplete output and recovery record. On error, stop new work and do not
-publish. Finish active work before finalization. On success, remove the input
-record and statistics file immediately before publication and use existing
-final-index writing and no-replace rename. Empty results follow the same lifecycle. The existing
-normal-operation guarantee applies; no crash-durability mechanism is added.
+statistics as incomplete.
+
+On SIGINT or SIGTERM, stop scheduling, finish and save the active tiles,
+checkpoint, and throw an `Error::Exception` with code `Cancelled`; the command
+exits with 128 plus the signal number and retains the incomplete output and
+recovery record. A process killed without this handling keeps the tiles of the
+last checkpoint, because the index is replaced atomically and unindexed
+payloads are ignored. Errors that the merger
+cannot recover from, including a failure to read or hard-link a cached tile,
+throw `Error::Exception`: unwinding joins the workers, writes the statistics
+and then the index of the completed tiles, and nothing is published. Bugs fail
+assertions and abort. On success, finish active work, remove the input record
+and statistics file immediately before publication and use existing
+final-index writing and no-replace rename. Empty results follow the same
+lifecycle. The existing normal-operation guarantee applies; no
+crash-durability mechanism is added.
 
 ## Verification checklist
 
@@ -327,7 +336,7 @@ coverage without duplicating those suites:
 - **Recovery and lifecycle:** identity changes for input order, metadata/index,
   priorities and semantic/partitioning policies; rounding-only compatibility;
   completed attributed/support leaves, unfinished siblings and unindexed files;
-  read/link/write errors; cancellation and recovery, including restored,
+  read/link/write errors; cancellation and recovery after a failure, including restored,
   missing and corrupt statistics; empty publication and
   collisions at publication.
 

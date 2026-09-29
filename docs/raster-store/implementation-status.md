@@ -21,17 +21,38 @@ the `rf-merger` executable, `rfmergerlib` and `unittests_rfmerger`.
   writes a CRC32C checksum.
 - If cache statistics are missing or corrupt, restored tiles are reported as
   "restored without statistics" and the statistics as incomplete.
-- After a production error, statistics and index are checkpointed on a
-  best-effort basis before returning the error; nothing is published.
+- Error handling follows the three tiers in the
+  [code style](../code-style.md#error-handling). Reusable merger functions
+  (priorities, input records, statistics files, partitioning) return
+  `Expected` or plain values. The merge itself throws `Error::Exception` via
+  `Error::raise` and `Error::throwing_unwrap`, and `rf_merger::merge::run`
+  returns the report directly. Results that fail only through a merger bug
+  use `ASSERT` or `Error::asserting_unwrap`.
+- Preflight rejects the sRGB mapping for scalar payloads and zoom gaps above 30
+  levels before creating the output. A failure to read or hard-link cache
+  tiles stops the merge.
+- SIGINT and SIGTERM cancel gracefully: queued work is discarded, active
+  tiles are finished and saved, statistics and index are checkpointed, and
+  `run` throws `Cancelled`, which `rf-merger` maps to exit status 128 plus the
+  signal number. When any other exception unwinds, a guard writes the
+  statistics before the output storage saves its index, so a failed merge is
+  recoverable with consistent statistics.
+- Pool workers catch `Error::Exception` and return the `Error`, which the
+  coordinator rethrows; `TilePool` is unchanged.
+- `rf-merger` logs errors with their chain and the stack trace captured where
+  the error was made, and logs assertion failures with their stack trace, to
+  stderr and `<output>.log`.
 
 Verification: Debug build of all merger and RF builder targets. The merger
 suite has 15 cases covering priority parsing, selection, partitioning,
 whole-tile precedence, overridden and single-pixel fine tiles, attribution
 holes, agreement with direct halo-reader and paired-scaler calls, RGB8,
 input and destination rejection, serial/parallel agreement, hard links with
-different output compression, cancellation, recovery with restored, missing
-and mismatching records, empty inputs, statistics formatting and the command
-line. RF builder: 57 cases pass after the pool move. clazy (levels 0-2) and
+different output compression, cancellation, recovery after a production failure with
+restored, missing and mismatching records, empty inputs, statistics
+formatting and the command line. RF builder: 57 cases pass after the pool
+move. `Error` tests cover `raise`, `throwing_unwrap` and stack traces that
+survive propagation; `asserting_unwrap` aborts and has no automated test. clazy (levels 0-2) and
 clang-tidy (bugprone, performance) report only the codebase's existing
 `const Key&` convention and the exception-escape note shared with `rf-builder`'s
 `main`. A RelWithDebInfo ThreadSanitizer build passes the merger suite and the

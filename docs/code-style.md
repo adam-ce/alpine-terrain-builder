@@ -34,7 +34,15 @@ Use consistent names for related classes and operations. A function name should 
 
 ## Error handling
 
-Functions that can fail return `Expected<T>`, which is an alias for `std::expected<T, Error>`.
+Failures fall into three tiers:
+
+- **Bugs:** violated invariants and preconditions, including results that can fail only through a programming error. Use libassert `ASSERT`, `DEBUG_ASSERT` for checks too expensive for release builds, `PANIC` or `UNREACHABLE`, and `Error::asserting_unwrap` for such an `Expected`. They abort with a stack trace.
+- **Recoverable failures:** reusable functions, including all of terrainlib, return `Expected<T>`, which is an alias for `std::expected<T, Error>`, whenever a caller might react to the failure. Library code does not throw.
+- **Unrecoverable failures in tools:** application code of command-line tools may throw `Error::Exception` for invalid input and runtime failures it cannot recover from, using `Error::raise` for new errors and `Error::throwing_unwrap` for failed results. The tool's `main` catches it, logs the error and its stack trace, and exits with a nonzero status.
+
+Every `Error` records the stack trace where it was made; `Error::stacktrace()` resolves it for logging.
+
+The rest of this section describes `Expected` results.
 
 ### Checking results
 

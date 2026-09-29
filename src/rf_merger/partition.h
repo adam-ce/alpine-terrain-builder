@@ -1,11 +1,12 @@
 #pragma once
 
-#include "Error.h"
 #include "raster_store/StoreTraits.h"
 #include "store/Index.h"
 #include <optional>
 #include <vector>
 
+// Indices must be validated and free of physical Inner nodes; the merger
+// rejects such inputs before partitioning.
 namespace rf_merger::partition {
 
 using Key = radix::tile::Id;
@@ -22,10 +23,10 @@ struct Leaf {
 };
 
 // The physical tile covering key at the same or a coarser zoom level.
-Expected<std::optional<Key>> supplier(const Index& index, const Key& key);
+std::optional<Key> supplier(const Index& index, const Key& key);
 
 // Whether key is a leaf of the output partition, derived from both indices.
-Expected<bool> is_leaf(const Index& left, const Index& right, const Key& key);
+bool is_leaf(const Index& left, const Index& right, const Key& key);
 
 // Lazily enumerates output leaves in depth-first order from index topology
 // alone: wherever either input has a physical leaf, the output is at least
@@ -34,7 +35,7 @@ class Cursor {
 public:
     Cursor(const Index& left, const Index& right);
 
-    Expected<std::optional<Leaf>> next();
+    std::optional<Leaf> next();
 
 private:
     struct Frame {

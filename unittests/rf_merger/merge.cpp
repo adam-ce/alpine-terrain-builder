@@ -12,6 +12,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
+#include <functional>
 #include <set>
 
 namespace {
@@ -76,7 +77,7 @@ struct Fixture {
         return result;
     }
 
-    Expected<merge::Report> merge(const std::string& left, const std::string& right, const std::string& priorities, const std::string& output) const
+    merge::Report merge(const std::string& left, const std::string& right, const std::string& priorities, const std::string& output) const
     {
         return merge::run(options(left, right, priorities, output));
     }
@@ -100,6 +101,18 @@ std::set<Key> physical(const Storage& storage)
         }
     }
     return result;
+}
+
+// The code of the Error::Exception thrown by operation.
+Error::Code thrown(const std::function<void()>& operation)
+{
+    try {
+        operation();
+    } catch (const Error::Exception& exception) {
+        return exception.error().code();
+    }
+    FAIL("no Error::Exception thrown");
+    return Error::Code::Internal;
 }
 
 template <typename T>
@@ -130,13 +143,14 @@ std::set<Key> split(const Key& coarse, const Key& descendant)
 }
 } // namespace
 
-TEST_CASE("RF merger priority tables are strict JSON arrays of attribution indices", "[rf-merger]")
+TEST_CASE("RF merger priority tables are JSON arrays of attribution indices", "[rf-merger]")
 {
     using rf_merger::priorities::parse;
     CHECK(parse("[]") == std::vector<std::uint16_t> {});
     CHECK(parse(" [ 7 , 3,12 ]\n") == std::vector<std::uint16_t> { 7, 3, 12 });
     CHECK(parse("[65534]") == std::vector<std::uint16_t> { 65534 });
-    for (const auto* invalid : { "", "[", "[1,]", "[,1]", "[1] x", "{}", "[1.5]", "[-1]", "[07]", "[\"1\"]", "[1 2]" }) {
+    // GDAL's parser also accepts trailing commas, trailing data and leading zeros.
+    for (const auto* invalid : { "", "[", "[,1]", "{}", "[1.5]", "[-1]", "[\"1\"]", "[1 2]" }) {
         INFO(invalid);
         CHECK_FALSE(parse(invalid));
     }
@@ -186,14 +200,10 @@ TEST_CASE("RF merger partition follows input topology without payload reads", "[
     const auto collect = [](const Index& left, const Index& right) {
         std::vector<Leaf> leaves;
         Cursor cursor(left, right);
-        for (;;) {
-            auto next = cursor.next();
-            REQUIRE(next);
-            if (!*next) {
-                return leaves;
-            }
-            leaves.push_back(**next);
+        while (const auto leaf = cursor.next()) {
+            leaves.push_back(*leaf);
         }
+        return leaves;
     };
     Index left, right;
     CHECK(collect(left, right).empty());
@@ -211,23 +221,13 @@ TEST_CASE("RF merger partition follows input topology without payload reads", "[
         CHECK(keys.insert(leaf.key).second);
         CHECK(leaf.left == (leaf.key == disjoint ? std::nullopt : std::optional(coarse)));
         CHECK(leaf.right == (leaf.key == fine ? std::optional(fine) : leaf.key == disjoint ? std::optional(disjoint) : std::nullopt));
-        auto is_leaf = rf_merger::partition::is_leaf(left, right, leaf.key);
-        REQUIRE(is_leaf);
-        CHECK(*is_leaf);
+        CHECK(rf_merger::partition::is_leaf(left, right, leaf.key));
     }
     auto expected = split(coarse, fine);
     expected.insert(disjoint);
     CHECK(keys == expected);
-    CHECK_FALSE(*rf_merger::partition::is_leaf(left, right, coarse));
-    CHECK_FALSE(*rf_merger::partition::is_leaf(left, right, { 1, { 1, 0 } }));
-
-    Index inner;
-    REQUIRE(inner.add(coarse));
-    REQUIRE(inner.add(fine));
-    Cursor rejecting(inner, right);
-    const auto rejected = rejecting.next();
-    REQUIRE_FALSE(rejected);
-    CHECK(rejected.error().code() == Error::Code::InvalidInput);
+    CHECK_FALSE(rf_merger::partition::is_leaf(left, right, coarse));
+    CHECK_FALSE(rf_merger::partition::is_leaf(left, right, { 1, { 1, 0 } }));
 }
 
 TEST_CASE("RF merger hard-links disjoint input tiles and publishes statistics", "[rf-merger]")
@@ -237,17 +237,16 @@ TEST_CASE("RF merger hard-links disjoint input tiles and publishes statistics", 
     const Key b { 1, { 1, 1 } };
     f.snapshot("left", { { a, tile(1.f, 1) } });
     f.snapshot("right", { { b, tile(2.f, 2) } });
-    auto report = f.merge("left", "right", "[]", "merged");
-    REQUIRE(report);
-    CHECK(report->statistics_complete);
-    CHECK(report->statistics.linked_left.tiles == 1);
-    CHECK(report->statistics.linked_right.tiles == 1);
-    CHECK(report->statistics.total().tiles == 2);
+    const auto report = f.merge("left", "right", "[]", "merged");
+    CHECK(report.statistics_complete);
+    CHECK(report.statistics.linked_left.tiles == 1);
+    CHECK(report.statistics.linked_right.tiles == 1);
+    CHECK(report.statistics.total().tiles == 2);
     auto merged = f.open("merged");
     CHECK(physical(*merged) == std::set<Key> { a, b });
     CHECK(linked(*f.open("left"), *merged, a));
     CHECK(linked(*f.open("right"), *merged, b));
-    CHECK(report->statistics.linked_left.bytes == std::filesystem::file_size(*merged->path_for(a)));
+    CHECK(report.statistics.linked_left.bytes == std::filesystem::file_size(*merged->path_for(a)));
     CHECK_FALSE(std::filesystem::exists(merged->base_path() / "inputs.tmp"));
     CHECK_FALSE(std::filesystem::exists(merged->base_path() / "statistics.tmp"));
     CHECK_FALSE(std::filesystem::exists(f.path("merged.part")));
@@ -268,16 +267,14 @@ TEST_CASE("RF merger selects attributed pixels by priority at equal zoom", "[rf-
 
     SECTION("higher-priority right input wins every pixel and is linked")
     {
-        auto report = f.merge("left", "right", "[3, 7]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.linked_right.tiles == 1);
+        const auto report = f.merge("left", "right", "[3, 7]", "merged");
+        CHECK(report.statistics.linked_right.tiles == 1);
         CHECK(linked(*f.open("right"), *f.open("merged"), key));
     }
     SECTION("mixed selection prefers priority and nonzero attribution")
     {
-        auto report = f.merge("left", "right", "[7, 3]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.mixed.tiles == 1);
+        const auto report = f.merge("left", "right", "[7, 3]", "merged");
+        CHECK(report.statistics.mixed.tiles == 1);
         auto merged = f.open("merged");
         auto loaded = merged->load(key);
         REQUIRE(loaded);
@@ -289,9 +286,8 @@ TEST_CASE("RF merger selects attributed pixels by priority at equal zoom", "[rf-
     }
     SECTION("unlisted attributions tie and the right input wins")
     {
-        auto report = f.merge("left", "right", "[]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.linked_right.tiles == 1);
+        const auto report = f.merge("left", "right", "[]", "merged");
+        CHECK(report.statistics.linked_right.tiles == 1);
     }
 }
 
@@ -306,12 +302,11 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
     {
         f.snapshot("left", { { coarse, tile(5.f, 4) } });
         f.snapshot("right", { { fine, tile(9.f, 0) } });
-        auto report = f.merge("left", "right", "[]", "merged");
-        REQUIRE(report);
+        const auto report = f.merge("left", "right", "[]", "merged");
         auto merged = f.open("merged");
         CHECK(physical(*merged) == expected);
-        CHECK(report->statistics.left_only.tiles == expected.size());
-        CHECK(report->statistics.total().tiles == expected.size());
+        CHECK(report.statistics.left_only.tiles == expected.size());
+        CHECK(report.statistics.total().tiles == expected.size());
         auto loaded = merged->load(fine);
         REQUIRE(loaded);
         CHECK(loaded->data.pixel({ 10, 20 }) == Catch::Approx(5.f));
@@ -321,22 +316,20 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
     {
         f.snapshot("left", { { coarse, tile(5.f, 4) } });
         f.snapshot("right", { { fine, tile(9.f, 6) } });
-        auto report = f.merge("left", "right", "[4, 6]", "merged");
-        REQUIRE(report);
+        const auto report = f.merge("left", "right", "[4, 6]", "merged");
         CHECK(physical(*f.open("merged")) == expected);
-        CHECK(report->statistics.left_only.tiles == expected.size());
-        CHECK(report->statistics.mixed.tiles == 0);
+        CHECK(report.statistics.left_only.tiles == expected.size());
+        CHECK(report.statistics.mixed.tiles == 0);
     }
     SECTION("attributed fine tile beats unattributed coarse support and is linked")
     {
         f.snapshot("left", { { coarse, tile(5.f, 0) } });
         f.snapshot("right", { { fine, tile(9.f, 6) } });
-        auto report = f.merge("left", "right", "[]", "merged");
-        REQUIRE(report);
+        const auto report = f.merge("left", "right", "[]", "merged");
         auto merged = f.open("merged");
         CHECK(physical(*merged) == expected);
-        CHECK(report->statistics.linked_right.tiles == 1);
-        CHECK(report->statistics.left_only.tiles == expected.size() - 1);
+        CHECK(report.statistics.linked_right.tiles == 1);
+        CHECK(report.statistics.left_only.tiles == expected.size() - 1);
         CHECK(linked(*f.open("right"), *merged, fine));
         auto sibling = merged->load({ 3, { 0, 2 } });
         REQUIRE(sibling);
@@ -350,9 +343,8 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
         holed.source_attribution.pixel({ 0, 0 }) = 4;
         f.snapshot("left", { { coarse, holed } });
         f.snapshot("right", { { fine, tile(9.f, 6) } });
-        auto report = f.merge("left", "right", "[4]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.linked_right.tiles == 1);
+        const auto report = f.merge("left", "right", "[4]", "merged");
+        CHECK(report.statistics.linked_right.tiles == 1);
         CHECK(linked(*f.open("right"), *f.open("merged"), fine));
     }
     SECTION("a single winning fine pixel produces a mixed tile")
@@ -361,9 +353,8 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
         auto winner = tile(9.f, 6);
         winner.source_attribution.pixel({ 3, 4 }) = 8;
         f.snapshot("right", { { fine, winner } });
-        auto report = f.merge("left", "right", "[8, 4, 6]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.mixed.tiles == 1);
+        const auto report = f.merge("left", "right", "[8, 4, 6]", "merged");
+        CHECK(report.statistics.mixed.tiles == 1);
         auto loaded = f.open("merged")->load(fine);
         REQUIRE(loaded);
         CHECK(loaded->data.pixel({ 3, 4 }) == 9.f);
@@ -375,10 +366,9 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
     {
         f.snapshot("left", { { coarse, tile(5.f, 0) } });
         f.snapshot("right", { { fine, tile(9.f, 0) } });
-        auto report = f.merge("left", "right", "[]", "merged");
-        REQUIRE(report);
-        CHECK(report->statistics.linked_right.tiles == 1);
-        CHECK(report->statistics.left_only.tiles == expected.size() - 1);
+        const auto report = f.merge("left", "right", "[]", "merged");
+        CHECK(report.statistics.linked_right.tiles == 1);
+        CHECK(report.statistics.left_only.tiles == expected.size() - 1);
     }
 }
 
@@ -396,8 +386,7 @@ TEST_CASE("RF merger upscaling agrees with the halo reader and paired scaler", "
     }
     f.snapshot("left", { { coarse, gradient }, { neighbour, tile(1000.f, 4) } });
     f.snapshot("right", { { fine, tile(0.f, 0) }, { { 3, { 3, 1 } }, tile(0.f, 0) } });
-    auto report = f.merge("left", "right", "[]", "merged");
-    REQUIRE(report);
+    f.merge("left", "right", "[]", "merged");
     auto merged = f.open("merged");
     auto left = f.open("left");
     const auto metadata = raster_store::io::manifest::read_metadata(f.path("left"));
@@ -432,9 +421,8 @@ TEST_CASE("RF merger merges RGB8 inputs", "[rf-merger]")
     left.source_attribution.pixel({ 1, 1 }) = 0;
     f.snapshot<glm::u8vec3>("left", { { key, left } });
     f.snapshot<glm::u8vec3>("right", { { key, tile(glm::u8vec3(200, 100, 50), 2) } });
-    auto report = f.merge("left", "right", "[1]", "merged");
-    REQUIRE(report);
-    CHECK(report->statistics.mixed.tiles == 1);
+    const auto report = f.merge("left", "right", "[1]", "merged");
+    CHECK(report.statistics.mixed.tiles == 1);
     auto loaded = f.open<glm::u8vec3>("merged")->load(key);
     REQUIRE(loaded);
     CHECK(loaded->data.pixel({ 0, 0 }) == glm::u8vec3(10, 20, 30));
@@ -451,24 +439,39 @@ TEST_CASE("RF merger rejects incompatible inputs and destinations", "[rf-merger]
     {
         raster_store::Tile<float> large(128);
         f.snapshot("right", { { key, large } });
-        CHECK(f.merge("left", "right", "[]", "merged").error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { f.merge("left", "right", "[]", "merged"); }) == Error::Code::InvalidInput);
     }
     SECTION("value mapping")
     {
         storage::CreateOptions options;
         options.value_mapping = raster_store::pixel::Mapping::SRGBA;
         f.snapshot("right", { { key, tile(1.f, 1) } }, options);
-        CHECK(f.merge("left", "right", "[]", "merged").error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { f.merge("left", "right", "[]", "merged"); }) == Error::Code::InvalidInput);
+    }
+    SECTION("sRGB mapping on scalar payloads")
+    {
+        storage::CreateOptions options;
+        options.value_mapping = raster_store::pixel::Mapping::SRGBA;
+        f.snapshot("srgb-left", { { key, tile(1.f, 1) } }, options);
+        f.snapshot("right", { { key, tile(1.f, 1) } }, options);
+        CHECK(thrown([&] { f.merge("srgb-left", "right", "[]", "merged"); }) == Error::Code::Unsupported);
+        CHECK_FALSE(std::filesystem::exists(f.path("merged.part")));
+    }
+    SECTION("zoom gaps above 30 levels")
+    {
+        f.snapshot("right", { { { 32, { 0, 0 } }, tile(1.f, 1) } });
+        CHECK(thrown([&] { f.merge("left", "right", "[]", "merged"); }) == Error::Code::Unsupported);
+        CHECK_FALSE(std::filesystem::exists(f.path("merged.part")));
     }
     SECTION("payload type")
     {
         f.snapshot<glm::u8vec3>("right", { { key, tile(glm::u8vec3(1), 1) } });
-        CHECK_FALSE(f.merge("left", "right", "[]", "merged"));
+        CHECK_THROWS_AS(f.merge("left", "right", "[]", "merged"), Error::Exception);
     }
     SECTION("physical tiles with physical descendants")
     {
         f.snapshot("right", { { key, tile(1.f, 1) }, { { 2, { 0, 0 } }, tile(1.f, 1) } });
-        CHECK(f.merge("left", "right", "[]", "merged").error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { f.merge("left", "right", "[]", "merged"); }) == Error::Code::InvalidInput);
     }
     SECTION("incomplete input")
     {
@@ -476,18 +479,18 @@ TEST_CASE("RF merger rejects incompatible inputs and destinations", "[rf-merger]
         REQUIRE(created);
         created->first.reset();
         auto options = f.options("left", "right.part", "[]", "merged");
-        CHECK_FALSE(merge::run(options));
+        CHECK_THROWS_AS(merge::run(options), Error::Exception);
     }
     SECTION("existing destination")
     {
         f.snapshot("right", { { key, tile(1.f, 1) } });
         std::filesystem::create_directory(f.path("merged.part"));
-        CHECK(f.merge("left", "right", "[]", "merged").error().code() == Error::Code::AlreadyExists);
+        CHECK(thrown([&] { f.merge("left", "right", "[]", "merged"); }) == Error::Code::AlreadyExists);
     }
     SECTION("invalid priorities")
     {
         f.snapshot("right", { { key, tile(1.f, 1) } });
-        CHECK(f.merge("left", "right", "[1, 1]", "merged").error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { f.merge("left", "right", "[1, 1]", "merged"); }) == Error::Code::InvalidInput);
         CHECK_FALSE(std::filesystem::exists(f.path("merged.part")));
     }
 }
@@ -498,13 +501,11 @@ TEST_CASE("RF merger serial and parallel runs agree", "[rf-merger]")
     const Key coarse { 1, { 0, 0 } };
     f.snapshot("left", { { coarse, tile(5.f, 4) }, { { 1, { 1, 1 } }, tile(3.f, 0) } });
     f.snapshot("right", { { { 3, { 1, 2 } }, tile(9.f, 6) }, { { 4, { 0, 0 } }, tile(7.f, 8) }, { { 2, { 3, 3 } }, tile(2.f, 6) } });
-    auto serial = f.merge("left", "right", "[8, 4]", "serial");
-    REQUIRE(serial);
+    const auto serial = f.merge("left", "right", "[8, 4]", "serial");
     auto options = f.options("left", "right", "[8, 4]", "parallel");
     options.jobs = 4;
-    auto parallel = merge::run(options);
-    REQUIRE(parallel);
-    CHECK(serial->statistics == parallel->statistics);
+    const auto parallel = merge::run(options);
+    CHECK(serial.statistics == parallel.statistics);
     auto a = f.open("serial");
     auto b = f.open("parallel");
     REQUIRE(physical(*a) == physical(*b));
@@ -528,38 +529,40 @@ TEST_CASE("RF merger links unchanged tiles independently of output compression",
     auto options = f.options("left", "right", "[1]", "merged");
     options.compression_algorithm = io::envelope::CompressionAlgorithm::None;
     options.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
-    auto report = merge::run(options);
-    REQUIRE(report);
+    const auto report = merge::run(options);
     auto merged = f.open("merged");
     CHECK(linked(*f.open("right"), *merged, { 2, { 3, 3 } }));
-    CHECK(report->statistics.left_only.tiles == 4);
+    CHECK(report.statistics.left_only.tiles == 4);
     auto resampled = merged->load({ 2, { 1, 0 } });
     REQUIRE(resampled);
     CHECK(resampled->data.pixel({ 0, 0 }) == Catch::Approx(1.f));
 }
 
-TEST_CASE("RF merger cancellation retains a recoverable snapshot with statistics", "[rf-merger]")
+TEST_CASE("RF merger failures retain a recoverable snapshot with statistics", "[rf-merger]")
 {
     Fixture f;
     const Key coarse { 1, { 0, 0 } };
+    const Key last { 2, { 3, 3 } };
     f.snapshot("left", { { coarse, tile(5.f, 4) }, { { 1, { 1, 1 } }, tile(3.f, 0) } });
-    f.snapshot("right", { { { 4, { 1, 2 } }, tile(9.f, 6) }, { { 2, { 3, 3 } }, tile(2.f, 6) } });
-    auto reference = f.merge("left", "right", "[6]", "reference");
-    REQUIRE(reference);
+    f.snapshot("right", { { { 4, { 1, 2 } }, tile(9.f, 6) }, { last, tile(2.f, 6) } });
 
-    auto options = f.options("left", "right", "[6]", "interrupted");
-    std::atomic<unsigned> polls = 0;
-    const auto result = merge::run(options, [&] { return ++polls > 4; });
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code() == Error::Code::Cancelled);
-    const auto part = f.path("interrupted.part");
+    // The right tile is read by the last leaf in depth-first order.
+    const auto payload = *f.open("right")->path_for(last);
+    auto original = io::read_bytes_from_path(payload);
+    REQUIRE(original);
+    write_text(payload, "not a tile");
+    CHECK(thrown([&] { f.merge("left", "right", "[6]", "failed"); }) == Error::Code::CorruptData);
+    REQUIRE(io::write_bytes_to_path(*original, payload));
+    const auto reference = f.merge("left", "right", "[6]", "reference");
+
+    const auto part = f.path("failed.part");
     REQUIRE(std::filesystem::exists(part / "inputs.tmp"));
     REQUIRE(std::filesystem::exists(part / "statistics.tmp"));
     auto opened = storage::open<float>(part, { .allow_incomplete = true });
     REQUIRE(opened);
     const auto cached = physical(*opened->first);
     CHECK_FALSE(cached.empty());
-    CHECK(cached.size() < reference->statistics.total().tiles);
+    CHECK(cached.size() < reference.statistics.total().tiles);
     auto saved = statistics::read(part);
     REQUIRE(saved);
     CHECK(saved->total().tiles == cached.size());
@@ -569,11 +572,10 @@ TEST_CASE("RF merger cancellation retains a recoverable snapshot with statistics
     {
         auto recovery = f.options("left", "right", "[6]", "recovered");
         recovery.cache = part;
-        auto recovered = merge::run(recovery);
-        REQUIRE(recovered);
-        CHECK(recovered->statistics_complete);
-        CHECK(recovered->restored_tiles == cached.size());
-        CHECK(recovered->statistics == reference->statistics);
+        const auto recovered = merge::run(recovery);
+        CHECK(recovered.statistics_complete);
+        CHECK(recovered.restored_tiles == cached.size());
+        CHECK(recovered.statistics == reference.statistics);
         auto cache = storage::open<float>(part, { .allow_incomplete = true });
         REQUIRE(cache);
         auto output = f.open("recovered");
@@ -587,27 +589,55 @@ TEST_CASE("RF merger cancellation retains a recoverable snapshot with statistics
         std::filesystem::remove(part / "statistics.tmp");
         auto recovery = f.options("left", "right", "[6]", "recovered");
         recovery.cache = part;
-        auto recovered = merge::run(recovery);
-        REQUIRE(recovered);
-        CHECK_FALSE(recovered->statistics_complete);
-        CHECK(recovered->statistics.uncategorized.tiles == cached.size());
-        CHECK(recovered->statistics.total().tiles == reference->statistics.total().tiles);
+        const auto recovered = merge::run(recovery);
+        CHECK_FALSE(recovered.statistics_complete);
+        CHECK(recovered.statistics.uncategorized.tiles == cached.size());
+        CHECK(recovered.statistics.total().tiles == reference.statistics.total().tiles);
     }
     SECTION("changed priorities or input order invalidate the cache")
     {
         auto changed = f.options("left", "right", "[4, 6]", "recovered");
         changed.cache = part;
-        CHECK(merge::run(changed).error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { merge::run(changed); }) == Error::Code::InvalidInput);
         auto swapped = f.options("right", "left", "[6]", "recovered2");
         swapped.cache = part;
-        CHECK(merge::run(swapped).error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { merge::run(swapped); }) == Error::Code::InvalidInput);
     }
     SECTION("published snapshots are not caches")
     {
         auto recovery = f.options("left", "right", "[6]", "recovered");
         recovery.cache = f.path("reference");
-        CHECK(merge::run(recovery).error().code() == Error::Code::InvalidInput);
+        CHECK(thrown([&] { merge::run(recovery); }) == Error::Code::InvalidInput);
     }
+}
+
+TEST_CASE("RF merger cancellation saves active tiles and stays recoverable", "[rf-merger]")
+{
+    Fixture f;
+    f.snapshot("left", { { { 1, { 0, 0 } }, tile(5.f, 4) }, { { 1, { 1, 1 } }, tile(3.f, 0) } });
+    f.snapshot("right", { { { 4, { 1, 2 } }, tile(9.f, 6) }, { { 2, { 3, 3 } }, tile(2.f, 6) } });
+    const auto reference = f.merge("left", "right", "[6]", "reference");
+
+    unsigned polls = 0;
+    const auto options = f.options("left", "right", "[6]", "cancelled");
+    CHECK(thrown([&] { merge::run(options, [&] { return ++polls > 4; }); }) == Error::Code::Cancelled);
+    const auto part = f.path("cancelled.part");
+    REQUIRE(std::filesystem::exists(part / "inputs.tmp"));
+    auto opened = storage::open<float>(part, { .allow_incomplete = true });
+    REQUIRE(opened);
+    const auto cached = physical(*opened->first);
+    CHECK_FALSE(cached.empty());
+    CHECK(cached.size() < reference.statistics.total().tiles);
+    auto saved = statistics::read(part);
+    REQUIRE(saved);
+    CHECK(saved->total().tiles == cached.size());
+    opened->first.reset();
+
+    auto recovery = f.options("left", "right", "[6]", "recovered");
+    recovery.cache = part;
+    const auto recovered = merge::run(recovery);
+    CHECK(recovered.restored_tiles == cached.size());
+    CHECK(recovered.statistics == reference.statistics);
 }
 
 TEST_CASE("RF merger empty inputs publish an empty snapshot", "[rf-merger]")
@@ -615,9 +645,8 @@ TEST_CASE("RF merger empty inputs publish an empty snapshot", "[rf-merger]")
     Fixture f;
     f.snapshot("left", {});
     f.snapshot("right", {});
-    auto report = f.merge("left", "right", "[]", "merged");
-    REQUIRE(report);
-    CHECK(report->statistics.total().tiles == 0);
+    const auto report = f.merge("left", "right", "[]", "merged");
+    CHECK(report.statistics.total().tiles == 0);
     CHECK(physical(*f.open("merged")).empty());
 }
 

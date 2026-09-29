@@ -10,6 +10,9 @@
 #include <cerrno>
 #include <chrono>
 #include <cmath>
+#include <exception>
+#include <functional>
+#include <libassert/assert.hpp>
 #include <sys/stat.h>
 
 namespace rf_merger::merge {
@@ -19,53 +22,72 @@ namespace {
     namespace storage = raster_store::storage;
     using Metadata = raster_store::io::manifest::Metadata;
 
-    Expected<void> check_link_filesystem(const std::filesystem::path& source, const std::filesystem::path& output)
+    void check_link_filesystem(const std::filesystem::path& source, const std::filesystem::path& output)
     {
         struct stat source_status {};
         if (::stat(source.c_str(), &source_status) != 0) {
-            return Error::fail(Error::Code::Io, "inspect RF merger input filesystem", source, std::error_code(errno, std::generic_category()));
+            Error::raise(Error::Code::Io, "inspect RF merger input filesystem", source, std::error_code(errno, std::generic_category()));
         }
         auto parent = std::filesystem::absolute(output).parent_path();
         struct stat output_status {};
         while (::stat(parent.c_str(), &output_status) != 0) {
             if (errno != ENOENT || parent == parent.parent_path()) {
-                return Error::fail(Error::Code::Io, "inspect RF merger output filesystem", parent, std::error_code(errno, std::generic_category()));
+                Error::raise(Error::Code::Io, "inspect RF merger output filesystem", parent, std::error_code(errno, std::generic_category()));
             }
             parent = parent.parent_path();
         }
         if (source_status.st_dev != output_status.st_dev) {
-            return Error::fail(Error::Code::Unsupported, "RF merger input or cache and output must be on the same filesystem for hard links", source);
+            Error::raise(Error::Code::Unsupported, "RF merger input or cache and output must be on the same filesystem for hard links", source);
         }
-        return {};
     }
 
-    Expected<void> reject_inner(const partition::Index& index, std::string_view role)
+    void reject_inner(const partition::Index& index, std::string_view role, Error::Code code = Error::Code::InvalidInput)
     {
         for (const auto& [key, status] : index) {
             if (status == store::NodeStatus::Inner) {
-                return Error::fail(Error::Code::InvalidInput, std::string(role) + " has a physical tile with physical descendants at " + to_string(key));
+                Error::raise(code, std::string(role) + " has a physical tile with physical descendants at " + to_string(key));
             }
         }
-        return {};
     }
 
-    Expected<void> check_inputs(const Metadata& left, const Metadata& right)
+    template <typename PixelType>
+    void check_inputs(const Metadata& left, const Metadata& right)
     {
         if (left.payload_type != right.payload_type || left.nominal_tile_size != right.nominal_tile_size || left.stored_tile_size != right.stored_tile_size
             || left.value_mapping != right.value_mapping) {
-            return Error::fail(Error::Code::InvalidInput, "RF merger inputs differ in payload type, tile dimensions or value mapping");
+            Error::raise(Error::Code::InvalidInput, "RF merger inputs differ in payload type, tile dimensions or value mapping");
         }
         const storage::CreateOptions defaults;
         if (left.codec_selector != defaults.codec_selector || right.codec_selector != defaults.codec_selector) {
-            return Error::fail(Error::Code::InvalidInput, "RF merger input codecs must equal the output codec " + defaults.codec_selector);
+            Error::raise(Error::Code::InvalidInput, "RF merger input codecs must equal the output codec " + defaults.codec_selector);
         }
         if (left.halo_width != 0 || right.halo_width != 0) {
-            return Error::fail(Error::Code::InvalidInput, "RF merger inputs must have zero stored halo");
+            Error::raise(Error::Code::InvalidInput, "RF merger inputs must have zero stored halo");
         }
         if (left.nominal_tile_size < 64) {
-            return Error::fail(Error::Code::Unsupported, "RF merger requires tiles of at least 64 pixels per side");
+            Error::raise(Error::Code::Unsupported, "RF merger requires tiles of at least 64 pixels per side");
         }
-        return {};
+        if (left.value_mapping == raster_store::pixel::Mapping::SRGBA && !std::is_same_v<PixelType, glm::u8vec3>) {
+            Error::raise(Error::Code::Unsupported, "RF merger supports the sRGB value mapping only for RGB8 payloads");
+        }
+    }
+
+    // Counts output leaves from the indices and rejects unsupported zoom gaps.
+    std::uint64_t count_leaves(const partition::Index& left, const partition::Index& right)
+    {
+        std::uint64_t total = 0;
+        partition::Cursor cursor(left, right);
+        while (const auto leaf = cursor.next()) {
+            for (const auto& supplier : { leaf->left, leaf->right }) {
+                if (supplier && leaf->key.zoom_level - supplier->zoom_level > produce::max_zoom_levels) {
+                    Error::raise(Error::Code::Unsupported,
+                        "RF merger supports zoom gaps of at most " + std::to_string(produce::max_zoom_levels) + " levels, not " + to_string(*supplier) + " to "
+                            + to_string(leaf->key));
+                }
+            }
+            ++total;
+        }
+        return total;
     }
 
     std::string remaining(double seconds)
@@ -77,86 +99,75 @@ namespace {
         return fmt::format("estimated remaining {}h {:02}m {:02}s", total / 3600, total / 60 % 60, total % 60);
     }
 
+    // Writes the statistics when an exception unwinds, before the output
+    // storage saves its index on destruction, so recovery restores both.
+    class StatisticsGuard {
+    public:
+        StatisticsGuard(const statistics::Totals& totals, std::filesystem::path directory)
+            : m_totals(&totals)
+            , m_directory(std::move(directory))
+        {
+        }
+        StatisticsGuard(const StatisticsGuard&) = delete;
+        StatisticsGuard& operator=(const StatisticsGuard&) = delete;
+        ~StatisticsGuard()
+        {
+            if (std::uncaught_exceptions() == 0) {
+                return;
+            }
+            if (auto written = statistics::write(*m_totals, m_directory); !written) {
+                LOG_WARN("RF merge could not save statistics after a failure: {}", written.error().to_string());
+            }
+        }
+
+    private:
+        const statistics::Totals* m_totals;
+        std::filesystem::path m_directory;
+    };
+
     template <typename PixelType>
-    Expected<Report> execute(const Options& options, const std::vector<std::uint16_t>& priorities, const std::function<bool()>& stop_requested)
+    Report execute(const Options& options, const std::vector<std::uint16_t>& priorities, const std::function<bool()>& stop_requested)
     {
-        auto opened_left = storage::open<PixelType>(options.left);
-        if (!opened_left) {
-            return Error::propagate(std::move(opened_left), "open left RF merger input");
-        }
-        auto opened_right = storage::open<PixelType>(options.right);
-        if (!opened_right) {
-            return Error::propagate(std::move(opened_right), "open right RF merger input");
-        }
-        auto [left, left_metadata] = std::move(*opened_left);
-        auto [right, right_metadata] = std::move(*opened_right);
-        if (auto checked = check_inputs(*left_metadata, *right_metadata); !checked) {
-            return Error::propagate(std::move(checked));
-        }
-        if (auto checked = reject_inner(left->index(), "left RF merger input"); !checked) {
-            return Error::propagate(std::move(checked));
-        }
-        if (auto checked = reject_inner(right->index(), "right RF merger input"); !checked) {
-            return Error::propagate(std::move(checked));
-        }
+        auto [left, left_metadata] = Error::throwing_unwrap(storage::open<PixelType>(options.left), "open left RF merger input");
+        auto [right, right_metadata] = Error::throwing_unwrap(storage::open<PixelType>(options.right), "open right RF merger input");
+        check_inputs<PixelType>(*left_metadata, *right_metadata);
+        reject_inner(left->index(), "left RF merger input");
+        reject_inner(right->index(), "right RF merger input");
         const auto& metadata = *left_metadata;
         inputs::Record record;
-        for (auto [path, fingerprint] : { std::pair { &options.left, &record.left }, std::pair { &options.right, &record.right } }) {
-            auto computed = inputs::fingerprint(*path);
-            if (!computed) {
-                return Error::propagate(std::move(computed));
-            }
-            *fingerprint = std::move(*computed);
-        }
+        record.left = Error::throwing_unwrap(inputs::fingerprint(options.left));
+        record.right = Error::throwing_unwrap(inputs::fingerprint(options.right));
         record.priorities = priorities;
         record.payload_type = metadata.payload_type;
         record.nominal_tile_size = metadata.nominal_tile_size;
         record.stored_tile_size = metadata.stored_tile_size;
         record.halo_width = metadata.halo_width;
         record.value_mapping = metadata.value_mapping;
-        for (const auto* source : { &options.left, &options.right }) {
-            if (auto checked = check_link_filesystem(*source, options.output); !checked) {
-                return Error::propagate(std::move(checked));
-            }
-        }
+        check_link_filesystem(options.left, options.output);
+        check_link_filesystem(options.right, options.output);
+        LOG_INFO("RF merge planning: counting output leaves from the input indices");
+        const auto total = count_leaves(left->index(), right->index());
 
         std::unique_ptr<const storage::IndexedStorage<PixelType>> cache;
         statistics::Totals totals;
         bool complete = true;
         if (options.cache) {
-            if (auto valid = inputs::validate_cache(*options.cache, record); !valid) {
-                return Error::propagate(std::move(valid));
-            }
-            if (auto checked = check_link_filesystem(*options.cache, options.output); !checked) {
-                return Error::propagate(std::move(checked));
-            }
-            auto opened = storage::open<PixelType>(*options.cache, { .allow_incomplete = true });
-            if (!opened) {
-                return Error::propagate(std::move(opened), "open RF merger cache");
-            }
-            auto [input, cache_metadata] = std::move(*opened);
+            Error::throwing_unwrap(inputs::validate_cache(*options.cache, record));
+            check_link_filesystem(*options.cache, options.output);
+            auto [input, cache_metadata]
+                = Error::throwing_unwrap(storage::open<PixelType>(*options.cache, { .allow_incomplete = true }), "open RF merger cache");
             if (cache_metadata->nominal_tile_size != metadata.nominal_tile_size || cache_metadata->stored_tile_size != metadata.stored_tile_size
                 || cache_metadata->halo_width != 0 || cache_metadata->value_mapping != metadata.value_mapping
                 || cache_metadata->codec_selector != metadata.codec_selector) {
-                return Error::fail(Error::Code::InvalidInput, "RF merger cache metadata disagrees with the inputs");
+                Error::raise(Error::Code::InvalidInput, "RF merger cache metadata disagrees with the inputs");
             }
-            if (auto checked = reject_inner(input->index(), "RF merger cache"); !checked) {
-                return Error::propagate(std::move(checked), Error::Code::CorruptData, "validate RF merger cache");
-            }
+            reject_inner(input->index(), "RF merger cache", Error::Code::CorruptData);
             for (const auto& [key, status] : input->index()) {
-                if (status != store::NodeStatus::Leaf) {
-                    continue;
-                }
-                auto leaf = partition::is_leaf(left->index(), right->index(), key);
-                if (!leaf) {
-                    return Error::propagate(std::move(leaf));
-                }
-                if (!*leaf) {
-                    return Error::fail(Error::Code::CorruptData, "RF merger cache tile " + to_string(key) + " is not part of the merge output");
+                if (status == store::NodeStatus::Leaf && !partition::is_leaf(left->index(), right->index(), key)) {
+                    Error::raise(Error::Code::CorruptData, "RF merger cache tile " + to_string(key) + " is not part of the merge output");
                 }
             }
-            auto restored = statistics::read(*options.cache);
-            if (restored) {
+            if (auto restored = statistics::read(*options.cache)) {
                 totals = *restored;
             } else {
                 complete = false;
@@ -171,49 +182,21 @@ namespace {
         create_options.value_mapping = metadata.value_mapping;
         create_options.compression_algorithm = options.compression_algorithm;
         create_options.checksum_algorithm = options.checksum_algorithm;
-        auto created = storage::create<PixelType>(options.output, create_options);
-        if (!created) {
-            return Error::propagate(std::move(created), "create RF merger output");
-        }
-        auto output = std::move(created->first);
+        auto output = std::move(Error::throwing_unwrap(storage::create<PixelType>(options.output, create_options), "create RF merger output").first);
         const auto input_path = output->base_path() / inputs::file_name;
-        if (auto written = io::envelope::write_to_path<inputs::Schema>(record, input_path); !written) {
-            return Error::propagate(std::move(written), "write RF merger input record");
-        }
+        Error::throwing_unwrap(io::envelope::write_to_path<inputs::Schema>(record, input_path), "write RF merger input record");
+        const StatisticsGuard statistics_guard(totals, output->base_path());
 
         const auto ranks = priorities::ranks(priorities);
         const produce::Inputs<PixelType> sources { { left.get(), left_metadata.get() }, { right.get(), right_metadata.get() }, &ranks };
-        const auto save = [&]() -> Expected<void> {
-            if (auto written = statistics::write(totals, output->base_path()); !written) {
-                return written;
-            }
-            return output->save_index();
-        };
-
-        LOG_INFO("RF merge planning: counting output leaves from the input indices");
-        std::uint64_t total = 0;
-        for (partition::Cursor counter(left->index(), right->index());;) {
-            auto next = counter.next();
-            if (!next) {
-                return Error::propagate(std::move(next), "count RF merger output leaves");
-            }
-            if (!*next) {
-                break;
-            }
-            ++total;
-        }
-
         const unsigned jobs = unsigned((std::min)(std::uint64_t(options.jobs), (std::max)(total, std::uint64_t(1))));
+        // Worker exceptions travel through the pool as errors and are rethrown by the coordinator.
         raster_store::TilePool<produce::Produced<PixelType>> pool(jobs, [&](unsigned, const Key& key) -> Expected<produce::Produced<PixelType>> {
-            partition::Leaf leaf { key, std::nullopt, std::nullopt };
-            for (auto [index, supplier] : { std::pair { &left->index(), &leaf.left }, std::pair { &right->index(), &leaf.right } }) {
-                auto found = partition::supplier(*index, key);
-                if (!found) {
-                    return Error::propagate(std::move(found));
-                }
-                *supplier = *found;
+            try {
+                return produce::produce(sources, { key, partition::supplier(left->index(), key), partition::supplier(right->index(), key) });
+            } catch (const Error::Exception& exception) {
+                return std::unexpected(exception.error());
             }
-            return produce::produce(sources, leaf);
         });
         LOG_INFO("RF merge: {} output leaves; {} workers; at most {} outstanding tiles", total, jobs, 2 * jobs);
 
@@ -237,15 +220,17 @@ namespace {
                 completed == total ? "complete" : remaining(seconds),
                 restored);
         };
-        const auto finish = [&](const Key& key, statistics::Category category, bool from_cache) -> Expected<void> {
-            auto path = output->path_for(key);
-            if (!path) {
-                return Error::propagate(std::move(path));
-            }
+        const auto checkpoint = [&] {
+            Error::throwing_unwrap(statistics::write(totals, output->base_path()));
+            Error::throwing_unwrap(output->save_index(), "checkpoint RF merger index");
+            last_checkpoint = std::chrono::steady_clock::now();
+        };
+        const auto finish = [&](const Key& key, statistics::Category category, bool from_cache) {
+            const auto path = Error::asserting_unwrap(output->path_for(key));
             std::error_code error;
-            const auto bytes = std::filesystem::file_size(*path, error);
+            const auto bytes = std::filesystem::file_size(path, error);
             if (error) {
-                return Error::fail(Error::Code::Io, "measure RF merger payload", *path, error);
+                Error::raise(Error::Code::Io, "measure RF merger payload", path, error);
             }
             if (!from_cache || !complete) {
                 totals.add(category, bytes);
@@ -257,82 +242,51 @@ namespace {
                 ++computed;
             }
             progress(completed == 1);
-            return {};
         };
-        const auto link = [&](const Key& key, Side side) -> Expected<void> {
-            const auto& input = side == Side::Left ? *left : *right;
-            if (auto linked = output->copy_from(key, input); !linked) {
-                return Error::propagate(std::move(linked), "hard-link RF merger tile " + to_string(key));
-            }
-            return finish(key, side == Side::Left ? statistics::Category::LinkedLeft : statistics::Category::LinkedRight, false);
+        const auto link = [&](const Key& key, Side side) {
+            Error::throwing_unwrap(output->copy_from(key, side == Side::Left ? *left : *right), "hard-link RF merger tile " + to_string(key));
+            finish(key, side == Side::Left ? statistics::Category::LinkedLeft : statistics::Category::LinkedRight, false);
         };
         // Cached leaves and single native suppliers need no pixel reads.
-        const auto direct = [&](const partition::Leaf& leaf) -> Expected<bool> {
-            if (cache) {
-                auto status = cache->index().get(leaf.key);
-                if (!status) {
-                    return Error::propagate(std::move(status));
-                }
-                if (*status == store::NodeStatus::Leaf) {
-                    if (auto linked = output->copy_from(leaf.key, *cache); !linked) {
-                        return Error::propagate(std::move(linked), "hard-link RF merger cache tile " + to_string(leaf.key));
-                    }
-                    if (auto finished = finish(leaf.key, statistics::Category::Uncategorized, true); !finished) {
-                        return Error::propagate(std::move(finished));
-                    }
-                    return true;
-                }
+        const auto direct = [&](const partition::Leaf& leaf) {
+            if (cache && Error::asserting_unwrap(cache->index().get(leaf.key)) == store::NodeStatus::Leaf) {
+                Error::throwing_unwrap(output->copy_from(leaf.key, *cache), "hard-link RF merger cache tile " + to_string(leaf.key));
+                finish(leaf.key, statistics::Category::Uncategorized, true);
+                return true;
             }
             if (leaf.left.has_value() != leaf.right.has_value() && leaf.left.value_or(leaf.right.value_or(Key {})) == leaf.key) {
-                if (auto linked = link(leaf.key, leaf.left ? Side::Left : Side::Right); !linked) {
-                    return Error::propagate(std::move(linked));
-                }
+                link(leaf.key, leaf.left ? Side::Left : Side::Right);
                 return true;
             }
             return false;
         };
-
-        std::optional<Error> failure;
-        bool cancelled = false, exhausted = false;
-        const auto fail = [&](Error error) {
-            if (!failure) {
-                failure = std::move(error);
+        const auto consume = [&](typename raster_store::TilePool<produce::Produced<PixelType>>::Completed done) {
+            auto produced = Error::throwing_unwrap(std::move(done.result), "produce RF merger tile " + to_string(done.key));
+            if (const auto* linked = std::get_if<produce::Link>(&produced)) {
+                link(done.key, linked->side);
+                return;
             }
-            pool.stop();
-        };
-        const auto consume = [&](typename raster_store::TilePool<produce::Produced<PixelType>>::Completed done) -> Expected<void> {
-            if (!done.result) {
-                return Error::propagate(std::move(done.result), "produce RF merger tile " + to_string(done.key));
-            }
-            if (failure) {
-                return {};
-            }
-            if (const auto* linked = std::get_if<produce::Link>(&*done.result)) {
-                return link(done.key, linked->side);
-            }
-            auto& tile = std::get<produce::Created<PixelType>>(*done.result);
-            if (auto saved = output->save(done.key, tile.tile); !saved) {
-                return Error::propagate(std::move(saved), "write RF merger tile " + to_string(done.key));
-            }
-            return finish(done.key, tile.category, false);
+            const auto& created = std::get<produce::Created<PixelType>>(produced);
+            Error::throwing_unwrap(output->save(done.key, created.tile), "write RF merger tile " + to_string(done.key));
+            finish(done.key, created.category, false);
         };
 
+        // Cancellation discards queued work, saves the active tiles and throws.
         const auto poll = [&] {
-            if (auto error = pool.failure(); error && !failure) {
-                fail(std::move(*error));
-            }
-            if (!cancelled && !failure && stop_requested && stop_requested()) {
-                cancelled = true;
+            if (stop_requested && stop_requested()) {
                 LOG_INFO("RF merge cancellation requested: discarding queued work and finishing active tiles");
                 pool.stop();
-            }
-            if (!failure && !cancelled && std::chrono::steady_clock::now() - last_checkpoint >= std::chrono::minutes(2)) {
-                if (auto saved = save(); !saved) {
-                    fail(std::move(saved).error());
-                } else {
-                    last_checkpoint = std::chrono::steady_clock::now();
-                    LOG_INFO("RF merge checkpoint: {} tiles", completed);
+                while (pool.outstanding() != 0) {
+                    if (auto done = pool.take(std::chrono::milliseconds(100))) {
+                        consume(std::move(*done));
+                    }
                 }
+                checkpoint();
+                Error::raise(Error::Code::Cancelled, "RF merge cancelled after " + std::to_string(completed) + " tiles; incomplete snapshot retained");
+            }
+            if (std::chrono::steady_clock::now() - last_checkpoint >= std::chrono::minutes(2)) {
+                checkpoint();
+                LOG_INFO("RF merge checkpoint: {} tiles", completed);
             }
             progress(false);
         };
@@ -340,27 +294,18 @@ namespace {
         progress(true);
         partition::Cursor cursor(left->index(), right->index());
         std::optional<partition::Leaf> pending;
+        bool exhausted = false;
         for (;;) {
             poll();
-            while (!failure && !cancelled && !exhausted) {
+            while (!exhausted) {
                 if (!pending) {
-                    auto next = cursor.next();
-                    if (!next) {
-                        fail(Error::propagate(std::move(next), "plan RF merger output").error());
-                        break;
-                    }
-                    if (!*next) {
+                    pending = cursor.next();
+                    if (!pending) {
                         exhausted = true;
                         break;
                     }
-                    pending = *next;
                 }
-                auto handled = direct(*pending);
-                if (!handled) {
-                    fail(std::move(handled).error());
-                    break;
-                }
-                if (*handled) {
+                if (direct(*pending)) {
                     pending.reset();
                     poll();
                     continue;
@@ -370,70 +315,42 @@ namespace {
                 }
                 pending.reset();
             }
-            if (pool.outstanding() == 0 && (failure || cancelled || exhausted)) {
+            if (exhausted && pool.outstanding() == 0) {
                 break;
             }
             if (auto done = pool.take(std::chrono::milliseconds(100))) {
-                if (auto consumed = consume(std::move(*done)); !consumed) {
-                    fail(std::move(consumed).error());
-                }
+                consume(std::move(*done));
             }
         }
         pool.join();
-        if (auto error = pool.failure(); error && !failure) {
-            failure = std::move(*error);
-        }
-        if (failure) {
-            if (auto saved = save(); !saved) {
-                LOG_WARN("RF merge could not checkpoint after failure: {}", saved.error().to_string());
-            }
-            return Error::propagate(std::move(*failure), "produce RF merger snapshot");
-        }
-        if (cancelled) {
-            if (auto saved = save(); !saved) {
-                return Error::propagate(std::move(saved), "checkpoint cancelled RF merge");
-            }
-            LOG_INFO("RF merge cancelled: checkpointed {} tiles; incomplete snapshot retained", completed);
-            return Error::fail(Error::Code::Cancelled, "RF merge cancelled; incomplete snapshot retained");
-        }
         progress(true);
         LOG_INFO("RF merge finalizing: publishing {} tiles", completed);
         std::error_code error;
         if (!std::filesystem::remove(input_path, error)) {
-            return Error::fail(Error::Code::Io, "remove RF merger input record before publication", input_path, error);
+            Error::raise(Error::Code::Io, "remove RF merger input record before publication", input_path, error);
         }
         const auto statistics_path = output->base_path() / statistics::file_name;
         std::filesystem::remove(statistics_path, error);
         if (error) {
-            return Error::fail(Error::Code::Io, "remove RF merger statistics before publication", statistics_path, error);
+            Error::raise(Error::Code::Io, "remove RF merger statistics before publication", statistics_path, error);
         }
-        if (auto published = storage::publish(std::move(output)); !published) {
-            return Error::propagate(std::move(published));
-        }
+        Error::throwing_unwrap(storage::publish(std::move(output)), "publish RF merger snapshot");
         return Report { totals, complete, restored, metadata.nominal_tile_size };
     }
 } // namespace
 
-Expected<Report> run(const Options& options, const std::function<bool()>& stop_requested)
+Report run(const Options& options, const std::function<bool()>& stop_requested)
 {
-    if (options.jobs == 0) {
-        return Error::fail(Error::Code::InvalidInput, "RF merger requires at least one job");
+    ASSERT(options.jobs > 0);
+    const auto priorities = Error::throwing_unwrap(priorities::read(options.priorities));
+    const auto metadata = Error::throwing_unwrap(raster_store::io::manifest::read_metadata(options.left), "read left RF merger input metadata");
+    if (metadata.payload_type == raster_store::pixel::identifier<float>()) {
+        return execute<float>(options, priorities, stop_requested);
     }
-    auto priorities = priorities::read(options.priorities);
-    if (!priorities) {
-        return Error::propagate(std::move(priorities));
+    if (metadata.payload_type == raster_store::pixel::identifier<glm::u8vec3>()) {
+        return execute<glm::u8vec3>(options, priorities, stop_requested);
     }
-    auto metadata = raster_store::io::manifest::read_metadata(options.left);
-    if (!metadata) {
-        return Error::propagate(std::move(metadata), "read left RF merger input metadata");
-    }
-    if (metadata->payload_type == raster_store::pixel::identifier<float>()) {
-        return execute<float>(options, *priorities, stop_requested);
-    }
-    if (metadata->payload_type == raster_store::pixel::identifier<glm::u8vec3>()) {
-        return execute<glm::u8vec3>(options, *priorities, stop_requested);
-    }
-    return Error::fail(Error::Code::Unsupported, "RF merger supports float32 scalar and RGB8 payloads, not " + metadata->payload_type);
+    Error::raise(Error::Code::Unsupported, "RF merger supports float32 scalar and RGB8 payloads, not " + metadata.payload_type);
 }
 
 } // namespace rf_merger::merge

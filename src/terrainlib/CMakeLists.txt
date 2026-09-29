@@ -264,6 +264,9 @@ target_link_libraries(terrainlib PUBLIC
     xatlas
 )
 
+# Error captures stack traces; libassert already links cpptrace publicly.
+target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
+
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)
 endif()

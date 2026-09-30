@@ -4,6 +4,7 @@
 #include "io/bytes.h"
 #include "partition.h"
 #include "priorities.h"
+#include "raster_store/io/manifest.h"
 #include "raster_store/read_tile_with_halo.h"
 #include "raster_store/scaler.h"
 #include "raster_store/storage.h"
@@ -26,7 +27,7 @@ constexpr unsigned side = 64;
 
 void write_text(const std::filesystem::path& path, const std::string& text)
 {
-    REQUIRE(io::write_bytes_to_path(std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()), path));
+    REQUIRE(io::write_bytes_to_path(std::as_bytes(std::span(text)), path));
 }
 
 template <typename PixelType = float>
@@ -528,7 +529,6 @@ TEST_CASE("RF merger links unchanged tiles independently of output compression",
     f.snapshot("right", { { { 2, { 3, 3 } }, tile(2.f, 2) }, { { 2, { 0, 0 } }, tile(2.f, 2) } });
     auto options = f.options("left", "right", "[1]", "merged");
     options.compression_algorithm = io::envelope::CompressionAlgorithm::None;
-    options.checksum_algorithm = io::envelope::ChecksumAlgorithm::Crc32c;
     const auto report = merge::run(options);
     auto merged = f.open("merged");
     CHECK(linked(*f.open("right"), *merged, { 2, { 3, 3 } }));
@@ -536,6 +536,37 @@ TEST_CASE("RF merger links unchanged tiles independently of output compression",
     auto resampled = merged->load({ 2, { 1, 0 } });
     REQUIRE(resampled);
     CHECK(resampled->data.pixel({ 0, 0 }) == Catch::Approx(1.f));
+}
+
+TEST_CASE("RF merger fingerprints inputs by the recorded hashes of their metadata and index", "[rf-merger]")
+{
+    namespace manifest = raster_store::io::manifest;
+    Fixture f;
+    f.snapshot("left", { { { 1, { 0, 0 } }, tile(1.f, 1) } });
+    const auto metadata_path = f.path("left") / manifest::metadata_file_name;
+    const auto fingerprint = rf_merger::inputs::fingerprint(f.path("left"));
+    REQUIRE(fingerprint);
+    CHECK(fingerprint->metadata_hash.size() == 8);
+    CHECK(fingerprint->metadata_hash == io::envelope::read_header(metadata_path)->hash);
+    CHECK(fingerprint->index_hash == io::envelope::read_header(f.path("left") / manifest::index_file_name)->hash);
+
+    const auto metadata = io::envelope::read_from_path<manifest::MetadataSchema>(metadata_path);
+    REQUIRE(metadata);
+    SECTION("recompression keeps the fingerprint")
+    {
+        REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(*metadata, metadata_path, true, io::envelope::CompressionAlgorithm::None));
+        const auto recompressed = rf_merger::inputs::fingerprint(f.path("left"));
+        REQUIRE(recompressed);
+        CHECK(*recompressed == *fingerprint);
+    }
+    SECTION("files without a hash are rejected")
+    {
+        REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(
+            *metadata, metadata_path, true, io::envelope::CompressionAlgorithm::ZstdDefaultCompression, io::hash::Algorithm::None));
+        const auto unhashed = rf_merger::inputs::fingerprint(f.path("left"));
+        REQUIRE_FALSE(unhashed);
+        CHECK(unhashed.error().code() == Error::Code::Unsupported);
+    }
 }
 
 TEST_CASE("RF merger failures retain a recoverable snapshot with statistics", "[rf-merger]")

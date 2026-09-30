@@ -13,7 +13,7 @@
 namespace rf_builder::tiles {
 namespace {
     struct Response {
-        std::vector<std::uint8_t> bytes;
+        std::vector<std::byte> bytes;
         NetworkCounters* counters;
         std::size_t limit;
         bool too_large = false;
@@ -34,7 +34,7 @@ namespace {
             return 0;
         }
         try {
-            const auto* first = static_cast<std::uint8_t*>(data);
+            const auto* first = static_cast<const std::byte*>(data);
             response.bytes.insert(response.bytes.end(), first, first + bytes);
             return bytes;
         } catch (...) {
@@ -113,7 +113,7 @@ HttpClient::HttpClient(NetworkCounters& counters, std::size_t response_limit, Re
     }
 }
 HttpClient::~HttpClient() { curl_easy_cleanup(m_curl); }
-Expected<std::optional<std::vector<std::uint8_t>>> HttpClient::get(const std::string& url)
+Expected<std::optional<std::vector<std::byte>>> HttpClient::get(const std::string& url)
 {
     if (m_policy.deadline.count() <= 0 || m_policy.initial_wait.count() <= 0 || m_policy.request_timeout.count() <= 0
         || m_policy.connect_timeout.count() <= 0) {

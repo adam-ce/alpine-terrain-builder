@@ -2,6 +2,7 @@
 #include "Error.h"
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <curl/curl.h>
 #include <optional>
@@ -25,7 +26,7 @@ public:
     ~HttpClient();
     HttpClient(const HttpClient&) = delete;
     HttpClient& operator=(const HttpClient&) = delete;
-    Expected<std::optional<std::vector<std::uint8_t>>> get(const std::string& url);
+    Expected<std::optional<std::vector<std::byte>>> get(const std::string& url);
 
 private:
     CURL* m_curl;

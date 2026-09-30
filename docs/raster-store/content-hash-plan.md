@@ -37,10 +37,10 @@ Measured single-threaded on an AMD Ryzen 9 3900X over 1 GiB in memory:
 | MD5 (`md5sum`) | 128 bit | 0.8 GB/s |
 | CRC-32C, envelope table | 32 bit | 0.5 GB/s |
 
-XXH3 is expected at 10–30 GB/s and is measured during implementation. A
-4096-pixel float tile with attribution is about 96 MiB uncompressed, so FNV-1a
-would add about 90 ms to every write and verified read, XXH3 a few
-milliseconds. XXH3 also mixes much better than FNV-1a. With 64 bits, a changed
+XXH3-64 measured 18.3 GB/s in a Release build (see
+[ADR 0005](../adr/0005-xxh3-64-envelope-hashes.md)). A 4096-pixel float tile
+with attribution is about 96 MiB uncompressed, so FNV-1a would add about 90 ms
+to every write and verified read, XXH3 about 5 ms. XXH3 also mixes much better than FNV-1a. With 64 bits, a changed
 payload keeps its hash with probability about 2⁻⁶⁴; there is no adversary, and
 each check compares against one recorded value.
 

@@ -3,6 +3,7 @@
 #include "Error.h"
 #include "io/envelope.h"
 #include "raster_store/pixel.h"
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -13,11 +14,11 @@ namespace rf_merger::inputs {
 
 inline constexpr std::string_view file_name = "inputs.tmp";
 
-// Identifies an input dataset without scanning its payloads.
+// Identifies an input dataset by the recorded payload hashes of its metadata and index.
 struct Fingerprint {
     std::string path;
-    std::uint64_t metadata_hash = 0;
-    std::uint64_t index_hash = 0;
+    std::vector<std::byte> metadata_hash;
+    std::vector<std::byte> index_hash;
 
     bool operator==(const Fingerprint&) const = default;
 };

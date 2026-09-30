@@ -29,8 +29,9 @@ struct CreateOptions {
     unsigned halo_width = 0;
     std::optional<pixel::Mapping> value_mapping = std::nullopt;
     std::string codec_selector = "amort";
-    ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum;
-    ::io::envelope::ChecksumAlgorithm checksum_algorithm = ::io::envelope::ChecksumAlgorithm::HandledByCompressionLib;
+    ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
+    // Tile hashes serve as content identities, for example for TB dependency records; with None, tiles have none.
+    ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64;
     std::optional<std::filesystem::path> copy_attribution_from_index;
 };
 
@@ -118,7 +119,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
         return Error::propagate(std::move(valid));
     }
     auto codec = io::tile_codec::from_name<PixelType>(
-        options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm, options.checksum_algorithm);
+        options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm, options.hash_algorithm);
     if (!codec) {
         return Error::propagate(std::move(codec));
     }

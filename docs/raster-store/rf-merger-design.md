@@ -140,8 +140,9 @@ reject published snapshots as recovery caches. Ignore unindexed payloads.
 
 Validate the recovery record against ordered input paths, metadata/index
 fingerprints, ordered priority IDs and processing settings. An input's
-fingerprint identifies the dataset: its canonical snapshot path and a content
-hash of its `raster_store.metadata` and `raster_store.index` files. Trust published
+fingerprint identifies the dataset: its canonical snapshot path and the
+payload hashes recorded in the envelope headers of its `raster_store.metadata`
+and `raster_store.index` files. Trust published
 payloads to remain immutable at their paths; do not hash or scan every payload
 for cache validation. Compare priority IDs rather than JSON formatting.
 Source-attribution table contents are not part of cache identity.
@@ -171,7 +172,8 @@ rf-merger --left /data/rf/a --right /data/rf/b \
 
 `--cache /data/rf/interrupted.part` is optional; `--jobs` defaults to one.
 Optional `--compression` selects the output envelope compression and
-defaults to the storage default, standard Zstandard with checksum.
+defaults to the storage default, standard Zstandard. Output tiles always use
+the storage default hash, XXH3-64; there is no hash option.
 Infer payload type and tile dimensions from input metadata. The output uses
 the default layout and codec; add layout and codec options only when
 alternatives exist. There are no mask, resampling-method, type-conversion or

@@ -170,7 +170,7 @@ Expected<Settings> read(const std::filesystem::path& path)
     if (!bytes) {
         return Error::propagate(std::move(bytes), "read provider JSON");
     }
-    return parse(std::string(bytes->begin(), bytes->end()));
+    return parse(std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
 }
 Expected<unsigned> zoom_offset(const Settings& settings, unsigned output_side)
 {

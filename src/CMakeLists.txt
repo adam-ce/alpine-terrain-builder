@@ -65,6 +65,10 @@ alp_setup_cmake_project(zstd
 )
 find_package(zstd CONFIG REQUIRED)
 
+alp_add_git_repository(xxhash URL https://github.com/Cyan4973/xxHash.git COMMITISH v0.8.3 DO_NOT_ADD_SUBPROJECT)
+add_library(xxhash INTERFACE)
+target_include_directories(xxhash SYSTEM INTERFACE ${xxhash_SOURCE_DIR})
+
 alp_add_git_repository(libassert URL https://github.com/jeremy-rifkin/libassert.git COMMITISH v2.1.0)
 alp_add_git_repository(magic_enum URL https://github.com/Neargye/magic_enum.git COMMITISH v0.9.7)
 alp_add_git_repository(meshoptimizer URL https://github.com/zeux/meshoptimizer.git COMMITISH v1.0.1)

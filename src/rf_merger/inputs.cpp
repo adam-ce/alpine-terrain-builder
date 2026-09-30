@@ -1,23 +1,21 @@
 #include "inputs.h"
 
-#include "io/bytes.h"
 #include "raster_store/io/manifest.h"
 #include <system_error>
 
 namespace rf_merger::inputs {
 namespace {
-    Expected<std::uint64_t> hash_file(const std::filesystem::path& path)
+    Expected<std::vector<std::byte>> recorded_hash(const std::filesystem::path& path)
     {
-        auto bytes = io::read_bytes_from_path(path);
-        if (!bytes) {
-            return Error::propagate(std::move(bytes), "fingerprint RF input");
+        auto header = io::envelope::read_header(path);
+        if (!header) {
+            return Error::propagate(std::move(header), "fingerprint RF input");
         }
-        // 64-bit FNV-1a identifies files; it is not a security boundary.
-        std::uint64_t hash = 0xcbf29ce484222325ULL;
-        for (const auto byte : *bytes) {
-            hash = (hash ^ byte) * 0x100000001b3ULL;
+        // An empty hash would match any content.
+        if (header->hash.empty()) {
+            return Error::fail(Error::Code::Unsupported, "RF input file records no payload hash", path);
         }
-        return hash;
+        return std::move(header->hash);
     }
 } // namespace
 
@@ -28,15 +26,15 @@ Expected<Fingerprint> fingerprint(const std::filesystem::path& snapshot)
     if (error) {
         return Error::fail(Error::Code::Io, "resolve RF input path", snapshot, error);
     }
-    auto metadata = hash_file(canonical / raster_store::io::manifest::metadata_file_name);
+    auto metadata = recorded_hash(canonical / raster_store::io::manifest::metadata_file_name);
     if (!metadata) {
         return Error::propagate(std::move(metadata));
     }
-    auto index = hash_file(canonical / raster_store::io::manifest::index_file_name);
+    auto index = recorded_hash(canonical / raster_store::io::manifest::index_file_name);
     if (!index) {
         return Error::propagate(std::move(index));
     }
-    return Fingerprint { canonical.string(), *metadata, *index };
+    return Fingerprint { canonical.string(), std::move(*metadata), std::move(*index) };
 }
 
 Expected<void> validate_cache(const std::filesystem::path& path, const Record& record)

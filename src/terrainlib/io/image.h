@@ -29,13 +29,13 @@ struct WriteOptions {
 };
 
 /// RGB(A) channels, first row at the top. No flipping, scaling or premultiplication.
-Expected<std::vector<std::uint8_t>> encode(const RGB8& image, Format format, EncodeOptions options = {});
+Expected<std::vector<std::byte>> encode(const RGB8& image, Format format, EncodeOptions options = {});
 /// PNG preserves all four channels. JPEG rejects RGBA input.
-Expected<std::vector<std::uint8_t>> encode(const RGBA8& image, Format format, EncodeOptions options = {});
+Expected<std::vector<std::byte>> encode(const RGBA8& image, Format format, EncodeOptions options = {});
 /// RGB readers discard alpha. RGBA readers supply opaque alpha when absent.
 /// Both return 8-bit channels and ignore EXIF orientation.
-Expected<RGB8> decode_rgb8(std::span<const std::uint8_t> bytes);
-Expected<RGBA8> decode_rgba8(std::span<const std::uint8_t> bytes);
+Expected<RGB8> decode_rgb8(std::span<const std::byte> bytes);
+Expected<RGBA8> decode_rgba8(std::span<const std::byte> bytes);
 Expected<RGB8> read_rgb8(const std::filesystem::path& path);
 Expected<RGBA8> read_rgba8(const std::filesystem::path& path);
 

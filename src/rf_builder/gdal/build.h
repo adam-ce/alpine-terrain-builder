@@ -50,8 +50,9 @@ struct Options {
 
 using Report = run::Report;
 
+// Throws Error::Exception for invalid inputs and failures, as run::execute.
 // stop_requested is polled only by the calling/coordinator thread. Active tiles
 // finish on cancellation; their results are saved and checkpointed, not published.
-Expected<Report> build(const Options& options, const std::function<bool()>& stop_requested = {});
+Report build(const Options& options, const std::function<bool()>& stop_requested = {});
 
 } // namespace rf_builder::gdal

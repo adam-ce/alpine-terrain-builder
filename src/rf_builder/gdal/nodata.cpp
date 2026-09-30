@@ -67,18 +67,18 @@ void Processor::resize(radix::Raster<float>& raster, glm::uvec2 size)
     }
 }
 
-Expected<raster::View<const float>> Processor::complete(const radix::Raster<std::uint8_t>& valid, glm::uvec2 offset, unsigned side)
+raster::View<const float> Processor::complete(const radix::Raster<std::uint8_t>& valid, glm::uvec2 offset, unsigned side)
 {
     if (m_search_radius != 0 && std::ranges::any_of(valid.buffer(), [](auto value) { return value != 0; })) {
         auto* driver = GetGDALDriverManager()->GetDriverByName("MEM");
         if (!driver) {
-            return Error::fail(Error::Code::Unsupported, "GDAL MEM driver is required for NoData filling");
+            Error::raise(Error::Code::Unsupported, "GDAL MEM driver is required for NoData filling");
         }
         // These datasets only borrow worker-owned buffers. They die before any
         // resize. GDALFillNodata reads the mask without updating it.
         Dataset memory(driver->Create("", int(m_work.width()), int(m_work.height()), 0, GDT_Unknown, nullptr));
         if (!memory.gdalDataset()) {
-            return Error::fail(Error::Code::Io, "create NoData memory dataset");
+            Error::raise(Error::Code::Io, "create NoData memory dataset");
         }
         CPLStringList values_options;
         values_options.SetNameValue("DATAPOINTER", fmt::format("{}", static_cast<void*>(m_work.buffer().data())).c_str());
@@ -86,31 +86,24 @@ Expected<raster::View<const float>> Processor::complete(const radix::Raster<std:
         mask_options.SetNameValue("DATAPOINTER", fmt::format("{}", static_cast<const void*>(valid.buffer().data())).c_str());
         auto* dataset = memory.gdalDataset();
         if (dataset->AddBand(GDT_Float32, values_options.List()) != CE_None || dataset->AddBand(GDT_Byte, mask_options.List()) != CE_None) {
-            return Error::fail(Error::Code::Io, "attach NoData working values and mask");
+            Error::raise(Error::Code::Io, "attach NoData working values and mask");
         }
         CPLStringList options;
         options.SetNameValue("TEMP_FILE_DRIVER", "MEM");
         if (GDALFillNodata(dataset->GetRasterBand(1), dataset->GetRasterBand(2), m_search_radius, 0, 0, options.List(), nullptr, nullptr) != CE_None) {
-            return Error::fail(Error::Code::Io, "fill RF NoData pixels: " + std::string(CPLGetLastErrorMsg()));
+            Error::raise(Error::Code::Io, "fill RF NoData pixels: " + std::string(CPLGetLastErrorMsg()));
         }
     }
     const unsigned size = unsigned(m_weights.size());
     if (size == 1) {
-        auto view = raster::make_view(std::as_const(m_work), offset, glm::uvec2(side));
-        if (!view) {
-            return Error::propagate(std::move(view));
-        }
-        return *view;
+        return Error::asserting_unwrap(raster::make_view(std::as_const(m_work), offset, glm::uvec2(side)));
     }
     const unsigned radius = size / 2;
-    auto input = raster::make_clamped_view(m_work, glm::i64vec2(offset) - glm::i64vec2(radius), glm::uvec2(side + 2 * radius));
-    if (!input) {
-        return Error::propagate(std::move(input));
-    }
+    const auto input = Error::asserting_unwrap(raster::make_clamped_view(m_work, glm::i64vec2(offset) - glm::i64vec2(radius), glm::uvec2(side + 2 * radius)));
     resize(m_horizontal, { side, side + 2 * radius });
     resize(m_smoothed, glm::uvec2(side));
-    auto horizontal = raster::algorithm::window_transform(
-        *input,
+    Error::asserting_unwrap(raster::algorithm::window_transform(
+        input,
         { size, 1 },
         [&](const auto& values) -> float {
             double sum = 0;
@@ -119,11 +112,8 @@ Expected<raster::View<const float>> Processor::complete(const radix::Raster<std:
             }
             return float(sum);
         },
-        m_horizontal);
-    if (!horizontal) {
-        return Error::propagate(std::move(horizontal));
-    }
-    auto vertical = raster::algorithm::window_transform(
+        m_horizontal));
+    Error::asserting_unwrap(raster::algorithm::window_transform(
         m_horizontal,
         { 1, size },
         [&](const auto& values) -> float {
@@ -133,10 +123,7 @@ Expected<raster::View<const float>> Processor::complete(const radix::Raster<std:
             }
             return float(sum);
         },
-        m_smoothed);
-    if (!vertical) {
-        return Error::propagate(std::move(vertical));
-    }
+        m_smoothed));
     return raster::make_view(std::as_const(m_smoothed));
 }
 } // namespace rf_builder::gdal::nodata

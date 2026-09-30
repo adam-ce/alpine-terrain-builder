@@ -19,71 +19,47 @@
 #include "build.h"
 #include "TileWorker.h"
 namespace rf_builder::tiles {
-Expected<run::Report> build(const Options& options, const std::function<bool()>& stop_requested)
+run::Report build(const Options& options, const std::function<bool()>& stop_requested)
 {
-    if (auto valid = run::validate_options(options.output); !valid) {
-        return Error::propagate(std::move(valid));
+    run::validate_options(options.output);
+    const auto provider = Error::throwing_unwrap(provider::read(options.provider));
+    const auto offset = Error::throwing_unwrap(provider::zoom_offset(provider, options.output.tile_side));
+    if (provider.max_zoom - provider.min_zoom > TileWorker::max_fallback_levels) {
+        Error::raise(Error::Code::Unsupported,
+            "online RF import supports provider zoom ranges of at most " + std::to_string(TileWorker::max_fallback_levels) + " levels for ancestor fallback");
     }
-    auto provider = provider::read(options.provider);
-    if (!provider) {
-        return Error::propagate(std::move(provider));
-    }
-    auto offset = provider::zoom_offset(*provider, options.output.tile_side);
-    if (!offset) {
-        return Error::propagate(std::move(offset));
-    }
-    auto identifier = run::identifier(options.mask);
-    if (!identifier) {
-        return Error::propagate(std::move(identifier));
-    }
-    auto entry = run::attribution(options.output);
-    if (!entry) {
-        return Error::propagate(std::move(entry));
-    }
+    const auto identifier = Error::throwing_unwrap(run::identifier(options.mask));
+    const auto entry = Error::throwing_unwrap(run::attribution(options.output));
     inputs::Record record;
     record.value_mapping = options.output.value_mapping.value_or(raster_store::pixel::default_mapping<glm::u8vec3>);
-    record.provider = *provider;
+    record.provider = provider;
     record.tile_side = options.output.tile_side;
-    record.mask = *identifier;
+    record.mask = identifier;
     record.attribution_index = options.output.attribution_index;
-    record.attribution = *entry;
+    record.attribution = entry;
     // Fail incompatible cache records before even loading the mask's geometry.
     if (options.output.cache) {
-        if (auto checked = inputs::validate_cache(*options.output.cache, record); !checked) {
-            return Error::propagate(std::move(checked));
-        }
+        Error::throwing_unwrap(inputs::validate_cache(*options.output.cache, record));
     }
-    auto mask = Mask::open(run::gdal_identifier(*identifier));
-    if (!mask) {
-        return Error::propagate(std::move(mask));
-    }
-    const planning::Coverage coverage(mask->bounds());
-    planning::Cursor roots(coverage, provider->min_zoom - *offset);
+    const auto mask = Error::throwing_unwrap(Mask::open(run::gdal_identifier(identifier)));
+    const planning::Coverage coverage(mask.bounds());
+    planning::Cursor roots(coverage, provider.min_zoom - offset);
     NetworkCounters counters;
     std::vector<std::unique_ptr<TileWorker>> workers;
     run::Source<glm::u8vec3> source;
-    source.attribution = *entry;
+    source.attribution = entry;
     source.validate_cache = [&](const auto& path) { return inputs::validate_cache(path, record); };
     source.write_inputs = [&](const auto& path) { return io::envelope::write_to_path<inputs::Schema>(record, path); };
-    source.total = [&](const run::Poll& poll) -> Expected<double> {
-        if (auto checked = poll(); !checked) {
-            return Error::propagate(std::move(checked));
-        }
+    source.total = [&](const run::Poll& poll) {
+        poll();
         return coverage.weight({ 0, { 0, 0 } });
     };
     source.next = [&](const run::Poll& poll) { return roots.next(poll); };
-    source.initialize = [&](unsigned jobs, const run::Poll& poll) -> Expected<void> {
+    source.initialize = [&](unsigned jobs, const run::Poll& poll) {
         for (unsigned worker = 0; worker < jobs; ++worker) {
-            if (auto checked = poll(); !checked) {
-                return checked;
-            }
-            auto opened = TileWorker::open(record, coverage, counters, options.source_cache_bytes, options.retry);
-            if (!opened) {
-                return Error::propagate(std::move(opened));
-            }
-            workers.push_back(std::move(*opened));
+            poll();
+            workers.push_back(TileWorker::open(record, coverage, counters, options.source_cache_bytes, options.retry));
         }
-        return {};
     };
     source.prepare = [&](unsigned worker, const auto& key) { return workers[worker]->prepare(key); };
     source.refine_cached = [&](const auto& key) { return coverage.children(key); };
@@ -91,10 +67,10 @@ Expected<run::Report> build(const Options& options, const std::function<bool()>&
     source.network_stats
         = [&] { return run::NetworkStats { counters.requests.load(std::memory_order_relaxed), counters.bytes.load(std::memory_order_relaxed) }; };
     LOG_INFO("RF online source: {}..{}, {} pixels; RF/source zoom offset {}; retained source cache budget {} bytes per worker",
-        provider->min_zoom,
-        provider->max_zoom,
-        provider->tile_size,
-        *offset,
+        provider.min_zoom,
+        provider.max_zoom,
+        provider.tile_size,
+        offset,
         options.source_cache_bytes);
     return run::execute(options.output, std::move(source), stop_requested);
 }

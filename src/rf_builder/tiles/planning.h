@@ -37,7 +37,8 @@ private:
 class Cursor {
 public:
     Cursor(const Coverage& coverage, unsigned zoom, run::Key region = { 0, { 0, 0 } });
-    Expected<std::optional<run::Key>> next(const run::Poll& poll = {});
+    // poll may throw to stop the enumeration.
+    std::optional<run::Key> next(const run::Poll& poll = {});
 
 private:
     const Coverage& m_coverage;

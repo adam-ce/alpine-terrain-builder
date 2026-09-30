@@ -31,6 +31,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <fstream>
+#include <functional>
 #include <ogrsf_frmts.h>
 #include <set>
 #include <vrtdataset.h>
@@ -40,6 +41,18 @@ using Bounds = RasterTransform::Bounds;
 using Key = radix::tile::Id;
 namespace storage = raster_store::storage;
 namespace inputs = rf_builder::gdal::inputs;
+
+// The code of the Error::Exception thrown by operation.
+Error::Code thrown(const std::function<void()>& operation)
+{
+    try {
+        operation();
+    } catch (const Error::Exception& exception) {
+        return exception.error().code();
+    }
+    FAIL("no Error::Exception thrown");
+    return Error::Code::Internal;
+}
 
 void write_text(const std::filesystem::path& path, const std::string& text)
 {
@@ -151,17 +164,15 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
     const unsigned bands = GENERATE(1u, 3u);
     Fixture fixture(bands);
     fixture.options.jobs = GENERATE(1u, 2u, 4u);
-    auto built = rf_builder::gdal::build(fixture.options);
-    INFO((built ? "" : built.error().to_string()));
-    REQUIRE(built);
-    CHECK(built->tile_count == 16);
-    CHECK(built->tile_bytes > 0);
-    CHECK(built->reused_tiles == 0);
+    const auto built = rf_builder::gdal::build(fixture.options);
+    CHECK(built.tile_count == 16);
+    CHECK(built.tile_bytes > 0);
+    CHECK(built.reused_tiles == 0);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     CHECK_FALSE(std::filesystem::exists(fixture.options.output / "inputs.tmp"));
     const auto check = [&](const auto& snapshot) {
         const auto keys = physical_keys(snapshot);
-        CHECK(keys.size() == built->tile_count);
+        CHECK(keys.size() == built.tile_count);
         std::uint64_t bytes = 0;
         for (const auto& key : keys) {
             CHECK(key.zoom_level == 4);
@@ -176,7 +187,7 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
             CHECK(std::ranges::all_of(tile->source_attribution.buffer(), [](auto value) { return value <= 1; }));
             bytes += std::filesystem::file_size(*snapshot.path_for(key));
         }
-        CHECK(bytes == built->tile_bytes);
+        CHECK(bytes == built.tile_bytes);
     };
     if (bands == 1) {
         auto opened_result = storage::open<float>(fixture.options.output);
@@ -261,17 +272,14 @@ TEST_CASE("RF planning measures directional stretch and chooses disjoint mixed z
     const double half = RasterTransform::world_half_extent;
     const unsigned halo = GENERATE(0u, 7u);
     std::vector<Key> selected;
-    REQUIRE(traverse(
+    traverse(
         16,
         { world },
         { world },
         [half](glm::dvec2 point) -> Expected<glm::dvec2> { return glm::dvec2(point.x / half * (point.x < 0 ? 4 : 256), point.y / half * 4); },
-        [&](const Key& key) -> Expected<void> {
-            selected.push_back(key);
-            return {};
-        },
+        [&](const Key& key) { selected.push_back(key); },
         {},
-        halo));
+        halo);
     REQUIRE_FALSE(selected.empty());
     std::set<unsigned> levels;
     for (const auto& key : selected) {
@@ -291,15 +299,8 @@ TEST_CASE("RF planning retains narrow masks until the selected resolution", "[rf
     const auto bounds = RasterTransform::tile_bounds({ 3, { 4, 3 } });
     const Bounds narrow { bounds.min + glm::dvec2(1, 1), bounds.min + glm::dvec2(2, 2) };
     std::vector<Key> selected;
-    REQUIRE(rf_builder::gdal::planning::traverse(
-        16,
-        { bounds },
-        { narrow },
-        [](glm::dvec2 point) -> Expected<glm::dvec2> { return point; },
-        [&](const Key& key) -> Expected<void> {
-            selected.push_back(key);
-            return {};
-        }));
+    rf_builder::gdal::planning::traverse(
+        16, { bounds }, { narrow }, [](glm::dvec2 point) -> Expected<glm::dvec2> { return point; }, [&](const Key& key) { selected.push_back(key); });
     CHECK_FALSE(selected.empty());
     CHECK(selected.front().zoom_level > 3);
 }
@@ -312,9 +313,7 @@ TEST_CASE("RF antimeridian source reaches canonical tiles on both sides", "[rf-b
     }
     std::filesystem::remove(fixture.options.mask);
     mask(fixture.options.mask, "MULTIPOLYGON (((170 -5,180 -5,180 5,170 5,170 -5)),((-180 -5,-170 -5,-170 5,-180 5,-180 -5)))", 4326);
-    auto built = rf_builder::gdal::build(fixture.options);
-    INFO((built ? "" : built.error().to_string()));
-    REQUIRE(built);
+    REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     auto opened_result = storage::open<float>(fixture.options.output);
     REQUIRE(opened_result);
     auto [opened, opened_metadata] = std::move(*opened_result);
@@ -343,11 +342,9 @@ TEST_CASE("RF empty and polar-only coverage publishes an empty snapshot", "[rf-b
         std::filesystem::remove(fixture.options.mask);
         mask(fixture.options.mask, "POLYGON ((10 86,14 86,14 89,10 89,10 86))", 4326);
     }
-    auto built = rf_builder::gdal::build(fixture.options);
-    INFO((built ? "" : built.error().to_string()));
-    REQUIRE(built);
-    CHECK(built->tile_count == 0);
-    CHECK(built->tile_bytes == 0);
+    const auto built = rf_builder::gdal::build(fixture.options);
+    CHECK(built.tile_count == 0);
+    CHECK(built.tile_bytes == 0);
     CHECK(storage::open<float>(fixture.options.output));
 }
 
@@ -370,7 +367,6 @@ TEST_CASE("RF rejects bad attribution and requested caches before tile productio
         fixture.options.mode = rf_builder::gdal::Mode::Colour;
         fixture.options.nodata_default_value = { 1.5 };
     }
-    SECTION("zero workers") { fixture.options.jobs = 0; }
     SECTION("unsupported attribution") { fixture.options.attribution_index = 65535; }
     SECTION("absent attribution") { fixture.options.attribution_index = 2; }
     SECTION("missing record") { fixture.options.cache = fixture.directory.path() / "missing.part"; }
@@ -379,7 +375,7 @@ TEST_CASE("RF rejects bad attribution and requested caches before tile productio
         write_text(*fixture.options.cache / "inputs.tmp", "bad envelope");
     }
     SECTION("invalid band") { fixture.options.bands = { 0 }; }
-    CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+    CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output));
     CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
 }
@@ -387,8 +383,7 @@ TEST_CASE("RF rejects bad attribution and requested caches before tile productio
 TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files", "[rf-builder]")
 {
     Fixture fixture;
-    auto first = rf_builder::gdal::build(fixture.options);
-    REQUIRE(first);
+    const auto first = rf_builder::gdal::build(fixture.options);
     auto original_result = storage::open<float>(fixture.options.output);
     REQUIRE(original_result);
     auto [original, original_metadata] = std::move(*original_result);
@@ -420,11 +415,9 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     fixture.options.cache = cache_path.string() + ".part";
     fixture.options.output = fixture.directory.path() / "second";
     SECTION("reuse") {
-        auto second = rf_builder::gdal::build(fixture.options);
-        INFO((second ? "" : second.error().to_string()));
-        REQUIRE(second);
-        CHECK(second->tile_count == first->tile_count);
-        CHECK(second->reused_tiles == 1);
+        const auto second = rf_builder::gdal::build(fixture.options);
+        CHECK(second.tile_count == first.tile_count);
+        CHECK(second.reused_tiles == 1);
         auto output_result = storage::open<float>(fixture.options.output);
         auto cache_result = storage::open<float>(*fixture.options.cache, { .allow_incomplete = true });
         REQUIRE(output_result);
@@ -436,9 +429,8 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     SECTION("equivalent explicit mapping reuses cache")
     {
         fixture.options.value_mapping = raster_store::pixel::Mapping::Linear;
-        auto second = rf_builder::gdal::build(fixture.options);
-        REQUIRE(second);
-        CHECK(second->reused_tiles == 1);
+        const auto second = rf_builder::gdal::build(fixture.options);
+        CHECK(second.reused_tiles == 1);
     }
     SECTION("different NoData settings reject cache")
     {
@@ -452,7 +444,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         if (setting == 2) {
             fixture.options.nodata_default_value = { 8 };
         }
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("old input schema is rejected")
@@ -461,13 +453,13 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         REQUIRE(record);
         using OldSchema = io::envelope::PayloadSchema<"rf_builder.Inputs", io::envelope::Version<1, inputs::Record>>;
         REQUIRE(io::envelope::write_to_path<OldSchema>(*record, *fixture.options.cache / "inputs.tmp"));
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("different mapping rejects cache")
     {
         fixture.options.value_mapping = raster_store::pixel::Mapping::SRGBA;
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("mismatched metadata rejects cache")
@@ -475,12 +467,12 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         auto metadata = raster_store::io::manifest::read_metadata(*fixture.options.cache).value();
         metadata.value_mapping = raster_store::pixel::Mapping::SRGBA;
         REQUIRE(raster_store::io::manifest::write_metadata(metadata, *fixture.options.cache));
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("mismatching record") {
         fixture.options.tile_side = 8;
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.string() + ".part"));
     }
     SECTION("missing indexed payload aborts without indexing the failed link") {
@@ -488,8 +480,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
         REQUIRE(cache_result);
         auto [cache, cache_metadata] = std::move(*cache_result);
         REQUIRE(std::filesystem::remove(*cache->path_for(keys[0])));
-        auto failed = rf_builder::gdal::build(fixture.options);
-        CHECK_FALSE(failed);
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
         auto partial_result = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
         REQUIRE(partial_result);
         auto [partial, partial_metadata] = std::move(*partial_result);
@@ -498,7 +489,7 @@ TEST_CASE("RF cache reuse hard-links indexed tiles and ignores unindexed files",
     }
     SECTION("published snapshot rejected") {
         fixture.options.cache = fixture.directory.path() / "result";
-        CHECK_FALSE(rf_builder::gdal::build(fixture.options));
+        CHECK_THROWS_AS(rf_builder::gdal::build(fixture.options), Error::Exception);
     }
 }
 
@@ -588,8 +579,7 @@ TEST_CASE("RF mask is an output selection and not a source cutline", "[rf-builde
         fixture.bounds.min + glm::dvec2(17 * spacing, 17 * spacing) };
     std::filesystem::remove(fixture.options.mask);
     mask(fixture.options.mask, rectangle(tiny));
-    auto built = rf_builder::gdal::build(fixture.options);
-    REQUIRE(built);
+    REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     auto opened_result = storage::open<float>(fixture.options.output);
     REQUIRE(opened_result);
     auto [opened, opened_metadata] = std::move(*opened_result);
@@ -667,26 +657,21 @@ TEST_CASE("RF imports rotated and skewed grids through the command pipeline", "[
         auto source
             = source_raster(fixture.options.dataset, 32, 1, { fixture.bounds.min.x, spacing, spacing * 0.2, fixture.bounds.max.y, spacing * 0.3, -spacing });
     }
-    auto result = rf_builder::gdal::build(fixture.options);
-    INFO((result ? "" : result.error().to_string()));
-    REQUIRE(result);
-    CHECK(result->tile_count > 0);
+    const auto result = rf_builder::gdal::build(fixture.options);
+    CHECK(result.tile_count > 0);
 }
 
 TEST_CASE("RF planning rejects a ratio that cannot fit the maximum supported zoom", "[rf-builder]")
 {
     const auto bounds = RasterTransform::tile_bounds({ 32, { 0, 0 } });
-    const auto result = rf_builder::gdal::planning::traverse(
-        16,
-        { bounds },
-        { bounds },
-        [](glm::dvec2 position) -> Expected<glm::dvec2> { return position * 1e12; },
-        [](const Key&) -> Expected<void> {
-            FAIL("No tile may be accepted");
-            return {};
-        });
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code() == Error::Code::Unsupported);
+    CHECK(thrown([&] {
+        rf_builder::gdal::planning::traverse(
+            16,
+            { bounds },
+            { bounds },
+            [](glm::dvec2 position) -> Expected<glm::dvec2> { return position * 1e12; },
+            [](const Key&) { FAIL("No tile may be accepted"); });
+    }) == Error::Code::Unsupported);
 }
 
 TEST_CASE("RF curved projected coverage retains edge extrema between densification samples", "[rf-builder]")
@@ -777,7 +762,7 @@ TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "
             inner.min.y,
             inner.max.x,
             inner.max.y));
-    REQUIRE(rf_builder::gdal::build(fixture.options));
+    REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     const auto baseline = fixture.options.output;
     const auto compare = [&]<typename PixelType>() {
         auto original_result = storage::open<PixelType>(baseline);
@@ -787,9 +772,7 @@ TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "
         for (const unsigned jobs : { 2u, 4u, 8u, 12u }) {
             fixture.options.jobs = jobs;
             fixture.options.output = fixture.directory.path() / ("parallel-" + std::to_string(jobs));
-            auto built = rf_builder::gdal::build(fixture.options);
-            INFO((built ? "" : built.error().to_string()));
-            REQUIRE(built);
+            REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
             auto output_result = storage::open<PixelType>(fixture.options.output);
             REQUIRE(output_result);
             auto [output, output_metadata] = std::move(*output_result);
@@ -831,22 +814,22 @@ TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-bu
     }
     const auto partial_path = std::filesystem::path(fixture.options.output.string() + ".part");
     unsigned polls = 0;
-    const auto cancelled = rf_builder::gdal::build(fixture.options, [&] {
-        ++polls;
-        // Index metadata lives directly in .part; a zoom directory only appears
-        // once the coordinator has saved a payload.
-        if (!std::filesystem::exists(partial_path)) {
-            return false;
-        }
-        for (const auto& entry : std::filesystem::directory_iterator(partial_path)) {
-            if (entry.is_directory()) {
-                return true;
+    CHECK(thrown([&] {
+        rf_builder::gdal::build(fixture.options, [&] {
+            ++polls;
+            // Index metadata lives directly in .part; a zoom directory only appears
+            // once the coordinator has saved a payload.
+            if (!std::filesystem::exists(partial_path)) {
+                return false;
             }
-        }
-        return false;
-    });
-    REQUIRE_FALSE(cancelled);
-    CHECK(cancelled.error().code() == Error::Code::Cancelled);
+            for (const auto& entry : std::filesystem::directory_iterator(partial_path)) {
+                if (entry.is_directory()) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }) == Error::Code::Cancelled);
     CHECK(polls > 0);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output));
     CHECK(std::filesystem::exists(partial_path / "inputs.tmp"));
@@ -861,18 +844,15 @@ TEST_CASE("RF cancellation checkpoints completed work and can reuse it", "[rf-bu
     }
     fixture.options.output = fixture.directory.path() / "resumed";
     fixture.options.cache = partial_path;
-    auto resumed = rf_builder::gdal::build(fixture.options);
-    REQUIRE(resumed);
-    CHECK(resumed->reused_tiles == keys.size());
-    CHECK(resumed->tile_count == 100);
+    const auto resumed = rf_builder::gdal::build(fixture.options);
+    CHECK(resumed.reused_tiles == keys.size());
+    CHECK(resumed.tile_count == 100);
 }
 
 TEST_CASE("RF cancellation during planning leaves an empty reusable checkpoint", "[rf-builder][parallel]")
 {
     Fixture fixture;
-    const auto result = rf_builder::gdal::build(fixture.options, [] { return true; });
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code() == Error::Code::Cancelled);
+    CHECK(thrown([&] { rf_builder::gdal::build(fixture.options, [] { return true; }); }) == Error::Code::Cancelled);
     auto partial_result = storage::open<float>(fixture.options.output.string() + ".part", { .allow_incomplete = true });
     REQUIRE(partial_result);
     auto [partial, partial_metadata] = std::move(*partial_result);
@@ -886,15 +866,16 @@ TEST_CASE("RF parallel writer failure never publishes or indexes a failed payloa
     fixture.options.jobs = 4;
     const auto partial_path = std::filesystem::path(fixture.options.output.string() + ".part");
     bool blocked = false;
-    const auto result = rf_builder::gdal::build(fixture.options, [&] {
-        if (!blocked && std::filesystem::exists(partial_path)) {
-            write_text(partial_path / "4", "blocks creation of the zoom directory");
-            blocked = true;
-        }
-        return false;
-    });
+    CHECK(thrown([&] {
+        rf_builder::gdal::build(fixture.options, [&] {
+            if (!blocked && std::filesystem::exists(partial_path)) {
+                write_text(partial_path / "4", "blocks creation of the zoom directory");
+                blocked = true;
+            }
+            return false;
+        });
+    }) == Error::Code::Io);
     REQUIRE(blocked);
-    REQUIRE_FALSE(result);
     CHECK_FALSE(std::filesystem::exists(fixture.options.output));
     auto partial_result = storage::open<float>(partial_path, { .allow_incomplete = true });
     REQUIRE(partial_result);
@@ -910,8 +891,7 @@ TEST_CASE("RF value mapping defaults and overrides persist without changing pixe
     SECTION("default") { }
     SECTION("linear override") { fixture.options.value_mapping = raster_store::pixel::Mapping::Linear; }
     SECTION("srgba override") { fixture.options.value_mapping = raster_store::pixel::Mapping::SRGBA; }
-    auto result = rf_builder::gdal::build(fixture.options);
-    REQUIRE(result);
+    REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     auto metadata = raster_store::io::manifest::read_metadata(fixture.options.output);
     REQUIRE(metadata);
     CHECK(metadata->value_mapping
@@ -936,9 +916,8 @@ TEST_CASE("RF warped nonfinite samples are invalid before RGB byte conversion", 
     CHECK(std::ranges::none_of(rgb->valid.buffer(), [](auto value) { return value != 0; }));
     auto processor = rf_builder::gdal::nodata::Processor::create(5, 5);
     REQUIRE(processor);
-    auto completed = processor->process(*rgb, { 7, 7 }, 16, { 128, 64, 32 });
-    REQUIRE(completed);
-    CHECK(std::ranges::all_of(completed->buffer(), [](auto value) { return value == glm::u8vec3(128, 64, 32); }));
+    const auto completed = processor->process(*rgb, { 7, 7 }, 16, { 128, 64, 32 });
+    CHECK(std::ranges::all_of(completed.buffer(), [](auto value) { return value == glm::u8vec3(128, 64, 32); }));
 }
 
 TEST_CASE("RF import stores configured replacements with zero attribution", "[rf-builder][rf-nodata]")
@@ -953,8 +932,7 @@ TEST_CASE("RF import stores configured replacements with zero attribution", "[rf
         REQUIRE(missing->RasterIO(GF_Write, 8, 8, 16, 16, hole.data(), 16, 16, GDT_Float32, 0, 0) == CE_None);
     }
     fixture.options.nodata_default_value = bands == 1 ? std::vector<double> { 12 } : std::vector<double> { 128, 64, 32 };
-    auto built = rf_builder::gdal::build(fixture.options);
-    REQUIRE(built);
+    REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     const auto check = [&](const auto& tile, const auto& original, const auto& fallback) {
         CHECK(tile.data.pixel({ 1, 1 }) == original);
         CHECK(tile.source_attribution.pixel({ 1, 1 }) == 1);

@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+#include <libassert/assert.hpp>
+
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "Mask.h"
@@ -41,48 +43,38 @@ namespace rf_builder::gdal {
 template <typename PixelType>
 class TileWorker {
 public:
-    static Expected<TileWorker> open(const inputs::Record& record)
+    // Throws Error::Exception when the inputs cannot be opened. The record's
+    // NoData settings must already be validated.
+    static TileWorker open(const inputs::Record& record)
     {
-        auto halo = nodata::halo(record.tile_side, record.nodata_search_radius, record.nodata_smoothing_kernel_size);
-        if (!halo) {
-            return Error::propagate(std::move(halo));
-        }
-        auto processor = nodata::Processor::create(record.nodata_search_radius, record.nodata_smoothing_kernel_size);
-        if (!processor) {
-            return Error::propagate(std::move(processor));
-        }
+        const auto halo = Error::asserting_unwrap(nodata::halo(record.tile_side, record.nodata_search_radius, record.nodata_smoothing_kernel_size));
+        auto processor = Error::asserting_unwrap(nodata::Processor::create(record.nodata_search_radius, record.nodata_smoothing_kernel_size));
         auto dataset = Dataset::open_raster(inputs::gdal_identifier(record.dataset));
         if (!dataset) {
-            return Error::fail(Error::Code::InvalidInput, "open RF worker dataset", record.dataset);
+            Error::raise(Error::Code::InvalidInput, "open RF worker dataset", record.dataset);
         }
-        auto transform = RasterTransform::create(*dataset->gdalDataset());
-        if (!transform) {
-            return Error::propagate(std::move(transform));
-        }
-        auto mask = Mask::open(inputs::gdal_identifier(record.mask));
-        if (!mask) {
-            return Error::propagate(std::move(mask));
-        }
-        return TileWorker(std::move(*dataset), std::move(*transform), std::move(*mask), record, *halo, std::move(*processor));
+        auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset->gdalDataset()));
+        auto mask = Error::throwing_unwrap(Mask::open(inputs::gdal_identifier(record.mask)));
+        return TileWorker(std::move(*dataset), std::move(transform), std::move(mask), record, halo, std::move(processor));
     }
 
-    Expected<std::optional<raster_store::Tile<PixelType>>> prepare(const radix::tile::Id& key)
+    // Returns no tile when the mask excludes every sample; throws Error::Exception on failure.
+    std::optional<raster_store::Tile<PixelType>> prepare(const radix::tile::Id& key)
     {
         const auto window = nodata::window(key, m_record.tile_side, m_halo);
         const auto& bounds = window.bounds;
-        auto samples = [&]() -> Expected<DatasetReader::Samples<PixelType>> {
-            if constexpr (std::is_same_v<PixelType, float>) {
-                return DatasetReader::read_scalar(*m_dataset.gdalDataset(), m_transform, bounds, window.size, m_record.bands[0]);
-            } else {
-                return DatasetReader::read_colour(
-                    *m_dataset.gdalDataset(), m_transform, bounds, window.size, { m_record.bands[0], m_record.bands[1], m_record.bands[2] });
-            }
-        }();
-        if (!samples) {
-            return Error::propagate(std::move(samples), "read RF tile " + to_string(key));
-        }
+        auto samples = Error::throwing_unwrap(
+            [&]() -> Expected<DatasetReader::Samples<PixelType>> {
+                if constexpr (std::is_same_v<PixelType, float>) {
+                    return DatasetReader::read_scalar(*m_dataset.gdalDataset(), m_transform, bounds, window.size, m_record.bands[0]);
+                } else {
+                    return DatasetReader::read_colour(
+                        *m_dataset.gdalDataset(), m_transform, bounds, window.size, { m_record.bands[0], m_record.bands[1], m_record.bands[2] });
+                }
+            }(),
+            "read RF tile " + to_string(key));
         const double spacing = bounds.width() / window.size.x;
-        auto selected_validity = samples->valid;
+        auto selected_validity = samples.valid;
         std::vector<glm::dvec2> centres(window.size.x);
         for (unsigned row = 0; row < window.size.y; ++row) {
             for (unsigned column = 0; column < window.size.x; ++column) {
@@ -92,24 +84,16 @@ public:
                 centres[column] = { x, bounds.max.y - (row + 0.5) * spacing };
             }
             auto validity = std::span(selected_validity.buffer()).subspan(std::size_t(row) * window.size.x, window.size.x);
-            if (auto selected = m_mask.select(centres, validity); !selected) {
-                return Error::propagate(std::move(selected), "mask RF tile " + to_string(key));
-            }
+            Error::throwing_unwrap(m_mask.select(centres, validity), "mask RF tile " + to_string(key));
         }
         if (std::ranges::none_of(selected_validity.buffer(), [](auto value) { return value != 0; })) {
             return std::nullopt;
         }
         raster_store::Tile<PixelType> tile(m_record.tile_side);
-        auto completed = m_processor.process(*samples, window.interior_offset, m_record.nodata_default_value, tile.data);
-        if (!completed) {
-            return Error::propagate(std::move(completed), "complete RF tile " + to_string(key));
-        }
-        const auto selected = *raster::make_view(selected_validity, window.interior_offset, glm::uvec2(m_record.tile_side));
-        auto attributed = raster::algorithm::transform(
-            selected, [&](std::uint8_t valid) -> std::uint16_t { return valid ? std::uint16_t(m_record.attribution_index) : 0; }, tile.source_attribution);
-        if (!attributed) {
-            return Error::propagate(std::move(attributed));
-        }
+        m_processor.process(samples, window.interior_offset, m_record.nodata_default_value, tile.data);
+        const auto selected = Error::asserting_unwrap(raster::make_view(selected_validity, window.interior_offset, glm::uvec2(m_record.tile_side)));
+        Error::asserting_unwrap(raster::algorithm::transform(
+            selected, [&](std::uint8_t valid) -> std::uint16_t { return valid ? std::uint16_t(m_record.attribution_index) : 0; }, tile.source_attribution));
         return std::optional(std::move(tile));
     }
 

@@ -21,6 +21,7 @@
 #include "raster/algorithm/scale.h"
 #include "raster_store/StoreTraits.h"
 #include <algorithm>
+#include <libassert/assert.hpp>
 
 namespace rf_builder::tiles {
 TileWorker::TileWorker(
@@ -29,42 +30,31 @@ TileWorker::TileWorker(
     , m_coverage(coverage)
     , m_mask(std::move(mask))
     , m_http(counters, (std::max)(std::size_t(1024 * 1024), std::size_t(record.provider.tile_size) * record.provider.tile_size * 8 + 65536), retry)
-    , m_offset(*provider::zoom_offset(record.provider, record.tile_side))
+    , m_offset(Error::asserting_unwrap(provider::zoom_offset(record.provider, record.tile_side)))
     , m_cache_bytes(cache_bytes)
 {
 }
-Expected<std::unique_ptr<TileWorker>> TileWorker::open(
+std::unique_ptr<TileWorker> TileWorker::open(
     const inputs::Record& record, const planning::Coverage& coverage, NetworkCounters& counters, std::size_t cache_bytes, RetryPolicy retry)
 {
-    if (auto offset = provider::zoom_offset(record.provider, record.tile_side); !offset) {
-        return Error::propagate(std::move(offset));
-    }
-    auto mask = Mask::open(run::gdal_identifier(record.mask));
-    if (!mask) {
-        return Error::propagate(std::move(mask));
-    }
-    return std::unique_ptr<TileWorker>(new TileWorker(record, coverage, counters, std::move(*mask), cache_bytes, retry));
+    Error::throwing_unwrap(provider::zoom_offset(record.provider, record.tile_side));
+    auto mask = Error::throwing_unwrap(Mask::open(run::gdal_identifier(record.mask)));
+    return std::unique_ptr<TileWorker>(new TileWorker(record, coverage, counters, std::move(mask), cache_bytes, retry));
 }
-Expected<TileWorker::Image> TileWorker::image(const run::Key& key)
+TileWorker::Image TileWorker::image(const run::Key& key)
 {
     if (auto found = m_lookup.find(key); found != m_lookup.end()) {
         m_cache.splice(m_cache.begin(), m_cache, found->second);
         return found->second->image;
     }
-    auto fetched = m_http.get(provider::url(m_record.provider, key));
-    if (!fetched) {
-        return Error::propagate(std::move(fetched), "fetch source tile " + to_string(key));
-    }
+    const auto fetched = Error::throwing_unwrap(m_http.get(provider::url(m_record.provider, key)), "fetch source tile " + to_string(key));
     Image decoded;
-    if (*fetched) {
-        auto result = io::image::decode_rgb8(**fetched);
-        if (!result) {
-            return Error::propagate(std::move(result), "decode source tile " + to_string(key));
+    if (fetched) {
+        auto result = Error::throwing_unwrap(io::image::decode_rgb8(*fetched), "decode source tile " + to_string(key));
+        if (result.size() != glm::uvec2(m_record.provider.tile_size)) {
+            Error::raise(Error::Code::CorruptData, "source tile dimensions disagree with provider configuration: " + to_string(key));
         }
-        if (result->size() != glm::uvec2(m_record.provider.tile_size)) {
-            return Error::fail(Error::Code::CorruptData, "source tile dimensions disagree with provider configuration: " + to_string(key));
-        }
-        decoded = std::make_shared<const radix::Raster<glm::u8vec3>>(std::move(*result));
+        decoded = std::make_shared<const radix::Raster<glm::u8vec3>>(std::move(result));
     }
     // Budget also charges entries for missing responses, list nodes and lookup
     // overhead, so an all-404 region cannot accumulate an unbounded journal.
@@ -81,7 +71,7 @@ Expected<TileWorker::Image> TileWorker::image(const run::Key& key)
     }
     return decoded;
 }
-Expected<std::optional<TileWorker::Supplier>> TileWorker::available(const run::Key& key)
+std::optional<TileWorker::Supplier> TileWorker::available(const run::Key& key)
 {
     std::optional<Supplier> result = std::nullopt;
     for (unsigned zoom = m_record.provider.min_zoom; zoom <= key.zoom_level; ++zoom) {
@@ -89,25 +79,19 @@ Expected<std::optional<TileWorker::Supplier>> TileWorker::available(const run::K
         const run::Key ancestor { zoom, { unsigned(std::uint64_t(key.coords.x) >> shift), unsigned(std::uint64_t(key.coords.y) >> shift) } };
         auto decoded = image(ancestor);
         if (!decoded) {
-            return Error::propagate(std::move(decoded));
-        }
-        if (!*decoded) {
             break;
         }
-        result = Supplier { ancestor, std::move(*decoded) };
+        result = Supplier { ancestor, std::move(decoded) };
     }
     return result;
 }
-Expected<bool> TileWorker::finer(const run::Key& source, const run::Key& candidate, unsigned matching_zoom)
+bool TileWorker::finer(const run::Key& source, const run::Key& candidate, unsigned matching_zoom)
 {
     if (!m_coverage.intersects(source, candidate)) {
         return false;
     }
     auto decoded = image(source);
     if (!decoded) {
-        return Error::propagate(std::move(decoded));
-    }
-    if (!*decoded) {
         return false;
     }
     if (source.zoom_level > matching_zoom) {
@@ -117,20 +101,11 @@ Expected<bool> TileWorker::finer(const run::Key& source, const run::Key& candida
         return false;
     }
     // Release this decoded reference before descent; the bounded LRU owns reuse.
-    decoded->reset();
+    decoded.reset();
     const auto children = raster_store::StoreTraits::children(source);
-    for (const auto& child : *children) {
-        auto found = finer(child, candidate, matching_zoom);
-        if (!found) {
-            return Error::propagate(std::move(found));
-        }
-        if (*found) {
-            return true;
-        }
-    }
-    return false;
+    return std::ranges::any_of(*children, [&](const auto& child) { return finer(child, candidate, matching_zoom); });
 }
-Expected<glm::u8vec3> TileWorker::pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge)
+glm::u8vec3 TileWorker::pixel(unsigned zoom, std::int64_t x, std::int64_t y, const Supplier& edge)
 {
     const std::int64_t side = m_record.provider.tile_size;
     const std::int64_t extent = side * (std::int64_t(1) << zoom);
@@ -140,30 +115,24 @@ Expected<glm::u8vec3> TileWorker::pixel(unsigned zoom, std::int64_t x, std::int6
     if (key == edge.key) {
         return edge.image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) });
     }
-    auto supplier = available(key);
+    const auto supplier = available(key);
     if (!supplier) {
-        return Error::propagate(std::move(supplier));
-    }
-    if (!*supplier) {
         // True coverage edge: extend this supplying tile's nearest sample.
         const auto local_x = std::clamp(x - std::int64_t(edge.key.coords.x) * side, std::int64_t(0), side - 1);
         const auto local_y = std::clamp(y - std::int64_t(edge.key.coords.y) * side, std::int64_t(0), side - 1);
         return edge.image->pixel({ unsigned(local_x), unsigned(local_y) });
     }
-    if ((**supplier).key.zoom_level == zoom) {
-        return (**supplier).image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) });
+    if (supplier->key.zoom_level == zoom) {
+        return supplier->image->pixel({ unsigned(wrapped_x % side), unsigned(clipped_y % side) });
     }
     radix::Raster<glm::u8vec3> result(1);
-    if (auto sampled = sample(**supplier, zoom, { wrapped_x, clipped_y }, raster::make_view(result)); !sampled) {
-        return Error::propagate(std::move(sampled));
-    }
+    sample(*supplier, zoom, { wrapped_x, clipped_y }, raster::make_view(result));
     return result.pixel({ 0, 0 });
 }
-Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 origin, const raster::View<glm::u8vec3>& destination)
+void TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 origin, const raster::View<glm::u8vec3>& destination)
 {
     const unsigned levels = zoom - supplier.key.zoom_level;
-    if (levels > 30)
-        return Error::fail(Error::Code::InvalidInput, "ancestor fallback zoom gap exceeds 30 levels");
+    ASSERT(levels <= max_fallback_levels, to_string(supplier.key), zoom);
     const std::uint64_t factor = 1u << levels;
     const auto first = origin / factor;
     const auto last = origin + glm::u64vec2(destination.size()) - std::uint64_t(1);
@@ -173,22 +142,16 @@ Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::
     // and its Lanczos support. Keep global coordinates entirely in integers.
     constexpr unsigned support = 3;
     const auto size = interior + glm::uvec2(2 * support);
-    auto source_window
-        = raster::algorithm::required_source_window(size, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, destination.size());
-    if (!source_window)
-        return Error::propagate(std::move(source_window));
+    const auto source_window = Error::asserting_unwrap(
+        raster::algorithm::required_source_window(size, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, destination.size()));
     radix::Raster<glm::u8vec3> neighbourhood(size);
     const glm::i64vec2 global_source_pixel_origin = glm::i64vec2(first) - std::int64_t(support);
     // Fetch only contributing samples so an unrelated neighbour cannot fail this tile.
-    const auto begin = source_window->origin;
-    const auto end = begin + source_window->size - glm::uvec2(1);
+    const auto begin = source_window.origin;
+    const auto end = begin + source_window.size - glm::uvec2(1);
     for (unsigned y = begin.y; y <= end.y; ++y) {
         for (unsigned x = begin.x; x <= end.x; ++x) {
-            auto value = pixel(supplier.key.zoom_level, global_source_pixel_origin.x + x, global_source_pixel_origin.y + y, supplier);
-            if (!value) {
-                return Error::propagate(std::move(value));
-            }
-            neighbourhood.pixel({ x, y }) = *value;
+            neighbourhood.pixel({ x, y }) = pixel(supplier.key.zoom_level, global_source_pixel_origin.x + x, global_source_pixel_origin.y + y, supplier);
         }
     }
     for (unsigned y = 0; y < neighbourhood.height(); ++y) {
@@ -196,10 +159,10 @@ Expected<void> TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::
             neighbourhood.pixel({ x, y }) = neighbourhood.pixel(glm::clamp(glm::uvec2(x, y), begin, end));
         }
     }
-    return raster::algorithm::scale(
-        neighbourhood, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, raster::algorithm::srgb_conversion<glm::u8vec3>(), destination);
+    Error::asserting_unwrap(raster::algorithm::scale(
+        neighbourhood, support, int(levels), raster::algorithm::Resampling::Lanczos3, offset, raster::algorithm::srgb_conversion<glm::u8vec3>(), destination));
 }
-Expected<void> TileWorker::assemble(
+void TileWorker::assemble(
     raster_store::Tile<glm::u8vec3>& tile, std::vector<std::uint8_t>& valid, const run::Key& candidate, const run::Key& source, const Supplier& supplier)
 {
     const unsigned side = m_record.provider.tile_size;
@@ -213,66 +176,33 @@ Expected<void> TileWorker::assemble(
                 valid[index] = 1;
             }
         }
-        return {};
+        return;
     }
-    auto destination = raster::make_view(tile.data, { unsigned(left), unsigned(top) }, glm::uvec2(side));
-    if (!destination) {
-        return Error::propagate(std::move(destination));
-    }
-    if (auto sampled = sample(supplier, source.zoom_level, glm::u64vec2(source.coords) * std::uint64_t(side), *destination); !sampled) {
-        return Error::propagate(std::move(sampled));
-    }
+    const auto destination = Error::asserting_unwrap(raster::make_view(tile.data, { unsigned(left), unsigned(top) }, glm::uvec2(side)));
+    sample(supplier, source.zoom_level, glm::u64vec2(source.coords) * std::uint64_t(side), destination);
     for (unsigned y = 0; y < side; ++y) {
         for (unsigned x = 0; x < side; ++x) {
             const auto index = (top + y) * m_record.tile_side + left + x;
             valid[index] = 1;
         }
     }
-    return {};
 }
-Expected<run::Prepared<glm::u8vec3>> TileWorker::prepare(const run::Key& key)
+run::Prepared<glm::u8vec3> TileWorker::prepare(const run::Key& key)
 {
     const unsigned matching = key.zoom_level + m_offset;
-    if (matching > m_record.provider.max_zoom) {
-        return Error::fail(Error::Code::Internal, "online RF candidate exceeds source ceiling");
-    }
+    ASSERT(matching <= m_record.provider.max_zoom, to_string(key));
     planning::Cursor roots(m_coverage, m_record.provider.min_zoom, key);
-    for (;;) {
-        auto source = roots.next();
-        if (!source) {
-            return Error::propagate(std::move(source));
-        }
-        if (!*source) {
-            break;
-        }
-        auto refine = finer(**source, key, matching);
-        if (!refine) {
-            return Error::propagate(std::move(refine));
-        }
-        if (*refine) {
+    while (const auto source = roots.next()) {
+        if (finer(*source, key, matching)) {
             return run::Prepared<glm::u8vec3>(m_coverage.children(key));
         }
     }
     raster_store::Tile<glm::u8vec3> tile(m_record.tile_side);
     std::vector<std::uint8_t> valid(std::size_t(m_record.tile_side) * m_record.tile_side, 0);
     planning::Cursor chunks(m_coverage, matching, key);
-    for (;;) {
-        auto source = chunks.next();
-        if (!source) {
-            return Error::propagate(std::move(source));
-        }
-        if (!*source) {
-            break;
-        }
-        auto supplier = available(**source);
-        if (!supplier) {
-            return Error::propagate(std::move(supplier));
-        }
-        if (!*supplier) {
-            continue;
-        }
-        if (auto prepared = assemble(tile, valid, key, **source, **supplier); !prepared) {
-            return Error::propagate(std::move(prepared));
+    while (const auto source = chunks.next()) {
+        if (const auto supplier = available(*source)) {
+            assemble(tile, valid, key, *source, *supplier);
         }
     }
     const auto bounds = RasterTransform::tile_bounds(key);
@@ -282,9 +212,8 @@ Expected<run::Prepared<glm::u8vec3>> TileWorker::prepare(const run::Key& key)
         for (unsigned column = 0; column < m_record.tile_side; ++column) {
             centres[column] = { bounds.min.x + (column + 0.5) * spacing, bounds.max.y - (row + 0.5) * spacing };
         }
-        if (auto selected = m_mask.select(centres, std::span(valid).subspan(std::size_t(row) * m_record.tile_side, m_record.tile_side)); !selected) {
-            return Error::propagate(std::move(selected));
-        }
+        Error::throwing_unwrap(m_mask.select(centres, std::span(valid).subspan(std::size_t(row) * m_record.tile_side, m_record.tile_side)),
+            "mask online RF tile " + to_string(key));
     }
     if (std::ranges::none_of(valid, [](auto value) { return value != 0; })) {
         return run::Prepared<glm::u8vec3>(std::monostate());

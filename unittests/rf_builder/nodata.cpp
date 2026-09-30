@@ -123,16 +123,15 @@ TEST_CASE("RF NoData preserves valid samples and fills small holes with bounded 
     auto processor = nodata::Processor::create(5, 5);
     REQUIRE(processor);
     const float fallback = GENERATE(0.f, 12.f);
-    auto result = processor->process(input, { 7, 7 }, 48, { fallback, fallback, fallback });
-    REQUIRE(result);
-    CHECK(result->pixel({ 5, 5 }) > 0);
-    CHECK(result->pixel({ 24, 20 }) == fallback);
-    CHECK(result->pixel({ 19, 20 }) > fallback);
+    const auto result = processor->process(input, { 7, 7 }, 48, { fallback, fallback, fallback });
+    CHECK(result.pixel({ 5, 5 }) > 0);
+    CHECK(result.pixel({ 24, 20 }) == fallback);
+    CHECK(result.pixel({ 19, 20 }) > fallback);
     for (unsigned y = 0; y < 48; ++y) {
         for (unsigned x = 0; x < 48; ++x) {
-            CHECK(std::isfinite(result->pixel({ x, y })));
+            CHECK(std::isfinite(result.pixel({ x, y })));
             if (input.valid.pixel({ x + 7, y + 7 })) {
-                CHECK(result->pixel({ x, y }) == input.data.pixel({ x + 7, y + 7 }));
+                CHECK(result.pixel({ x, y }) == input.data.pixel({ x + 7, y + 7 }));
             }
         }
     }
@@ -145,21 +144,18 @@ TEST_CASE("RF NoData disable modes and RGB fallback preserve originals", "[rf-bu
     input.valid.pixel({ 15, 15 }) = 0;
     auto processor = nodata::Processor::create(0, 1);
     REQUIRE(processor);
-    auto result = processor->process(input, { 7, 7 }, 16, { 128, 64, 32 });
-    REQUIRE(result);
-    CHECK(result->pixel({ 8, 8 }) == glm::u8vec3(128, 64, 32));
-    CHECK(result->pixel({ 7, 8 }) == glm::u8vec3(10, 20, 30));
+    const auto result = processor->process(input, { 7, 7 }, 16, { 128, 64, 32 });
+    CHECK(result.pixel({ 8, 8 }) == glm::u8vec3(128, 64, 32));
+    CHECK(result.pixel({ 7, 8 }) == glm::u8vec3(10, 20, 30));
     auto filled = nodata::Processor::create(5, 1);
     REQUIRE(filled);
-    auto interpolated = filled->process(input, { 7, 7 }, 16, { 128, 64, 32 });
-    REQUIRE(interpolated);
-    CHECK(interpolated->pixel({ 8, 8 }) == glm::u8vec3(10, 20, 30));
+    const auto interpolated = filled->process(input, { 7, 7 }, 16, { 128, 64, 32 });
+    CHECK(interpolated.pixel({ 8, 8 }) == glm::u8vec3(10, 20, 30));
     std::ranges::fill(input.valid.buffer(), 0);
     auto smooth = nodata::Processor::create(5, 5);
     REQUIRE(smooth);
-    auto empty = smooth->process(input, { 7, 7 }, 16, { 128, 64, 32 });
-    REQUIRE(empty);
-    CHECK(std::ranges::all_of(empty->buffer(), [](auto value) { return value == glm::u8vec3(128, 64, 32); }));
+    const auto empty = smooth->process(input, { 7, 7 }, 16, { 128, 64, 32 });
+    CHECK(std::ranges::all_of(empty.buffer(), [](auto value) { return value == glm::u8vec3(128, 64, 32); }));
 }
 
 TEST_CASE("RF NoData Gaussian composes both passes before restoring valid values", "[rf-builder][rf-nodata]")
@@ -169,11 +165,10 @@ TEST_CASE("RF NoData Gaussian composes both passes before restoring valid values
     input.valid.pixel({ 4, 4 }) = 0;
     auto processor = nodata::Processor::create(0, 5);
     REQUIRE(processor);
-    auto result = processor->process(input, { 2, 2 }, 5, {});
-    REQUIRE(result);
+    const auto result = processor->process(input, { 2, 2 }, 5, {});
     const auto weights = *raster::algorithm::gaussian_kernel(5);
-    CHECK(result->pixel({ 2, 2 }) == Catch::Approx(100 * weights[1] * weights[1]));
-    CHECK(result->pixel({ 1, 1 }) == 100);
+    CHECK(result.pixel({ 2, 2 }) == Catch::Approx(100 * weights[1] * weights[1]));
+    CHECK(result.pixel({ 1, 1 }) == 100);
 }
 
 TEST_CASE("RF NoData split windows agree and parallel processors remain independent", "[rf-builder][rf-nodata]")
@@ -188,9 +183,8 @@ TEST_CASE("RF NoData split windows agree and parallel processors remain independ
     }
     auto processor = nodata::Processor::create(5, 5);
     REQUIRE(processor);
-    auto whole = processor->process(input, { 7, 7 }, 64, {});
-    REQUIRE(whole);
-    std::vector<std::future<Expected<radix::Raster<float>>>> futures;
+    const auto whole = processor->process(input, { 7, 7 }, 64, {});
+    std::vector<std::future<radix::Raster<float>>> futures;
     for (unsigned part = 0; part < 4; ++part) {
         futures.push_back(std::async(std::launch::async, [&, part] {
             const glm::uvec2 origin { (part % 2) * 32, (part / 2) * 32 };
@@ -206,12 +200,11 @@ TEST_CASE("RF NoData split windows agree and parallel processors remain independ
         }));
     }
     for (unsigned part = 0; part < 4; ++part) {
-        auto piece = futures[part].get();
-        REQUIRE(piece);
+        const auto piece = futures[part].get();
         const glm::uvec2 origin { (part % 2) * 32, (part / 2) * 32 };
         for (unsigned y = 0; y < 32; ++y) {
             for (unsigned x = 0; x < 32; ++x) {
-                CHECK(piece->pixel({ x, y }) == Catch::Approx(whole->pixel(origin + glm::uvec2(x, y))).margin(1e-5));
+                CHECK(piece.pixel({ x, y }) == Catch::Approx(whole.pixel(origin + glm::uvec2(x, y))).margin(1e-5));
             }
         }
     }
@@ -231,10 +224,9 @@ TEST_CASE("RF NoData polar windows clip reads and replicate completed borders", 
     input.data.pixel({ 3, 0 }) = 100;
     auto processor = nodata::Processor::create(0, 5);
     REQUIRE(processor);
-    auto result = processor->process(input, { 2, 0 }, 4, {});
-    REQUIRE(result);
+    const auto result = processor->process(input, { 2, 0 }, 4, {});
     const auto weights = *raster::algorithm::gaussian_kernel(5);
-    CHECK(result->pixel({ 2, 0 }) == Catch::Approx(100 * weights[1] * (weights[0] + weights[1] + weights[2])));
+    CHECK(result.pixel({ 2, 0 }) == Catch::Approx(100 * weights[1] * (weights[0] + weights[1] + weights[2])));
 }
 
 TEST_CASE("RF periodic seam reads narrow source strips and postprocessing does not reread", "[rf-builder][rf-nodata]")
@@ -266,12 +258,11 @@ TEST_CASE("RF periodic seam reads narrow source strips and postprocessing does n
     REQUIRE(processor);
     test::TemporaryDirectory temporary;
     CPLSetThreadLocalConfigOption("CPL_TMPDIR", temporary.path().c_str());
-    auto result = processor->process(*read, { 7, 7 }, 16, {});
+    const auto result = processor->process(*read, { 7, 7 }, 16, {});
     CPLSetThreadLocalConfigOption("CPL_TMPDIR", nullptr);
-    REQUIRE(result);
     CHECK(band->read_count == reads);
     CHECK(std::filesystem::is_empty(temporary.path()));
-    CHECK(std::isfinite(result->pixel({ 8, 8 })));
+    CHECK(std::isfinite(result.pixel({ 8, 8 })));
 }
 
 TEST_CASE("RF NoData stage benchmarks", "[!benchmark][rf-nodata]")
@@ -315,10 +306,7 @@ TEST_CASE("RF NoData full tile memory and parallel benchmark", "[!benchmark][rf-
     {
         std::vector<std::future<float>> results;
         for (unsigned i = 0; i < jobs; ++i) {
-            results.push_back(std::async(std::launch::async, [&, i] {
-                auto output = workers[i].process(input, { 7, 7 }, 4096, {});
-                return output ? output->pixel({ 128, 128 }) : -1.f;
-            }));
+            results.push_back(std::async(std::launch::async, [&, i] { return workers[i].process(input, { 7, 7 }, 4096, {}).pixel({ 128, 128 }); }));
         }
         float value = 0;
         for (auto& result : results) {

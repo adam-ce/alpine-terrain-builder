@@ -8,6 +8,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <numbers>
 #include <opencv2/imgcodecs.hpp>
@@ -20,6 +21,17 @@ namespace tiles = rf_builder::tiles;
 namespace run = rf_builder::run;
 namespace storage = raster_store::storage;
 using Key = run::Key;
+// The code of the Error::Exception thrown by operation.
+Error::Code thrown(const std::function<void()>& operation)
+{
+    try {
+        operation();
+    } catch (const Error::Exception& exception) {
+        return exception.error().code();
+    }
+    FAIL("no Error::Exception thrown");
+    return Error::Code::Internal;
+}
 void write_text(const std::filesystem::path& path, const std::string& text)
 {
     std::ofstream stream(path);
@@ -232,10 +244,8 @@ TEST_CASE("Online adaptive RF keeps fine islands and fills coarse siblings witho
     Fixture fixture;
     fixture.mixed();
     fixture.options.output.jobs = GENERATE(1u, 4u);
-    auto report = tiles::build(fixture.options);
-    INFO((report ? "success" : report.error().to_string()));
-    REQUIRE(report);
-    CHECK(report->tile_count == 7);
+    const auto report = tiles::build(fixture.options);
+    CHECK(report.tile_count == 7);
     auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
     REQUIRE(output_result);
     auto [output, output_metadata] = std::move(*output_result);
@@ -275,18 +285,16 @@ TEST_CASE("Online fallback samples across RF and source boundaries in linear lig
     REQUIRE(selected);
     tiles::planning::Coverage coverage(selected->bounds());
     tiles::NetworkCounters counters;
-    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
-    REQUIRE(worker);
-    auto result = (*worker)->prepare(candidate);
-    REQUIRE(result);
-    auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+    const auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
+    auto result = worker->prepare(candidate);
+    auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&result);
     REQUIRE(tile);
     const auto value = tile->data.buffer()[8 * 16 + 15];
     for (unsigned x = 0; x < 16; ++x)
         CHECK(tile->data.pixel({ x, 8 }) == glm::u8vec3(lanczos3_edge(4 + (x + 0.5) / 4 - 0.5)));
     CHECK(value.x != 165); // Distinguish Lanczos from the previous bilinear output.
     CHECK(value.x != 96); // Nonlinear interpolation would be too dark.
-    CHECK((*worker)->retained_bytes() <= 4096);
+    CHECK(worker->retained_bytes() <= 4096);
     const auto requests = fixture.server.requests();
     CHECK(std::ranges::find(requests, path({ 3, { 3, 2 } })) != requests.end());
 }
@@ -304,12 +312,7 @@ TEST_CASE("Online conservative coverage weights preserve area across overlaps an
     CHECK(total == Catch::Approx(coverage.weight(root)));
     tiles::planning::Cursor cursor(coverage, 3);
     unsigned count = 0;
-    for (;;) {
-        auto next = cursor.next();
-        REQUIRE(next);
-        if (!*next) {
-            break;
-        }
+    while (cursor.next()) {
         ++count;
     }
     CHECK(count == 4);
@@ -323,13 +326,12 @@ TEST_CASE("Online minimum missing coverage publishes empty and malformed sources
     if (malformed) {
         fixture.pyramid[path({ 3, { 2, 2 } })] = text_bytes("bad");
     }
-    auto result = tiles::build(fixture.options);
     if (malformed) {
-        CHECK_FALSE(result);
+        CHECK_THROWS_AS(tiles::build(fixture.options), Error::Exception);
         CHECK_FALSE(std::filesystem::exists(fixture.options.output.output));
     } else {
-        REQUIRE(result);
-        CHECK(result->tile_count == 0);
+        const auto result = tiles::build(fixture.options);
+        CHECK(result.tile_count == 0);
         const auto requests = fixture.server.requests();
         CHECK(std::ranges::all_of(requests, [](const auto& request) { return request.starts_with("/3/"); }));
     }
@@ -341,28 +343,27 @@ TEST_CASE("Online completed cache skips all HTTP and provider identity uses fiel
     fixture.mixed();
     auto partial = fixture.options.output.output;
     partial += ".part";
-    auto cancelled = tiles::build(fixture.options, [&] {
-        unsigned count = 0;
-        if (std::filesystem::exists(partial)) {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(partial)) {
-                if (entry.path().extension() == ".amort") {
-                    ++count;
+    CHECK(thrown([&] {
+        tiles::build(fixture.options, [&] {
+            unsigned count = 0;
+            if (std::filesystem::exists(partial)) {
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(partial)) {
+                    if (entry.path().extension() == ".amort") {
+                        ++count;
+                    }
                 }
             }
-        }
-        return count == 7;
-    });
-    REQUIRE_FALSE(cancelled);
-    CHECK(cancelled.error().code() == Error::Code::Cancelled);
+            return count == 7;
+        });
+    }) == Error::Code::Cancelled);
     REQUIRE(std::filesystem::exists(partial / "inputs.tmp"));
     fixture.options.output.cache = partial;
     fixture.options.output.output = fixture.directory.path() / "resumed";
     fixture.options.provider = fixture.directory.path() / "moved.json";
     write_text(fixture.options.provider, "\n " + json(fixture.server.base()) + " \n");
     fixture.server.clear();
-    auto resumed = tiles::build(fixture.options);
-    REQUIRE(resumed);
-    CHECK(resumed->reused_tiles == 7);
+    const auto resumed = tiles::build(fixture.options);
+    CHECK(resumed.reused_tiles == 7);
     CHECK(fixture.server.requests().empty());
     auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
     REQUIRE(output_result);
@@ -373,7 +374,7 @@ TEST_CASE("Online completed cache skips all HTTP and provider identity uses fiel
     }
     fixture.options.output.output = fixture.directory.path() / "changed";
     write_text(fixture.options.provider, json(fixture.server.base(), 3, 4));
-    CHECK_FALSE(tiles::build(fixture.options));
+    CHECK_THROWS_AS(tiles::build(fixture.options), Error::Exception);
     CHECK(fixture.server.requests().empty());
     CHECK_FALSE(std::filesystem::exists(fixture.options.output.output.string() + ".part"));
 }
@@ -398,13 +399,11 @@ TEST_CASE("Online fallback wraps longitude extends true coverage edges and never
     REQUIRE(mask_data);
     const tiles::planning::Coverage coverage(mask_data->bounds());
     tiles::NetworkCounters counters;
-    auto worker = tiles::TileWorker::open(record, coverage, counters, 256, fixture.options.retry);
-    REQUIRE(worker);
-    auto result = (*worker)->prepare(candidate);
-    REQUIRE(result);
-    const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+    const auto worker = tiles::TileWorker::open(record, coverage, counters, 256, fixture.options.retry);
+    auto result = worker->prepare(candidate);
+    const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&result);
     REQUIRE(tile);
-    CHECK((*worker)->retained_bytes() <= 256); // Every decoded image exceeds this budget and is evicted/not retained.
+    CHECK(worker->retained_bytes() <= 256); // Every decoded image exceeds this budget and is evicted/not retained.
     if (scenario == 0) {
         CHECK(tile->data.buffer()[8 * 16 + 15] == glm::u8vec3(lanczos3_edge(7.375)));
     } else {
@@ -427,25 +426,21 @@ TEST_CASE("Online fallback agrees when the same source region is split into RF w
     REQUIRE(mask_data);
     const tiles::planning::Coverage coverage(mask_data->bounds());
     tiles::NetworkCounters counters;
-    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
-    REQUIRE(worker);
+    const auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
     std::array<raster_store::Tile<glm::u8vec3>, 4> parts {
         raster_store::Tile<glm::u8vec3>(16), raster_store::Tile<glm::u8vec3>(16), raster_store::Tile<glm::u8vec3>(16), raster_store::Tile<glm::u8vec3>(16)
     };
     const auto children = whole.children();
     for (unsigned i = 0; i < 4; ++i) {
-        auto result = (*worker)->prepare(children[i]);
-        REQUIRE(result);
-        auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+        auto result = worker->prepare(children[i]);
+        auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&result);
         REQUIRE(tile);
         parts[i] = std::move(*tile);
     }
     record.tile_side = 32; // Same output pixel spacing; one window covers all four parts.
-    auto metatile_worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
-    REQUIRE(metatile_worker);
-    auto metatile = (*metatile_worker)->prepare(whole);
-    REQUIRE(metatile);
-    const auto* joined = std::get_if<raster_store::Tile<glm::u8vec3>>(&*metatile);
+    const auto metatile_worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
+    auto metatile = metatile_worker->prepare(whole);
+    const auto* joined = std::get_if<raster_store::Tile<glm::u8vec3>>(&metatile);
     REQUIRE(joined);
     for (unsigned i = 0; i < 4; ++i) {
         for (unsigned y = 0; y < 16; ++y) {
@@ -466,9 +461,8 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
     bounds.min.x += spacing * 0.4;
     bounds.max.x = bounds.min.x + spacing * 0.2;
     mask(fixture.options.mask, bounds);
-    auto result = tiles::build(fixture.options);
-    REQUIRE(result);
-    CHECK(result->tile_count > 0);
+    const auto result = tiles::build(fixture.options);
+    CHECK(result.tile_count > 0);
     auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
     REQUIRE(output_result);
     auto [output, output_metadata] = std::move(*output_result);
@@ -489,9 +483,7 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
             hole.min.y,
             hole.max.x,
             hole.max.y));
-    auto holed = tiles::build(fixture.options);
-    INFO((holed ? "success" : holed.error().to_string()));
-    REQUIRE(holed);
+    REQUIRE_NOTHROW(tiles::build(fixture.options));
     auto hole_output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
     REQUIRE(hole_output_result);
     auto [hole_output, hole_output_metadata] = std::move(*hole_output_result);
@@ -504,9 +496,7 @@ TEST_CASE("Online partial cache preserves completed leaves while discovering unf
     fixture.mixed();
     auto partial = fixture.options.output.output;
     partial += ".part";
-    auto cancelled = tiles::build(fixture.options, [&] { return std::filesystem::exists(partial / "4/4/4.amort"); });
-    REQUIRE_FALSE(cancelled);
-    CHECK(cancelled.error().code() == Error::Code::Cancelled);
+    CHECK(thrown([&] { tiles::build(fixture.options, [&] { return std::filesystem::exists(partial / "4/4/4.amort"); }); }) == Error::Code::Cancelled);
     auto cached_result = storage::open<glm::u8vec3>(partial, { .allow_incomplete = true });
     REQUIRE(cached_result);
     auto [cached, cached_metadata] = std::move(*cached_result);
@@ -520,10 +510,9 @@ TEST_CASE("Online partial cache preserves completed leaves while discovering unf
     fixture.options.output.output = fixture.directory.path() / "resumed";
     fixture.options.output.jobs = 4;
     fixture.server.clear();
-    auto resumed = tiles::build(fixture.options);
-    REQUIRE(resumed);
-    CHECK(resumed->tile_count == 7);
-    CHECK(resumed->reused_tiles == completed.size());
+    const auto resumed = tiles::build(fixture.options);
+    CHECK(resumed.tile_count == 7);
+    CHECK(resumed.reused_tiles == completed.size());
     auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output);
     REQUIRE(output_result);
     auto [output, output_metadata] = std::move(*output_result);
@@ -610,7 +599,7 @@ TEST_CASE("Online source settings and cache failures abort before requests", "[r
         record.provider.tile_size = 16;
         REQUIRE(io::envelope::write_to_path<tiles::inputs::Schema>(record, *fixture.options.output.cache / "inputs.tmp"));
     }
-    CHECK_FALSE(tiles::build(fixture.options));
+    CHECK_THROWS_AS(tiles::build(fixture.options), Error::Exception);
     CHECK(fixture.server.requests().empty());
     CHECK_FALSE(std::filesystem::exists(fixture.options.output.output.string() + ".part"));
 }
@@ -624,20 +613,20 @@ TEST_CASE("Online coordinator ignores active subdivision after cancellation", "[
         write_text(path, "test inputs");
         return {};
     };
-    source.total = [](const auto&) -> Expected<double> { return 1.; };
+    source.total = [](const auto&) { return 1.; };
     bool scheduled = false;
-    source.next = [&](const auto&) -> Expected<std::optional<Key>> {
+    source.next = [&](const auto&) -> std::optional<Key> {
         if (scheduled) {
             return std::nullopt;
         }
         scheduled = true;
-        return std::optional(Key { 0, { 0, 0 } });
+        return Key { 0, { 0, 0 } };
     };
-    source.initialize = [](unsigned, const auto&) -> Expected<void> { return {}; };
+    source.initialize = [](unsigned, const auto&) { };
     std::atomic<bool> active = false;
     std::atomic<bool> stop_seen = false;
     std::atomic<unsigned> prepared = 0;
-    source.prepare = [&](unsigned, const Key& key) -> Expected<run::Prepared<glm::u8vec3>> {
+    source.prepare = [&](unsigned, const Key& key) {
         ++prepared;
         active = true;
         while (!stop_seen) {
@@ -647,15 +636,15 @@ TEST_CASE("Online coordinator ignores active subdivision after cancellation", "[
         return run::Prepared<glm::u8vec3>(run::Subdivide { { children.begin(), children.end() } });
     };
     source.weight = [](const Key& key) { return std::ldexp(1., -2 * int(key.zoom_level)); };
-    auto result = run::execute(fixture.options.output, std::move(source), [&] {
-        if (active) {
-            stop_seen = true;
-            return true;
-        }
-        return false;
-    });
-    REQUIRE_FALSE(result);
-    CHECK(result.error().code() == Error::Code::Cancelled);
+    CHECK(thrown([&] {
+        run::execute(fixture.options.output, std::move(source), [&] {
+            if (active) {
+                stop_seen = true;
+                return true;
+            }
+            return false;
+        });
+    }) == Error::Code::Cancelled);
     CHECK(prepared == 1);
     auto output_result = storage::open<glm::u8vec3>(fixture.options.output.output.string() + ".part", { .allow_incomplete = true });
     REQUIRE(output_result);
@@ -673,23 +662,23 @@ TEST_CASE("Online coordinator reports weighted progress during idle and out-of-o
         write_text(path, "test inputs");
         return {};
     };
-    source.total = [](const auto&) -> Expected<double> { return 1.; };
+    source.total = [](const auto&) { return 1.; };
     bool scheduled = false;
-    source.next = [&](const auto&) -> Expected<std::optional<Key>> {
+    source.next = [&](const auto&) -> std::optional<Key> {
         if (scheduled) {
             return std::nullopt;
         }
         scheduled = true;
-        return std::optional(Key { 0, { 0, 0 } });
+        return Key { 0, { 0, 0 } };
     };
-    source.initialize = [](unsigned, const auto&) -> Expected<void> { return {}; };
+    source.initialize = [](unsigned, const auto&) { };
     source.refine_cached = [](const Key& key) {
         const auto children = key.children();
         return run::Subdivide { { children.begin(), children.end() } };
     };
     source.network_stats = [] { return run::NetworkStats(); };
     source.weight = [](const Key& key) { return std::ldexp(1., -2 * int(key.zoom_level)); };
-    source.prepare = [](unsigned, const Key& key) -> Expected<run::Prepared<glm::u8vec3>> {
+    source.prepare = [](unsigned, const Key& key) -> run::Prepared<glm::u8vec3> {
         if (key.zoom_level == 0) {
             const auto children = key.children();
             return run::Prepared<glm::u8vec3>(run::Subdivide { { children.begin(), children.end() } });
@@ -708,10 +697,9 @@ TEST_CASE("Online coordinator reports weighted progress during idle and out-of-o
     const auto logger = Log::get_logger();
     const auto sink = std::make_shared<spdlog::sinks::ostream_sink_mt>(stream);
     logger->sinks().push_back(sink);
-    auto result = run::execute(fixture.options.output, std::move(source));
+    const auto result = run::execute(fixture.options.output, std::move(source));
     logger->sinks().pop_back();
-    REQUIRE(result);
-    CHECK(result->tile_count == 3);
+    CHECK(result.tile_count == 3);
     const auto log = stream.str();
     CHECK(log.find("estimated 25.0%") != std::string::npos);
     CHECK(log.find("estimated 75.0%") != std::string::npos); // Periodic update while the first child is still active.
@@ -745,18 +733,17 @@ TEST_CASE("Online mixed-resolution import measurement", "[.][online-benchmark]")
     fixture.pyramid[path({ 5, { 16, 16 } })] = image(side, { 75, 125, 175 });
     fixture.pyramid[path({ 6, { 32, 32 } })] = image(side, { 100, 150, 200 });
     const auto started = std::chrono::steady_clock::now();
-    auto result = tiles::build(fixture.options);
-    REQUIRE(result);
-    CHECK(result->tile_count == 7);
+    const auto result = tiles::build(fixture.options);
+    CHECK(result.tile_count == 7);
     LOG_INFO("Online mixed-resolution measurement: {:.3f}s, {} output tiles, {} stored bytes, {} requests; dense pixel expansion {}x",
         std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count(),
-        result->tile_count,
-        result->tile_bytes,
+        result.tile_count,
+        result.tile_bytes,
         fixture.server.requests().size(),
-        result->tile_count);
+        result.tile_count);
 }
 
-TEST_CASE("Online fallback supports zoom gaps through 30 and rejects larger gaps", "[rf-builder][online]")
+TEST_CASE("Online fallback supports zoom gaps through 30 and rejects larger provider ranges", "[rf-builder][online]")
 {
     Fixture fixture;
     const unsigned gap = GENERATE(30u, 31u, 32u);
@@ -766,24 +753,23 @@ TEST_CASE("Online fallback supports zoom gaps through 30 and rejects larger gaps
     write_text(fixture.options.provider, json(fixture.server.base(), 0, gap));
     fixture.pyramid.clear();
     fixture.pyramid[path({ 0, { 0, 0 } })] = image(8, { 255, 255, 255 });
+    if (gap > tiles::TileWorker::max_fallback_levels) {
+        // Larger ranges could need deeper fallback and are rejected before any request.
+        CHECK(thrown([&] { tiles::build(fixture.options); }) == Error::Code::Unsupported);
+        CHECK(fixture.server.requests().empty());
+        CHECK_FALSE(std::filesystem::exists(fixture.options.output.output.string() + ".part"));
+        return;
+    }
     const auto record = fixture.record();
     auto selection = rf_builder::Mask::open(record.mask);
     REQUIRE(selection);
     const tiles::planning::Coverage coverage(selection->bounds());
     tiles::NetworkCounters counters;
-    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
-    REQUIRE(worker);
-    auto result = (*worker)->prepare(candidate);
-    if (gap <= 30) {
-        REQUIRE(result);
-        const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
-        REQUIRE(tile);
-        CHECK(std::ranges::all_of(tile->data, [](auto value) { return value == glm::u8vec3(255); }));
-    } else {
-        REQUIRE_FALSE(result);
-        CHECK(result.error().code() == Error::Code::InvalidInput);
-        CHECK(result.error().to_string().find("ancestor fallback zoom gap") != std::string::npos);
-    }
+    const auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
+    auto result = worker->prepare(candidate);
+    const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&result);
+    REQUIRE(tile);
+    CHECK(std::ranges::all_of(tile->data, [](auto value) { return value == glm::u8vec3(255); }));
 }
 
 TEST_CASE("Online Lanczos fallback fetches outer support and ignores unrelated neighbours", "[rf-builder][online]")
@@ -805,14 +791,12 @@ TEST_CASE("Online Lanczos fallback fetches outer support and ignores unrelated n
     REQUIRE(selection);
     const tiles::planning::Coverage coverage(selection->bounds());
     tiles::NetworkCounters counters;
-    auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
-    REQUIRE(worker);
-    auto result = (*worker)->prepare(candidate);
+    const auto worker = tiles::TileWorker::open(record, coverage, counters, 4096, fixture.options.retry);
     if (broken_support) {
-        CHECK_FALSE(result);
+        CHECK_THROWS_AS(worker->prepare(candidate), Error::Exception);
     } else {
-        REQUIRE(result);
-        const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&*result);
+        auto result = worker->prepare(candidate);
+        const auto* tile = std::get_if<raster_store::Tile<glm::u8vec3>>(&result);
         REQUIRE(tile);
         CHECK(std::ranges::all_of(tile->data, [](auto value) { return value == glm::u8vec3(0); }));
     }

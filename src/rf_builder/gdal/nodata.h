@@ -4,6 +4,7 @@
 #include "raster/ClampedView.h"
 #include "raster/algorithm.h"
 #include <array>
+#include <libassert/assert.hpp>
 #include <limits>
 
 namespace rf_builder::gdal::nodata {
@@ -22,44 +23,31 @@ class Processor {
 public:
     static Expected<Processor> create(unsigned search_radius, unsigned kernel_size);
 
+    // Throws Error::Exception when GDAL cannot fill the NoData pixels. The
+    // samples must cover the square output at offset.
     template <typename PixelType>
-    Expected<radix::Raster<PixelType>> process(
-        const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, unsigned side, const std::array<float, 3>& fallback)
+    radix::Raster<PixelType> process(const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, unsigned side, const std::array<float, 3>& fallback)
     {
         radix::Raster<PixelType> result(side);
-        auto completed = process(samples, offset, fallback, result);
-        if (!completed) {
-            return Error::propagate(std::move(completed));
-        }
+        process(samples, offset, fallback, result);
         return result;
     }
 
     template <typename PixelType>
-    Expected<void> process(
-        const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, const std::array<float, 3>& fallback, radix::Raster<PixelType>& result)
+    void process(const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, const std::array<float, 3>& fallback, radix::Raster<PixelType>& result)
     {
         const unsigned side = result.width();
-        if (side == 0 || result.height() != side || samples.data.size() != samples.valid.size()) {
-            return Error::fail(Error::Code::InvalidInput, "NoData processing requires matching input masks and a square output");
-        }
-        auto original = raster::make_view(samples.data, offset, glm::uvec2(side));
-        auto valid = raster::make_view(samples.valid, offset, glm::uvec2(side));
-        if (!original) {
-            return Error::propagate(std::move(original));
-        }
-        if (!valid) {
-            return Error::propagate(std::move(valid));
-        }
+        ASSERT(side > 0 && result.height() == side && samples.data.size() == samples.valid.size());
+        const auto original = Error::asserting_unwrap(raster::make_view(samples.data, offset, glm::uvec2(side)));
+        const auto valid = Error::asserting_unwrap(raster::make_view(samples.valid, offset, glm::uvec2(side)));
         if (std::ranges::all_of(samples.valid.buffer(), [](auto value) { return value != 0; })) {
-            if (auto copied = raster::algorithm::copy(*original, result); !copied) {
-                return Error::propagate(std::move(copied));
-            }
-            return {};
+            Error::asserting_unwrap(raster::algorithm::copy(original, result));
+            return;
         }
         resize(m_work, samples.data.size());
         constexpr unsigned channels = std::is_same_v<PixelType, float> ? 1 : 3;
         for (unsigned channel = 0; channel < channels; ++channel) {
-            auto initialized = raster::algorithm::zip_transform(
+            Error::asserting_unwrap(raster::algorithm::zip_transform(
                 samples.data,
                 samples.valid,
                 [&](const PixelType& value, std::uint8_t source_valid) -> float {
@@ -72,17 +60,11 @@ public:
                         return value[channel];
                     }
                 },
-                m_work);
-            if (!initialized) {
-                return Error::propagate(std::move(initialized));
-            }
-            auto completed = complete(samples.valid, offset, side);
-            if (!completed) {
-                return Error::propagate(std::move(completed));
-            }
+                m_work));
+            const auto completed = complete(samples.valid, offset, side);
             const auto output = raster::make_view(result);
-            auto composed = raster::algorithm::zip_transform(
-                std::tuple { *original, *valid, *completed, output },
+            Error::asserting_unwrap(raster::algorithm::zip_transform(
+                std::tuple { original, valid, completed, output },
                 [&](const PixelType& value, std::uint8_t source_valid, float replacement, PixelType previous) -> PixelType {
                     if (source_valid) {
                         return value;
@@ -94,12 +76,8 @@ public:
                         return previous;
                     }
                 },
-                result);
-            if (!composed) {
-                return Error::propagate(std::move(composed));
-            }
+                result));
         }
-        return {};
     }
 
 private:
@@ -109,7 +87,7 @@ private:
     {
     }
     static void resize(radix::Raster<float>& raster, glm::uvec2 size);
-    Expected<raster::View<const float>> complete(const radix::Raster<std::uint8_t>& valid, glm::uvec2 offset, unsigned side);
+    raster::View<const float> complete(const radix::Raster<std::uint8_t>& valid, glm::uvec2 offset, unsigned side);
 
     unsigned m_search_radius;
     std::vector<double> m_weights;

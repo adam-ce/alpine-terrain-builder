@@ -15,7 +15,9 @@
 
 namespace rf_builder::run {
 using Key = radix::tile::Id;
-using Poll = std::function<Expected<void>()>;
+// Checks for cancellation and checkpoints; throws Error::Exception with code
+// Cancelled after saving the completed tiles.
+using Poll = std::function<void()>;
 struct Options {
     std::filesystem::path output;
     unsigned tile_side = 4096;
@@ -42,26 +44,33 @@ struct NetworkStats {
 
 // Source callbacks run on the coordinator except prepare, which owns one state
 // instance per worker. Source selection/weights never depend on output mutation.
+// total, next, initialize and prepare throw Error::Exception on failure.
 template <typename PixelType>
 struct Source {
     raster_store::attribution::Entity attribution;
     std::function<Expected<void>(const std::filesystem::path&)> validate_cache;
     std::function<Expected<void>(const std::filesystem::path&)> write_inputs;
-    std::function<Expected<double>(const Poll&)> total;
-    std::function<Expected<std::optional<Key>>(const Poll&)> next;
-    std::function<Expected<void>(unsigned, const Poll&)> initialize;
-    std::function<Expected<Prepared<PixelType>>(unsigned, const Key&)> prepare;
+    std::function<double(const Poll&)> total;
+    std::function<std::optional<Key>(const Poll&)> next;
+    std::function<void(unsigned, const Poll&)> initialize;
+    std::function<Prepared<PixelType>(unsigned, const Key&)> prepare;
     // Present only for online sources. Refine virtual cached ancestors before HTTP.
     std::function<Subdivide(const Key&)> refine_cached;
     std::function<double(const Key&)> weight;
     std::function<NetworkStats()> network_stats;
 };
 
-Expected<void> validate_options(const Options& options);
+// Throws Error::Exception for invalid attribution indices and tile sizes.
+void validate_options(const Options& options);
 Expected<raster_store::attribution::Entity> attribution(const Options& options);
 Expected<std::string> identifier(const std::string& input);
 std::string gdal_identifier(const std::string& input);
 Expected<void> check_link_filesystem(const std::filesystem::path& cache, const std::filesystem::path& output);
+// Builds and publishes the snapshot at options.output. Throws Error::Exception
+// for invalid inputs and failures; a failure during production retains the
+// incomplete .part snapshot with its completed tiles indexed. When
+// stop_requested returns true, active tiles are finished and saved, then an
+// Error::Exception with code Cancelled is thrown.
 template <typename PixelType>
-Expected<Report> execute(const Options& options, Source<PixelType> source, const std::function<bool()>& stop_requested = {});
+Report execute(const Options& options, Source<PixelType> source, const std::function<bool()>& stop_requested = {});
 } // namespace rf_builder::run

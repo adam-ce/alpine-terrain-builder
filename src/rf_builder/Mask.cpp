@@ -1,4 +1,5 @@
 #include "Mask.h"
+#include <libassert/assert.hpp>
 #include <numbers>
 #include <numeric>
 #include <CGAL/Arr_trapezoid_ric_point_location.h>
@@ -184,9 +185,7 @@ Expected<Mask> Mask::open(const std::string& identifier)
 
 Expected<void> Mask::select(const std::span<const glm::dvec2> centres, const std::span<std::uint8_t> validity) const
 {
-    if (centres.size() != validity.size()) {
-        return Error::fail(Error::Code::Internal, "mask coordinates and validity dimensions disagree");
-    }
+    ASSERT(centres.size() == validity.size());
     if (std::ranges::none_of(validity, [](auto value) { return value != 0; })) { return {}; }
     std::vector<double> x(centres.size()), y(centres.size());
     std::vector<int> success(centres.size());

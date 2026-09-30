@@ -5,8 +5,8 @@
 #include <cctype>
 #include <charconv>
 #include <exception>
+#include <libassert/assert.hpp>
 #include <limits>
-#include <stdexcept>
 #include <string_view>
 #include <thread>
 
@@ -107,18 +107,16 @@ HttpClient::HttpClient(NetworkCounters& counters, std::size_t response_limit, Re
     , m_response_limit(response_limit)
     , m_policy(policy)
 {
+    // The retry policy is an internal execution setting, not user input.
+    ASSERT(m_policy.deadline.count() > 0 && m_policy.initial_wait.count() > 0 && m_policy.request_timeout.count() > 0 && m_policy.connect_timeout.count() > 0);
     static const auto initialized = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (initialized != CURLE_OK || !(m_curl = curl_easy_init())) {
-        throw std::runtime_error("initialize RF curl client");
+        Error::raise(Error::Code::Internal, "initialize RF curl client");
     }
 }
 HttpClient::~HttpClient() { curl_easy_cleanup(m_curl); }
 Expected<std::optional<std::vector<std::byte>>> HttpClient::get(const std::string& url)
 {
-    if (m_policy.deadline.count() <= 0 || m_policy.initial_wait.count() <= 0 || m_policy.request_timeout.count() <= 0
-        || m_policy.connect_timeout.count() <= 0) {
-        return Error::fail(Error::Code::InvalidInput, "HTTP retry durations must be positive");
-    }
     const auto deadline = std::chrono::steady_clock::now() + m_policy.deadline;
     auto delay = m_policy.initial_wait;
     std::uint64_t attempt = 0;

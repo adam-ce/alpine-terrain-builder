@@ -116,7 +116,6 @@ TEST_CASE("RF mask batches agree with ring tests across holes overlaps and share
     REQUIRE(loaded->select(invalid_points, invalid));
     CHECK(invalid == std::vector<std::uint8_t> { 0, 0 });
     REQUIRE(loaded->select({}, {}));
-    CHECK_FALSE(loaded->select(points, {}));
     auto moved = std::move(*loaded);
     interior_validity.assign(64, 1);
     REQUIRE(moved.select(interior, interior_validity));

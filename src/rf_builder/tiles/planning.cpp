@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <libassert/assert.hpp>
 namespace rf_builder::tiles::planning {
 namespace {
     std::optional<Bounds> overlap(const Bounds& a, const Bounds& b)
@@ -90,13 +91,11 @@ Cursor::Cursor(const Coverage& coverage, unsigned zoom, run::Key region)
     , m_region(region)
 {
 }
-Expected<std::optional<run::Key>> Cursor::next(const run::Poll& poll)
+std::optional<run::Key> Cursor::next(const run::Poll& poll)
 {
     while (!m_pending.empty()) {
         if (poll) {
-            if (auto checked = poll(); !checked) {
-                return Error::propagate(std::move(checked));
-            }
+            poll();
         }
         const auto key = m_pending.back();
         m_pending.pop_back();
@@ -106,10 +105,9 @@ Expected<std::optional<run::Key>> Cursor::next(const run::Poll& poll)
         if (key.zoom_level == m_zoom) {
             return std::optional(key);
         }
-        auto children = raster_store::StoreTraits::children(key);
-        if (!children) {
-            return Error::fail(Error::Code::InvalidInput, "online root zoom exceeds supported tile keys");
-        }
+        // Provider validation bounds the target zoom by the maximum tile zoom.
+        const auto children = raster_store::StoreTraits::children(key);
+        ASSERT(children, to_string(key), m_zoom);
         m_pending.insert(m_pending.end(), children->rbegin(), children->rend());
     }
     return std::nullopt;

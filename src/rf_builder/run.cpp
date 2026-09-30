@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <fmt/chrono.h>
+#include <libassert/assert.hpp>
 #include <limits>
 #include <memory>
 #include <sys/stat.h>
@@ -49,13 +50,15 @@ Expected<void> check_link_filesystem(const std::filesystem::path& cache, const s
     return {};
 }
 
-Expected<void> validate_options(const Options& options)
+void validate_options(const Options& options)
 {
-    if (options.jobs == 0 || options.tile_side == 0 || options.tile_side > unsigned((std::numeric_limits<int>::max)()) || options.attribution_index == 0
+    // The command line requires positive worker counts and tile sizes.
+    ASSERT(options.jobs > 0);
+    ASSERT(options.tile_side > 0);
+    if (options.tile_side > unsigned((std::numeric_limits<int>::max)()) || options.attribution_index == 0
         || options.attribution_index >= raster_store::attribution::index_limit) {
-        return Error::fail(Error::Code::InvalidInput, "RF requires positive jobs/dimensions and attribution in 1..65534");
+        Error::raise(Error::Code::InvalidInput, "RF requires tile dimensions within GDAL limits and attribution in 1..65534");
     }
-    return {};
 }
 Expected<raster_store::attribution::Entity> attribution(const Options& options)
 {
@@ -73,44 +76,27 @@ Expected<raster_store::attribution::Entity> attribution(const Options& options)
 }
 
 template <typename PixelType>
-Expected<Report> execute(const Options& options, Source<PixelType> source, const std::function<bool()>& stop_requested)
+Report execute(const Options& options, Source<PixelType> source, const std::function<bool()>& stop_requested)
 {
-    if (auto checked = validate_options(options); !checked) {
-        return Error::propagate(std::move(checked));
-    }
+    validate_options(options);
     std::unique_ptr<const raster_store::storage::IndexedStorage<PixelType>> cache;
     if (options.cache) {
-        if (auto valid = source.validate_cache(*options.cache); !valid) {
-            return Error::propagate(std::move(valid));
-        }
-        auto opened = raster_store::storage::open<PixelType>(*options.cache, { .allow_incomplete = true });
-        if (!opened) {
-            return Error::propagate(std::move(opened));
-        }
-        auto [input, metadata] = std::move(*opened);
+        Error::throwing_unwrap(source.validate_cache(*options.cache));
+        auto [input, metadata] = Error::throwing_unwrap(raster_store::storage::open<PixelType>(*options.cache, { .allow_incomplete = true }), "open RF cache");
         if (metadata->nominal_tile_size != options.tile_side || metadata->stored_tile_size != options.tile_side || metadata->halo_width != 0
             || metadata->value_mapping != options.value_mapping.value_or(raster_store::pixel::default_mapping<PixelType>)
             || metadata->codec_selector != "amort") {
-            return Error::fail(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions, halo, mapping, or codec");
+            Error::raise(Error::Code::InvalidInput, "RF cache metadata disagrees with requested dimensions, halo, mapping, or codec");
         }
-        auto table = raster_store::attribution::read_table(*options.cache / raster_store::io::manifest::index_file_name);
-        if (!table) {
-            return Error::propagate(std::move(table));
+        const auto table = Error::throwing_unwrap(raster_store::attribution::read_table(*options.cache / raster_store::io::manifest::index_file_name));
+        if (*Error::throwing_unwrap(table.at(options.attribution_index)) != source.attribution) {
+            Error::raise(Error::Code::InvalidInput, "RF cache attribution entry disagrees with the output table");
         }
-        auto entry = table->at(options.attribution_index);
-        if (!entry) {
-            return Error::propagate(std::move(entry));
-        }
-        if (**entry != source.attribution) {
-            return Error::fail(Error::Code::InvalidInput, "RF cache attribution entry disagrees with the output table");
-        }
-        if (auto checked = check_link_filesystem(*options.cache, options.output); !checked) {
-            return Error::propagate(std::move(checked));
-        }
+        Error::throwing_unwrap(check_link_filesystem(*options.cache, options.output));
         if (source.refine_cached) {
             for (const auto& [key, status] : input->index()) {
                 if (status == store::NodeStatus::Inner) {
-                    return Error::fail(Error::Code::CorruptData, "online RF cache contains overlapping physical ancestors/descendants at " + to_string(key));
+                    Error::raise(Error::Code::CorruptData, "online RF cache contains overlapping physical ancestors/descendants at " + to_string(key));
                 }
             }
         }
@@ -120,39 +106,31 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     create_options.nominal_tile_size = options.tile_side;
     create_options.halo_width = 0;
     create_options.value_mapping = options.value_mapping;
-    auto created = raster_store::storage::create<PixelType>(options.output, create_options);
-    if (!created) {
-        return Error::propagate(std::move(created));
-    }
-    auto [output, metadata] = std::move(*created);
+    auto output = std::move(Error::throwing_unwrap(raster_store::storage::create<PixelType>(options.output, create_options), "create RF output").first);
     const auto input_path = output->base_path() / "inputs.tmp";
-    if (auto written = source.write_inputs(input_path); !written) {
-        return Error::propagate(std::move(written));
-    }
+    Error::throwing_unwrap(source.write_inputs(input_path), "write RF input record");
     Report report { .tile_side = options.tile_side };
     auto last_checkpoint = std::chrono::steady_clock::now();
-    const auto checkpoint = [&]() -> Expected<void> {
+    const auto checkpoint = [&] {
         if (std::chrono::steady_clock::now() - last_checkpoint < std::chrono::minutes(2)) {
-            return {};
+            return;
         }
-        if (auto saved = output->save_index(); !saved) {
-            return saved;
-        }
+        Error::throwing_unwrap(output->save_index(), "checkpoint RF index");
         last_checkpoint = std::chrono::steady_clock::now();
         LOG_INFO("RF checkpoint: {} tiles, {} bytes", report.tile_count, report.tile_bytes);
-        return {};
     };
-    const auto initial_poll = [&]() -> Expected<void> {
+    const auto cancel = [&] {
+        Error::throwing_unwrap(output->save_index(), "checkpoint cancelled RF import");
+        LOG_INFO("RF cancelled: checkpointed {} tiles; incomplete snapshot retained", report.tile_count);
+        Error::raise(Error::Code::Cancelled, "RF import cancelled; incomplete snapshot retained");
+    };
+    const auto initial_poll = [&] {
         if (stop_requested && stop_requested()) {
-            return Error::fail(Error::Code::Cancelled, "RF import cancelled; incomplete snapshot retained");
+            cancel();
         }
-        return checkpoint();
+        checkpoint();
     };
-    auto counted = source.total(initial_poll);
-    if (!counted) {
-        return Error::propagate(std::move(counted));
-    }
-    const double total = *counted;
+    const double total = source.total(initial_poll);
     const bool geographic = bool(source.refine_cached);
     const auto started = std::chrono::steady_clock::now();
     auto last_progress = started;
@@ -205,10 +183,15 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     };
     progress(true);
     const unsigned jobs = geographic ? (total > 0 ? options.jobs : 0) : unsigned((std::min)(double(options.jobs), total));
-    if (auto initialized = source.initialize(jobs, initial_poll); !initialized) {
-        return Error::propagate(std::move(initialized));
-    }
-    raster_store::TilePool<Prepared<PixelType>> pool(jobs, source.prepare);
+    source.initialize(jobs, initial_poll);
+    // Worker exceptions travel through the pool as errors and are rethrown by the coordinator.
+    raster_store::TilePool<Prepared<PixelType>> pool(jobs, [&](unsigned worker, const Key& key) -> Expected<Prepared<PixelType>> {
+        try {
+            return source.prepare(worker, key);
+        } catch (const Error::Exception& exception) {
+            return Error::propagate(Error(exception.error()), "prepare RF tile " + to_string(key));
+        }
+    });
     // Each lane traverses depth first and has only one outstanding preparation.
     // Thus each stack retains at most three siblings per level, independently of
     // completion order. Pool slots bound all queued/active/completed payloads.
@@ -218,38 +201,21 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
     };
     std::vector<Lane> lanes(std::size_t(jobs) * 2);
     bool exhausted = jobs == 0, cancelled = false;
-    std::optional<Error> failure = std::nullopt;
     LOG_INFO("RF workers: {}; at most {} outstanding tiles", jobs, lanes.size());
-    const auto poll = [&]() -> Expected<void> {
-        if (auto error = pool.failure(); error && !failure) {
-            failure = std::move(*error);
+    // The pool records the first worker failure, even when failed results are
+    // consumed out of order.
+    const auto rethrow_failure = [&] {
+        if (auto first = pool.failure()) {
+            throw Error::Exception(Error::propagate(std::move(*first), "produce RF snapshot").error());
         }
-        if (!cancelled && stop_requested && stop_requested()) {
-            cancelled = true;
-            LOG_INFO("RF cancellation requested: discarding queued work and finishing active tiles");
-        }
-        if (failure || cancelled) {
-            pool.stop();
-        }
-        progress(false);
-        if (failure) {
-            return Error::propagate(Error(*failure));
-        }
-        if (cancelled) {
-            return Error::fail(Error::Code::Cancelled, "RF import cancelled; incomplete snapshot retained");
-        }
-        return checkpoint();
     };
-    const auto finish = [&](const Key& key, bool reused, bool payload) -> Expected<void> {
+    const auto finish = [&](const Key& key, bool reused, bool payload) {
         if (payload) {
-            auto path = output->path_for(key);
-            if (!path) {
-                return Error::propagate(std::move(path));
-            }
+            const auto path = Error::asserting_unwrap(output->path_for(key));
             std::error_code error;
-            const auto bytes = std::filesystem::file_size(*path, error);
+            const auto bytes = std::filesystem::file_size(path, error);
             if (error) {
-                return Error::fail(Error::Code::Io, "measure RF payload", *path, error);
+                Error::raise(Error::Code::Io, "measure RF payload", path, error);
             }
             report.tile_bytes += bytes;
             ++report.tile_count;
@@ -264,54 +230,59 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
         }
         ++candidates;
         progress(candidates == 1 || completed >= total);
-        return checkpoint();
+        checkpoint();
     };
-    const auto subdivide = [&](Lane& lane, const Key& parent, Subdivide division) -> Expected<void> {
+    const auto subdivide = [&](Lane& lane, const Key& parent, Subdivide division) {
         const auto children = raster_store::StoreTraits::children(parent);
-        if (!children || division.children.size() > 4) {
-            return Error::fail(Error::Code::Internal, "invalid RF subdivision");
-        }
+        ASSERT(children && division.children.size() <= 4, to_string(parent));
         for (std::size_t i = 0; i < division.children.size(); ++i) {
             const auto child = division.children[i];
-            if (std::ranges::find(*children, child) == children->end()
-                || std::find(division.children.begin(), division.children.begin() + i, child) != division.children.begin() + i) {
-                return Error::fail(Error::Code::Internal, "invalid or duplicate RF subdivision child");
-            }
+            ASSERT(std::ranges::find(*children, child) != children->end()
+                    && std::find(division.children.begin(), division.children.begin() + i, child) == division.children.begin() + i,
+                to_string(parent),
+                to_string(child));
         }
         lane.pending.insert(lane.pending.end(), division.children.rbegin(), division.children.rend());
-        return {};
     };
-    const auto consume = [&](typename raster_store::TilePool<Prepared<PixelType>>::Completed done) -> Expected<void> {
+    const auto consume = [&](typename raster_store::TilePool<Prepared<PixelType>>::Completed done) {
         auto lane = std::ranges::find_if(lanes, [&](const auto& item) { return item.active == done.key; });
-        if (lane == lanes.end()) {
-            return Error::fail(Error::Code::Internal, "completed RF candidate has no scheduling lane");
-        }
+        ASSERT(lane != lanes.end(), to_string(done.key));
         lane->active.reset();
-        if (!done.result) {
-            if (auto first = pool.failure()) {
-                return Error::propagate(std::move(*first));
+        rethrow_failure();
+        // A failed result always sets the pool failure first.
+        auto prepared = Error::asserting_unwrap(std::move(done.result));
+        if (auto* division = std::get_if<Subdivide>(&prepared)) {
+            if (!cancelled) {
+                subdivide(*lane, done.key, std::move(*division));
             }
-            return Error::propagate(std::move(done.result));
+            return;
         }
-        if (failure) {
-            return {};
-        }
-        if (auto* division = std::get_if<Subdivide>(&*done.result)) {
-            return cancelled ? Expected<void>() : subdivide(*lane, done.key, std::move(*division));
-        }
-        auto* tile = std::get_if<raster_store::Tile<PixelType>>(&*done.result);
+        auto* tile = std::get_if<raster_store::Tile<PixelType>>(&prepared);
         if (tile) {
-            if (auto saved = output->save(done.key, *tile); !saved) {
-                return saved;
-            }
+            Error::throwing_unwrap(output->save(done.key, *tile), "write RF tile " + to_string(done.key));
         }
-        return finish(done.key, false, tile != nullptr);
+        finish(done.key, false, tile != nullptr);
     };
-    const auto schedule = [&](Lane& lane) -> Expected<void> {
-        while (!lane.active) {
-            if (auto checked = poll(); !checked) {
-                return checked;
+    // Cancellation discards queued work, saves the active tiles and throws.
+    const auto poll = [&] {
+        rethrow_failure();
+        if (stop_requested && stop_requested()) {
+            LOG_INFO("RF cancellation requested: discarding queued work and finishing active tiles");
+            cancelled = true;
+            pool.stop();
+            while (pool.outstanding() != 0) {
+                if (auto done = pool.take(std::chrono::milliseconds(100))) {
+                    consume(std::move(*done));
+                }
             }
+            cancel();
+        }
+        progress(false);
+        checkpoint();
+    };
+    const auto schedule = [&](Lane& lane) {
+        while (!lane.active) {
+            poll();
             if (lane.pending.empty()) {
                 // Idle lanes take a sibling subtree before requesting another
                 // root. Without this, a one-root import uses only one worker.
@@ -322,104 +293,58 @@ Expected<Report> execute(const Options& options, Source<PixelType> source, const
                     continue;
                 }
                 if (exhausted) {
-                    return {};
+                    return;
                 }
-                auto next = source.next(poll);
+                const auto next = source.next(poll);
                 if (!next) {
-                    return Error::propagate(std::move(next));
-                }
-                if (!*next) {
                     exhausted = true;
-                    return {};
+                    return;
                 }
-                lane.pending.push_back(**next);
+                lane.pending.push_back(*next);
             }
             const auto key = lane.pending.back();
             lane.pending.pop_back();
             if (cache) {
-                auto present = cache->index().get(key);
-                if (!present) {
-                    return Error::propagate(std::move(present));
-                }
-                if (*present && **present != store::NodeStatus::Virtual) {
-                    if (auto linked = output->copy_from(key, *cache); !linked) {
-                        return linked;
-                    }
-                    if (auto finished = finish(key, true, true); !finished) {
-                        return finished;
-                    }
+                const auto present = Error::asserting_unwrap(cache->index().get(key));
+                if (present && *present != store::NodeStatus::Virtual) {
+                    Error::throwing_unwrap(output->copy_from(key, *cache), "hard-link RF cache tile " + to_string(key));
+                    finish(key, true, true);
                     continue;
                 }
-                if (*present && source.refine_cached) {
-                    if (auto divided = subdivide(lane, key, source.refine_cached(key)); !divided) {
-                        return divided;
-                    }
+                if (present && source.refine_cached) {
+                    subdivide(lane, key, source.refine_cached(key));
                     continue;
                 }
             }
             if (!pool.submit(key)) {
-                if (auto first = pool.failure()) {
-                    return Error::propagate(std::move(*first));
-                }
-                return Error::fail(Error::Code::Internal, "RF pool rejected available scheduling lane");
+                rethrow_failure();
+                PANIC("RF pool rejected an available scheduling lane", to_string(key));
             }
             lane.active = key;
         }
-        return {};
     };
     for (;;) {
-        auto checked = poll();
-        if (!checked && checked.error().code() != Error::Code::Cancelled && !failure) {
-            failure = std::move(checked).error();
-            pool.stop();
+        poll();
+        for (auto& lane : lanes) {
+            schedule(lane);
         }
-        if (!failure && !cancelled) {
-            for (auto& lane : lanes) {
-                if (auto scheduled = schedule(lane); !scheduled) {
-                    if (scheduled.error().code() != Error::Code::Cancelled && !failure) {
-                        failure = std::move(scheduled).error();
-                    }
-                    pool.stop();
-                    break;
-                }
-            }
-        }
-        if (pool.outstanding() == 0
-            && (failure || cancelled || (exhausted && std::ranges::all_of(lanes, [](const auto& lane) { return lane.pending.empty(); })))) {
+        if (pool.outstanding() == 0 && exhausted && std::ranges::all_of(lanes, [](const auto& lane) { return lane.pending.empty(); })) {
             break;
         }
         if (auto done = pool.take(std::chrono::milliseconds(100))) {
-            if (auto consumed = consume(std::move(*done)); !consumed && !failure) {
-                failure = std::move(consumed).error();
-                pool.stop();
-            }
+            consume(std::move(*done));
         }
     }
     pool.join();
-    if (auto checked = poll(); !checked && checked.error().code() != Error::Code::Cancelled && !failure) {
-        failure = std::move(checked).error();
-    }
-    if (failure) {
-        return Error::propagate(std::move(*failure), "produce RF snapshot");
-    }
-    if (cancelled) {
-        if (auto saved = output->save_index(); !saved) {
-            return Error::propagate(std::move(saved));
-        }
-        LOG_INFO("RF cancelled: checkpointed {} tiles; incomplete snapshot retained", report.tile_count);
-        return Error::fail(Error::Code::Cancelled, "RF import cancelled; incomplete snapshot retained");
-    }
     progress(true);
     LOG_INFO("RF finalizing: publishing {} tiles", report.tile_count);
     std::error_code error;
     if (!std::filesystem::remove(input_path, error)) {
-        return Error::fail(Error::Code::Io, "remove RF input record before publication", input_path, error);
+        Error::raise(Error::Code::Io, "remove RF input record before publication", input_path, error);
     }
-    if (auto published = raster_store::storage::publish(std::move(output)); !published) {
-        return Error::propagate(std::move(published));
-    }
+    Error::throwing_unwrap(raster_store::storage::publish(std::move(output)), "publish RF snapshot");
     return report;
 }
-template Expected<Report> execute<float>(const Options&, Source<float>, const std::function<bool()>&);
-template Expected<Report> execute<glm::u8vec3>(const Options&, Source<glm::u8vec3>, const std::function<bool()>&);
+template Report execute<float>(const Options&, Source<float>, const std::function<bool()>&);
+template Report execute<glm::u8vec3>(const Options&, Source<glm::u8vec3>, const std::function<bool()>&);
 } // namespace rf_builder::run

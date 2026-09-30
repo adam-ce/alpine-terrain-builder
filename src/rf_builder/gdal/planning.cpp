@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <libassert/assert.hpp>
 #include <optional>
 #include "raster_store/StoreTraits.h"
 
@@ -77,16 +78,12 @@ Cursor::Cursor(unsigned side, const std::vector<Bounds>& source_bounds, const st
         }
     }
 }
-Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expected<void>()>& poll)
+std::optional<radix::tile::Id> Cursor::next(const std::function<void()>& poll)
 {
-    if (m_side == 0) {
-        return Error::fail(Error::Code::InvalidInput, "RF tile side must be positive");
-    }
+    ASSERT(m_side > 0);
     while (!m_pending.empty()) {
         if (poll) {
-            if (auto saved = poll(); !saved) {
-                return Error::propagate(std::move(saved));
-            }
+            poll();
         }
         const auto key = m_pending.back();
         m_pending.pop_back();
@@ -119,11 +116,8 @@ Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expect
                     continue;
                 }
                 intersects = true;
-                auto estimated = estimate(*overlap, spacing, m_transform);
-                if (!estimated) {
-                    return Error::propagate(std::move(estimated), "estimate resolution for RF tile " + to_string(key));
-                }
-                ratio = (std::max)(ratio, *estimated);
+                ratio
+                    = (std::max)(ratio, Error::throwing_unwrap(estimate(*overlap, spacing, m_transform), "estimate resolution for RF tile " + to_string(key)));
                 if (ratio > sampling_limit) {
                     break;
                 }
@@ -136,7 +130,7 @@ Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expect
         } else {
             const auto children = raster_store::StoreTraits::children(key);
             if (!children) {
-                return Error::fail(Error::Code::Unsupported, "RF sampling limit cannot be met at maximum zoom " + to_string(key));
+                Error::raise(Error::Code::Unsupported, "RF sampling limit cannot be met at maximum zoom " + to_string(key));
             }
             // Reverse insertion gives stable northwest-first traversal.
             m_pending.insert(m_pending.end(), children->rbegin(), children->rend());
@@ -145,26 +139,17 @@ Expected<std::optional<radix::tile::Id>> Cursor::next(const std::function<Expect
     return std::nullopt;
 }
 
-Expected<void> traverse(const unsigned side,
+void traverse(const unsigned side,
     const std::vector<Bounds>& source_bounds,
     const std::vector<Bounds>& mask_bounds,
     const Transform& transform,
     const Visit& visit,
-    const std::function<Expected<void>()>& checkpoint,
+    const std::function<void()>& checkpoint,
     unsigned halo_width)
 {
     Cursor cursor(side, source_bounds, mask_bounds, transform, halo_width);
-    for (;;) {
-        auto key = cursor.next(checkpoint);
-        if (!key) {
-            return Error::propagate(std::move(key));
-        }
-        if (!*key) {
-            return {};
-        }
-        if (auto visited = visit(**key); !visited) {
-            return visited;
-        }
+    while (const auto key = cursor.next(checkpoint)) {
+        visit(*key);
     }
 }
 

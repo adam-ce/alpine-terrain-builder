@@ -10,5 +10,6 @@ struct Options {
     RetryPolicy retry;
     std::size_t source_cache_bytes = 64 * 1024 * 1024;
 };
-Expected<run::Report> build(const Options& options, const std::function<bool()>& stop_requested = {});
+// Throws Error::Exception for invalid inputs and failures, as run::execute.
+run::Report build(const Options& options, const std::function<bool()>& stop_requested = {});
 } // namespace rf_builder::tiles

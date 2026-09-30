@@ -1,8 +1,7 @@
 /*****************************************************************************
- * Alpine Terrain Builder
- * Copyright (C) 2022 alpinemaps.org
- * Copyright (C) 2022 Adam Celarek <family name at cg tuwien ac at>
- * Copyright (C) 2025 Martin Braunsperger <e11909911@student.tuwien.ac.at>
+ * AlpineMaps.org
+ * Copyright (C) 2022 Adam Celarek-Litofcenko
+ * Copyright (C) 2025 Martin Braunsperger
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

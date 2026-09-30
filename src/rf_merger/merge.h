@@ -17,8 +17,7 @@ struct Options {
     std::filesystem::path output;
     unsigned jobs = 1;
     std::optional<std::filesystem::path> cache = std::nullopt;
-    io::envelope::CompressionAlgorithm compression_algorithm = io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum;
-    io::envelope::ChecksumAlgorithm checksum_algorithm = io::envelope::ChecksumAlgorithm::HandledByCompressionLib;
+    io::envelope::CompressionAlgorithm compression_algorithm = io::envelope::CompressionAlgorithm::ZstdDefaultCompression;
 };
 
 struct Report {

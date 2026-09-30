@@ -231,7 +231,7 @@ TEST_CASE("octree opening retains index failures without directory fallback", "[
     REQUIRE_FALSE(unknown_codec.has_value());
     CHECK(unknown_codec.error().code() == Error::Code::Unsupported);
 
-    const std::array<uint8_t, 3> malformed_bytes { 0xff, 0x00, 0x01 };
+    const std::array malformed_bytes { std::byte { 0xff }, std::byte { 0x00 }, std::byte { 0x01 } };
     REQUIRE(io::write_bytes_to_path(malformed_bytes, index_path).has_value());
     const auto malformed = mesh::storage::open_folder_indexed(directory.path());
     REQUIRE_FALSE(malformed.has_value());

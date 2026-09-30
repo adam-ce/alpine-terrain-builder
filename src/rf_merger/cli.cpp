@@ -13,18 +13,12 @@ void configure(CLI::App& app, merge::Options& options)
     app.add_option_function<std::string>(
            "--compression",
            [&options](const auto& value) {
-               using io::envelope::ChecksumAlgorithm;
                using io::envelope::CompressionAlgorithm;
-               if (value == "none") {
-                   options.compression_algorithm = CompressionAlgorithm::None;
-                   options.checksum_algorithm = ChecksumAlgorithm::Crc32c;
-               } else {
-                   options.compression_algorithm = value == "zstd-best" ? CompressionAlgorithm::ZstdBestCompressionWithChecksum
-                                                                        : CompressionAlgorithm::ZstdDefaultCompressionWithChecksum;
-                   options.checksum_algorithm = ChecksumAlgorithm::HandledByCompressionLib;
-               }
+               options.compression_algorithm = value == "none" ? CompressionAlgorithm::None
+                   : value == "zstd-best"                      ? CompressionAlgorithm::ZstdBestCompression
+                                                               : CompressionAlgorithm::ZstdDefaultCompression;
            },
-           "Output tile compression: zstd (default), zstd-best, or none with a CRC32C checksum")
+           "Output tile compression: zstd (default), zstd-best, or none")
         ->check(CLI::IsMember({ "zstd", "zstd-best", "none" }));
     app.footer(R"(Example:
   rf-merger --left rf/a --right rf/b --priorities priority.json --output rf/merged --jobs 8

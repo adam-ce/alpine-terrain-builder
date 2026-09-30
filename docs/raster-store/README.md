@@ -22,6 +22,7 @@ TB generation and the tile server remain future work.
 - [GDAL import NoData filling: policy and verification](gdal-nodata-filling.md)
 - [Online tile import extension](rf-builder-downloader-design.md)
 - [RF-merger design](rf-merger-design.md)
+- [Envelope content hashes](content-hash-plan.md)
 
 - [Tile-storage implementation plan](implementation-plan.md)
 - [Raster store TODO](todo.md)

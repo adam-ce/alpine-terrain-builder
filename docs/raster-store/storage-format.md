@@ -124,6 +124,30 @@ share an identifier. Both raster buffers use the stored dimensions and
 row-major order, with x varying fastest. No additional raster-specific limit
 is imposed on allocation; envelope serialization retains its own limits.
 
+### Envelope
+
+Every file is one `io::envelope`: a header followed by the compressed payload
+as a byte vector. The header fields are, in serialization order: `uint64_t`
+magic `0xA6EFA707D12E4404`, class-name string, `uint32_t` class version,
+`uint8_t` hash algorithm, hash byte vector, `uint8_t` compression algorithm
+and `uint64_t` uncompressed size. Strings and vectors carry a 32-bit size
+prefix. Class names are at most 128 bytes and hashes at most 64 bytes, so the
+header fits in `io::envelope::max_header_size`, 222 bytes.
+
+Hash algorithms are 0 for `None`, which stores an empty hash, and 1 for
+`Xxh3_64`: XXH3-64 with seed 0 over the uncompressed payload, stored as 8
+big-endian bytes. Compression algorithms are 0 for `None`, 1 for
+`ZstdBestCompression` and 2 for `ZstdDefaultCompression`; Zstandard frames are
+written without their frame checksum. Writers default to `Xxh3_64` with
+`ZstdDefaultCompression`. Readers reject other magic values, unknown
+enumerators and oversized names or hashes, and verify the recorded hash
+against the decompressed payload.
+
+`io::envelope::read_header` decodes only the header from a file prefix. Its
+hash identifies the payload content, for example for TB dependency records,
+but that read does not verify it. See the
+[hash decision](../adr/0005-xxh3-64-envelope-hashes.md).
+
 ### Sparse quadtree index
 
 The hierarchy is a Web Mercator (EPSG:3857) quadtree keyed by
@@ -160,10 +184,11 @@ struct Tile {
 ```
 
 Tile files use the `.amort` extension (AlpineMapsOrg raster tile) and
-`io::envelope`. The writer exposes the envelope compression option, defaulting
-to standard Zstandard compression with checksum. Readers accept the
-algorithms supported by `io::envelope`; each envelope records its selected
-algorithm. Writing is lossless to preserve data through repeated merging and
+`io::envelope`. The writer exposes the envelope compression and hash options,
+defaulting to standard Zstandard compression and an XXH3-64 hash. Readers
+accept the algorithms supported by `io::envelope`; each envelope records its
+selected algorithms. Tiles hard-linked from another snapshot keep the hash of
+their source. Writing is lossless to preserve data through repeated merging and
 overview generation. Different codecs may be used for writing and reading
 when their representations are compatible. The first version stores no
 derived tile metadata such as extrema or contributing-attribution lists.

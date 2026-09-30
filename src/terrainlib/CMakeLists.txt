@@ -61,8 +61,9 @@ add_library(terrainlib
     io/compression.h io/compression.cpp
     io/conversion.h
     io/image.h io/image.cpp
-    io/envelope.h
+    io/envelope.h io/envelope.cpp
     io/glm_serialization.h
+    io/hash.h io/hash.cpp
     io/utils.h io/utils.cpp
 
     mesh/EncodedMesh.h
@@ -266,6 +267,8 @@ target_link_libraries(terrainlib PUBLIC
 
 # Error captures stack traces; libassert already links cpptrace publicly.
 target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
+# Only io/hash.cpp includes xxHash.
+target_link_libraries(terrainlib PRIVATE xxhash)
 
 if(ALP_ENABLE_OVERVIEW_READING)
     target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)

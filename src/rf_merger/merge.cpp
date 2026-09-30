@@ -181,7 +181,6 @@ namespace {
         create_options.halo_width = 0;
         create_options.value_mapping = metadata.value_mapping;
         create_options.compression_algorithm = options.compression_algorithm;
-        create_options.checksum_algorithm = options.checksum_algorithm;
         auto output = std::move(Error::throwing_unwrap(storage::create<PixelType>(options.output, create_options), "create RF merger output").first);
         const auto input_path = output->base_path() / inputs::file_name;
         Error::throwing_unwrap(io::envelope::write_to_path<inputs::Schema>(record, input_path), "write RF merger input record");

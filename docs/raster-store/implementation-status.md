@@ -1,5 +1,26 @@
 # Raster-store implementation status
 
+## Envelope content hashes — 2026-09-30
+
+Implemented the [content-hash plan](content-hash-plan.md); progress is tracked
+in the [status checklist](content-hash-status.md) and the decision in
+[ADR 0005](../adr/0005-xxh3-64-envelope-hashes.md).
+
+- Envelopes have a new magic, a `Header` with a binary `hash` of the
+  uncompressed payload, and renumbered enumerators:
+  `io::hash::Algorithm { None, Xxh3_64 }` and
+  `CompressionAlgorithm { None, ZstdBestCompression, ZstdDefaultCompression }`.
+  Files written before this change are unreadable.
+- `io::hash::data` computes hashes; xxHash v0.8.3 is included only by
+  `io/hash.cpp`. `io/compression.h` only compresses and decompresses.
+- `io::envelope::read_header` reads at most 222 bytes and bounds its
+  allocations to that size. It shares the magic, enumerator and size-limit
+  checks with `deserialize`.
+- The RF merger fingerprints its inputs with the header hashes of their
+  metadata and index files.
+- Byte buffers of `io::read_bytes_from_path`, `io::write_bytes_to_path`, the
+  image encoder and decoder and the RF builder's `HttpClient` are `std::byte`.
+
 ## RF merger — 2026-09-28
 
 Implemented the [merger design](rf-merger-design.md) as `src/rf_merger` with
@@ -16,9 +37,10 @@ the `rf-merger` executable, `rfmergerlib` and `unittests_rfmerger`.
 - A supplier that must be upscaled is read with `read_tile_with_halo` only when
   the Lanczos-3 support window leaves its interior; otherwise an ordinary load
   suffices. Zoom gaps above 30 levels are rejected, as in the halo reader.
-- Fingerprints hash the complete metadata and index files with 64-bit FNV-1a.
-- `--compression` accepts `zstd` (default), `zstd-best` and `none`; `none`
-  writes a CRC32C checksum.
+- Fingerprints store the XXH3-64 payload hashes recorded in the envelope
+  headers of the metadata and index files; a file without a hash is rejected.
+- `--compression` accepts `zstd` (default), `zstd-best` and `none`; every
+  choice writes XXH3-64 tile hashes.
 - If cache statistics are missing or corrupt, restored tiles are reported as
   "restored without statistics" and the statistics as incomplete.
 - Error handling follows the three tiers in the
@@ -146,7 +168,7 @@ Tile storage is implemented and verified on Linux/GCC as of 2026-09-08.
 | Accepted decisions and documentation | Verified | Attribution ownership, JSON contract, version-1 encoding, codec selection, API usage, and shared I/O fix recorded |
 | Typed tiles and attribution tables | Verified | `raster_store/Tile.h`, `attribution.h/.cpp`; zero attribution, verbatim fields, malformed slots, lookup precedence, and boundary indices |
 | XYZ layout, index, and metadata | Verified | `raster_store/path_layout.h`, `raster_store/io/manifest.h/.cpp`; boundary paths, mixed hierarchy, corrupt topology, metadata errors, and checkpoint persistence |
-| AMORT codec | Verified | `raster_store/io/TileCodec.h`; native scalar/packed-GLM bytes, NaN bits, zero-attribution payload preservation, dimensions, byte counts, compression, checksum, and version errors |
+| AMORT codec | Verified | `raster_store/io/TileCodec.h`; native scalar/packed-GLM bytes, NaN bits, zero-attribution payload preservation, dimensions, byte counts, compression, hash, and version errors |
 | Raster scaling and paired attribution | Verified | `raster/algorithm/*.h`, `raster_store/scaler.h`, and `pixel.h`; single-raster conversion/reduction, rectangular strided windows, separable filtering, independent attribution; see [scaling verification](scaling.md#refactor-verification--2026-09-22) |
 | Creation, opening, checkpoints, publication | Verified | `raster_store/storage.h`; metadata codec selection, incomplete opening, checkpoint failures, no implicit publication, collision rejection, no payload scan, and `/dev/full` write failure |
 | Hard-link integration and regression tests | Verified | `unittests/terrainlib/raster_store.cpp`; cross-root hard links and independent attribution survive RF deletion; all six regression suites pass |

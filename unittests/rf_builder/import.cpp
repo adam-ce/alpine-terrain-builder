@@ -25,7 +25,7 @@ namespace inputs = rf_builder::gdal::inputs;
 
 void write_text(const std::filesystem::path& path, const std::string& text)
 {
-    REQUIRE(io::write_bytes_to_path(std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()), path));
+    REQUIRE(io::write_bytes_to_path(std::as_bytes(std::span(text)), path));
 }
 
 void table(const std::filesystem::path& directory)

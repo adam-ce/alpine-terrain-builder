@@ -20,7 +20,6 @@ namespace tiles = rf_builder::tiles;
 namespace run = rf_builder::run;
 namespace storage = raster_store::storage;
 using Key = run::Key;
-using Bytes = std::vector<std::uint8_t>;
 void write_text(const std::filesystem::path& path, const std::string& text)
 {
     std::ofstream stream(path);
@@ -28,7 +27,12 @@ void write_text(const std::filesystem::path& path, const std::string& text)
     REQUIRE(stream.good());
 }
 std::string path(const Key& key) { return fmt::format("/{}/{}/{}.jpeg", key.zoom_level, key.coords.x, key.coords.y); }
-Bytes image(unsigned side, cv::Scalar colour = { 0, 0, 0 }, bool pattern = false)
+std::vector<std::byte> text_bytes(const std::string_view text)
+{
+    const auto bytes = std::as_bytes(std::span(text));
+    return { bytes.begin(), bytes.end() };
+}
+std::vector<std::byte> image(unsigned side, cv::Scalar colour = { 0, 0, 0 }, bool pattern = false)
 {
     cv::Mat pixels(int(side), int(side), CV_8UC3, colour);
     if (pattern) {
@@ -38,9 +42,10 @@ Bytes image(unsigned side, cv::Scalar colour = { 0, 0, 0 }, bool pattern = false
             }
         }
     }
-    Bytes result;
+    std::vector<uchar> result;
     REQUIRE(cv::imencode(".jpg", pixels, result));
-    return result;
+    const auto encoded = std::as_bytes(std::span(result));
+    return { encoded.begin(), encoded.end() };
 }
 // Independent Lanczos-3 reference: white tile at x=[8,16), y=[0,8),
 // black elsewhere, sampled on row y=1.625 (output row 8 of this fixture).
@@ -84,7 +89,7 @@ void mask(const std::filesystem::path& file, const RasterTransform::Bounds& boun
 struct Fixture {
     test::TemporaryDirectory directory { "rf-online" };
     unsigned transient_failures = 0;
-    std::map<std::string, Bytes> pyramid;
+    std::map<std::string, std::vector<std::byte>> pyramid;
     rf_test::HttpFixture server { [this](const std::string& request, unsigned attempt) {
         if (attempt <= transient_failures) {
             return rf_test::Response { 503, {}, "" };
@@ -179,10 +184,10 @@ TEST_CASE("Online HTTP retries transient failures and only 404 means absence", "
     using namespace std::chrono_literals;
     rf_test::HttpFixture server([](const std::string& request, unsigned attempt) {
         if (request == "/redirect") {
-            return rf_test::Response { 302, { 'r', 'e', 'd' }, "Location: /retry\r\n" };
+            return rf_test::Response { 302, text_bytes("red"), "Location: /retry\r\n" };
         }
         if (request == "/retry") {
-            return rf_test::Response { attempt < 3 ? 503 : 200, { 'o', 'k' }, "" };
+            return rf_test::Response { attempt < 3 ? 503 : 200, text_bytes("ok"), "" };
         }
         if (request == "/unauthorized") {
             return rf_test::Response { 401, {}, "" };
@@ -191,10 +196,10 @@ TEST_CASE("Online HTTP retries transient failures and only 404 means absence", "
             return rf_test::Response { 429, {}, "Retry-After: 3600\r\n" };
         }
         if (request == "/slow") {
-            return rf_test::Response { 200, { 'o', 'k' }, "", 40ms };
+            return rf_test::Response { 200, text_bytes("ok"), "", 40ms };
         }
         if (request == "/large") {
-            return rf_test::Response { 200, Bytes(2000), "" };
+            return rf_test::Response { 200, std::vector<std::byte>(2000), "" };
         }
         return rf_test::Response();
     });
@@ -203,12 +208,12 @@ TEST_CASE("Online HTTP retries transient failures and only 404 means absence", "
     auto retried = client.get(server.base() + "/retry");
     REQUIRE(retried);
     REQUIRE(*retried);
-    CHECK(**retried == Bytes { 'o', 'k' });
+    CHECK(**retried == text_bytes("ok"));
     CHECK(counters.requests == 3);
     auto redirected = client.get(server.base() + "/redirect");
     REQUIRE(redirected);
     REQUIRE(*redirected);
-    CHECK(**redirected == Bytes { 'o', 'k' });
+    CHECK(**redirected == text_bytes("ok"));
     auto missing = client.get(server.base() + "/missing");
     REQUIRE(missing);
     CHECK_FALSE(*missing);
@@ -316,7 +321,7 @@ TEST_CASE("Online minimum missing coverage publishes empty and malformed sources
     const bool malformed = GENERATE(false, true);
     fixture.pyramid.clear();
     if (malformed) {
-        fixture.pyramid[path({ 3, { 2, 2 } })] = { 'b', 'a', 'd' };
+        fixture.pyramid[path({ 3, { 2, 2 } })] = text_bytes("bad");
     }
     auto result = tiles::build(fixture.options);
     if (malformed) {
@@ -792,9 +797,9 @@ TEST_CASE("Online Lanczos fallback fetches outer support and ignores unrelated n
     fixture.pyramid[path({ 3, { 2, 2 } })] = image(8);
     const auto west = path({ 3, { 1, 2 } });
     const auto east = path({ 3, { 3, 2 } });
-    fixture.pyramid[east] = { 'b', 'a', 'd' }; // Outside this window's support.
+    fixture.pyramid[east] = text_bytes("bad"); // Outside this window's support.
     if (broken_support)
-        fixture.pyramid[west] = { 'b', 'a', 'd' }; // Reached by Lanczos, but not bilinear.
+        fixture.pyramid[west] = text_bytes("bad"); // Reached by Lanczos, but not bilinear.
     const auto record = fixture.record();
     auto selection = rf_builder::Mask::open(record.mask);
     REQUIRE(selection);

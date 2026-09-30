@@ -2,9 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <string_view>
-#include <system_error>
+#include <span>
 #include <vector>
 
 #include <expected>
@@ -13,34 +11,19 @@
 
 namespace io::envelope {
 
-using Bytes = std::vector<std::byte>;
-
 inline constexpr std::size_t default_max_decompressed_size = std::size_t { 1 } << 30;
-
-enum class ChecksumAlgorithm : std::uint8_t {
-    None,
-    HandledByCompressionLib,
-    Crc32c,
-};
 
 enum class CompressionAlgorithm : std::uint8_t {
     None,
-    ZstdBestCompressionWithChecksum,
-    ZstdDefaultCompressionWithChecksum,
+    ZstdBestCompression,
+    ZstdDefaultCompression,
 };
 
-struct CompressedData {
-    Bytes compressed_data;
-    std::string checksum;
-};
+// The algorithm must be an enumerator. Zstandard frames are written without their frame checksum.
+Expected<std::vector<std::byte>> compress(std::span<const std::byte> uncompressed_data, CompressionAlgorithm compression_algorithm);
 
-Expected<CompressedData> compress_with_checksum(
-    const Bytes& uncompressed_data, CompressionAlgorithm compression_algorithm, ChecksumAlgorithm checksum_algorithm);
-
-Expected<Bytes> checked_decompress(const Bytes& compressed_data,
-    CompressionAlgorithm compression_algorithm,
-    ChecksumAlgorithm checksum_algorithm,
-    std::string_view checksum,
-    std::size_t max_decompressed_size = default_max_decompressed_size);
+// The algorithm must be an enumerator. Zstandard frames are accepted with or without their frame checksum.
+Expected<std::vector<std::byte>> decompress(
+    std::span<const std::byte> compressed_data, CompressionAlgorithm compression_algorithm, std::size_t max_decompressed_size = default_max_decompressed_size);
 
 } // namespace io::envelope

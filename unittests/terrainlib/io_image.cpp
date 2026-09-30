@@ -21,6 +21,8 @@ image::RGBA8 colours()
     result.pixel({ 1, 1 }) = { 17, 31, 47, 0 };
     return result;
 }
+
+cv::Mat encoded_mat(const std::vector<std::byte>& bytes) { return { 1, int(bytes.size()), CV_8UC1, const_cast<std::byte*>(bytes.data()) }; }
 } // namespace
 
 TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io-image]")
@@ -33,7 +35,7 @@ TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io-image
     CHECK(decoded->size() == source.size());
     CHECK(std::ranges::equal(decoded->bytes(), source.bytes()));
     // Independent decoder verifies that both sides of our API cannot hide a channel/row swap.
-    const auto reference = cv::imdecode(*bytes, cv::IMREAD_UNCHANGED);
+    const auto reference = cv::imdecode(encoded_mat(*bytes), cv::IMREAD_UNCHANGED);
     REQUIRE(reference.type() == CV_8UC4);
     CHECK(reference.at<cv::Vec4b>(0, 0) == cv::Vec4b(0, 0, 255, 255));
     CHECK(reference.at<cv::Vec4b>(1, 1) == cv::Vec4b(47, 31, 17, 0));
@@ -49,8 +51,8 @@ TEST_CASE("PNG preserves RGBA including hidden colour and row order", "[io-image
     const cv::Mat grey(2, 2, CV_8UC1, cv::Scalar(37));
     std::vector<std::uint8_t> grey_bytes;
     REQUIRE(cv::imencode(".png", grey, grey_bytes));
-    const auto grey_rgb = image::decode_rgb8(grey_bytes);
-    const auto grey_rgba = image::decode_rgba8(grey_bytes);
+    const auto grey_rgb = image::decode_rgb8(std::as_bytes(std::span(grey_bytes)));
+    const auto grey_rgba = image::decode_rgba8(std::as_bytes(std::span(grey_bytes)));
     REQUIRE(grey_rgb);
     REQUIRE(grey_rgba);
     CHECK(grey_rgb->pixel({ 0, 0 }) == glm::u8vec3(37, 37, 37));
@@ -83,7 +85,7 @@ TEST_CASE("PNG compression and JPEG quality options reach encoders", "[io-image]
     source.fill({ 255, 0, 0 });
     const auto jpeg = image::encode(source, image::Format::Jpeg);
     REQUIRE(jpeg);
-    const auto reference = cv::imdecode(*jpeg, cv::IMREAD_COLOR);
+    const auto reference = cv::imdecode(encoded_mat(*jpeg), cv::IMREAD_COLOR);
     const auto red = reference.at<cv::Vec3b>(0, 0);
     CHECK(red[0] <= 2);
     CHECK(red[1] <= 2);
@@ -103,7 +105,7 @@ TEST_CASE("image I/O rejects invalid inputs without silent alpha loss", "[io-ima
     CHECK_FALSE(image::encode(source, image::Format::Png, { .jpeg_quality = 101 }));
     CHECK_FALSE(image::encode(image::RGB8 {}, image::Format::Png));
     CHECK_FALSE(image::decode_rgb8({}));
-    const std::array<std::uint8_t, 4> junk { 1, 2, 3, 4 };
+    const std::array junk { std::byte { 1 }, std::byte { 2 }, std::byte { 3 }, std::byte { 4 } };
     CHECK(image::decode_rgba8(junk).error().code() == Error::Code::CorruptData);
 }
 
@@ -140,11 +142,11 @@ TEST_CASE("byte writer retains legacy overwrite and supports exclusive creation"
 {
     test::TemporaryDirectory directory;
     const auto path = directory.path() / "bytes";
-    const std::array<std::uint8_t, 3> first { 1, 2, 3 };
-    const std::array<std::uint8_t, 2> second { 4, 5 };
+    const std::array first { std::byte { 1 }, std::byte { 2 }, std::byte { 3 } };
+    const std::array second { std::byte { 4 }, std::byte { 5 } };
     REQUIRE(io::write_bytes_to_path(first, path, io::WriteMode::CreateNew));
     CHECK(io::write_bytes_to_path(second, path, io::WriteMode::CreateNew).error().code() == Error::Code::AlreadyExists);
-    CHECK(*io::read_bytes_from_path(path) == std::vector<std::uint8_t>(first.begin(), first.end()));
+    CHECK(*io::read_bytes_from_path(path) == std::vector(first.begin(), first.end()));
     REQUIRE(io::write_bytes_to_path(second, path));
-    CHECK(*io::read_bytes_from_path(path) == std::vector<std::uint8_t>(second.begin(), second.end()));
+    CHECK(*io::read_bytes_from_path(path) == std::vector(second.begin(), second.end()));
 }

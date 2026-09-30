@@ -252,7 +252,7 @@ TEST_CASE("RF metadata discovery, explicit metadata, corruption and size checks"
     metadata->stored_tile_size = metadata->nominal_tile_size = 4;
     REQUIRE(io::envelope::write_to_path<manifest::MetadataSchema>(*metadata, saved_metadata));
     CHECK_FALSE(rf_tile2image::render_tile(options));
-    const std::array<std::uint8_t, 3> junk { 1, 2, 3 };
+    const std::array junk { std::byte { 1 }, std::byte { 2 }, std::byte { 3 } };
     REQUIRE(io::write_bytes_to_path(junk, saved_metadata));
     CHECK_FALSE(rf_tile2image::render_tile(options));
 }
@@ -290,13 +290,13 @@ TEST_CASE("RF conversion writes JPEG and lossless PNG and protects both existing
     CHECK(png_bytes == before);
     const auto jpeg_bytes = io::read_bytes_from_path(paths->data).value();
     REQUIRE(jpeg_bytes.size() >= 2);
-    CHECK(jpeg_bytes[0] == 0xFF);
-    CHECK(jpeg_bytes[1] == 0xD8);
+    CHECK(jpeg_bytes[0] == std::byte { 0xFF });
+    CHECK(jpeg_bytes[1] == std::byte { 0xD8 });
     REQUIRE(png_bytes.size() >= 8);
-    CHECK(png_bytes[0] == 0x89);
-    CHECK(png_bytes[1] == 'P');
-    CHECK(png_bytes[2] == 'N');
-    CHECK(png_bytes[3] == 'G');
+    CHECK(png_bytes[0] == std::byte { 0x89 });
+    CHECK(png_bytes[1] == std::byte { 'P' });
+    CHECK(png_bytes[2] == std::byte { 'N' });
+    CHECK(png_bytes[3] == std::byte { 'G' });
 }
 
 TEST_CASE("RF CLI accepts independent range options and reports errors", "[rf-tile2image]")

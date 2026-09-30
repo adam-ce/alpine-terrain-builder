@@ -29,7 +29,7 @@ constexpr std::string_view entity_json =
 
 void write_text(const std::filesystem::path& path, const std::string_view text)
 {
-    REQUIRE(io::write_bytes_to_path(std::span(reinterpret_cast<const std::uint8_t*>(text.data()), text.size()), path));
+    REQUIRE(io::write_bytes_to_path(std::as_bytes(std::span(text)), path));
 }
 
 void write_table(const std::filesystem::path& directory)
@@ -139,7 +139,7 @@ TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[ra
     check_bytes(read->data, tile.data);
     check_bytes(read->source_attribution, tile.source_attribution);
 
-    TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None, io::envelope::ChecksumAlgorithm::Crc32c);
+    TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None, io::hash::Algorithm::Xxh3_64);
     REQUIRE(uncompressed.write(path, tile));
     read = writer.read(path);
     REQUIRE(read);
@@ -173,7 +173,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     TileCodec<float> rectangular({ 3, 2 });
     CHECK(rectangular.write(path, tile).error().code() == Error::Code::InvalidInput);
 
-    tile_codec::detail::v1::RasterTile encoded { 3, 3, io::envelope::Bytes(36), io::envelope::Bytes(18) };
+    tile_codec::detail::v1::RasterTile encoded { 3, 3, std::vector<std::byte>(36), std::vector<std::byte>(18) };
     SECTION("wrong dimensions") { encoded.width = 4; }
     SECTION("short data") { encoded.data.pop_back(); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
@@ -392,7 +392,7 @@ TEST_CASE("cross-root hard links and independent attribution survive RF removal"
 TEST_CASE("byte writes report buffered device failures", "[io][bytes][raster-store]")
 {
 #ifdef __linux__
-    const std::array<std::uint8_t, 1> bytes { 42 };
+    const std::array bytes { std::byte { 42 } };
     auto written = io::write_bytes_to_path(bytes, "/dev/full", false);
     REQUIRE_FALSE(written);
     CHECK(written.error().code() == Error::Code::Io);
@@ -498,16 +498,16 @@ TEST_CASE("AMORT propagates envelope checksum and version errors", "[raster-stor
     TileCodec<float> amort({ 3, 3 });
     REQUIRE(amort.write(path, raster_store::Tile<float>(3)));
     const auto bytes = io::read_bytes_from_path(payload_path).value();
-    auto envelope = io::envelope::detail::deserialize_from_bytes<io::envelope::Envelope>(std::as_bytes(std::span(bytes))).value();
+    auto envelope = io::envelope::detail::deserialize_from_bytes<io::envelope::Envelope>(bytes).value();
     auto expected_error = Error::Code::CorruptData;
-    SECTION("checksum") { envelope.compressed_data.back() ^= std::byte { 1 }; }
+    SECTION("hash") { envelope.compressed_data.back() ^= std::byte { 1 }; }
     SECTION("version")
     {
-        envelope.class_version = 999;
+        envelope.header.class_version = 999;
         expected_error = Error::Code::Unsupported;
     }
     const auto modified = io::envelope::detail::serialize_to_bytes(envelope).value();
-    REQUIRE(io::write_bytes_to_path(std::span(reinterpret_cast<const std::uint8_t*>(modified.data()), modified.size()), payload_path));
+    REQUIRE(io::write_bytes_to_path(modified, payload_path));
     CHECK(amort.read(path).error().code() == expected_error);
 }
 

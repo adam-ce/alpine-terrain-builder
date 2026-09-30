@@ -245,7 +245,7 @@ Opening and publication do not perform an additional whole-snapshot
 validation pass or scan payload files for existence. Errors from envelope
 decoding and the normal format-adapter/opening path are propagated when the
 index or a tile is read. Generic envelope checks cover the serialized
-representation, version, compression, and checksum; index invariants belong
+representation, version, compression, and payload hash; index invariants belong
 to the format adapter. The attribution table is parsed separately as JSON.
 
 ### Publication

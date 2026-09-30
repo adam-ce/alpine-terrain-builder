@@ -18,8 +18,8 @@ namespace tile_codec {
         struct RasterTile {
             std::uint32_t width;
             std::uint32_t height;
-            ::io::envelope::Bytes data;
-            ::io::envelope::Bytes source_attribution;
+            std::vector<std::byte> data;
+            std::vector<std::byte> source_attribution;
         };
 
     } // namespace detail::v1
@@ -34,11 +34,11 @@ class TileCodec final : public store::Codec<Tile<PixelType>> {
 
 public:
     explicit TileCodec(const glm::uvec2 dimensions = glm::uvec2(default_tile_side),
-        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum,
-        const ::io::envelope::ChecksumAlgorithm checksum_algorithm = ::io::envelope::ChecksumAlgorithm::HandledByCompressionLib)
+        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression,
+        const ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64)
         : m_dimensions(dimensions)
         , m_compression_algorithm(compression_algorithm)
-        , m_checksum_algorithm(checksum_algorithm)
+        , m_hash_algorithm(hash_algorithm)
     {
     }
 
@@ -83,24 +83,24 @@ public:
         const auto source_attribution = tile.source_attribution.bytes();
         const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
             { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
-        return ::io::envelope::write_to_path<tile_codec::TileSchema>(encoded, paths(node_path).front(), true, m_compression_algorithm, m_checksum_algorithm);
+        return ::io::envelope::write_to_path<tile_codec::TileSchema>(encoded, paths(node_path).front(), true, m_compression_algorithm, m_hash_algorithm);
     }
 
 private:
     glm::uvec2 m_dimensions;
     ::io::envelope::CompressionAlgorithm m_compression_algorithm;
-    ::io::envelope::ChecksumAlgorithm m_checksum_algorithm;
+    ::io::hash::Algorithm m_hash_algorithm;
 };
 
 namespace tile_codec {
 
     template <typename PixelType>
     Expected<std::unique_ptr<store::Codec<Tile<PixelType>>>> from_name(const std::string_view name, const glm::uvec2 dimensions,
-        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompressionWithChecksum,
-        const ::io::envelope::ChecksumAlgorithm checksum_algorithm = ::io::envelope::ChecksumAlgorithm::HandledByCompressionLib)
+        const ::io::envelope::CompressionAlgorithm compression_algorithm = ::io::envelope::CompressionAlgorithm::ZstdDefaultCompression,
+        const ::io::hash::Algorithm hash_algorithm = ::io::hash::Algorithm::Xxh3_64)
     {
         if (name == "amort") {
-            return std::make_unique<TileCodec<PixelType>>(dimensions, compression_algorithm, checksum_algorithm);
+            return std::make_unique<TileCodec<PixelType>>(dimensions, compression_algorithm, hash_algorithm);
         }
         return Error::fail(Error::Code::Unsupported, "unsupported raster codec selector: " + std::string(name));
     }

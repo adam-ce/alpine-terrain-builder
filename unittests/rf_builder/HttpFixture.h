@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <mutex>
@@ -16,7 +17,7 @@
 namespace rf_test {
 struct Response {
     int status = 404;
-    std::vector<std::uint8_t> body;
+    std::vector<std::byte> body;
     std::string headers;
     std::chrono::milliseconds delay { 0 };
 };

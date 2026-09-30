@@ -4,7 +4,7 @@
   additional SF invariants and their required error reporting are defined.
   This is not part of the shared-store refactor.
 - Idea: store each tile's XXH3-64 content hash (see the
-  [content-hash plan](content-hash-plan.md)) in its raster-store index entry.
+  [hash decision](../adr/0005-xxh3-64-envelope-hashes.md)) in its raster-store index entry.
   TB dependency checks would become in-memory lookups instead of one envelope
   header read per source tile, which matters for millions of tiles and on
   network filesystems. Saving a tile knows the hash from the envelope write,

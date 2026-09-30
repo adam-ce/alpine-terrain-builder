@@ -1,33 +1,20 @@
 # Raster store design
 
 This directory describes authoritative raster tile storage and the planned
-generation of delivery tile pyramids from it. Storage format version 1 is
-documented alongside the implementation status. Halo extraction, windowed
-scaling, and RF import are implemented;
-TB generation and the tile server remain future work.
+generation of delivery tile pyramids from it. RF import and merging are
+implemented; TB generation and the tile server remain future work.
 
 ## Documents
 
 - [Terminology](terminology.md)
-- [Architecture](architecture.md)
+- [Architecture](architecture.md): components, lifecycle, and the planned
+  TB builder and tile server
 - [Storage format](storage-format.md)
-- [Sampling and pyramid generation](sampling-and-generation.md)
-- [Implementation status](implementation-status.md)
+- [Sampling and pyramid generation](sampling-and-generation.md): sampling
+  theory, TB generation requirements, and the implemented scaling rules
+- [Tiles with halo](tiles-with-halo.md)
+- [RF builder](rf-builder-design.md): GDAL and online tile import
+- [RF merger](rf-merger-design.md)
+- [TODO](todo.md)
 
-## Plans
-
-- [Tiles with halo: design](tiles-with-halo.md)
-- [Halo extraction implementation plan](halo-implementation-plan.md)
-- [RF-builder design and implementation plan](rf-builder-design.md)
-- [GDAL import NoData filling: policy and verification](gdal-nodata-filling.md)
-- [Online tile import extension](rf-builder-downloader-design.md)
-- [RF-merger design](rf-merger-design.md)
-- [Envelope content hashes](content-hash-plan.md)
-
-- [Tile-storage implementation plan](implementation-plan.md)
-- [Raster store TODO](todo.md)
-
-## Scope
-
-The documents describe the storage format, implemented import and merge
-tools, and proposed delivery-generation behavior.
+Decisions and their rationale are recorded in the [ADRs](../adr/).

@@ -151,8 +151,8 @@ quadtree. It resolves:
 - chunk and source-map decoding; and
 - neighbouring data needed by the window.
 
-The generator determines the requested halo. The planned raster-store halo
-extractor applies replication only where physical coverage is missing,
+The generator determines the requested halo. The raster-store halo
+reader applies replication only where physical coverage is missing,
 including vertical world limits, using clamped views as described in
 [Tiles with halo](tiles-with-halo.md). Zero attribution within a physical
 source is not a boundary and does not trigger replacement of its data.
@@ -173,7 +173,7 @@ Sampling placement alone does not determine a correct filter:
 | Source mask/NoData | importer validity and coverage rules before generic scaling |
 
 Source NoData handling remains an importer concern. Once a raster is supplied
-to the [single-raster scaling facility](scaling.md), attribution does not mask
+to the [scaling facility](#implemented-scaling-rules), attribution does not mask
 any numerical input. Missing attribution and missing physical coverage are
 distinct; neither should be inferred from a numeric sentinel by the scaler.
 
@@ -212,7 +212,7 @@ The generator needs explicit rules for:
 - zero-attribution pixels inside physically covered chunks; and
 - filters whose support crosses a layer's coverage boundary.
 
-The planned raster-store halo rules are specified in
+The raster-store halo rules are specified in
 [Tiles with halo](tiles-with-halo.md): preserve physically supplied
 zero-attribution payloads and replicate only missing physical coverage through
 clamped views. Other generator-specific boundary policies remain separate
@@ -231,7 +231,7 @@ Before production filtering is implemented, synthetic fixtures should prove:
 5. Filtering is unchanged when a store window is split into different chunks.
 6. A source boundary blends supplied payloads independently of attribution.
    Paired wrappers report representative attribution according to the
-   [scaling contract](scaling.md): repeated local 2x2 mode reduction, including
+   [scaling rules](#implemented-scaling-rules): repeated local 2x2 mode reduction, including
    zero in the vote, and nearest-neighbour attribution for upscaling.
 7. Existing zero-attribution pixels contribute normally and retain their
    supplied or resampled payloads; missing physical coverage follows the
@@ -240,14 +240,123 @@ Before production filtering is implemented, synthetic fixtures should prove:
 8. A coherent physical parent can be chosen instead of finer descendants.
 9. TMS and Slippy input IDs normalize to the same canonical spatial tile.
 
-The [scaling contract](scaling.md) specifies coefficients and verification
-requirements for its area-pixel operations. Other layer-specific and
+The [scaling rules](#implemented-scaling-rules) specify coefficients for
+the area-pixel operations. Other layer-specific and
 vertex-pixel filters remain separate design decisions; tests should fix their
 numeric tolerances only after representative evaluation.
 
-The implemented [halo reader](tiles-with-halo.md) clamps bilinear ancestor
+The [halo reader](tiles-with-halo.md) clamps ancestor interpolation
 support at the complete supplying physical tile's edge. This is its explicit
 fallback policy; it does not promise the seam-free vertex-generation invariant
 above. A future generator needing that invariant must assemble common support
 or generate metatiles. Halo attribution is representative and never masks
 numerical contributions; zero attribution triggers no resolution fallback.
+
+## Implemented scaling rules
+
+`raster::algorithm` scales and reduces single rasters; `raster_store::scaler`
+pairs these operations for data and attribution. This section records their
+numerical contract; signatures are in the code.
+
+### Scope
+
+Generic scaling operates on one raster without interpreting attribution or
+treating any sample as NoData. Every supplied pixel participates according to
+the selected operation. Callers must supply usable, finite values, including
+where the attribution raster contains zero; there is no runtime validity scan.
+Nearest-neighbour sampling and zero-level cropping copy stored pixels exactly,
+including nonfinite values.
+
+Only power-of-two scale factors are supported, with area-pixel placement.
+Vertex-pixel generation, world wrapping, physical-source selection and
+ancestor fallback belong to callers such as the halo reader.
+
+### Methods
+
+| Selection | Upscaling | Downscaling |
+|---|---|---|
+| `NearestNeighbourAndBox` | Nearest-neighbour | Box |
+| `BiliinearAndBox` | Bilinear | Box |
+| `Lanczos2` | Lanczos-2 | Lanczos-2 |
+| `Lanczos3` | Lanczos-3 | Lanczos-3 |
+| `Lanczos4` | Lanczos-4 | Lanczos-4 |
+
+Custom reductions operate on complete 2x2 blocks. Supplied reducers are
+component-wise `Min`, `Max` and `Median` (average of the two middle values;
+integer halfway cases round away from zero), and scalar `Mode` (greatest
+frequency, ties broken by first occurrence in row-major order; zero is an
+ordinary value).
+
+### Sampling phase
+
+With interior pixel centres at integer positions, direct upscaling by factor
+`F` evaluates output pixel `j` at `(j + 0.5) / F - 0.5` in input coordinates.
+A reduction by two evaluates pixel `j` at `2j + 0.5`. Positions are applied
+independently on each axis. Halo offsets affect addressing, not phase.
+
+Upscaling goes directly from the input to the final resolution. Downscaling
+repeats reduction by two, encoding the result into the stored pixel type after
+every step; the next step decodes it again. A reduction by four therefore
+equals two reductions by two, but repeated median, mode, rounding and sRGB
+encoding need not equal a single larger filter.
+
+### Kernels
+
+Lanczos upscaling with radius `a` uses normalized `sinc(x) * sinc(x/a)`
+weights with `2a` taps per axis, where `sinc(x) = sin(pi*x) / (pi*x)`.
+Reduction by two evaluates the same kernel at half the input distance:
+weights proportional to `sinc(t/2) * sinc(t/(2a))` for `abs(t) < 2a`, with
+`4a` taps, low-passing before decimation. Two-dimensional weights are products
+of the axis weights, normalized over the complete support, independently of
+payloads or attribution. Box reduction averages the complete 2x2 block;
+bilinear interpolation uses all four neighbours.
+
+Separable passes decode once, filter horizontally and vertically in the
+working type, and encode only after both passes.
+
+### Required halos
+
+Inputs carry a symmetric halo, supplied physically or through a clamped view.
+The scaler never clamps implicitly, including at the edges of a processing
+window. Minimum halo widths in input pixels:
+
+| Operation | Required halo |
+|---|---|
+| Zero levels (crop only) | 0 |
+| Nearest-neighbour upscaling | 0 |
+| Bilinear upscaling | 1 |
+| Lanczos upscaling, radius `a` | `a` |
+| Box or custom 2x2 reduction, including repeated steps | 0 |
+| Lanczos reduction by total factor `F`, radius `a` | `(2a - 1) * (F - 1)` |
+
+For one Lanczos reduction step, the first output centre is `0.5` and input
+indices range from `1 - 2a` through `2a`, giving a halo of `2a - 1`. Retaining
+output halo `h` needs input halo `2h + (2a - 1)`; repeated application yields
+the formula. Lanczos-3 therefore needs 5 input halo pixels for reduction by
+two and 15 for reduction by four.
+
+For Lanczos upscaling by factor `F`, a symmetric output halo `h` needs input
+halo `ceil(a - 0.5 + (h - 0.5) / F)`. Lanczos-3 at 2x can thus preserve five
+halo pixels: a 266x266 source with a 256x256 interior produces a 522x522
+window at offset `{-5, -5}`.
+
+### Output windows
+
+A window of the conceptual full output can be requested by offset and size.
+The result equals filtering a sufficiently large raster and cropping, while
+computing only the necessary samples and preserving the global phase and
+reduction-stage alignment. The full conceptual output is never allocated, so
+distant ancestors can be upscaled into small windows.
+
+### Attribution and value mapping
+
+Paired operations handle attribution independently of data: nearest-neighbour
+for upscaling and repeated 2x2 `Mode` for downscaling. Zero takes part in the
+vote, so `[0, 0, 0, 7]` reduces to zero. Attribution never changes data
+samples, weights or results; one representative ID is kept per pixel.
+
+The snapshot's `pixel::Mapping` selects the data conversion. `Linear` filters
+stored values directly (integers through floating point, rounded and clamped
+on encoding). `SRGBA` requires RGB8/RGBA8 for numerical resampling; it
+decodes RGB through the sRGB transfer function to linear light, filters, and
+encodes back. Alpha is linear, filtered independently and does not weight RGB.

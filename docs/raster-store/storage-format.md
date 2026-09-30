@@ -2,8 +2,8 @@
 
 This document defines the shared on-disk format for raster-fundamentalis (RF)
 and tile-base (TB), including source attribution. [Architecture](architecture.md)
-owns system responsibilities, implementation status, attribution management,
-and the snapshot lifecycle. [Terminology](terminology.md) defines the domain
+owns system responsibilities, attribution management, and the snapshot
+lifecycle. [Terminology](terminology.md) defines the domain
 language.
 
 ## Directory layout
@@ -86,12 +86,11 @@ exceed the nominal size. `stored_tile_size = nominal_tile_size + 2 * halo_width`
 Both square tile rasters must match the stored size, which need not be a
 power of two. Halo extraction asserts a nominal size of at least 64.
 
-`raster_store/pixel.h` exposes `pixel::identifier<T>()` and
-`pixel::Mapping { Linear, SRGBA }`. Creation defaults RGB8/RGBA8 to SRGBA and
-other types to Linear; an explicit override takes precedence. Metadata stores
-the resolved mapping. SRGBA treats RGB channels as sRGB and alpha as linear.
-Storage validates the enum, while numerical operations validate whether the
-pixel type supports the requested mapping. Exact copies do not need conversion.
+The value mapping is `Linear` or `SRGBA`. Creation defaults RGB8/RGBA8 to
+SRGBA and other types to Linear; an explicit override takes precedence.
+Metadata stores the resolved mapping. SRGBA treats RGB channels as sRGB and
+alpha as linear. It is a value mapping rather than a colour-space label:
+linear data also includes elevation.
 
 The codec selector is a codec name string, independent of file extensions.
 Opening resolves a reader from this metadata string. A future resolver may
@@ -169,19 +168,8 @@ defines when these files are read and how incomplete snapshots are opened.
 
 All stored tiles in one snapshot use one payload type and area pixels. Each
 pixel has one data value, which may be a vector, and one `uint16_t` index into
-the source-attribution table. A tile is represented by two rasters:
-
-```cpp
-namespace raster_store {
-
-template <typename PixelType>
-struct Tile {
-    radix::Raster<PixelType> data;
-    radix::Raster<std::uint16_t> source_attribution;
-};
-
-} // namespace raster_store
-```
+the source-attribution table. A tile is represented by two rasters, data and
+source attribution.
 
 Tile files use the `.amort` extension (AlpineMapsOrg raster tile) and
 `io::envelope`. The writer exposes the envelope compression and hash options,
@@ -222,6 +210,5 @@ participates in generic scaling just like any other supplied data value.
 Storage preserves all payloads losslessly, including NaNs and values with
 attribution zero. Callers of numerical algorithms must supply usable values;
 storage does not repair or validate payloads for them. Source NoData remains
-an importer concern, separate from stored attribution. The single-raster
-[scaling refactor](scaling.md) specifies this separation; the design is agreed,
-while the existing coupled scaler still awaits replacement.
+an importer concern, separate from stored attribution. See the
+[scaling rules](sampling-and-generation.md#implemented-scaling-rules).

@@ -192,15 +192,3 @@ Changes to SF mask processing must preserve these invariants:
    coordinates touch.
 8. Meshes passed to CGAL volume operations satisfy the required topology, and
    Boolean outputs are validated in debug builds.
-
-## Regression coverage
-
-The relevant tests are:
-
-- `unittests/sf_merger/mask.cpp`: disconnected and point-touching synthetic
-  masks, union and empty-mask semantics, and the real multipolygon fixture after
-  node-bounds clipping.
-- `unittests/sf_merger/integration.cpp`: an end-to-end SF build and merge across
-  regular and point-touching mask borders.
-- `unittests/dag_builder/multi_component.cpp`: the downstream simplification
-  handoff for disconnected components that meet at one point.

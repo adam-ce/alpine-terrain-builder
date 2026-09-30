@@ -6,8 +6,7 @@ check and a content identity that `io::envelope::read_header` exposes without
 reading the payload, for TB dependency records and RF merger fingerprints.
 Hashing uncompressed bytes keeps the identity independent of the Zstandard
 settings. The header field is binary, not text, and `io::hash::Algorithm`
-leaves room for longer or stronger hashes. It was agreed on 2026-09-30 in the
-[content-hash plan](../raster-store/content-hash-plan.md).
+leaves room for longer or stronger hashes.
 
 Single-threaded throughput on an AMD Ryzen 9 3900X over 1 GiB in memory:
 

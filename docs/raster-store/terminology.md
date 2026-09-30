@@ -1,6 +1,6 @@
 # Terminology
 
-The planned extraction and storage contract is in
+The halo extraction and storage contract is in
 [Tiles with halo](tiles-with-halo.md).
 
 **Tile interior**:
@@ -107,7 +107,7 @@ _Avoid_: NoData pixel, invalid pixel (for a stored zero-attribution pixel)
 
 **Representative attribution**
 : The single attribution index retained for a resampled value under the
-  [shared scaling rules](scaling.md#paired-raster-store-wrappers). It is not
+  [shared scaling rules](sampling-and-generation.md#attribution-and-value-mapping). It is not
   a complete record of the sources contributing to that value.
 
 **Ancestor fallback**

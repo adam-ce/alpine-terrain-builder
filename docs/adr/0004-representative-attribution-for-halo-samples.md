@@ -1,7 +1,7 @@
 # Retain one representative attribution for halo samples
 
 Halo extraction retains one representative attribution per resampled pixel,
-following the rules in [Raster scaling](../raster-store/scaling.md).
+following the [scaling rules](../raster-store/sampling-and-generation.md#implemented-scaling-rules).
 Attribution indices are categorical and are never averaged. The refactor
 agreed on 2026-09-22 delegates paired operations to `raster_store::scaler`,
 whose thin wrappers call the generic single-raster algorithms independently

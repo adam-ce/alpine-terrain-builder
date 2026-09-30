@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <exception>
 #include <functional>
+#include <libassert/assert.hpp>
 #include <mutex>
 #include <optional>
 #include <radix/tile.h>
@@ -19,11 +20,13 @@ namespace raster_store {
 // RF tile scheduling shared by the RF builder and merger. The coordinator alone
 // submits/takes results.
 // Fixed slots bound queued + active + completed tiles, not merely the job queue.
+// prepare may throw Error::Exception; the pool returns its error as the result.
+// Any failure stops the pool, and failed results are returned in any order.
 template <typename Payload>
 class TilePool {
 public:
     using Key = radix::tile::Id;
-    using Prepare = std::function<Expected<Payload>(unsigned, const Key&)>;
+    using Prepare = std::function<Payload(unsigned, const Key&)>;
     struct Completed {
         Key key;
         Expected<Payload> result;
@@ -42,24 +45,22 @@ public:
     TilePool(const TilePool&) = delete;
     TilePool& operator=(const TilePool&) = delete;
 
+    // Returns false once the pool is stopped. The coordinator must not submit
+    // more than twice the worker count of outstanding tiles.
     bool submit(const Key& key)
     {
         std::lock_guard lock(m_mutex);
         if (m_stopped) {
             return false;
         }
-        for (auto& slot : m_slots) {
-            if (slot.state != State::Free) {
-                continue;
-            }
-            slot.key = key;
-            slot.sequence = m_sequence++;
-            slot.state = State::Pending;
-            ++m_outstanding;
-            m_changed.notify_all();
-            return true;
-        }
-        return false;
+        const auto slot = std::ranges::find(m_slots, State::Free, &Slot::state);
+        ASSERT(slot != m_slots.end(), to_string(key));
+        slot->key = key;
+        slot->sequence = m_sequence++;
+        slot->state = State::Pending;
+        ++m_outstanding;
+        m_changed.notify_all();
+        return true;
     }
 
     std::optional<Completed> take(std::chrono::milliseconds timeout)
@@ -93,11 +94,6 @@ public:
     {
         std::lock_guard lock(m_mutex);
         return m_outstanding;
-    }
-    std::optional<Error> failure() const
-    {
-        std::lock_guard lock(m_mutex);
-        return m_failure;
     }
 
 private:
@@ -148,6 +144,8 @@ private:
             auto result = [&]() -> Expected<Payload> {
                 try {
                     return m_prepare(worker, key);
+                } catch (const Error::Exception& exception) {
+                    return Error::propagate(Error(exception.error()), "prepare RF tile " + to_string(key));
                 } catch (const std::exception& error) {
                     return Error::fail(Error::Code::Internal, "prepare RF tile " + to_string(key) + ": " + error.what());
                 } catch (...) {
@@ -155,8 +153,7 @@ private:
                 }
             }();
             lock.lock();
-            if (!result && !m_failure) {
-                m_failure = result.error();
+            if (!result) {
                 stop_locked();
             }
             slot.result.emplace(std::move(result));
@@ -171,7 +168,6 @@ private:
     std::uint64_t m_sequence = 0;
     std::size_t m_outstanding = 0;
     bool m_stopped = false;
-    std::optional<Error> m_failure = std::nullopt;
     // Last: joins before any state used by workers is destroyed, including if
     // thread creation throws halfway through construction.
     std::vector<std::jthread> m_threads;

@@ -190,12 +190,8 @@ namespace {
         const produce::Inputs<PixelType> sources { { left.get(), left_metadata.get() }, { right.get(), right_metadata.get() }, &ranks };
         const unsigned jobs = unsigned((std::min)(std::uint64_t(options.jobs), (std::max)(total, std::uint64_t(1))));
         // Worker exceptions travel through the pool as errors and are rethrown by the coordinator.
-        raster_store::TilePool<produce::Produced<PixelType>> pool(jobs, [&](unsigned, const Key& key) -> Expected<produce::Produced<PixelType>> {
-            try {
-                return produce::produce(sources, { key, partition::supplier(left->index(), key), partition::supplier(right->index(), key) });
-            } catch (const Error::Exception& exception) {
-                return std::unexpected(exception.error());
-            }
+        raster_store::TilePool<produce::Produced<PixelType>> pool(jobs, [&](unsigned, const Key& key) {
+            return produce::produce(sources, { key, partition::supplier(left->index(), key), partition::supplier(right->index(), key) });
         });
         LOG_INFO("RF merge: {} output leaves; {} workers; at most {} outstanding tiles", total, jobs, 2 * jobs);
 
@@ -309,7 +305,8 @@ namespace {
                     poll();
                     continue;
                 }
-                if (!pool.submit(pending->key)) {
+                // Wait while all slots are in use or after a worker failure stopped the pool.
+                if (pool.outstanding() == 2 * std::size_t(jobs) || !pool.submit(pending->key)) {
                     break;
                 }
                 pending.reset();

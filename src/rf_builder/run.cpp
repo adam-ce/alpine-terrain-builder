@@ -185,13 +185,7 @@ Report execute(const Options& options, Source<PixelType> source, const std::func
     const unsigned jobs = geographic ? (total > 0 ? options.jobs : 0) : unsigned((std::min)(double(options.jobs), total));
     source.initialize(jobs, initial_poll);
     // Worker exceptions travel through the pool as errors and are rethrown by the coordinator.
-    raster_store::TilePool<Prepared<PixelType>> pool(jobs, [&](unsigned worker, const Key& key) -> Expected<Prepared<PixelType>> {
-        try {
-            return source.prepare(worker, key);
-        } catch (const Error::Exception& exception) {
-            return Error::propagate(Error(exception.error()), "prepare RF tile " + to_string(key));
-        }
-    });
+    raster_store::TilePool<Prepared<PixelType>> pool(jobs, source.prepare);
     // Each lane traverses depth first and has only one outstanding preparation.
     // Thus each stack retains at most three siblings per level, independently of
     // completion order. Pool slots bound all queued/active/completed payloads.
@@ -202,13 +196,6 @@ Report execute(const Options& options, Source<PixelType> source, const std::func
     std::vector<Lane> lanes(std::size_t(jobs) * 2);
     bool exhausted = jobs == 0, cancelled = false;
     LOG_INFO("RF workers: {}; at most {} outstanding tiles", jobs, lanes.size());
-    // The pool records the first worker failure, even when failed results are
-    // consumed out of order.
-    const auto rethrow_failure = [&] {
-        if (auto first = pool.failure()) {
-            throw Error::Exception(Error::propagate(std::move(*first), "produce RF snapshot").error());
-        }
-    };
     const auto finish = [&](const Key& key, bool reused, bool payload) {
         if (payload) {
             const auto path = Error::asserting_unwrap(output->path_for(key));
@@ -248,9 +235,7 @@ Report execute(const Options& options, Source<PixelType> source, const std::func
         auto lane = std::ranges::find_if(lanes, [&](const auto& item) { return item.active == done.key; });
         ASSERT(lane != lanes.end(), to_string(done.key));
         lane->active.reset();
-        rethrow_failure();
-        // A failed result always sets the pool failure first.
-        auto prepared = Error::asserting_unwrap(std::move(done.result));
+        auto prepared = Error::throwing_unwrap(std::move(done.result), "produce RF snapshot");
         if (auto* division = std::get_if<Subdivide>(&prepared)) {
             if (!cancelled) {
                 subdivide(*lane, done.key, std::move(*division));
@@ -265,7 +250,6 @@ Report execute(const Options& options, Source<PixelType> source, const std::func
     };
     // Cancellation discards queued work, saves the active tiles and throws.
     const auto poll = [&] {
-        rethrow_failure();
         if (stop_requested && stop_requested()) {
             LOG_INFO("RF cancellation requested: discarding queued work and finishing active tiles");
             cancelled = true;
@@ -316,9 +300,9 @@ Report execute(const Options& options, Source<PixelType> source, const std::func
                     continue;
                 }
             }
+            // A worker failure stopped the pool; consuming its result throws.
             if (!pool.submit(key)) {
-                rethrow_failure();
-                PANIC("RF pool rejected an available scheduling lane", to_string(key));
+                return;
             }
             lane.active = key;
         }

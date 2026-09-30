@@ -32,7 +32,7 @@ TEST_CASE("RF workers return ready tiles without waiting for the first tile", "[
 {
     std::promise<void> release;
     const auto gate = release.get_future().share();
-    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> unsigned {
         if (key.coords.x == 0) {
             gate.wait();
         }
@@ -52,7 +52,7 @@ TEST_CASE("RF cancellation drops queued tiles and finishes active tiles within t
     std::promise<void> release;
     const auto gate = release.get_future().share();
     std::atomic_uint started = 0;
-    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> unsigned {
         ++started;
         gate.wait();
         return key.coords.x;
@@ -64,7 +64,6 @@ TEST_CASE("RF cancellation drops queued tiles and finishes active tiles within t
         REQUIRE(wait_for([&] { return started == 2; }));
         REQUIRE(pool.submit({ 3, { 2, 0 } }));
         REQUIRE(pool.submit({ 3, { 3, 0 } }));
-        CHECK_FALSE(pool.submit({ 3, { 4, 0 } }));
         CHECK(pool.outstanding() == 4);
         pool.stop();
         CHECK(pool.outstanding() == 2);
@@ -81,49 +80,19 @@ TEST_CASE("RF cancellation drops queued tiles and finishes active tiles within t
     CHECK(pool.outstanding() == 0);
 }
 
-TEST_CASE("RF retains the first worker error when later failures occupy earlier slots", "[rf-builder][parallel]")
-{
-    std::promise<void> release_first_slot, release_second_slot;
-    const auto first_gate = release_first_slot.get_future().share();
-    const auto second_gate = release_second_slot.get_future().share();
-    std::atomic_uint started = 0;
-    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
-        ++started;
-        if (key.coords.x == 0) {
-            first_gate.wait();
-            return Error::fail(Error::Code::Io, "later failure");
-        }
-        second_gate.wait();
-        return Error::fail(Error::Code::Io, "first failure");
-    });
-    Release first { release_first_slot }, second { release_second_slot };
-    REQUIRE(pool.submit({ 3, { 0, 0 } }));
-    REQUIRE(pool.submit({ 3, { 1, 0 } }));
-    REQUIRE(wait_for([&] { return started == 2; }));
-    second.open();
-    REQUIRE(wait_for([&] { return pool.failure().has_value(); }));
-    first.open();
-    pool.join();
-    auto done = pool.take(0ms);
-    REQUIRE(done);
-    CHECK(done->key.coords.x == 0);
-    CHECK(done->result.error().to_string().find("later failure") != std::string::npos);
-    CHECK(pool.failure()->to_string().find("first failure") != std::string::npos);
-}
-
 TEST_CASE("RF worker errors and exceptions stop queued work and join active workers", "[rf-builder][parallel]")
 {
-    const bool throws = GENERATE(false, true);
+    const bool error_exception = GENERATE(true, false);
     std::promise<void> release;
     const auto gate = release.get_future().share();
     std::atomic_uint started = 0;
-    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> Expected<unsigned> {
+    raster_store::TilePool<unsigned> pool(2, [&](unsigned, const Key& key) -> unsigned {
         ++started;
         gate.wait();
-        if (throws) {
-            throw std::runtime_error("injected worker failure");
+        if (error_exception) {
+            Error::raise(Error::Code::Io, "injected failure for " + to_string(key));
         }
-        return Error::fail(Error::Code::Io, "injected failure for " + to_string(key));
+        throw std::runtime_error("injected worker failure");
     });
     {
         Release cleanup { release };
@@ -135,9 +104,10 @@ TEST_CASE("RF worker errors and exceptions stop queued work and join active work
     }
     auto first = pool.take(3s);
     REQUIRE(first);
-    CHECK_FALSE(first->result);
-    REQUIRE(pool.failure());
-    CHECK(pool.failure()->code() == (throws ? Error::Code::Internal : Error::Code::Io));
+    REQUIRE_FALSE(first->result);
+    CHECK(first->result.error().code() == (error_exception ? Error::Code::Io : Error::Code::Internal));
+    CHECK(first->result.error().to_string().find("prepare RF tile " + to_string(first->key)) != std::string::npos);
+    CHECK_FALSE(pool.submit({ 3, { 4, 0 } }));
     auto second = pool.take(3s);
     REQUIRE(second);
     CHECK_FALSE(second->result);

@@ -235,10 +235,9 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_data
     GDALDataset *dataset = mask_dataset.gdalDataset();
 
     OGRSpatialReference srs;
-    // TODO: remove this try catch
-    try {
-        srs = mask_dataset.srs();
-    } catch (std::runtime_error &e) {
+    if (auto dataset_srs = mask_dataset.srs()) {
+        srs = std::move(*dataset_srs);
+    } else {
         LOG_WARN("Mask does not reference an srs, assuming WGS84");
         srs = srs::wgs84();
         // srs.SetAxisMappingStrategy(OAMS_AUTHORITY_COMPLIANT);

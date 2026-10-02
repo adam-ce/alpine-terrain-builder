@@ -160,8 +160,18 @@ void log_dataset_overview(const Dataset &dataset) {
     const uint32_t heightPx = dataset.heightInPixels();
     const uint32_t bands = dataset.n_bands();
 
-    const auto datasetSrs = dataset.srs();
-    const auto bounds = dataset.bounds3d(true);
+    const auto datasetSrsResult = dataset.srs();
+    if (!datasetSrsResult) {
+        LOG_ERROR("Failed to read dataset SRS: {}", datasetSrsResult.error().to_string());
+        return;
+    }
+    const auto datasetSrs = *datasetSrsResult;
+    const auto boundsResult = dataset.bounds3d(true);
+    if (!boundsResult) {
+        LOG_ERROR("Failed to read dataset bounds: {}", boundsResult.error().to_string());
+        return;
+    }
+    const auto bounds = *boundsResult;
 
     const auto boundsEcefResult = srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
     if (!boundsEcefResult) {

@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -118,10 +119,14 @@ std::string Dataset::name() const {
 
 Dataset::~Dataset() = default;
 
-radix::tile::SrsBounds Dataset::bounds() const {
+Expected<radix::tile::SrsBounds> Dataset::bounds() const
+{
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None) {
-        throw std::runtime_error("Could not get transformation information from source dataset");
+        return Error::fail(Error::Code::Unsupported, "dataset " + name() + " has no geotransform");
+    }
+    if (!std::ranges::all_of(adfGeoTransform, [](double value) { return std::isfinite(value); })) {
+        return Error::fail(Error::Code::InvalidInput, "dataset " + name() + " has a nonfinite geotransform");
     }
 
     // https://gdal.org/user/raster_data_model.html
@@ -131,7 +136,11 @@ radix::tile::SrsBounds Dataset::bounds() const {
 
     // we don't support sheering or rotation for now
     if (adfGeoTransform[2] != 0.0 || adfGeoTransform[4] != 0.0) {
-        throw std::runtime_error("Dataset geo transform contains sheering or rotation. This is not supported!");
+        return Error::fail(Error::Code::Unsupported, "dataset " + name() + " geotransform contains sheering or rotation");
+    }
+    // nor mirrored or south-up rasters
+    if (adfGeoTransform[1] <= 0.0 || adfGeoTransform[5] >= 0.0) {
+        return Error::fail(Error::Code::Unsupported, "dataset " + name() + " geotransform is not north-up with positive pixel width");
     }
 
     const double westX = adfGeoTransform[0];
@@ -139,10 +148,11 @@ radix::tile::SrsBounds Dataset::bounds() const {
 
     const double eastX = adfGeoTransform[0] + (widthInPixels() * adfGeoTransform[1]);
     const double northY = adfGeoTransform[3];
-    return {{westX, southY}, {eastX, northY}};
+    return radix::tile::SrsBounds { { westX, southY }, { eastX, northY } };
 }
 
-radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
+Expected<radix::tile::SrsAndHeightBounds> Dataset::bounds3d(bool approx_ok) const
+{
     const auto band = this->m_gdal_dataset->GetRasterBand(1);
 
     glm::dvec2 height_range;
@@ -154,22 +164,33 @@ radix::tile::SrsAndHeightBounds Dataset::bounds3d(bool approx_ok) const {
         height_range = {-11000.0, 9000.0}; // Mariana Trench and Mount Everest
     }
 
-    const auto bounds2d = this->bounds();
+    auto bounds2d = this->bounds();
+    if (!bounds2d) {
+        return Error::propagate(std::move(bounds2d));
+    }
     radix::tile::SrsAndHeightBounds bounds3d;
-    bounds3d.min = glm::dvec3(bounds2d.min, height_range[0]);
-    bounds3d.max = glm::dvec3(bounds2d.max, height_range[1]);
+    bounds3d.min = glm::dvec3(bounds2d->min, height_range[0]);
+    bounds3d.max = glm::dvec3(bounds2d->max, height_range[1]);
     return bounds3d;
 }
 
-radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) const {
-    const auto l_bounds = bounds();
+Expected<radix::tile::SrsBounds> Dataset::bounds(const OGRSpatialReference& targetSrs) const
+{
+    const auto bounds_result = bounds();
+    if (!bounds_result) {
+        return bounds_result;
+    }
+    const auto l_bounds = *bounds_result;
     const auto west = l_bounds.min.x;
     const auto east = l_bounds.max.x;
     const auto north = l_bounds.max.y;
     const auto south = l_bounds.min.y;
 
-    const auto data_srs = srs();
-    if (targetSrs.IsSame(&data_srs))
+    auto data_srs = srs();
+    if (!data_srs) {
+        return Error::propagate(std::move(data_srs));
+    }
+    if (targetSrs.IsSame(&*data_srs))
         return l_bounds;
 
     // We need to transform the bounds to the target SRS
@@ -184,14 +205,14 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
 
     const auto deltaX = l_bounds.width() / 2000.0;
     if (deltaX <= 0.0)
-        throw std::runtime_error("west coordinate > east coordinate. This is not supported.");
+        return Error::fail(Error::Code::Unsupported, "west coordinate > east coordinate");
     for (double s = west; s < east; s += deltaX) {
         addCoordinate(s, south);
         addCoordinate(s, north);
     }
     const auto deltaY = (north - south) / 2000.0;
     if (deltaY <= 0.0)
-        throw std::runtime_error("south coordinate > north coordinate. This is not supported.");
+        return Error::fail(Error::Code::Unsupported, "south coordinate > north coordinate");
     for (double s = south; s < north; s += deltaY) {
         addCoordinate(west, s);
         addCoordinate(east, s);
@@ -199,9 +220,12 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     // don't wanna miss out the max/max edge vertex
     addCoordinate(east, north);
 
-    const auto transformer = Error::throwing_unwrap(srs::transformation(srs(), targetSrs));
-    if (!transformer->Transform(int(x.size()), x.data(), y.data())) {
-        throw std::runtime_error("Could not transform dataset bounds to target SRS");
+    auto transformer = srs::transformation(*data_srs, targetSrs);
+    if (!transformer) {
+        return Error::propagate(std::move(transformer));
+    }
+    if (!(*transformer)->Transform(int(x.size()), x.data(), y.data())) {
+        return Error::fail(Error::Code::InvalidInput, "transform dataset bounds to target SRS");
     }
 
     DEBUG_ASSERT(!x.empty());
@@ -210,10 +234,37 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     const double target_maxX = *std::max_element(x.begin(), x.end());
     const double target_minY = *std::min_element(y.begin(), y.end());
     const double target_maxY = *std::max_element(y.begin(), y.end());
-    return {{target_minX, target_minY}, {target_maxX, target_maxY}};
+    return radix::tile::SrsBounds { { target_minX, target_minY }, { target_maxX, target_maxY } };
 }
 
-OGRSpatialReference Dataset::srs() const {
+Expected<std::vector<radix::tile::SrsBounds>> Dataset::geodetic_coverage() const
+{
+    auto reference = srs();
+    if (!reference) {
+        return Error::propagate(std::move(reference));
+    }
+    auto l_bounds = bounds();
+    if (!l_bounds) {
+        return Error::propagate(std::move(l_bounds));
+    }
+    return srs::geodetic_coverage(*reference, *l_bounds);
+}
+
+Expected<std::vector<radix::tile::SrsBounds>> Dataset::mercator_coverage() const
+{
+    auto reference = srs();
+    if (!reference) {
+        return Error::propagate(std::move(reference));
+    }
+    auto l_bounds = bounds();
+    if (!l_bounds) {
+        return Error::propagate(std::move(l_bounds));
+    }
+    return srs::mercator_coverage(*reference, *l_bounds);
+}
+
+Expected<OGRSpatialReference> Dataset::srs() const
+{
     const OGRSpatialReference *source_srs = m_gdal_dataset->GetSpatialRef();
     for (int layer_index = 0; source_srs == nullptr && layer_index < m_gdal_dataset->GetLayerCount(); ++layer_index) {
         if (OGRLayer *layer = m_gdal_dataset->GetLayer(layer_index)) {
@@ -221,7 +272,7 @@ OGRSpatialReference Dataset::srs() const {
         }
     }
     if (source_srs == nullptr) {
-        throw std::runtime_error("The source dataset does not have a spatial reference system assigned");
+        return Error::fail(Error::Code::InvalidInput, "dataset " + name() + " does not have a spatial reference system assigned");
     }
     auto srs = *source_srs;
     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -236,12 +287,14 @@ unsigned Dataset::heightInPixels() const {
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
-double Dataset::widthInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
-    return bounds.width() / pixelWidthIn(bounds_srs);
+Expected<double> Dataset::widthInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
+{
+    return pixelWidthIn(bounds_srs).transform([&](double pixel_width) { return bounds.width() / pixel_width; });
 }
 
-double Dataset::heightInPixels(const radix::tile::SrsBounds &bounds, const OGRSpatialReference &bounds_srs) const {
-    return bounds.height() / pixelHeightIn(bounds_srs);
+Expected<double> Dataset::heightInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
+{
+    return pixelHeightIn(bounds_srs).transform([&](double pixel_height) { return bounds.height() / pixel_height; });
 }
 
 unsigned Dataset::n_bands() const {
@@ -257,17 +310,40 @@ const GDALDataset *Dataset::gdalDataset() const {
     return m_gdal_dataset.get();
 }
 
-double Dataset::gridResolution(const OGRSpatialReference &target_srs) const {
-    return std::min(pixelWidthIn(target_srs), pixelHeightIn(target_srs));
+Expected<double> Dataset::gridResolution(const OGRSpatialReference& target_srs) const
+{
+    auto width = pixelWidthIn(target_srs);
+    if (!width) {
+        return width;
+    }
+    auto height = pixelHeightIn(target_srs);
+    if (!height) {
+        return height;
+    }
+    return std::min(*width, *height);
 }
 
-double Dataset::pixelWidthIn(const OGRSpatialReference &target_srs) const {
-    const auto b0 = bounds();
-    const auto b1 = Error::throwing_unwrap(srs::non_exact_bounds_transform(b0, srs(), target_srs));
-    return b1.width() / widthInPixels();
+namespace {
+Expected<radix::tile::SrsBounds> bounds_in(const Dataset& dataset, const OGRSpatialReference& target_srs)
+{
+    auto bounds = dataset.bounds();
+    if (!bounds) {
+        return bounds;
+    }
+    auto reference = dataset.srs();
+    if (!reference) {
+        return Error::propagate(std::move(reference));
+    }
+    return srs::non_exact_bounds_transform(*bounds, *reference, target_srs);
+}
+} // namespace
+
+Expected<double> Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
+{
+    return bounds_in(*this, target_srs).transform([&](const radix::tile::SrsBounds& bounds) { return bounds.width() / widthInPixels(); });
 }
 
-double Dataset::pixelHeightIn(const OGRSpatialReference &target_srs) const {
-    const auto b = Error::throwing_unwrap(srs::non_exact_bounds_transform(bounds(), srs(), target_srs));
-    return b.height() / heightInPixels();
+Expected<double> Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
+{
+    return bounds_in(*this, target_srs).transform([&](const radix::tile::SrsBounds& bounds) { return bounds.height() / heightInPixels(); });
 }

@@ -97,7 +97,12 @@ std::optional<SimpleMesh> build_patch(
     if (!mesh_result) {
         const BuildMeshError error = mesh_result.error();
         if (error == BuildMeshError::OutOfBounds) {
-            const radix::tile::SrsBounds dataset_bounds = dataset.bounds();
+            const auto dataset_bounds_result = dataset.bounds();
+            if (!dataset_bounds_result) {
+                LOG_ERROR("Target bounds are fully outside of dataset region: {}", dataset_bounds_result.error().to_string());
+                return std::nullopt;
+            }
+            const radix::tile::SrsBounds dataset_bounds = *dataset_bounds_result;
             LOG_ERROR("Target bounds are fully outside of dataset region\n"
                       "Dataset {{\n"
                       "\t x={}, y={}, w={}, h={}.\n"
@@ -224,8 +229,16 @@ Expected<void> build_all_patches(
     raw_storage.settings().allow_overwrite = overwrite_existing;
     store::ThreadSafeStorage<mesh::storage::Storage> storage(std::move(raw_storage));
 
-    const auto dataset_srs = dataset.srs();
-    const auto dataset_bounds = dataset.bounds3d(true);
+    auto dataset_srs_result = dataset.srs();
+    if (!dataset_srs_result) {
+        return Error::propagate(std::move(dataset_srs_result), "read dataset SRS");
+    }
+    const auto dataset_srs = *dataset_srs_result;
+    auto dataset_bounds_result = dataset.bounds3d(true);
+    if (!dataset_bounds_result) {
+        return Error::propagate(std::move(dataset_bounds_result), "read dataset bounds");
+    }
+    const auto dataset_bounds = *dataset_bounds_result;
 
     const auto ecef_srs = srs::ecef();
     auto ecef_bounds_result = srs::encompassing_bounds_transfer(dataset_srs, ecef_srs, dataset_bounds);

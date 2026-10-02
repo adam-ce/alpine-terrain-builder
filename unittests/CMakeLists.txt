@@ -25,7 +25,6 @@ function(atb_configure_test target)
     target_compile_definitions(${target} PRIVATE
         CATCH_CONFIG_ENABLE_ALL_STRINGMAKERS
         ALP_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/unittests/data/"
-        ALP_UNITTESTS_AUSTRIA_HIGHRES="${ALP_UNITTESTS_AUSTRIA_HIGHRES}"
         ALP_UNITTESTS_EXTENDED=$<BOOL:${ALP_UNITTESTS_EXTENDED}>
         ALP_UNITTESTS_DEBUG_IMAGES=$<BOOL:${ALP_UNITTESTS_DEBUG_IMAGES}>
     )
@@ -47,6 +46,7 @@ add_executable(unittests_terrainlib
     terrainlib/convert.cpp
     terrainlib/cow.cpp
     terrainlib/dataset.cpp
+    terrainlib/dataset_reading.cpp
     terrainlib/enumerate.cpp
     terrainlib/envelope.cpp
     terrainlib/error.cpp
@@ -115,22 +115,6 @@ target_compile_features(unittests_glm_serialization_aligned PRIVATE cxx_std_23)
 target_compile_definitions(unittests_glm_serialization_aligned PRIVATE GLM_FORCE_INTRINSICS GLM_FORCE_ALIGNED_GENTYPES)
 target_include_directories(unittests_glm_serialization_aligned PRIVATE ${CMAKE_SOURCE_DIR}/src/terrainlib)
 target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_bits Catch2::Catch2WithMain)
-
-if(TARGET tilebuilderlib)
-    add_executable(unittests_tilebuilder
-        catch2_helpers.h
-        tilebuilder/alpine_raster_format.cpp
-        tilebuilder/dataset_reading.cpp
-        tilebuilder/depth_first_tile_traverser.cpp
-        tilebuilder/image_writer.cpp
-        tilebuilder/parallel_tile_generator.cpp
-        tilebuilder/parallel_tiler.cpp
-        tilebuilder/tile_heights_generator.cpp
-        tilebuilder/top_down_tiler.cpp
-    )
-    target_link_libraries(unittests_tilebuilder PRIVATE tilebuilderlib Catch2::Catch2WithMain)
-    atb_configure_test(unittests_tilebuilder)
-endif()
 
 if(TARGET sfbuilderlib)
     add_executable(unittests_sfbuilder

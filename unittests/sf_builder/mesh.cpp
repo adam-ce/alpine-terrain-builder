@@ -158,7 +158,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
     for (const auto &data : test_data) {
         DYNAMIC_SECTION(data.path_suffix) {
             Dataset dataset(std::filesystem::path(ALP_TEST_DATA_DIR).concat(data.path_suffix));
-            const auto source_srs = dataset.srs();
+            const auto source_srs = dataset.srs().value();
             const auto &mesh_srs = data.mesh_srs;
             const auto &target_srs = data.target_srs;
             const auto &target_bounds = data.target_bounds;

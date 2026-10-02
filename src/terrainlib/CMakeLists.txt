@@ -287,7 +287,3 @@ target_link_libraries(terrainlib PUBLIC
 target_link_libraries(terrainlib PRIVATE cpptrace::cpptrace)
 # Only io/hash.cpp includes xxHash.
 target_link_libraries(terrainlib PRIVATE xxhash)
-
-if(ALP_ENABLE_OVERVIEW_READING)
-    target_compile_definitions(terrainlib PUBLIC ALP_ENABLE_OVERVIEW_READING)
-endif()

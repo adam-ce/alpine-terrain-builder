@@ -57,10 +57,9 @@ public:
     static Expected<Samples<glm::u8vec3>> read_colour(
         GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, const std::array<unsigned, 3>& bands);
 
-    DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews = true);
+    DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band);
 
     radix::Raster<float> read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const;
-    radix::Raster<float> readWithOverviews(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const;
 
     unsigned dataset_band() const { return m_band; }
     bool isReprojecting() const { return m_requires_reprojection; }
@@ -75,7 +74,6 @@ private:
     std::string m_dataset_srs_wkt;
     std::string m_target_srs_wkt;
     bool m_requires_reprojection;
-    [[maybe_unused]] bool m_warn_on_missing_overviews;
     unsigned m_band;
 };
 

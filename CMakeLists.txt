@@ -6,7 +6,6 @@ project(alpine-terrain-builder LANGUAGES C CXX)
 option(ALP_BUILD_RF_BUILDER "Build rf-builder" ON)
 option(ALP_BUILD_RF_TILE2IMAGE "Build rf-tile2image" ON)
 option(ALP_BUILD_RF_MERGER "Build rf-merger" ON)
-option(ALP_BUILD_TILE_BUILDER "Build tile-builder" ON)
 option(ALP_BUILD_SF_MERGER "Build sf-merger" ON)
 option(ALP_BUILD_SF_BUILDER "Build sf-builder" ON)
 option(ALP_BUILD_TILE_DOWNLOADER "Build tile-downloader" ON)
@@ -20,7 +19,6 @@ option(ALP_BUILD_UNITTESTS "Build unit tests for enabled components" ON)
 # Project configuration
 option(ALP_ENABLE_THREAD_SANITIZER "Compile with ThreadSanitizer enabled" OFF)
 option(ALP_ENABLE_ADDRESS_SANITIZER "Compile with AddressSanitizer enabled" OFF)
-option(ALP_ENABLE_OVERVIEW_READING "Enable GDAL overview reading (broken with newer GDAL versions)" OFF)
 option(ALP_ENABLE_UNITY_BUILD "Enable unity (jumbo) builds to speed compilation" OFF)
 option(ALP_WARNINGS_AS_ERRORS "Treat first-party compiler warnings as errors" OFF)
 
@@ -38,7 +36,6 @@ set(ALP_DEPENDENCIES_N_BUILD_JOBS "" CACHE STRING
 # Unit-test configuration
 option(ALP_UNITTESTS_EXTENDED "Perform extended unit tests (they take long)" OFF)
 option(ALP_UNITTESTS_DEBUG_IMAGES "Output debug height images for visual comparison" OFF)
-set(ALP_UNITTESTS_AUSTRIA_HIGHRES "" CACHE FILEPATH "Path to the high resolution Austrian terrain dataset")
 
 if(ALP_ENABLE_ADDRESS_SANITIZER AND ALP_ENABLE_THREAD_SANITIZER)
     message(FATAL_ERROR "Cannot enable both AddressSanitizer and ThreadSanitizer")

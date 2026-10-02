@@ -25,12 +25,13 @@
 #include <ogr_spatialref.h>
 #include <radix/tile.h>
 #include "Error.h"
+#include "srs.h"
 
 // Exact affine raster coordinates, independent of delivery-tile dimensions.
 class RasterTransform {
 public:
-    static constexpr double world_half_extent = 20037508.342789244;
-    static constexpr double latitude_limit = 85.0511287798066;
+    static constexpr double world_half_extent = srs::webmercator_half_extent;
+    static constexpr double latitude_limit = srs::webmercator_latitude_limit;
     using Bounds = radix::tile::SrsBounds;
 
     static Expected<RasterTransform> create(GDALDataset& dataset);

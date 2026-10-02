@@ -119,71 +119,13 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
     return { std::move(options), GdalImageTransformArgsPtr(nullptr, &GDALDestroyGenImgProjTransformer) };
 }
 
-#ifdef ALP_ENABLE_OVERVIEW_READING
-std::shared_ptr<Dataset> getOverviewDataset(const std::shared_ptr<Dataset>& dataset, void* hTransformerArg, bool warn_on_missing_overviews)
-{
-    GDALDataset* poSrcDS = dataset->gdalDataset();
-    int nOvLevel = -2;
-    int nOvCount = poSrcDS->GetRasterBand(1)->GetOverviewCount();
-
-    assert(nOvCount >= 0);
-    if (nOvCount == 0) {
-        if (warn_on_missing_overviews)
-            TNTN_LOG_WARN("No dataset overviews found.");
-        return dataset;
-    }
-
-    std::array<double, 6> adfSuggestedGeoTransform;
-    std::array<double, 4> adfExtent;
-    int nPixels;
-    int nLines;
-    /* Compute what the "natural" output resolution (in pixels) would be for this */
-    /* input dataset */
-    if (GDALSuggestedWarpOutput2(poSrcDS, GDALGenImgProjTransform, hTransformerArg,
-            adfSuggestedGeoTransform.data(), &nPixels, &nLines,
-            adfExtent.data(), 0)
-        == CE_Failure) {
-        TNTN_LOG_WARN("GDALSuggestedWarpOutput2 failed. We won't use dataset overviews!");
-        return dataset;
-    }
-
-    double dfTargetRatio = 1.0 / adfSuggestedGeoTransform[1];
-    //  if( dfTargetRatio <= 1.0 ) {
-    //    TNTN_LOG_WARN(fmt::format("dfTargetRatio {} <= 1.0. We won't use dataset overviews!\n", dfTargetRatio));
-    //    TNTN_LOG_WARN(fmt::format("Other values: nPixels={}, nLines={}, adfExtent={}/{}/{}/{}\n",
-    //                              nPixels, nLines, adfExtent[0], adfExtent[1], adfExtent[2], adfExtent[3]));
-    //    TNTN_LOG_WARN(fmt::format("Other values: adfSuggestedGeoTransform={}/{}/{}/{}/{}/{}\n",
-    //                              adfSuggestedGeoTransform[0], adfSuggestedGeoTransform[1], adfSuggestedGeoTransform[2],
-    //                              adfSuggestedGeoTransform[3], adfSuggestedGeoTransform[4], adfSuggestedGeoTransform[5]));
-    //    return dataset;
-    //  }
-
-    int iOvr;
-    for (iOvr = -1; iOvr < nOvCount - 1; iOvr++) {
-        const auto dfOvrRatio = (iOvr < 0) ? 1.0 : double(poSrcDS->GetRasterXSize()) / poSrcDS->GetRasterBand(1)->GetOverview(iOvr)->GetXSize();
-        const auto dfNextOvrRatio = double(poSrcDS->GetRasterXSize()) / poSrcDS->GetRasterBand(1)->GetOverview(iOvr + 1)->GetXSize();
-        if (dfOvrRatio < dfTargetRatio && dfNextOvrRatio > dfTargetRatio)
-            break;
-        if (std::abs(dfOvrRatio - dfTargetRatio) < 1e-1)
-            break;
-    }
-    iOvr += nOvLevel + 2;
-    if (iOvr >= 0) {
-        TNTN_LOG_DEBUG("WARPING: Selecting overview level {} for output dataset {}x{}\n", iOvr, nPixels, nLines);
-        return std::make_shared<Dataset>(static_cast<GDALDataset*>(GDALCreateOverviewDataset(poSrcDS, iOvr, FALSE)));
-    }
-    return dataset;
-}
-#endif
-
 }
 
-DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band, bool warn_on_missing_overviews)
+DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band)
     : m_dataset(dataset)
-    , m_dataset_srs_wkt(toWkt(dataset->srs()))
+    , m_dataset_srs_wkt(toWkt(Error::throwing_unwrap(dataset->srs())))
     , m_target_srs_wkt(toWkt(targetSRS))
-    , m_requires_reprojection(!dataset->srs().IsSame(&targetSRS))
-    , m_warn_on_missing_overviews(warn_on_missing_overviews)
+    , m_requires_reprojection(!Error::throwing_unwrap(dataset->srs()).IsSame(&targetSRS))
     , m_band(band)
 {
     if (band > dataset->n_bands())
@@ -193,18 +135,6 @@ DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRS
 radix::Raster<float> DatasetReader::read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
 {
     return readFrom(m_dataset, bounds, width, height);
-}
-
-radix::Raster<float> DatasetReader::readWithOverviews(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
-{
-#ifdef ALP_ENABLE_OVERVIEW_READING
-    auto transformer_args = make_image_transform_args(*this, m_dataset.get(), bounds, width, height);
-    auto source_dataset = getOverviewDataset(m_dataset, transformer_args.get(), m_warn_on_missing_overviews);
-
-    return readFrom(source_dataset, bounds, width, height);
-#else
-    return read(bounds, width, height);
-#endif
 }
 
 radix::Raster<float> DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const

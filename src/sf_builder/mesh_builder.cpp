@@ -207,7 +207,11 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     const OGRSpatialReference &mesh_srs,
     const OGRSpatialReference &clip_srs, const radix::geometry::Aabb3d &clip_bounds,
     const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
-    const OGRSpatialReference &source_srs = dataset.srs();
+    const auto source_srs_result = dataset.srs();
+    if (!source_srs_result) {
+        return std::unexpected(log_transformation_error(source_srs_result.error()));
+    }
+    const OGRSpatialReference& source_srs = *source_srs_result;
 
     // Translate tile bounds from tile srs into the source srs, so we know what data to read.
     Expected<radix::tile::SrsBounds> target_bounds_result;

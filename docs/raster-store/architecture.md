@@ -28,7 +28,7 @@ Authoritative rf raster store
     │
     │ generate overviews using defined filtering strategy.
     ▼
-tile-base store (one per layer, one per data version. user visible server should only need one version per layer)
+tile-base store (one per channel; every build is a new snapshot, the server needs one version per channel)
     ├── read by tile-server
     ├── area/vertex pixel tile generation
     └── select resolution, type etc by url
@@ -168,7 +168,8 @@ Implementation: `src/rf_merger/*`, executable `rf-merger`.
 
 ### tb_builder
 
-Tile-base adds overviews to RF and retains the data. Every level is occupied
+Tile-base adds overviews to one RF and retains the data. It holds one
+channel; derived channels such as shadings are produced by separate tools. Every level is occupied
 and selects an adequate source. It must support at least minimum, maximum, and average
 aggregation. A TB may choose different tile dimensions from its RF input.
 See [sampling and generation](sampling-and-generation.md) for filtering and

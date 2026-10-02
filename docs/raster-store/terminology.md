@@ -117,8 +117,19 @@ _Avoid_: NoData pixel, invalid pixel (for a stored zero-attribution pixel)
   coordinates at a location. It expresses the local reduction in source detail
   without treating a pure rotation as a change in resolution.
 
+**Channel**
+: One kind of raster data, such as orthophoto RGB, a digital surface model
+  (DSM), a digital terrain model (DTM) or a shading.
+
 **tile-base (tb)**
-: basically rf with overviews, used to generate derived tiles
+: A hierarchical raster store holding one channel. It retains the data of one
+  RF and adds overview levels, built bottom-up by a reduction chosen for that
+  channel, such as filtered resampling, minimum or maximum. Several TBs exist
+  side by side, one per channel.
+
+**Layer**
+: A client-visible tile product served by the tile server. A layer is derived
+  from one or more TBs, for example DSM and DTM combined, or several shadings.
 
 **Vertex pixel**
 : A generated value located on a grid vertex. Height tiles for mesh generation

@@ -14,3 +14,7 @@
   store keeps a separate hash table beside it. Header reads remain available
   for verifying or rebuilding an index. Decide with the TB builder design that
   defines the dependency records.
+- Design derived-channel generation (shading, slope, PLaTSA, AO). It is not
+  part of the TB builder, which converts one RF into one TB without computing
+  channels. A separate tool is expected to produce an RF-like input for the TB
+  builder;

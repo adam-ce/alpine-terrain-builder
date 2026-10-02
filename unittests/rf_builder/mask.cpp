@@ -231,7 +231,9 @@ TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-
         const auto masked = std::chrono::steady_clock::now();
         raster_store::Tile<float> tile(side);
         tile.data = std::move(samples->data);
-        for (std::size_t i = 0; i < samples->valid.buffer().size(); ++i) { tile.source_attribution.buffer()[i] = samples->valid.buffer()[i] ? 1 : 0; }
+        for (std::size_t i = 0; i < samples->valid.buffer().size(); ++i) {
+            tile.attribution.buffer()[i] = samples->valid.buffer()[i] ? 1 : 0;
+        }
         const auto accepted = std::ranges::count(samples->valid.buffer(), std::uint8_t(1));
         if (accepted) {
             REQUIRE(output->save(key, tile));

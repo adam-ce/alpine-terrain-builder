@@ -99,7 +99,6 @@ add_executable(unittests_terrainlib
     terrainlib/raster_fold.cpp
     terrainlib/raster_view.cpp
     terrainlib/raster_store.cpp
-    terrainlib/raster_halo.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp

@@ -40,12 +40,12 @@ template <typename PixelType>
 struct Tile {
     explicit Tile(const unsigned side = default_tile_side)
         : data(side)
-        , source_attribution(glm::uvec2(side), std::uint16_t { 0 })
+        , attribution(glm::uvec2(side), std::uint16_t { 0 })
     {
     }
 
     radix::Raster<PixelType> data;
-    radix::Raster<std::uint16_t> source_attribution;
+    radix::Raster<std::uint16_t> attribution;
 };
 
 } // namespace raster_store

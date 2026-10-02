@@ -282,7 +282,7 @@ TEST_CASE("Online adaptive RF keeps fine islands and fills coarse siblings witho
     for (unsigned y = 0; y < 8; ++y) {
         for (unsigned x = 0; x < 8; ++x) {
             CHECK(fine->data.buffer()[y * 16 + x] == glm::u8vec3(0));
-            CHECK(fine->source_attribution.buffer()[y * 16 + x] == 1);
+            CHECK(fine->attribution.buffer()[y * 16 + x] == 1);
         }
     }
     const auto requests = fixture.server.requests();
@@ -708,7 +708,7 @@ TEST_CASE("Online coordinator reports weighted progress during idle and out-of-o
             return run::Prepared<glm::u8vec3>(std::monostate());
         }
         raster_store::Tile<glm::u8vec3> tile(16);
-        std::ranges::fill(tile.source_attribution.buffer(), 1);
+        std::ranges::fill(tile.attribution.buffer(), 1);
         return run::Prepared<glm::u8vec3>(std::move(tile));
     };
     std::ostringstream stream;

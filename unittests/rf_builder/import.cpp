@@ -179,12 +179,12 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
             auto tile = snapshot.load(key);
             REQUIRE(tile);
             const bool original_coverage = key.coords.x >= 8 && key.coords.x <= 9 && key.coords.y >= 6 && key.coords.y <= 7;
-            CHECK(std::ranges::any_of(tile->source_attribution.buffer(), [](auto value) { return value == 1; }) == original_coverage);
+            CHECK(std::ranges::any_of(tile->attribution.buffer(), [](auto value) { return value == 1; }) == original_coverage);
             CHECK(key.coords.x >= 7);
             CHECK(key.coords.x <= 10);
             CHECK(key.coords.y >= 5);
             CHECK(key.coords.y <= 8);
-            CHECK(std::ranges::all_of(tile->source_attribution.buffer(), [](auto value) { return value <= 1; }));
+            CHECK(std::ranges::all_of(tile->attribution.buffer(), [](auto value) { return value <= 1; }));
             bytes += std::filesystem::file_size(*snapshot.path_for(key));
         }
         CHECK(bytes == built.tile_bytes);
@@ -588,7 +588,7 @@ TEST_CASE("RF mask is an output selection and not a source cutline", "[rf-builde
         auto tile = opened->load(key);
         REQUIRE(tile);
         for (std::size_t i = 0; i < tile->data.buffer().size(); ++i) {
-            if (tile->source_attribution.buffer()[i]) {
+            if (tile->attribution.buffer()[i]) {
                 ++accepted;
                 CHECK(tile->data.buffer()[i] == Catch::Approx(10));
             }
@@ -783,7 +783,7 @@ TEST_CASE("RF parallel imports match serial pixels attribution and hierarchy", "
                 REQUIRE(expected);
                 REQUIRE(actual);
                 CHECK(std::ranges::equal(actual->data.buffer(), expected->data.buffer()));
-                CHECK(std::ranges::equal(actual->source_attribution.buffer(), expected->source_attribution.buffer()));
+                CHECK(std::ranges::equal(actual->attribution.buffer(), expected->attribution.buffer()));
             }
             for (const auto& entry : std::filesystem::recursive_directory_iterator(baseline)) {
                 if (!entry.is_regular_file()) {
@@ -935,10 +935,10 @@ TEST_CASE("RF import stores configured replacements with zero attribution", "[rf
     REQUIRE_NOTHROW(rf_builder::gdal::build(fixture.options));
     const auto check = [&](const auto& tile, const auto& original, const auto& fallback) {
         CHECK(tile.data.pixel({ 1, 1 }) == original);
-        CHECK(tile.source_attribution.pixel({ 1, 1 }) == 1);
+        CHECK(tile.attribution.pixel({ 1, 1 }) == 1);
         CHECK(tile.data.pixel({ 15, 15 }) == fallback);
-        CHECK(tile.source_attribution.pixel({ 15, 15 }) == 0);
-        CHECK(tile.source_attribution.pixel({ 8, 8 }) == 0);
+        CHECK(tile.attribution.pixel({ 15, 15 }) == 0);
+        CHECK(tile.attribution.pixel({ 8, 8 }) == 0);
         CHECK(tile.data.pixel({ 8, 8 }) != fallback);
     };
     if (bands == 1) {

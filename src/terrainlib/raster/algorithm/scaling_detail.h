@@ -56,20 +56,14 @@ namespace detail {
         return Error::fail(Error::Code::InvalidInput, "invalid raster resampling method");
     }
 
-    // Floor division, including negative output coordinates and factors above INT_MAX.
-    inline int source_cell(int position, unsigned factor)
-    {
-        return position >= 0 ? int(unsigned(position) / factor) : -1 - int(unsigned(-(position + 1)) / factor);
-    }
+    // Floor division, including negative output coordinates.
+    inline std::int64_t source_cell(std::int64_t position, unsigned factor) { return position >= 0 ? position / factor : -1 - (-(position + 1)) / factor; }
 
-    inline unsigned source_phase(int position, unsigned factor)
-    {
-        return unsigned(std::int64_t(position) - std::int64_t(source_cell(position, factor)) * factor);
-    }
+    inline unsigned source_phase(std::int64_t position, unsigned factor) { return unsigned(position - source_cell(position, factor) * factor); }
 
-    inline int upscaling_origin(int position, unsigned factor, unsigned radius)
+    inline std::int64_t upscaling_origin(std::int64_t position, unsigned factor, unsigned radius)
     {
-        const int cell = source_cell(position, factor);
+        const std::int64_t cell = source_cell(position, factor);
         if (radius == 0)
             return cell;
         return cell - (source_phase(position, factor) < factor / 2 ? 1 : 0) - int(radius) + 1;
@@ -195,22 +189,24 @@ namespace detail {
     }
 
     // Validate actual source support, including windows outside the scaled interior.
-    inline Expected<ScalingGeometry> window_geometry(glm::uvec2 input, unsigned halo_width, int levels, Resampling method, glm::ivec2 offset, glm::uvec2 size)
+    inline Expected<ScalingGeometry> window_geometry(glm::uvec2 input, unsigned halo_width, int levels, Resampling method, glm::i64vec2 offset, glm::uvec2 size)
     {
         assert(input.x <= (1u << 30) && input.y <= (1u << 30));
         assert(size.x <= (1u << 30) && size.y <= (1u << 30));
-        assert(offset.x >= -(1 << 30) && offset.x < (1 << 30) && offset.y >= -(1 << 30) && offset.y < (1 << 30));
         auto required = required_halo(levels, method);
         if (!required)
             return Error::propagate(std::move(required));
         const auto factor = *scale_factor(static_cast<unsigned>(levels < 0 ? -std::int64_t(levels) : levels));
+        // Downscaling multiplies the offset by the factor.
+        [[maybe_unused]] const std::int64_t limit = (std::int64_t(1) << 62) / (levels < 0 ? factor : 1);
+        assert(offset.x > -limit && offset.x < limit && offset.y > -limit && offset.y < limit);
         if (input.x == 0 || input.y == 0 || halo_width > ((std::min)(input.x, input.y) - 1) / 2)
             return Error::fail(Error::Code::InvalidInput, "invalid raster interior");
         ScalingGeometry result { input - glm::uvec2(2 * halo_width), size, factor };
         for (unsigned axis = 0; axis < 2; ++axis) {
             if (size[axis] == 0)
                 return Error::fail(Error::Code::InvalidInput, "empty scaling output window");
-            const int last = offset[axis] + int(size[axis] - 1);
+            const std::int64_t last = offset[axis] + std::int64_t(size[axis] - 1);
             std::int64_t first_source;
             std::int64_t last_source;
             if (levels > 0) {
@@ -220,8 +216,8 @@ namespace detail {
             } else if (levels < 0) {
                 if (result.interior[axis] % factor != 0)
                     return Error::fail(Error::Code::InvalidInput, "raster interior dimensions must be divisible by the reduction factor");
-                first_source = std::int64_t(halo_width) + std::int64_t(offset[axis]) * factor - *required;
-                last_source = std::int64_t(halo_width) + (std::int64_t(last) + 1) * factor + *required - 1;
+                first_source = std::int64_t(halo_width) + offset[axis] * factor - *required;
+                last_source = std::int64_t(halo_width) + (last + 1) * factor + *required - 1;
             } else {
                 first_source = std::int64_t(halo_width) + offset[axis];
                 last_source = std::int64_t(halo_width) + last;
@@ -245,7 +241,7 @@ struct SourceWindow {
 /// The returned origin includes the source halo; output_offset is relative to the scaled interior.
 /// Rejects invalid geometry or insufficient source support, just like windowed scale().
 [[nodiscard]] inline Expected<SourceWindow> required_source_window(
-    glm::uvec2 input_size, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, glm::uvec2 output_size)
+    glm::uvec2 input_size, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, glm::uvec2 output_size)
 {
     auto geometry = detail::window_geometry(input_size, halo_width, levels, method, output_offset, output_size);
     if (!geometry)

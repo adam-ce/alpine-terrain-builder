@@ -145,7 +145,7 @@ TEST_CASE("RF nonfinite pixels are magenta and unattributed values still define 
     }
     tile.data.buffer()[2] = -10;
     tile.data.buffer()[3] = 10;
-    tile.source_attribution.buffer()[3] = 1;
+    tile.attribution.buffer()[3] = 1;
     options = fixture(directory.path(), tile);
     images = rf_tile2image::render_tile(options);
     REQUIRE(images);
@@ -189,7 +189,7 @@ TEST_CASE("RF attribution hashes are unique with contrasting neighbours", "[rf-t
     test::TemporaryDirectory directory;
     raster_store::Tile<std::uint8_t> tile(256);
     for (std::uint32_t index = 0; index < 65535; ++index) {
-        tile.source_attribution.buffer()[index] = static_cast<std::uint16_t>(index);
+        tile.attribution.buffer()[index] = static_cast<std::uint16_t>(index);
     }
     auto options = fixture(directory.path(), tile);
     auto images = rf_tile2image::render_tile(options);
@@ -208,7 +208,7 @@ TEST_CASE("RF attribution hashes are unique with contrasting neighbours", "[rf-t
     }
     check_colour(colours[0], { 0, 0, 0 });
     check_colour(colours[1], { 0x9E, 0x37, 0x79 });
-    tile.source_attribution.buffer()[0] = 65535;
+    tile.attribution.buffer()[0] = 65535;
     options = fixture(directory.path(), tile);
     CHECK_FALSE(rf_tile2image::render_tile(options));
 }
@@ -220,7 +220,7 @@ TEMPLATE_TEST_CASE("RF imagery preserves RGB channels, halo, orientation, and ig
     tile.data.fill(TestType(0));
     tile.data.pixel({ 0, 0 }).x = 255;
     tile.data.pixel({ 5, 5 }).z = 255;
-    tile.source_attribution.pixel({ 0, 0 }) = 1;
+    tile.attribution.pixel({ 0, 0 }) = 1;
     const rf_tile2image::Options options = fixture(directory.path(), tile, raster_store::pixel::Mapping::SRGBA, 1);
     auto images = rf_tile2image::render_tile(options);
     REQUIRE(images);
@@ -280,7 +280,7 @@ TEST_CASE("RF conversion writes JPEG and lossless PNG and protects both existing
     test::TemporaryDirectory directory;
     raster_store::Tile<float> tile(16);
     tile.data.fill(10);
-    tile.source_attribution.fill(1);
+    tile.attribution.fill(1);
     auto options = fixture(directory.path(), tile);
     options.output_directory = directory.path() / "images";
     auto paths = rf_tile2image::convert(options);

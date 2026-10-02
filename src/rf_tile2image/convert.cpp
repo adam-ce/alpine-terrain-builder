@@ -153,12 +153,12 @@ namespace {
             }
             images.data = std::move(*data);
         }
-        if (raster::algorithm::fold(tile->source_attribution, false, [](bool invalid, const std::uint16_t& index) {
+        if (raster::algorithm::fold(tile->attribution, false, [](bool invalid, const std::uint16_t& index) {
                 return invalid || index >= raster_store::attribution::index_limit;
             })) {
             return Error::fail(Error::Code::CorruptData, "unsupported attribution index 65535");
         }
-        auto attribution = raster::algorithm::transform(tile->source_attribution, attribution_colour);
+        auto attribution = raster::algorithm::transform(tile->attribution, attribution_colour);
         if (!attribution) {
             return Error::propagate(std::move(attribution));
         }

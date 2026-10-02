@@ -143,7 +143,7 @@ Any nontrivial low-pass filter needs samples outside the exact output bounds.
 The required halo is determined by the reconstruction and reduction filters,
 not by a fixed one-pixel border flag.
 
-The physical-tile halo reader resolves a tile-centred window over the
+The generator's window reader resolves a tile-centred window over the
 quadtree. It resolves:
 
 - physical chunks selected for the requested accuracy;
@@ -151,11 +151,8 @@ quadtree. It resolves:
 - chunk and source-map decoding; and
 - neighbouring data needed by the window.
 
-The generator determines the requested halo. The raster-store halo
-reader applies replication only where physical coverage is missing,
-including vertical world limits, using clamped views as described in
-[Tiles with halo](tiles-with-halo.md). Zero attribution within a physical
-source is not a boundary and does not trigger replacement of its data.
+The generator determines the requested halo. Zero attribution within a
+physical source is not a boundary and does not trigger replacement of its data.
 Callers prepare usable values before invoking the generic scaler; the scaler
 neither assembles neighbours nor invents boundary conditions.
 
@@ -212,11 +209,8 @@ The generator needs explicit rules for:
 - zero-attribution pixels inside physically covered chunks; and
 - filters whose support crosses a layer's coverage boundary.
 
-The raster-store halo rules are specified in
-[Tiles with halo](tiles-with-halo.md): preserve physically supplied
-zero-attribution payloads and replicate only missing physical coverage through
-clamped views. Other generator-specific boundary policies remain separate
-design work. Tests must distinguish true coverage boundaries from ordinary
+Physically supplied zero-attribution payloads are preserved. Other
+generator-specific boundary policies remain separate design work. Tests must distinguish true coverage boundaries from ordinary
 internal chunk and delivery-tile boundaries. Source dataset NoData/mask
 boundaries are handled during import, not by generic scaling.
 
@@ -245,16 +239,14 @@ the area-pixel operations. Other layer-specific and
 vertex-pixel filters remain separate design decisions; tests should fix their
 numeric tolerances only after representative evaluation.
 
-The [halo reader](tiles-with-halo.md) clamps ancestor interpolation
-support at the complete supplying physical tile's edge. This is its explicit
-fallback policy; it does not promise the seam-free vertex-generation invariant
-above. A future generator needing that invariant must assemble common support
-or generate metatiles. Halo attribution is representative and never masks
-numerical contributions; zero attribution triggers no resolution fallback.
+A generator needing the seam-free vertex-generation invariant above must
+assemble common support or generate metatiles. Halo attribution is
+representative and never masks numerical contributions; zero attribution
+triggers no resolution fallback.
 
 ## Implemented scaling rules
 
-`raster::algorithm` scales and reduces single rasters; `raster_store::scaler`
+`raster::algorithm` scales and reduces single rasters; `raster_store::scale`
 pairs these operations for data and attribution. This section records their
 numerical contract; signatures are in the code.
 
@@ -269,7 +261,7 @@ including nonfinite values.
 
 Only power-of-two scale factors are supported, with area-pixel placement.
 Vertex-pixel generation, world wrapping, physical-source selection and
-ancestor fallback belong to callers such as the halo reader.
+ancestor fallback belong to callers such as the RF merger.
 
 ### Methods
 

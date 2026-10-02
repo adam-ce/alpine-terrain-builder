@@ -48,7 +48,7 @@ namespace detail {
     }
 
     template <typename S>
-    std::array<S, 8> upscaling_weights(int position, unsigned factor, unsigned radius)
+    std::array<S, 8> upscaling_weights(std::int64_t position, unsigned factor, unsigned radius)
     {
         const unsigned remainder = source_phase(position, factor);
         const S phase = (S(remainder) + S(0.5)) / S(factor) - S(0.5);
@@ -72,7 +72,7 @@ namespace detail {
         Resampling method,
         const Conversion& conversion,
         const View<T>& destination,
-        glm::ivec2 output_offset)
+        glm::i64vec2 output_offset)
     {
         using W = DecodedPixel<Conversion, T>;
         using S = typename PixelTraits<W>::Scalar;
@@ -81,8 +81,7 @@ namespace detail {
         if (radius == 0) {
             for (unsigned y = 0; y < destination.height(); ++y)
                 for (unsigned x = 0; x < destination.width(); ++x) {
-                    const glm::uvec2 nearest(
-                        int(halo_width) + source_cell(output_offset.x + int(x), factor), int(halo_width) + source_cell(output_offset.y + int(y), factor));
+                    const glm::uvec2 nearest(halo_width + source_cell(output_offset.x + x, factor), halo_width + source_cell(output_offset.y + y, factor));
                     std::memcpy(std::addressof(destination.pixel({ x, y })), std::addressof(source.pixel(nearest)), sizeof(T));
                 }
             return {};
@@ -92,13 +91,13 @@ namespace detail {
         if (!horizontal)
             return Error::propagate(std::move(horizontal));
         for (unsigned x = 0; x < destination.width(); ++x)
-            horizontal->pixel({ x, 0 }) = upscaling_weights<S>(output_offset.x + int(x), factor, radius);
+            horizontal->pixel({ x, 0 }) = upscaling_weights<S>(output_offset.x + x, factor, radius);
         for (unsigned y = 0; y < destination.height(); ++y) {
-            const int position_y = output_offset.y + int(y);
+            const std::int64_t position_y = output_offset.y + y;
             const auto weights_y = upscaling_weights<S>(position_y, factor, radius);
-            const unsigned origin_y = int(halo_width) + upscaling_origin(position_y, factor, radius);
+            const auto origin_y = unsigned(halo_width + upscaling_origin(position_y, factor, radius));
             for (unsigned x = 0; x < destination.width(); ++x) {
-                const unsigned origin_x = int(halo_width) + upscaling_origin(output_offset.x + int(x), factor, radius);
+                const auto origin_x = unsigned(halo_width + upscaling_origin(output_offset.x + x, factor, radius));
                 const auto& weights_x = horizontal->pixel({ x, 0 });
                 W value {};
                 for (unsigned dy = 0; dy < 2 * radius; ++dy)
@@ -159,7 +158,7 @@ namespace detail {
         unsigned halo_width,
         int levels,
         Resampling method,
-        glm::ivec2 offset,
+        glm::i64vec2 offset,
         const Conversion& conversion,
         const View<T>& destination)
     {
@@ -184,7 +183,7 @@ template <detail::ViewSource Source, typename Conversion, detail::WritableViewDe
 requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingConversion<Conversion, detail::SourcePixel<Source>>
     && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
 [[nodiscard]] Expected<void> scale(
-    Source&& source, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, const Conversion& conversion, Destination&& destination)
+    Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, const Conversion& conversion, Destination&& destination)
 {
     return detail::scale_window(
         detail::read_only_view(raster::make_view(source)), halo_width, levels, method, output_offset, conversion, raster::make_view(destination));
@@ -193,7 +192,7 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingCon
 template <detail::ViewSource Source, typename Conversion>
 requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingConversion<Conversion, detail::SourcePixel<Source>>
 [[nodiscard]] Expected<radix::Raster<detail::SourcePixel<Source>>> scale(
-    Source&& source, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, glm::uvec2 output_size, const Conversion& conversion)
+    Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, glm::uvec2 output_size, const Conversion& conversion)
 {
     auto geometry = detail::window_geometry(source.size(), halo_width, levels, method, output_offset, output_size);
     if (!geometry)
@@ -204,7 +203,7 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingCon
 
 template <detail::ViewSource Source, detail::WritableViewDestination Destination>
 requires detail::NumericPixel<detail::SourcePixel<Source>> && std::same_as<detail::SourcePixel<Source>, detail::SourcePixel<Destination>>
-[[nodiscard]] Expected<void> scale(Source&& source, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, Destination&& destination)
+[[nodiscard]] Expected<void> scale(Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, Destination&& destination)
 {
     return scale(std::forward<Source>(source),
         halo_width,
@@ -218,7 +217,7 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && std::same_as<detai
 template <detail::ViewSource Source>
 requires detail::NumericPixel<detail::SourcePixel<Source>>
 [[nodiscard]] Expected<radix::Raster<detail::SourcePixel<Source>>> scale(
-    Source&& source, unsigned halo_width, int levels, Resampling method, glm::ivec2 output_offset, glm::uvec2 output_size)
+    Source&& source, unsigned halo_width, int levels, Resampling method, glm::i64vec2 output_offset, glm::uvec2 output_size)
 {
     return scale(std::forward<Source>(source), halo_width, levels, method, output_offset, output_size, linear_conversion<detail::SourcePixel<Source>>());
 }
@@ -234,7 +233,7 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingCon
         return Error::propagate(std::move(geometry));
     if (destination.size() != geometry->output)
         return Error::fail(Error::Code::InvalidInput, "raster scaling output dimensions do not match");
-    return scale(std::forward<Source>(source), halo_width, levels, method, glm::ivec2(0), conversion, std::forward<Destination>(destination));
+    return scale(std::forward<Source>(source), halo_width, levels, method, glm::i64vec2(0), conversion, std::forward<Destination>(destination));
 }
 
 template <detail::ViewSource Source, typename Conversion>
@@ -245,7 +244,7 @@ requires detail::NumericPixel<detail::SourcePixel<Source>> && detail::ScalingCon
     auto geometry = detail::scale_geometry(source.size(), halo_width, levels, method);
     if (!geometry)
         return Error::propagate(std::move(geometry));
-    return scale(std::forward<Source>(source), halo_width, levels, method, glm::ivec2(0), geometry->output, conversion);
+    return scale(std::forward<Source>(source), halo_width, levels, method, glm::i64vec2(0), geometry->output, conversion);
 }
 
 template <detail::ViewSource Source, detail::WritableViewDestination Destination>

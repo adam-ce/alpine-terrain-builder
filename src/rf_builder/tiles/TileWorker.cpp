@@ -137,7 +137,7 @@ void TileWorker::sample(const Supplier& supplier, unsigned zoom, glm::u64vec2 or
     const auto first = origin / factor;
     const auto last = origin + glm::u64vec2(destination.size()) - std::uint64_t(1);
     const glm::uvec2 interior(last / factor - first + std::uint64_t(1));
-    const glm::ivec2 offset(origin % factor);
+    const glm::i64vec2 offset(origin % factor);
     // Crop before scaling so even a distant ancestor needs only this window
     // and its Lanczos support. Keep global coordinates entirely in integers.
     constexpr unsigned support = 3;
@@ -220,7 +220,7 @@ run::Prepared<glm::u8vec3> TileWorker::prepare(const run::Key& key)
     }
     for (std::size_t i = 0; i < valid.size(); ++i) {
         if (valid[i]) {
-            tile.source_attribution.buffer()[i] = std::uint16_t(m_record.attribution_index);
+            tile.attribution.buffer()[i] = std::uint16_t(m_record.attribution_index);
         }
     }
     return run::Prepared<glm::u8vec3>(std::move(tile));

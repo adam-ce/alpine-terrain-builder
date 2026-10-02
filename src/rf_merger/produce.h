@@ -29,8 +29,8 @@ namespace rf_merger::produce {
 
 using Key = radix::tile::Id;
 
-// Largest supported zoom gap between a supplier and an output leaf, as in the
-// halo reader's ancestor fallback. Inputs are validated against it.
+// Largest supported zoom gap between a supplier and an output leaf. Inputs are
+// validated against it.
 inline constexpr unsigned max_zoom_levels = 30;
 
 template <typename PixelType>

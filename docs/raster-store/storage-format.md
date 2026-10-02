@@ -84,7 +84,8 @@ in a snapshot share these values. `nominal_tile_size` defaults to 4096 and
 must be a positive power of two; `halo_width` defaults to zero and cannot
 exceed the nominal size. `stored_tile_size = nominal_tile_size + 2 * halo_width`.
 Both square tile rasters must match the stored size, which need not be a
-power of two. Halo extraction asserts a nominal size of at least 64.
+power of two. TB snapshots may store a halo; RF snapshots must have
+`halo_width` zero.
 
 The value mapping is `Linear` or `SRGBA`. Creation defaults RGB8/RGBA8 to
 SRGBA and other types to Linear; an explicit override takes precedence.

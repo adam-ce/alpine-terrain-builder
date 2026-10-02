@@ -142,20 +142,20 @@ TEMPLATE_TEST_CASE("AMORT preserves native scalar and packed vector bytes", "[ra
 {
     TemporaryDirectory directory;
     raster_store::Tile<TestType> tile(3);
-    CHECK(std::ranges::all_of(tile.source_attribution, [](const auto value) { return value == 0; }));
+    CHECK(std::ranges::all_of(tile.attribution, [](const auto value) { return value == 0; }));
     std::uint8_t value = 0;
     for (auto& byte : tile.data.bytes()) {
         byte = std::byte(value);
         value = static_cast<std::uint8_t>(value + 37);
     }
-    tile.source_attribution.pixel({ 1, 1 }) = 65534;
+    tile.attribution.pixel({ 1, 1 }) = 65534;
     const auto path = directory.path() / "tile";
     TileCodec<TestType> writer({ 3, 3 });
     REQUIRE(writer.write(path, tile));
     auto read = writer.read(path);
     REQUIRE(read);
     check_bytes(read->data, tile.data);
-    check_bytes(read->source_attribution, tile.source_attribution);
+    check_bytes(read->attribution, tile.attribution);
 
     TileCodec<TestType> uncompressed({ 3, 3 }, io::envelope::CompressionAlgorithm::None, io::hash::Algorithm::Xxh3_64);
     REQUIRE(uncompressed.write(path, tile));
@@ -169,7 +169,7 @@ TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster-st
     TemporaryDirectory directory;
     raster_store::Tile<float> tile(3);
     tile.data.pixel({ 0, 0 }) = std::bit_cast<float>(std::uint32_t { 0x7fc01234 });
-    tile.source_attribution.pixel({ 0, 0 }) = 1;
+    tile.attribution.pixel({ 0, 0 }) = 1;
     tile.data.pixel({ 1, 0 }) = 42.0f;
     tile.data.pixel({ 2, 0 }) = std::bit_cast<float>(std::uint32_t { 0x80000000 });
     TileCodec<float> amort({ 3, 3 });
@@ -177,7 +177,7 @@ TEST_CASE("AMORT preserves NaN bits and data beneath NoData pixels", "[raster-st
     auto read = amort.read(directory.path() / "tile");
     REQUIRE(read);
     check_bytes(read->data, tile.data);
-    check_bytes(read->source_attribution, tile.source_attribution);
+    check_bytes(read->attribution, tile.attribution);
 }
 
 TEST_CASE("AMORT validates dimensions and byte counts before allocating typed rasters", "[raster-store][codec]")
@@ -186,7 +186,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     const auto path = directory.path() / "tile";
     TileCodec<float> amort({ 3, 3 });
     raster_store::Tile<float> tile(3);
-    tile.source_attribution = radix::Raster<std::uint16_t>(2);
+    tile.attribution = radix::Raster<std::uint16_t>(2);
     CHECK(amort.write(path, tile).error().code() == Error::Code::InvalidInput);
     TileCodec<float> rectangular({ 3, 2 });
     CHECK(rectangular.write(path, tile).error().code() == Error::Code::InvalidInput);
@@ -254,7 +254,7 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     raster_store::Tile<float> tile(4);
     tile.data.fill(12.5f);
     // Reference checks belong to RF builder, not storage reads or writes.
-    tile.source_attribution.fill(65534);
+    tile.attribution.fill(65534);
     REQUIRE(created->save({ 0, { 0, 0 } }, tile));
     REQUIRE(created->save_index());
     CHECK(io::read_bytes_from_path(partial / manifest::metadata_file_name).value() == metadata_before);

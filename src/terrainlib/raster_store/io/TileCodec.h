@@ -85,7 +85,7 @@ public:
         }
         Tile<PixelType> tile(encoded->width);
         std::memcpy(tile.data.bytes().data(), encoded->data.data(), encoded->data.size());
-        std::memcpy(tile.source_attribution.bytes().data(), encoded->source_attribution.data(), encoded->source_attribution.size());
+        std::memcpy(tile.attribution.bytes().data(), encoded->source_attribution.data(), encoded->source_attribution.size());
         return tile;
     }
 
@@ -94,11 +94,11 @@ public:
         if (auto valid = validate_dimensions(m_dimensions); !valid) {
             return valid;
         }
-        if (tile.data.size() != m_dimensions || tile.source_attribution.size() != m_dimensions) {
+        if (tile.data.size() != m_dimensions || tile.attribution.size() != m_dimensions) {
             return Error::fail(Error::Code::InvalidInput, "both tile rasters must match snapshot dimensions");
         }
         const auto data = tile.data.bytes();
-        const auto source_attribution = tile.source_attribution.bytes();
+        const auto source_attribution = tile.attribution.bytes();
         const tile_codec::detail::v1::RasterTile encoded { m_dimensions.x, m_dimensions.y,
             { data.begin(), data.end() }, { source_attribution.begin(), source_attribution.end() } };
         return ::io::envelope::write_to_path<tile_codec::TileSchema>(encoded, paths(node_path).front(), true, m_compression_algorithm, m_hash_algorithm);

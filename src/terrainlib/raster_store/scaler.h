@@ -22,8 +22,8 @@
 #include "raster/algorithm/reduce.h"
 #include "raster/algorithm/scale.h"
 
-namespace raster_store::scaler {
-namespace detail {
+namespace raster_store {
+namespace scale_details {
     namespace algorithm = raster::algorithm;
     namespace raster_detail = algorithm::detail;
 
@@ -96,24 +96,24 @@ namespace detail {
         }
         return std::pair { std::move(*data), std::move(*attribution) };
     }
-} // namespace detail
+} // namespace scale_details
 
 /// Scale only the selected conceptual output window.
 template <typename Data, typename Attribution, typename Destination, typename AttributionDestination>
-requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
+requires scale_details::PairedSources<Data, Attribution> && scale_details::PairedDestinations<Data, Destination, AttributionDestination>
 [[nodiscard]] Expected<void> scale(Data&& data,
     Attribution&& attribution,
     unsigned halo_width,
     int levels,
     raster::algorithm::Resampling method,
-    glm::ivec2 output_offset,
+    glm::i64vec2 output_offset,
     pixel::Mapping mapping,
     Destination&& destination,
     AttributionDestination&& attribution_destination)
 {
     namespace algorithm = raster::algorithm;
     using T = algorithm::detail::SourcePixel<Data>;
-    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
+    if (auto valid = scale_details::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
         !valid)
         return valid;
     const auto input = algorithm::detail::read_only_view(raster::make_view(data));
@@ -161,18 +161,18 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
 }
 
 template <typename Data, typename Attribution>
-requires detail::PairedSources<Data, Attribution>
+requires scale_details::PairedSources<Data, Attribution>
 [[nodiscard]] Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>> scale(Data&& data,
     Attribution&& attribution,
     unsigned halo_width,
     int levels,
     raster::algorithm::Resampling method,
-    glm::ivec2 output_offset,
+    glm::i64vec2 output_offset,
     glm::uvec2 output_size,
     pixel::Mapping mapping)
 {
     using T = raster::algorithm::detail::SourcePixel<Data>;
-    if (auto valid = detail::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
+    if (auto valid = scale_details::validate_mapping<T>(mapping, levels < 0 || (levels > 0 && method != raster::algorithm::Resampling::NearestNeighbourAndBox));
         !valid)
         return Error::propagate(std::move(valid));
     auto geometry = raster::algorithm::detail::window_geometry(data.size(), halo_width, levels, method, output_offset, output_size);
@@ -180,14 +180,14 @@ requires detail::PairedSources<Data, Attribution>
         return Error::propagate(std::move(geometry));
     if (data.size() != attribution.size())
         return Error::fail(Error::Code::InvalidInput, "data and attribution dimensions differ");
-    return detail::produce_pair<T>(output_size, [&](auto& output, auto& output_attribution) {
+    return scale_details::produce_pair<T>(output_size, [&](auto& output, auto& output_attribution) {
         return scale(data, attribution, halo_width, levels, method, output_offset, mapping, output, output_attribution);
     });
 }
 
 /// Full-output convenience overloads use the same windowed scaling implementation.
 template <typename Data, typename Attribution, typename Destination, typename AttributionDestination>
-requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
+requires scale_details::PairedSources<Data, Attribution> && scale_details::PairedDestinations<Data, Destination, AttributionDestination>
 [[nodiscard]] Expected<void> scale(Data&& data,
     Attribution&& attribution,
     unsigned halo_width,
@@ -207,26 +207,26 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
         halo_width,
         levels,
         method,
-        glm::ivec2(0),
+        glm::i64vec2(0),
         mapping,
         std::forward<Destination>(destination),
         std::forward<AttributionDestination>(attribution_destination));
 }
 
 template <typename Data, typename Attribution>
-requires detail::PairedSources<Data, Attribution>
+requires scale_details::PairedSources<Data, Attribution>
 [[nodiscard]] Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>> scale(
     Data&& data, Attribution&& attribution, unsigned halo_width, int levels, raster::algorithm::Resampling method, pixel::Mapping mapping)
 {
     auto geometry = raster::algorithm::detail::scale_geometry(data.size(), halo_width, levels, method);
     if (!geometry)
         return Error::propagate(std::move(geometry));
-    return scale(std::forward<Data>(data), std::forward<Attribution>(attribution), halo_width, levels, method, glm::ivec2(0), geometry->output, mapping);
+    return scale(std::forward<Data>(data), std::forward<Attribution>(attribution), halo_width, levels, method, glm::i64vec2(0), geometry->output, mapping);
 }
 
 /// Custom data reduction uses the supplied conversion; attribution always uses identity and Mode.
 template <typename Data, typename Attribution, typename Conversion, typename Reducer, typename Destination, typename AttributionDestination>
-requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
+requires scale_details::PairedSources<Data, Attribution> && scale_details::PairedDestinations<Data, Destination, AttributionDestination>
     && raster::algorithm::detail::PixelReduction<Conversion, Reducer, raster::algorithm::detail::SourcePixel<Data>>
 [[nodiscard]] Expected<void> reduce(Data&& data,
     Attribution&& attribution,
@@ -246,7 +246,7 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
     if (!geometry) {
         return Error::propagate(std::move(geometry));
     }
-    if (auto valid = detail::validate_destinations(input, input_attribution, halo_width, *geometry, output, output_attribution); !valid) {
+    if (auto valid = scale_details::validate_destinations(input, input_attribution, halo_width, *geometry, output, output_attribution); !valid) {
         return valid;
     }
     if (auto result = algorithm::reduce(input, halo_width, n_zoom_levels, conversion, reducer, output); !result) {
@@ -256,7 +256,7 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
 }
 
 template <typename Data, typename Attribution, typename Conversion, typename Reducer>
-requires detail::PairedSources<Data, Attribution>
+requires scale_details::PairedSources<Data, Attribution>
     && raster::algorithm::detail::PixelReduction<Conversion, Reducer, raster::algorithm::detail::SourcePixel<Data>>
 [[nodiscard]] Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>> reduce(
     Data&& data, Attribution&& attribution, unsigned halo_width, unsigned n_zoom_levels, const Conversion& conversion, const Reducer& reducer)
@@ -268,13 +268,13 @@ requires detail::PairedSources<Data, Attribution>
     if (!geometry) {
         return Error::propagate(std::move(geometry));
     }
-    return detail::produce_pair<raster::algorithm::detail::SourcePixel<Data>>(geometry->output, [&](auto& output, auto& output_attribution) {
+    return scale_details::produce_pair<raster::algorithm::detail::SourcePixel<Data>>(geometry->output, [&](auto& output, auto& output_attribution) {
         return reduce(data, attribution, halo_width, n_zoom_levels, conversion, reducer, output, output_attribution);
     });
 }
 
 template <typename Data, typename Attribution, typename Reducer, typename Destination, typename AttributionDestination>
-requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<Data, Destination, AttributionDestination>
+requires scale_details::PairedSources<Data, Attribution> && scale_details::PairedDestinations<Data, Destination, AttributionDestination>
     && raster::algorithm::detail::PixelReduction<decltype(raster::algorithm::identity_conversion()), Reducer, raster::algorithm::detail::SourcePixel<Data>>
 [[nodiscard]] Expected<void> reduce(Data&& data,
     Attribution&& attribution,
@@ -295,7 +295,7 @@ requires detail::PairedSources<Data, Attribution> && detail::PairedDestinations<
 }
 
 template <typename Data, typename Attribution, typename Reducer>
-requires detail::PairedSources<Data, Attribution>
+requires scale_details::PairedSources<Data, Attribution>
     && raster::algorithm::detail::PixelReduction<decltype(raster::algorithm::identity_conversion()), Reducer, raster::algorithm::detail::SourcePixel<Data>>
 [[nodiscard]] auto reduce(Data&& data, Attribution&& attribution, unsigned halo_width, unsigned n_zoom_levels, const Reducer& reducer)
     -> Expected<std::pair<radix::Raster<raster::algorithm::detail::SourcePixel<Data>>, radix::Raster<std::uint16_t>>>
@@ -303,4 +303,4 @@ requires detail::PairedSources<Data, Attribution>
     return reduce(
         std::forward<Data>(data), std::forward<Attribution>(attribution), halo_width, n_zoom_levels, raster::algorithm::identity_conversion(), reducer);
 }
-} // namespace raster_store::scaler
+} // namespace raster_store

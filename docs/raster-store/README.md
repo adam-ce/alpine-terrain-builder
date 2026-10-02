@@ -12,7 +12,6 @@ implemented; TB generation and the tile server remain future work.
 - [Storage format](storage-format.md)
 - [Sampling and pyramid generation](sampling-and-generation.md): sampling
   theory, TB generation requirements, and the implemented scaling rules
-- [Tiles with halo](tiles-with-halo.md)
 - [RF builder](rf-builder-design.md): GDAL and online tile import
 - [RF merger](rf-merger-design.md)
 - [TODO](todo.md)

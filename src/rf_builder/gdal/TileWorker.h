@@ -93,7 +93,7 @@ public:
         m_processor.process(samples, window.interior_offset, m_record.nodata_default_value, tile.data);
         const auto selected = Error::asserting_unwrap(raster::make_view(selected_validity, window.interior_offset, glm::uvec2(m_record.tile_side)));
         Error::asserting_unwrap(raster::algorithm::transform(
-            selected, [&](std::uint8_t valid) -> std::uint16_t { return valid ? std::uint16_t(m_record.attribution_index) : 0; }, tile.source_attribution));
+            selected, [&](std::uint8_t valid) -> std::uint16_t { return valid ? std::uint16_t(m_record.attribution_index) : 0; }, tile.attribution));
         return std::optional(std::move(tile));
     }
 

@@ -42,7 +42,6 @@ namespace {
 
 namespace algorithm = raster::algorithm;
 using algorithm::Resampling;
-namespace scaler = raster_store::scaler;
 using ValueMapping = raster_store::pixel::Mapping;
 using Catch::Matchers::WithinAbs;
 
@@ -60,7 +59,7 @@ auto scale(const radix::Raster<T>& data,
     Resampling method = Resampling::NearestNeighbourAndBox,
     ValueMapping mapping = ValueMapping::Linear)
 {
-    return scaler::scale(data, attribution, halo, levels, method, mapping);
+    return raster_store::scale(data, attribution, halo, levels, method, mapping);
 }
 
 template <typename T>
@@ -168,7 +167,7 @@ TEST_CASE("raster scaling rejects invalid geometry and dimensions before allocat
     CHECK(scale(data, attribution, 0, 0, Resampling::BiliinearAndBox, ValueMapping::SRGBA));
     CHECK(scale(data, attribution, -1, 0, Resampling::BiliinearAndBox, ValueMapping::SRGBA).error().code() == Error::Code::Unsupported);
     CHECK(scale(data, attribution, 31).error().code() == Error::Code::ResourceExhausted);
-    CHECK_FALSE(scaler::reduce(data, attribution, 0, (std::numeric_limits<unsigned>::max)(), algorithm::Max {}));
+    CHECK_FALSE(raster_store::reduce(data, attribution, 0, (std::numeric_limits<unsigned>::max)(), algorithm::Max {}));
 }
 
 TEST_CASE("zero zoom levels crop both rasters preserving payload bits", "[raster-algorithm]")
@@ -191,7 +190,7 @@ TEST_CASE("zero zoom levels crop both rasters preserving payload bits", "[raster
         ++calls;
         return 0.f;
     };
-    auto reduced = scaler::reduce(data, attribution, 2, 0, algorithm::linear_conversion<algorithm::detail::SourcePixel<decltype(data)>>(), reducer);
+    auto reduced = raster_store::reduce(data, attribution, 2, 0, algorithm::linear_conversion<algorithm::detail::SourcePixel<decltype(data)>>(), reducer);
     REQUIRE(reduced);
     CHECK(calls == 0);
     same_raster(output->first, reduced->first);
@@ -308,7 +307,7 @@ TEST_CASE("custom reducers receive four decoded row-major samples and immutable 
         CHECK(values[3] == 8);
         return values[2] + bias;
     };
-    const auto result = scaler::reduce(data, ids, 0, 1, conversion, reducer);
+    const auto result = raster_store::reduce(data, ids, 0, 1, conversion, reducer);
     REQUIRE(result);
     CHECK(result->first.pixel({ 0, 0 }) == 4);
     CHECK(result->second.pixel({ 0, 0 }) == 0);
@@ -342,7 +341,7 @@ TEMPLATE_TEST_CASE("raster scalar working types support integer endpoints",
         const auto result = scale(data, ids, -1);
         REQUIRE(result);
         CHECK(result->first.pixel({ 0, 0 }) == value);
-        const auto maximum = scaler::reduce(data, ids, 0, 1, algorithm::Max {});
+        const auto maximum = raster_store::reduce(data, ids, 0, 1, algorithm::Max {});
         REQUIRE(maximum);
         CHECK(maximum->first.pixel({ 0, 0 }) == value);
     }
@@ -354,7 +353,7 @@ TEST_CASE("integer raster conversion rounds and clamps finite custom values", "[
     radix::Raster<std::uint16_t> ids(glm::uvec2(2), 1);
     const auto convert = [&](float value) {
         const auto reducer = [value](std::span<const float>) { return value; };
-        return scaler::reduce(data, ids, 0, 1, algorithm::linear_conversion<algorithm::detail::SourcePixel<decltype(data)>>(), reducer);
+        return raster_store::reduce(data, ids, 0, 1, algorithm::linear_conversion<algorithm::detail::SourcePixel<decltype(data)>>(), reducer);
     };
     CHECK(convert(0.5f)->first.pixel({ 0, 0 }) == 1);
     CHECK(convert(-0.5f)->first.pixel({ 0, 0 }) == -1);
@@ -362,7 +361,7 @@ TEST_CASE("integer raster conversion rounds and clamps finite custom values", "[
     CHECK(convert(-1e20f)->first.pixel({ 0, 0 }) == -32768);
     radix::Raster<std::uint64_t> large(glm::uvec2(2), 0);
     const auto upper = [](std::span<const long double>) { return std::ldexp(1.L, 64); };
-    CHECK(scaler::reduce(large, ids, 0, 1, algorithm::linear_conversion<std::uint64_t>(), upper)->first.pixel({ 0, 0 })
+    CHECK(raster_store::reduce(large, ids, 0, 1, algorithm::linear_conversion<std::uint64_t>(), upper)->first.pixel({ 0, 0 })
         == (std::numeric_limits<std::uint64_t>::max)());
 }
 
@@ -379,7 +378,7 @@ TEST_CASE("sRGB raster scaling and custom reduction operate in linear light with
         CHECK(values[2].w == 128.f / 255.f);
         return algorithm::Median {}(values);
     };
-    const auto custom = scaler::reduce(data, ids, 0, 1, algorithm::srgb_conversion<glm::u8vec4>(), reducer);
+    const auto custom = raster_store::reduce(data, ids, 0, 1, algorithm::srgb_conversion<glm::u8vec4>(), reducer);
     REQUIRE(custom);
     same_raster(custom->first, result->first);
     const auto nearest = scale(data, ids, 1, 0, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
@@ -503,7 +502,7 @@ TEMPLATE_TEST_CASE("raster vector arithmetic instantiates every working precisio
     radix::Raster<TestType> data(glm::uvec2(8), TestType(12));
     radix::Raster<std::uint16_t> ids(glm::uvec2(8), 1);
     const auto filtered = scale(data, ids, -1, 3, Resampling::Lanczos2);
-    const auto median = scaler::reduce(data, ids, 3, 1, algorithm::Median {});
+    const auto median = raster_store::reduce(data, ids, 3, 1, algorithm::Median {});
     REQUIRE(filtered);
     REQUIRE(median);
     for (glm::length_t i = 0; i < TestType::length(); ++i) {
@@ -654,15 +653,15 @@ TEST_CASE("paired destination validation prevents partial writes on invalid attr
     radix::Raster<std::uint16_t> ids(glm::uvec2(4), 0);
     radix::Raster<std::uint16_t> output(glm::uvec2(2), 99);
     radix::Raster<std::uint16_t> wrong(glm::uvec2(3), 77);
-    CHECK_FALSE(scaler::scale(data, ids, 0, -1, Resampling::BiliinearAndBox, ValueMapping::Linear, output, wrong));
-    CHECK_FALSE(scaler::reduce(data, ids, 0, 1, algorithm::Max {}, output, wrong));
+    CHECK_FALSE(raster_store::scale(data, ids, 0, -1, Resampling::BiliinearAndBox, ValueMapping::Linear, output, wrong));
+    CHECK_FALSE(raster_store::reduce(data, ids, 0, 1, algorithm::Max {}, output, wrong));
     const auto cross = raster::make_view(data, { 0, 0 }, { 2, 2 }).value();
-    CHECK_FALSE(scaler::reduce(data, ids, 0, 1, algorithm::Max {}, output, cross));
-    CHECK_FALSE(scaler::scale(data, ids, 0, -1, Resampling::BiliinearAndBox, ValueMapping::Linear, output, cross));
-    CHECK_FALSE(scaler::reduce(data, ids, 0, 1, algorithm::Max {}, output, output));
+    CHECK_FALSE(raster_store::reduce(data, ids, 0, 1, algorithm::Max {}, output, cross));
+    CHECK_FALSE(raster_store::scale(data, ids, 0, -1, Resampling::BiliinearAndBox, ValueMapping::Linear, output, cross));
+    CHECK_FALSE(raster_store::reduce(data, ids, 0, 1, algorithm::Max {}, output, output));
     CHECK(std::ranges::all_of(output, [](auto value) { return value == 99; }));
     radix::Raster<std::uint16_t> out_ids(glm::uvec2(2));
-    REQUIRE(scaler::reduce(data, ids, 0, 1, algorithm::Max {}, output, out_ids));
+    REQUIRE(raster_store::reduce(data, ids, 0, 1, algorithm::Max {}, output, out_ids));
     CHECK(std::ranges::all_of(output, [](auto value) { return value == 12; }));
     CHECK(std::ranges::all_of(out_ids, [](auto value) { return value == 0; }));
 }
@@ -755,11 +754,11 @@ TEST_CASE("scaling windows match full output crops across stages and kernels", "
             { Resampling::NearestNeighbourAndBox, Resampling::BiliinearAndBox, Resampling::Lanczos2, Resampling::Lanczos3, Resampling::Lanczos4 }) {
             const unsigned halo = *algorithm::required_halo(levels, method);
             auto [data, attribution] = field({ 32, 24 }, halo);
-            auto full = scaler::scale(data, attribution, halo, levels, method, ValueMapping::Linear);
+            auto full = raster_store::scale(data, attribution, halo, levels, method, ValueMapping::Linear);
             REQUIRE(full);
-            const glm::ivec2 offset(3, 1);
+            const glm::i64vec2 offset(3, 1);
             const glm::uvec2 size(3, 4);
-            auto window = scaler::scale(data, attribution, halo, levels, method, offset, size, ValueMapping::Linear);
+            auto window = raster_store::scale(data, attribution, halo, levels, method, offset, size, ValueMapping::Linear);
             REQUIRE(window);
             same_raster(window->first, *algorithm::copy(*raster::make_view(full->first, offset, size)));
             same_raster(window->second, *algorithm::copy(*raster::make_view(full->second, offset, size)));
@@ -775,8 +774,8 @@ TEST_CASE("scaling windows retain conversion tuples and per-stage encoded roundi
             data.pixel({ x, y }) = { x * 7, y * 7, (x * y) % 256, (x + 3 * y) % 256 };
             attribution.pixel({ x, y }) = (x + y) % 3;
         }
-    auto full = scaler::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
-    auto window = scaler::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, { 1, 2 }, { 4, 3 }, ValueMapping::SRGBA);
+    auto full = raster_store::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, ValueMapping::SRGBA);
+    auto window = raster_store::scale(data, attribution, 0, -2, Resampling::NearestNeighbourAndBox, { 1, 2 }, { 4, 3 }, ValueMapping::SRGBA);
     REQUIRE(full);
     REQUIRE(window);
     same_raster(window->first, *algorithm::copy(*raster::make_view(full->first, { 1, 2 }, { 4, 3 })));
@@ -808,14 +807,14 @@ TEST_CASE("scaling validates full destinations and windows before writing", "[ra
     CHECK(destination.pixel({ 0, 0 }) == 99);
     radix::Raster<std::uint16_t> attribution({ 4, 4 });
     radix::Raster<std::uint16_t> wrong({ 2, 2 });
-    CHECK_FALSE(scaler::scale(source, attribution, 0, 1, Resampling::NearestNeighbourAndBox, { 0, 0 }, ValueMapping::Linear, destination, wrong));
+    CHECK_FALSE(raster_store::scale(source, attribution, 0, 1, Resampling::NearestNeighbourAndBox, { 0, 0 }, ValueMapping::Linear, destination, wrong));
     CHECK(destination.pixel({ 0, 0 }) == 99);
 }
 
 TEST_CASE("windowed scaling writes strided destinations and rejects overlap before writes", "[raster-algorithm]")
 {
     auto [data, attribution] = field({ 16, 16 }, 1);
-    auto expected = scaler::scale(data, attribution, 1, 1, Resampling::BiliinearAndBox, { 3, 5 }, { 5, 7 }, ValueMapping::Linear);
+    auto expected = raster_store::scale(data, attribution, 1, 1, Resampling::BiliinearAndBox, { 3, 5 }, { 5, 7 }, ValueMapping::Linear);
     REQUIRE(expected);
     radix::Raster<float> output({ 10, 12 });
     output.fill(-99);
@@ -823,7 +822,7 @@ TEST_CASE("windowed scaling writes strided destinations and rejects overlap befo
     output_attribution.fill(99);
     auto view = *raster::make_view(output, { 2, 3 }, { 5, 7 });
     auto attribution_view = *raster::make_view(output_attribution, { 2, 3 }, { 5, 7 });
-    REQUIRE(scaler::scale(data, attribution, 1, 1, Resampling::BiliinearAndBox, { 3, 5 }, ValueMapping::Linear, view, attribution_view));
+    REQUIRE(raster_store::scale(data, attribution, 1, 1, Resampling::BiliinearAndBox, { 3, 5 }, ValueMapping::Linear, view, attribution_view));
     same_raster(*algorithm::copy(view), expected->first);
     same_raster(*algorithm::copy(attribution_view), expected->second);
     CHECK(output.pixel({ 0, 0 }) == -99);
@@ -863,8 +862,8 @@ TEST_CASE("Lanczos upscaling preserves halos and matches independent sinc recons
             const unsigned halo = unsigned(std::ceil(double(factor) * (radius - 1) / (factor - 1) + 0.5));
             auto [data, ids] = field({ 4, 4 }, halo);
             const glm::uvec2 size = glm::uvec2(4 * factor + 2 * halo);
-            const glm::ivec2 offset(-int(halo));
-            auto output = scaler::scale(data, ids, halo, levels, method, offset, size, ValueMapping::Linear);
+            const glm::i64vec2 offset(-std::int64_t(halo));
+            auto output = raster_store::scale(data, ids, halo, levels, method, offset, size, ValueMapping::Linear);
             REQUIRE(output);
             const auto sinc = [](double x) { return x == 0 ? 1. : std::sin(std::numbers::pi * x) / (std::numbers::pi * x); };
             for (unsigned y = 0; y < size.y; ++y) {
@@ -923,8 +922,8 @@ TEST_CASE("halo windows match larger raster crops in both scaling directions", "
             auto [data, ids] = field({ 16, 16 }, halo);
             const unsigned interior_side = levels < 0 ? 16 / factor : 16 * factor;
             const glm::uvec2 output_size(interior_side + 4);
-            auto window = scaler::scale(data, ids, halo, levels, method, { -2, -2 }, output_size, ValueMapping::Linear);
-            auto reference = scaler::scale(data, ids, support, levels, method, ValueMapping::Linear);
+            auto window = raster_store::scale(data, ids, halo, levels, method, { -2, -2 }, output_size, ValueMapping::Linear);
+            auto reference = raster_store::scale(data, ids, support, levels, method, ValueMapping::Linear);
             REQUIRE(window);
             REQUIRE(reference);
             const unsigned crop = levels < 0 ? margin / factor - 2 : margin * factor - 2;
@@ -943,10 +942,10 @@ TEST_CASE("negative halo windows validate support before touching paired strided
     backing_ids.fill(99);
     auto output = *raster::make_view(backing, { 2, 2 }, { 26, 26 });
     auto attribution = *raster::make_view(backing_ids, { 2, 2 }, { 26, 26 });
-    CHECK_FALSE(scaler::scale(data, ids, 5, 1, Resampling::Lanczos3, { -6, -5 }, ValueMapping::Linear, output, attribution));
+    CHECK_FALSE(raster_store::scale(data, ids, 5, 1, Resampling::Lanczos3, { -6, -5 }, ValueMapping::Linear, output, attribution));
     CHECK(std::ranges::all_of(backing, [](float value) { return value == -99; }));
     CHECK(std::ranges::all_of(backing_ids, [](unsigned value) { return value == 99; }));
-    REQUIRE(scaler::scale(data, ids, 5, 1, Resampling::Lanczos3, { -5, -5 }, ValueMapping::Linear, output, attribution));
+    REQUIRE(raster_store::scale(data, ids, 5, 1, Resampling::Lanczos3, { -5, -5 }, ValueMapping::Linear, output, attribution));
     auto expected = algorithm::scale(data, 5, 1, Resampling::Lanczos3, { -5, -5 }, { 26, 26 });
     REQUIRE(expected);
     same_raster(*algorithm::copy(output), *expected);

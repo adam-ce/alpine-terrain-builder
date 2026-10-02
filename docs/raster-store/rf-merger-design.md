@@ -70,12 +70,24 @@ Support-only tiles take part in partitioning like any other tile.
 
 Coarse suppliers are upscaled with fixed Lanczos-3 through the shared
 [scaling rules](sampling-and-generation.md#implemented-scaling-rules), using
-the input's value mapping. Support beyond a tile edge comes from the
-[halo reader](tiles-with-halo.md). Original input suppliers are scaled
-directly to the required grid, never through intermediate results.
-Attribution-zero samples contribute numerically. Subsequent merges rank a
-resampled value by its stored representative attribution, as specified in the
-[attribution decision](../adr/0004-representative-attribution-for-halo-samples.md).
+the input's value mapping. Original input suppliers are scaled directly to the
+required grid, never through intermediate results. Attribution-zero samples
+contribute numerically. Subsequent merges rank a resampled value by its stored
+representative attribution.
+
+Where the Lanczos support of a leaf's window leaves the supplier, the merger
+assembles only that window at the supplier's resolution from the same input.
+Each part beyond the supplier comes from the adjacent tile at the supplier's
+zoom:
+
+- a physical tile is copied;
+- a physical coarser tile covering it is sampled by nearest neighbour;
+- physical children of a virtual tile are box-reduced; and
+- otherwise, the supplier's edge is replicated, including beyond the poles.
+
+The window wraps at the antimeridian. Halo attribution is never selected by
+nearest-neighbour attribution upscaling, so output attribution only comes
+from the supplier.
 
 ## Whole-tile reuse
 

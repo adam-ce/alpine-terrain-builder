@@ -1,8 +1,5 @@
 # Terminology
 
-The halo extraction and storage contract is in
-[Tiles with halo](tiles-with-halo.md).
-
 **Tile interior**:
 The square raster region corresponding to a tile ID's geographic extent,
 excluding its halo.
@@ -34,6 +31,7 @@ _Avoid_: Tile with borders, tile with border
 
 **Stored halo width**:
 The halo width of the tile rasters persisted in a raster-store snapshot.
+TB snapshots may store a halo; RF snapshots must not.
 
 **Requested halo width**:
 The halo width of the tile requested by a consumer of the raster store.

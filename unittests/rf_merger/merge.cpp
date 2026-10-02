@@ -23,7 +23,6 @@
 #include "partition.h"
 #include "priorities.h"
 #include "raster_store/io/manifest.h"
-#include "raster_store/read_tile_with_halo.h"
 #include "raster_store/scaler.h"
 #include "raster_store/storage.h"
 #include "selection.h"
@@ -32,6 +31,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <set>
 
 namespace {
@@ -53,7 +53,7 @@ raster_store::Tile<PixelType> tile(PixelType value, std::uint16_t attribution)
 {
     raster_store::Tile<PixelType> result(side);
     result.data.fill(value);
-    result.source_attribution.fill(attribution);
+    result.attribution.fill(attribution);
     return result;
 }
 
@@ -278,7 +278,7 @@ TEST_CASE("RF merger selects attributed pixels by priority at equal zoom", "[rf-
     auto left = tile(1.f, 7);
     for (unsigned y = 0; y < side; ++y) {
         for (unsigned x = side / 2; x < side; ++x) {
-            left.source_attribution.pixel({ x, y }) = 0;
+            left.attribution.pixel({ x, y }) = 0;
         }
     }
     f.snapshot("left", { { key, left } });
@@ -298,9 +298,9 @@ TEST_CASE("RF merger selects attributed pixels by priority at equal zoom", "[rf-
         auto loaded = merged->load(key);
         REQUIRE(loaded);
         CHECK(loaded->data.pixel({ 0, 5 }) == 1.f);
-        CHECK(loaded->source_attribution.pixel({ 0, 5 }) == 7);
+        CHECK(loaded->attribution.pixel({ 0, 5 }) == 7);
         CHECK(loaded->data.pixel({ side - 1, 5 }) == 2.f);
-        CHECK(loaded->source_attribution.pixel({ side - 1, 5 }) == 3);
+        CHECK(loaded->attribution.pixel({ side - 1, 5 }) == 3);
         CHECK_FALSE(linked(*f.open("right"), *merged, key));
     }
     SECTION("unlisted attributions tie and the right input wins")
@@ -329,7 +329,7 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
         auto loaded = merged->load(fine);
         REQUIRE(loaded);
         CHECK(loaded->data.pixel({ 10, 20 }) == Catch::Approx(5.f));
-        CHECK(loaded->source_attribution.pixel({ 10, 20 }) == 4);
+        CHECK(loaded->attribution.pixel({ 10, 20 }) == 4);
     }
     SECTION("fully overridden fine tile still refines the output")
     {
@@ -353,13 +353,13 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
         auto sibling = merged->load({ 3, { 0, 2 } });
         REQUIRE(sibling);
         CHECK(sibling->data.pixel({ 0, 0 }) == Catch::Approx(5.f));
-        CHECK(sibling->source_attribution.pixel({ 0, 0 }) == 0);
+        CHECK(sibling->attribution.pixel({ 0, 0 }) == 0);
     }
     SECTION("fine pixels fill coarse attribution holes")
     {
         auto holed = tile(5.f, 4);
-        holed.source_attribution.fill(0);
-        holed.source_attribution.pixel({ 0, 0 }) = 4;
+        holed.attribution.fill(0);
+        holed.attribution.pixel({ 0, 0 }) = 4;
         f.snapshot("left", { { coarse, holed } });
         f.snapshot("right", { { fine, tile(9.f, 6) } });
         const auto report = f.merge("left", "right", "[4]", "merged");
@@ -370,16 +370,16 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
     {
         f.snapshot("left", { { coarse, tile(5.f, 4) } });
         auto winner = tile(9.f, 6);
-        winner.source_attribution.pixel({ 3, 4 }) = 8;
+        winner.attribution.pixel({ 3, 4 }) = 8;
         f.snapshot("right", { { fine, winner } });
         const auto report = f.merge("left", "right", "[8, 4, 6]", "merged");
         CHECK(report.statistics.mixed.tiles == 1);
         auto loaded = f.open("merged")->load(fine);
         REQUIRE(loaded);
         CHECK(loaded->data.pixel({ 3, 4 }) == 9.f);
-        CHECK(loaded->source_attribution.pixel({ 3, 4 }) == 8);
+        CHECK(loaded->attribution.pixel({ 3, 4 }) == 8);
         CHECK(loaded->data.pixel({ 4, 4 }) == Catch::Approx(5.f));
-        CHECK(loaded->source_attribution.pixel({ 4, 4 }) == 4);
+        CHECK(loaded->attribution.pixel({ 4, 4 }) == 4);
     }
     SECTION("unattributed inputs prefer the finer tile")
     {
@@ -391,34 +391,109 @@ TEST_CASE("RF merger refines by topology and resamples coarse winners", "[rf-mer
     }
 }
 
-TEST_CASE("RF merger upscaling agrees with the halo reader and paired scaler", "[rf-merger]")
+namespace {
+// A tile whose values identify the tile and pixel.
+Tile labelled(float label)
 {
-    Fixture f;
-    const Key coarse { 1, { 0, 0 } };
-    const Key neighbour { 1, { 1, 0 } };
-    const Key fine { 3, { 0, 0 } };
-    auto gradient = tile(0.f, 4);
+    auto result = tile(0.f, 7);
     for (unsigned y = 0; y < side; ++y) {
         for (unsigned x = 0; x < side; ++x) {
-            gradient.data.pixel({ x, y }) = float(x) + 100.f * float(y);
+            result.data.pixel({ x, y }) = 10000.f * label + float(x) + 100.f * float(y);
+            result.attribution.pixel({ x, y }) = std::uint16_t((x + y) % 3 + 1);
         }
     }
-    f.snapshot("left", { { coarse, gradient }, { neighbour, tile(1000.f, 4) } });
-    f.snapshot("right", { { fine, tile(0.f, 0) }, { { 3, { 3, 1 } }, tile(0.f, 0) } });
+    return result;
+}
+
+// The value at a supplier pixel, possibly beyond the supplier, according to
+// the merger's halo rules for disjoint inputs.
+float reference(const std::map<Key, Tile>& tiles, const Key& supplier, glm::ivec2 position)
+{
+    const auto clamped = [&] { return tiles.at(supplier).data.pixel(glm::uvec2(glm::clamp(position, glm::ivec2(0), glm::ivec2(side - 1)))); };
+    const glm::ivec2 offset(position.x < 0 ? -1 : position.x >= int(side) ? 1 : 0, position.y < 0 ? -1 : position.y >= int(side) ? 1 : 0);
+    const int tiles_per_axis = 1 << supplier.zoom_level;
+    const int y = int(supplier.coords.y) + offset.y;
+    if (y < 0 || y >= tiles_per_axis)
+        return clamped();
+    const Key neighbour { supplier.zoom_level, { unsigned((int(supplier.coords.x) + offset.x + tiles_per_axis) % tiles_per_axis), unsigned(y) } };
+    const auto local = glm::uvec2(position - offset * int(side));
+    if (tiles.contains(neighbour))
+        return tiles.at(neighbour).data.pixel(local);
+    const Key child { neighbour.zoom_level + 1, neighbour.coords * 2u + local / (side / 2) };
+    if (tiles.contains(child)) {
+        const auto first = (local % (side / 2)) * 2u;
+        const auto& data = tiles.at(child).data;
+        return (data.pixel(first) + data.pixel(first + glm::uvec2(1, 0)) + data.pixel(first + glm::uvec2(0, 1)) + data.pixel(first + glm::uvec2(1))) / 4.f;
+    }
+    for (Key ancestor = neighbour; ancestor.zoom_level > 0;) {
+        ancestor = ancestor.parent();
+        if (tiles.contains(ancestor)) {
+            const unsigned gap = neighbour.zoom_level - ancestor.zoom_level;
+            return tiles.at(ancestor).data.pixel(((neighbour.coords * side + local) >> gap) - ancestor.coords * side);
+        }
+    }
+    return clamped();
+}
+} // namespace
+
+TEST_CASE("RF merger upscaling assembles support beyond the supplier", "[rf-merger]")
+{
+    Fixture f;
+    Key supplier;
+    std::map<Key, Tile> tiles;
+    std::vector<Key> fine;
+    SECTION("from same-zoom, coarser and finer neighbours, replicating elsewhere")
+    {
+        supplier = { 3, { 3, 3 } };
+        tiles = {
+            { supplier, labelled(1) },
+            // Below: same zoom.
+            { { 3, { 3, 4 } }, labelled(2) },
+            // Right and top right: coarser.
+            { { 2, { 2, 1 } }, labelled(3) },
+            // Left: virtual with one physical child and one deeper descendant.
+            { { 4, { 5, 6 } }, labelled(4) },
+            { { 5, { 11, 14 } }, labelled(5) },
+            // Bottom left: same zoom. Top, top left and bottom right are missing.
+            { { 3, { 2, 4 } }, labelled(6) },
+        };
+        fine = { { 5, { 12, 12 } }, { 5, { 15, 15 } } };
+    }
+    SECTION("wrapping at the antimeridian and replicating beyond the poles")
+    {
+        supplier = { 1, { 0, 0 } };
+        tiles = { { supplier, labelled(1) }, { { 1, { 1, 0 } }, labelled(2) } };
+        fine = { { 3, { 0, 0 } }, { 3, { 3, 3 } } };
+    }
+    f.snapshot("left", std::vector<std::pair<Key, Tile>>(tiles.begin(), tiles.end()));
+    std::vector<std::pair<Key, Tile>> right;
+    for (const auto& key : fine) {
+        right.push_back({ key, tile(0.f, 0) });
+    }
+    f.snapshot("right", right);
     f.merge("left", "right", "[]", "merged");
     auto merged = f.open("merged");
-    auto left = f.open("left");
-    const auto metadata = raster_store::io::manifest::read_metadata(f.path("left"));
-    REQUIRE(metadata);
-    for (const Key leaf : { fine, Key { 3, { 3, 1 } }, Key { 2, { 1, 1 } } }) {
+
+    constexpr unsigned support = 3;
+    Tile halo(side + 2 * support);
+    for (unsigned y = 0; y < halo.data.height(); ++y) {
+        for (unsigned x = 0; x < halo.data.width(); ++x) {
+            const auto position = glm::ivec2(x, y) - int(support);
+            halo.data.pixel({ x, y }) = reference(tiles, supplier, position);
+            // Attribution upscaling never selects halo pixels.
+            halo.attribution.pixel({ x, y }) = tiles.at(supplier).attribution.pixel(glm::uvec2(glm::clamp(position, glm::ivec2(0), glm::ivec2(side - 1))));
+        }
+    }
+    unsigned checked = 0;
+    for (const auto& leaf : physical(*merged)) {
+        if (leaf.zoom_level <= supplier.zoom_level || (leaf.coords >> (leaf.zoom_level - supplier.zoom_level)) != supplier.coords)
+            continue;
         INFO(to_string(leaf));
-        auto halo = raster_store::read_tile_with_halo(*left, *metadata, coarse, 3, raster::algorithm::Resampling::Lanczos3);
-        REQUIRE(halo);
-        const unsigned levels = leaf.zoom_level - coarse.zoom_level;
+        const unsigned levels = leaf.zoom_level - supplier.zoom_level;
         const auto offset = glm::ivec2(leaf.coords & glm::uvec2((1u << levels) - 1)) * int(side);
-        auto direct = raster_store::scaler::scale(halo->data,
-            halo->source_attribution,
-            3,
+        auto direct = raster_store::scale(halo.data,
+            halo.attribution,
+            support,
             int(levels),
             raster::algorithm::Resampling::Lanczos3,
             offset,
@@ -428,8 +503,11 @@ TEST_CASE("RF merger upscaling agrees with the halo reader and paired scaler", "
         auto loaded = merged->load(leaf);
         REQUIRE(loaded);
         CHECK(same(loaded->data, direct->first));
-        CHECK(same(loaded->source_attribution, direct->second));
+        CHECK(same(loaded->attribution, direct->second));
+        ++checked;
     }
+    // Two children of the supplier are split once more around the fine tiles.
+    CHECK(checked == 10);
 }
 
 TEST_CASE("RF merger merges RGB8 inputs", "[rf-merger]")
@@ -437,7 +515,7 @@ TEST_CASE("RF merger merges RGB8 inputs", "[rf-merger]")
     Fixture f;
     const Key key { 2, { 0, 0 } };
     auto left = tile(glm::u8vec3(10, 20, 30), 1);
-    left.source_attribution.pixel({ 1, 1 }) = 0;
+    left.attribution.pixel({ 1, 1 }) = 0;
     f.snapshot<glm::u8vec3>("left", { { key, left } });
     f.snapshot<glm::u8vec3>("right", { { key, tile(glm::u8vec3(200, 100, 50), 2) } });
     const auto report = f.merge("left", "right", "[1]", "merged");
@@ -535,7 +613,7 @@ TEST_CASE("RF merger serial and parallel runs agree", "[rf-merger]")
         REQUIRE(first);
         REQUIRE(second);
         CHECK(same(first->data, second->data));
-        CHECK(same(first->source_attribution, second->source_attribution));
+        CHECK(same(first->attribution, second->attribution));
     }
 }
 

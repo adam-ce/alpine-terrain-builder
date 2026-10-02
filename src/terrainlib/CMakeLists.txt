@@ -42,7 +42,7 @@ add_library(terrainlib
     optional_utils.h
     pch.h
     range_utils.h
-    srs.h
+    srs.h srs.cpp
     string_utils.h
     tile_path.h
     type_utils.h

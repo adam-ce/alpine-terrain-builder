@@ -129,9 +129,9 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
     const auto webmercator_srs = srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84).value();
     const glm::dvec3 steffl_wgs84(16.3735655, 48.2083264, 204);
-    const glm::dvec3 steffl_ecef = srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84);
+    const glm::dvec3 steffl_ecef = srs::transform_point(wgs84_srs, ecef_srs, steffl_wgs84).value();
 
     const std::vector<TestData> test_data{
         {"/austria/pizbuin_1m_epsg4326.tif",
@@ -183,7 +183,7 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
                 check_mesh_basics(mesh);
             }
 
-            const std::vector<glm::dvec3> positions_in_target_srs = srs::transform_points(mesh_srs, target_srs, mesh.positions);
+            const std::vector<glm::dvec3> positions_in_target_srs = srs::transform_points(mesh_srs, target_srs, mesh.positions).value();
             SECTION("Vertices within target bounds") {
                 for (const auto &position : positions_in_target_srs) {
                     REQUIRE(radix::geometry::Aabb2d(target_bounds).contains_inclusive(glm::dvec2(position)));
@@ -202,12 +202,12 @@ TEST_CASE("can build reference mesh patches for various datasets", "[terrainbuil
             }
 
             SECTION("Matches dataset resolution") {
-                const auto positions_in_source_srs = srs::transform_points(mesh_srs, source_srs, mesh.positions);
+                const auto positions_in_source_srs = srs::transform_points(mesh_srs, source_srs, mesh.positions).value();
                 auto flat_positions_in_source_srs = positions_in_source_srs;
                 for (auto &pos : flat_positions_in_source_srs) {
                     pos.z = 0.0;
                 }
-                const auto flat_positions_in_ecef_srs = srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs);
+                const auto flat_positions_in_ecef_srs = srs::transform_points(source_srs, ecef_srs, flat_positions_in_source_srs).value();
 
                 const auto target_bounds_2d = radix::geometry::Aabb2d(target_bounds);
                 const auto padding = target_bounds_2d.size() * 0.1;
@@ -246,7 +246,7 @@ TEST_CASE("neighbouring patches fit together", "[terrainbuilder]") {
     const auto webmercator_srs = srs::webmercator();
 
     const glm::dvec3 pizbuin_summit_wgs84(10.118333, 46.844167, 3312);
-    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84);
+    const glm::dvec3 pizbuin_summit_ecef = srs::transform_point(wgs84_srs, ecef_srs, pizbuin_summit_wgs84).value();
     const octree::Space space = octree::Space::earth();
     const octree::Id summit_node = space.find_node_at_level_containing_point(pizbuin_summit_ecef, 17).value();
     std::vector<octree::Id> nodes = summit_node.neighbours();

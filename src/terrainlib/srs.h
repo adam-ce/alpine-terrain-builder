@@ -36,6 +36,8 @@
 #include <radix/geometry.h>
 #include <radix/tile.h>
 
+#include "Error.h"
+
 namespace srs {
 
 std::optional<int> epsg_code(const OGRSpatialReference& srs);
@@ -44,40 +46,44 @@ std::string friendly_name(const OGRSpatialReference& srs);
 
 std::unique_ptr<OGRSpatialReference> clone(const OGRSpatialReference& srs);
 
-std::unique_ptr<OGRCoordinateTransformation> uncached_transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs);
+Expected<std::unique_ptr<OGRCoordinateTransformation>> uncached_transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs);
 
-std::shared_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs);
+Expected<std::shared_ptr<OGRCoordinateTransformation>> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs);
 
 template <typename T>
-inline glm::tvec2<T> transform_point(OGRCoordinateTransformation* transform, glm::tvec2<T> p)
+inline Expected<glm::tvec2<T>> transform_point(OGRCoordinateTransformation* transform, glm::tvec2<T> p)
 {
     if (!transform->Transform(1, &p.x, &p.y))
-        throw std::runtime_error("srs::transform_point(glm::tvec2<T>) failed");
+        return Error::fail(Error::Code::InvalidInput, "transform 2d point");
     return p;
 }
 template <typename T>
-inline glm::tvec3<T> transform_point(OGRCoordinateTransformation* transform, glm::tvec3<T> p)
+inline Expected<glm::tvec3<T>> transform_point(OGRCoordinateTransformation* transform, glm::tvec3<T> p)
 {
     if (!transform->Transform(1, &p.x, &p.y, &p.z))
-        throw std::runtime_error("srs::transform_point(glm::tvec3<T>) failed");
+        return Error::fail(Error::Code::InvalidInput, "transform 3d point");
     return p;
 }
 
 template <typename T>
-inline glm::tvec2<T> transform_point(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec2<T> p)
+inline Expected<glm::tvec2<T>> transform_point(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec2<T> p)
 {
-    const auto transform = transformation(source_srs, target_srs);
-    return transform_point(transform.get(), p);
+    auto transform = transformation(source_srs, target_srs);
+    if (!transform)
+        return Error::propagate(std::move(transform));
+    return transform_point(transform->get(), p);
 }
 template <typename T>
-inline glm::tvec3<T> transform_point(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p)
+inline Expected<glm::tvec3<T>> transform_point(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, glm::tvec3<T> p)
 {
-    const auto transform = transformation(source_srs, target_srs);
-    return transform_point(transform.get(), p);
+    auto transform = transformation(source_srs, target_srs);
+    if (!transform)
+        return Error::propagate(std::move(transform));
+    return transform_point(transform->get(), p);
 }
 
 template <typename Container>
-inline void transform_points_inplace(OGRCoordinateTransformation* transform, Container& points)
+inline Expected<void> transform_points_inplace(OGRCoordinateTransformation* transform, Container& points)
 {
     using PointType = typename Container::value_type;
     using T = typename PointType::value_type;
@@ -116,7 +122,7 @@ inline void transform_points_inplace(OGRCoordinateTransformation* transform, Con
     }
 
     if (!success) {
-        throw std::runtime_error("srs::transform_points_inplace failed");
+        return Error::fail(Error::Code::InvalidInput, "transform points");
     }
 
     for (size_t i = 0; i < size; i++) {
@@ -126,19 +132,23 @@ inline void transform_points_inplace(OGRCoordinateTransformation* transform, Con
             points[i] = PointType(xs[i], ys[i]);
         }
     }
+    return {};
 }
 
 template <typename Container>
-inline Container transform_points(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, Container points)
+inline Expected<Container> transform_points(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, Container points)
 {
-    const auto transform = transformation(source_srs, target_srs);
-    transform_points_inplace(transform.get(), points);
+    auto transform = transformation(source_srs, target_srs);
+    if (!transform)
+        return Error::propagate(std::move(transform));
+    if (auto result = transform_points_inplace(transform->get(), points); !result)
+        return Error::propagate(std::move(result));
     return points;
 }
 
 // TODO: somehow integrate into a single transform_points
 template <typename T>
-inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransformation* transform, const std::vector<glm::tvec3<T>>& points)
+inline Expected<std::vector<glm::tvec2<T>>> transform_points_to_2d(OGRCoordinateTransformation* transform, const std::vector<glm::tvec3<T>>& points)
 {
     std::vector<T> xs;
     std::vector<T> ys;
@@ -155,7 +165,7 @@ inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransforma
     }
 
     if (!transform->Transform(points.size(), xs.data(), ys.data(), zs.data())) {
-        throw std::runtime_error("srs::transform_points_to_2d(OGRCoordinateTransformation *, std::vector<glm::tvec3<T>>) failed");
+        return Error::fail(Error::Code::InvalidInput, "transform points to 2d");
     }
 
     std::vector<glm::tvec2<T>> transformed;
@@ -167,25 +177,25 @@ inline std::vector<glm::tvec2<T>> transform_points_to_2d(OGRCoordinateTransforma
     return transformed;
 }
 
-radix::tile::SrsBounds non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& bounds);
-radix::tile::SrsBounds non_exact_bounds_transform(
+Expected<radix::tile::SrsBounds> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& bounds);
+Expected<radix::tile::SrsBounds> non_exact_bounds_transform(
     const radix::tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs);
-radix::geometry::Aabb3d non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::geometry::Aabb3d& bounds);
-radix::geometry::Aabb3d non_exact_bounds_transform(
+Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::geometry::Aabb3d& bounds);
+Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(
     const radix::geometry::Aabb3d& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs);
 
 /// Transforms bounds from one srs to another,
 /// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
 /// But there can be points inside the new bounds that were not present in the original ones.
-radix::tile::SrsBounds encompassing_bounds_transfer(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& source_bounds);
-radix::tile::SrsBounds encompassing_bounds_transfer(
+Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& source_bounds);
+Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(
     const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, const radix::tile::SrsBounds& source_bounds);
 
-radix::geometry::Aabb3d encompassing_bounds_transfer(OGRCoordinateTransformation* transform,
+Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(OGRCoordinateTransformation* transform,
     const radix::geometry::Aabb3d& source_bounds,
     const uint32_t intermediate_points_edges = 21,
     const uint32_t intermediate_points_faces = 5);
-radix::geometry::Aabb3d encompassing_bounds_transfer(const OGRSpatialReference& source_srs,
+Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(const OGRSpatialReference& source_srs,
     const OGRSpatialReference& target_srs,
     const radix::geometry::Aabb3d& source_bounds,
     const uint32_t intermediate_points_edges = 21,

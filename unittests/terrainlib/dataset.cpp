@@ -136,8 +136,8 @@ TEST_CASE("bbox width pixels") {
 
     CHECK(d_mgi.widthInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(620.0));
     CHECK(d_mgi.heightInPixels(d_mgi.bounds(), d_mgi.srs()) == Approx(350.0));
-    CHECK(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(620.0));
-    CHECK(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator), webmercator) == Approx(350.0));
+    CHECK(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator).value(), webmercator) == Approx(620.0));
+    CHECK(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds(), d_mgi.srs(), webmercator).value(), webmercator) == Approx(350.0));
 
     auto adjust_bounds = [](auto bounds) {
         const auto unadjusted_width = bounds.width();
@@ -150,7 +150,7 @@ TEST_CASE("bbox width pixels") {
     CHECK(d_wgs84.widthInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(620.0 * 0.7));
     CHECK(d_wgs84.heightInPixels(adjust_bounds(d_wgs84.bounds()), d_wgs84.srs()) == Approx(350.0 * 0.5));
 
-    const auto webmercator_bounds = srs::non_exact_bounds_transform(d_wgs84.bounds(), d_wgs84.srs(), webmercator);
+    const auto webmercator_bounds = srs::non_exact_bounds_transform(d_wgs84.bounds(), d_wgs84.srs(), webmercator).value();
     CHECK(d_wgs84.widthInPixels(webmercator_bounds, webmercator) == Approx(620.0));
     CHECK(d_wgs84.heightInPixels(webmercator_bounds, webmercator) == Approx(350.0));
 

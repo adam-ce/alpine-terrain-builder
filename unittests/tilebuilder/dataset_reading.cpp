@@ -39,7 +39,7 @@ void require_projection_available(const Dataset& dataset, const OGRSpatialRefere
     const auto source_bounds = dataset.bounds();
 
     std::shared_ptr<OGRCoordinateTransformation> transform;
-    REQUIRE_NOTHROW(transform = srs::transformation(dataset_srs, target_srs));
+    REQUIRE_NOTHROW(transform = srs::transformation(dataset_srs, target_srs).value());
     REQUIRE(transform != nullptr);
 
     std::array xs = { (source_bounds.min.x + source_bounds.max.x) / 2.0 };
@@ -113,7 +113,7 @@ TEST_CASE("reading")
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                    const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs);
+                    const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs).value();
 
                     require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, srs, 1);
@@ -227,7 +227,7 @@ TEST_CASE("reading")
 
         const auto pixel_width = low_res_ds->pixelWidthIn(srs);
         const auto pixel_height = low_res_ds->pixelHeightIn(srs);
-        auto srs_bounds = srs::non_exact_bounds_transform(low_res_ds->bounds(), low_res_ds->srs(), srs);
+        auto srs_bounds = srs::non_exact_bounds_transform(low_res_ds->bounds(), low_res_ds->srs(), srs).value();
         srs_bounds.min = { srs_bounds.min.x + border * pixel_width, srs_bounds.min.y + border * pixel_height };
         srs_bounds.max = { srs_bounds.max.x - border * pixel_width, srs_bounds.max.y - border * pixel_height };
 
@@ -273,7 +273,7 @@ TEST_CASE("reading")
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
+        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs).value();
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs));
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs));
@@ -315,7 +315,7 @@ TEST_CASE("reading")
         const auto srs = low_res_ds->srs();
         const auto low_res_reader = DatasetReader(low_res_ds, srs, 1);
         const auto high_res_reader = DatasetReader(high_res_ds, srs, 1);
-        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs);
+        const auto srs_bounds = srs::non_exact_bounds_transform(radix::tile::SrsBounds{{9.5, 46.4}, {17.1, 49.0}}, geodetic_srs, srs).value();
 
         const auto render_width = unsigned(low_res_ds->widthInPixels(srs_bounds, srs)) / 10;
         const auto render_height = unsigned(low_res_ds->heightInPixels(srs_bounds, srs)) / 10;

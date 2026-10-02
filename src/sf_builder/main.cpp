@@ -163,8 +163,12 @@ void log_dataset_overview(const Dataset &dataset) {
     const auto datasetSrs = dataset.srs();
     const auto bounds = dataset.bounds3d(true);
 
-    const auto boundsEcef =
-        srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+    const auto boundsEcefResult = srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+    if (!boundsEcefResult) {
+        LOG_ERROR("Failed to transform dataset bounds to ECEF: {}", boundsEcefResult.error().to_string());
+        return;
+    }
+    const auto boundsEcef = *boundsEcefResult;
 
     const octree::Space earth = octree::Space::earth();
     const auto enclosingNode =

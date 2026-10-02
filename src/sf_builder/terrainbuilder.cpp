@@ -112,6 +112,8 @@ std::optional<SimpleMesh> build_patch(
             LOG_WARN("Target bounds are inside dataset, but the region is empty");
             return std::nullopt;
         }
+        // Transformation failures are logged where they occur.
+        return std::nullopt;
     }
     SimpleMesh mesh = mesh_result.value();
     LOG_DEBUG("Mesh building took {}s", format_secs_since(start));
@@ -226,8 +228,11 @@ Expected<void> build_all_patches(
     const auto dataset_bounds = dataset.bounds3d(true);
 
     const auto ecef_srs = srs::ecef();
-    const auto ecef_bounds = srs::encompassing_bounds_transfer(
-        dataset_srs, ecef_srs, dataset_bounds);
+    auto ecef_bounds_result = srs::encompassing_bounds_transfer(dataset_srs, ecef_srs, dataset_bounds);
+    if (!ecef_bounds_result) {
+        return Error::propagate(std::move(ecef_bounds_result), "transform dataset bounds to ECEF");
+    }
+    const auto ecef_bounds = *ecef_bounds_result;
     const auto space = octree::Space::earth();
     const auto root_node = expect(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
@@ -238,11 +243,14 @@ Expected<void> build_all_patches(
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
+    // Validate once, so that the per-thread transformations below cannot fail.
+    if (auto transform = srs::transformation(ecef_srs, dataset_srs); !transform) {
+        return Error::propagate(std::move(transform), "create ECEF to dataset transformation");
+    }
     tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
         auto local_ecef_srs = ecef_srs;
         auto local_dataset_srs = dataset_srs;
-        auto transform = srs::transformation(local_ecef_srs, local_dataset_srs);
-        return transform;
+        return Error::asserting_unwrap(srs::transformation(local_ecef_srs, local_dataset_srs));
     });
 
     process_node = [&](octree::Id node) {
@@ -253,8 +261,7 @@ Expected<void> build_all_patches(
         }
 
         // Check if node bounds in dataset srs intersect with dataset
-        const auto node_bounds_dataset_srs = srs::encompassing_bounds_transfer(
-            &*transform_ecef_dataset.local(), node_bounds, 7, 3);
+        const auto node_bounds_dataset_srs = Error::asserting_unwrap(srs::encompassing_bounds_transfer(&*transform_ecef_dataset.local(), node_bounds, 7, 3));
         if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
             return;
         }

@@ -31,7 +31,8 @@ namespace terrainbuilder {
 
 enum class BuildMeshError {
     OutOfBounds,
-    EmptyRegion
+    EmptyRegion,
+    TransformationFailed
 };
 std::ostream &operator<<(std::ostream &os, BuildMeshError error);
 

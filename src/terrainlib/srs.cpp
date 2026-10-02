@@ -73,16 +73,16 @@ namespace {
     };
 } // namespace
 
-std::unique_ptr<OGRCoordinateTransformation> uncached_transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
+Expected<std::unique_ptr<OGRCoordinateTransformation>> uncached_transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
 {
     std::unique_ptr<OGRCoordinateTransformation> transform(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
     if (!transform) {
-        throw std::runtime_error("Couldn't create SRS transformation");
+        return Error::fail(Error::Code::InvalidInput, "create SRS transformation from " + friendly_name(source_srs) + " to " + friendly_name(target_srs));
     }
     return transform;
 }
 
-std::shared_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
+Expected<std::shared_ptr<OGRCoordinateTransformation>> transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
 {
     thread_local std::vector<TransformationCacheEntry> cache;
 
@@ -98,7 +98,8 @@ std::shared_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialRefe
         if (entry.source.IsSame(&target_srs) && entry.target.IsSame(&source_srs)) {
             std::shared_ptr<OGRCoordinateTransformation> inverse(entry.transform->GetInverse());
             if (!inverse) {
-                throw std::runtime_error("Couldn't create inverse transformation");
+                return Error::fail(
+                    Error::Code::InvalidInput, "create inverse SRS transformation from " + friendly_name(source_srs) + " to " + friendly_name(target_srs));
             }
             cache.push_back({ source_srs, target_srs, inverse });
             return inverse;
@@ -107,47 +108,56 @@ std::shared_ptr<OGRCoordinateTransformation> transformation(const OGRSpatialRefe
 
     // Not found
     auto transform = uncached_transformation(source_srs, target_srs);
-    std::shared_ptr<OGRCoordinateTransformation> shared_transform = std::move(transform);
+    if (!transform) {
+        return Error::propagate(std::move(transform));
+    }
+    std::shared_ptr<OGRCoordinateTransformation> shared_transform = std::move(*transform);
     cache.push_back({ source_srs, target_srs, shared_transform });
     return shared_transform;
 }
 
-radix::tile::SrsBounds non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& bounds)
+Expected<radix::tile::SrsBounds> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& bounds)
 {
     std::array xs = { bounds.min.x, bounds.max.x };
     std::array ys = { bounds.min.y, bounds.max.y };
     if (!transform->Transform(2, xs.data(), ys.data())) {
-        throw std::runtime_error("srs::non_exact_bounds_transform failed");
+        return Error::fail(Error::Code::InvalidInput, "transform bounds corners");
     }
-    return { { std::min(xs[0], xs[1]), std::min(ys[0], ys[1]) }, { std::max(xs[0], xs[1]), std::max(ys[0], ys[1]) } };
+    return radix::tile::SrsBounds { { std::min(xs[0], xs[1]), std::min(ys[0], ys[1]) }, { std::max(xs[0], xs[1]), std::max(ys[0], ys[1]) } };
 }
 
-radix::tile::SrsBounds non_exact_bounds_transform(
+Expected<radix::tile::SrsBounds> non_exact_bounds_transform(
     const radix::tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
 {
-    const auto transform = transformation(sourceSrs, targetSrs);
-    return non_exact_bounds_transform(transform.get(), bounds);
+    auto transform = transformation(sourceSrs, targetSrs);
+    if (!transform) {
+        return Error::propagate(std::move(transform));
+    }
+    return non_exact_bounds_transform(transform->get(), bounds);
 }
 
-radix::geometry::Aabb3d non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::geometry::Aabb3d& bounds)
+Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::geometry::Aabb3d& bounds)
 {
     std::array xs = { bounds.min.x, bounds.max.x };
     std::array ys = { bounds.min.y, bounds.max.y };
     std::array zs = { bounds.min.z, bounds.max.z };
     if (!transform->Transform(2, xs.data(), ys.data(), zs.data())) {
-        throw std::runtime_error("srs::non_exact_bounds_transform failed");
+        return Error::fail(Error::Code::InvalidInput, "transform bounds corners");
     }
-    return { { xs[0], ys[0], zs[0] }, { xs[1], ys[1], zs[1] } };
+    return radix::geometry::Aabb3d { { xs[0], ys[0], zs[0] }, { xs[1], ys[1], zs[1] } };
 }
 
-radix::geometry::Aabb3d non_exact_bounds_transform(
+Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(
     const radix::geometry::Aabb3d& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs)
 {
-    const auto transform = transformation(sourceSrs, targetSrs);
-    return non_exact_bounds_transform(transform.get(), bounds);
+    auto transform = transformation(sourceSrs, targetSrs);
+    if (!transform) {
+        return Error::propagate(std::move(transform));
+    }
+    return non_exact_bounds_transform(transform->get(), bounds);
 }
 
-radix::tile::SrsBounds encompassing_bounds_transfer(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& source_bounds)
+Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& source_bounds)
 {
     radix::tile::SrsBounds target_bounds;
     const int result = transform->TransformBounds(source_bounds.min.x,
@@ -160,23 +170,26 @@ radix::tile::SrsBounds encompassing_bounds_transfer(OGRCoordinateTransformation*
         &target_bounds.max.y,
         21);
     if (result != TRUE) {
-        throw std::runtime_error("srs::encompassing_bounding_box_transfer failed");
+        return Error::fail(Error::Code::InvalidInput, "transform bounds");
     }
     return target_bounds;
 }
 
-radix::tile::SrsBounds encompassing_bounds_transfer(
+Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(
     const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, const radix::tile::SrsBounds& source_bounds)
 {
     if (source_srs.IsSame(&target_srs)) {
         return source_bounds;
     }
 
-    const std::shared_ptr<OGRCoordinateTransformation> transformation = srs::transformation(source_srs, target_srs);
-    return encompassing_bounds_transfer(transformation.get(), source_bounds);
+    auto transformation = srs::transformation(source_srs, target_srs);
+    if (!transformation) {
+        return Error::propagate(std::move(transformation));
+    }
+    return encompassing_bounds_transfer(transformation->get(), source_bounds);
 }
 
-radix::geometry::Aabb3d encompassing_bounds_transfer(OGRCoordinateTransformation* transform,
+Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(OGRCoordinateTransformation* transform,
     const radix::geometry::Aabb3d& source_bounds,
     const uint32_t intermediate_points_edges,
     const uint32_t intermediate_points_faces)
@@ -219,7 +232,9 @@ radix::geometry::Aabb3d encompassing_bounds_transfer(OGRCoordinateTransformation
     }
 
     // Transform all collected points
-    transform_points_inplace(transform, points);
+    if (auto result = transform_points_inplace(transform, points); !result) {
+        return Error::propagate(std::move(result));
+    }
 
     // Compute bounds from transformed points
     radix::geometry::Aabb3d target_bounds;
@@ -232,7 +247,7 @@ radix::geometry::Aabb3d encompassing_bounds_transfer(OGRCoordinateTransformation
     return target_bounds;
 }
 
-radix::geometry::Aabb3d encompassing_bounds_transfer(const OGRSpatialReference& source_srs,
+Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(const OGRSpatialReference& source_srs,
     const OGRSpatialReference& target_srs,
     const radix::geometry::Aabb3d& source_bounds,
     const uint32_t intermediate_points_edges,
@@ -242,8 +257,11 @@ radix::geometry::Aabb3d encompassing_bounds_transfer(const OGRSpatialReference& 
         return source_bounds;
     }
 
-    const auto transform = srs::transformation(source_srs, target_srs);
-    return encompassing_bounds_transfer(transform.get(), source_bounds, intermediate_points_edges, intermediate_points_faces);
+    auto transform = srs::transformation(source_srs, target_srs);
+    if (!transform) {
+        return Error::propagate(std::move(transform));
+    }
+    return encompassing_bounds_transfer(transform->get(), source_bounds, intermediate_points_edges, intermediate_points_faces);
 }
 
 std::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg)

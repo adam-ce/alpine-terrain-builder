@@ -199,7 +199,7 @@ radix::tile::SrsBounds Dataset::bounds(const OGRSpatialReference &targetSrs) con
     // don't wanna miss out the max/max edge vertex
     addCoordinate(east, north);
 
-    const auto transformer = srs::transformation(srs(), targetSrs);
+    const auto transformer = Error::throwing_unwrap(srs::transformation(srs(), targetSrs));
     if (!transformer->Transform(int(x.size()), x.data(), y.data())) {
         throw std::runtime_error("Could not transform dataset bounds to target SRS");
     }
@@ -263,11 +263,11 @@ double Dataset::gridResolution(const OGRSpatialReference &target_srs) const {
 
 double Dataset::pixelWidthIn(const OGRSpatialReference &target_srs) const {
     const auto b0 = bounds();
-    const auto b1 = srs::non_exact_bounds_transform(b0, srs(), target_srs);
+    const auto b1 = Error::throwing_unwrap(srs::non_exact_bounds_transform(b0, srs(), target_srs));
     return b1.width() / widthInPixels();
 }
 
 double Dataset::pixelHeightIn(const OGRSpatialReference &target_srs) const {
-    const auto b = srs::non_exact_bounds_transform(bounds(), srs(), target_srs);
+    const auto b = Error::throwing_unwrap(srs::non_exact_bounds_transform(bounds(), srs(), target_srs));
     return b.height() / heightInPixels();
 }

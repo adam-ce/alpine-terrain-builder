@@ -29,10 +29,11 @@
 #include "RasterTransform.h"
 
 class Dataset;
-class OGRSpatialReference;
 
 class DatasetReader {
 public:
+    enum class Projection { WebMercator, Geodetic };
+
     template <typename PixelType>
     struct Samples {
         radix::Raster<PixelType> data;
@@ -57,10 +58,14 @@ public:
     static Expected<Samples<glm::u8vec3>> read_colour(
         GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, glm::uvec2 size, const std::array<unsigned, 3>& bands);
 
-    DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band);
+    DatasetReader(const std::shared_ptr<Dataset>& dataset, Projection projection, unsigned band);
 
     radix::Raster<float> read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const;
+    // Smallest source pixel size within bounds, per axis, in units of the projection.
+    // Approximate: sampled on a grid within the dataset coverage.
+    Expected<glm::dvec2> min_pixel_size(const radix::tile::SrsBounds& bounds) const;
 
+    Projection projection() const { return m_projection; }
     unsigned dataset_band() const { return m_band; }
     bool isReprojecting() const { return m_requires_reprojection; }
     std::string dataset_srs_wkt() const { return m_dataset_srs_wkt; }
@@ -71,6 +76,7 @@ protected:
 
 private:
     std::shared_ptr<Dataset> m_dataset;
+    Projection m_projection;
     std::string m_dataset_srs_wkt;
     std::string m_target_srs_wkt;
     bool m_requires_reprojection;

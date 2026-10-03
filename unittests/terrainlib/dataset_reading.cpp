@@ -19,14 +19,18 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <numeric>
+#include <numbers>
 #include <string>
 #include <tuple>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <fmt/core.h>
+#include <gdal_priv.h>
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
@@ -100,7 +104,10 @@ TEST_CASE("reading")
 
     SECTION("check for min and max heights")
     {
-        const std::array test_srses = { 4326, 3857 };
+        const std::array test_projections = {
+            std::make_pair(DatasetReader::Projection::Geodetic, 4326),
+            std::make_pair(DatasetReader::Projection::WebMercator, 3857),
+        };
         const std::array test_locations = {
         // CRS bounds, [lower limit, at least one value smaller, at least one value larger, upper limit]
 #if defined(ALP_UNITTESTS_EXTENDED) && ALP_UNITTESTS_EXTENDED
@@ -127,7 +134,7 @@ TEST_CASE("reading")
 
             for (std::string dataset_name : test_datasets) {
                 const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
-                for (const auto& test_srs : test_srses) {
+                for (const auto& [test_projection, test_srs] : test_projections) {
                     OGRSpatialReference srs;
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
@@ -135,7 +142,8 @@ TEST_CASE("reading")
                     const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs).value();
 
                     require_projection_available(*dataset, srs);
-                    const DatasetReader reader(dataset, srs, 1);
+                    const DatasetReader reader(dataset, test_projection, 1);
+                    REQUIRE(reader.projection() == test_projection);
                     if (ALP_UNITTESTS_DEBUG_IMAGES) {
                         const auto heights = reader.read(srs_bounds, 1000, 1000);
                         const auto s = std::string("/austria/").length();
@@ -187,7 +195,7 @@ TEST_CASE("reading")
 
             const auto ref_dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())).value();
             require_projection_available(*ref_dataset, geodetic_srs);
-            const auto ref_reader = DatasetReader(ref_dataset, geodetic_srs, 1);
+            const auto ref_reader = DatasetReader(ref_dataset, DatasetReader::Projection::Geodetic, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
             if (ALP_UNITTESTS_DEBUG_IMAGES) {
                 REQUIRE(debug_out(ref_heights, fmt::format("./heights_ref.png")).has_value());
@@ -196,7 +204,7 @@ TEST_CASE("reading")
             for (std::string dataset_name : datasets) {
                 const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
                 require_projection_available(*dataset, geodetic_srs);
-                const auto reader = DatasetReader(dataset, geodetic_srs, 1);
+                const auto reader = DatasetReader(dataset, DatasetReader::Projection::Geodetic, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
 
                 const auto s = std::string("/austria/").length();
@@ -221,5 +229,74 @@ TEST_CASE("reading")
                 CHECK(mse < max_mse);
             }
         }
+    }
+}
+
+TEST_CASE("min pixel size")
+{
+    using Projection = DatasetReader::Projection;
+    const auto open = [](const char* name) { return Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name)).value(); };
+    const auto pixel_size = [](const std::shared_ptr<Dataset>& dataset) {
+        std::array<double, 6> geo_transform {};
+        REQUIRE(dataset->gdalDataset()->GetGeoTransform(geo_transform.data()) == CE_None);
+        return glm::dvec2(geo_transform[1], -geo_transform[5]);
+    };
+    const double metres_per_degree = 6378137.0 * std::numbers::pi / 180;
+    // Within all Austrian test datasets.
+    const radix::tile::SrsBounds geodetic_bounds { { 12.0, 47.0 }, { 14.0, 48.0 } };
+    const auto mercator_bounds = srs::non_exact_bounds_transform(geodetic_bounds, srs::wgs84(), srs::webmercator()).value();
+
+    SECTION("same srs as the dataset")
+    {
+        const auto mercator = open("/austria/at_100m_epsg3857.tif");
+        const auto mercator_size = DatasetReader(mercator, Projection::WebMercator, 1).min_pixel_size(mercator_bounds);
+        REQUIRE(mercator_size);
+        CHECK(mercator_size->x == Catch::Approx(pixel_size(mercator).x));
+        CHECK(mercator_size->y == Catch::Approx(pixel_size(mercator).y));
+
+        const auto anisotropic = open("/austria/at_x149m_y100m_epsg4326.tif");
+        const auto geodetic_size = DatasetReader(anisotropic, Projection::Geodetic, 1).min_pixel_size(geodetic_bounds);
+        REQUIRE(geodetic_size);
+        CHECK(geodetic_size->x == Catch::Approx(pixel_size(anisotropic).x));
+        CHECK(geodetic_size->y == Catch::Approx(pixel_size(anisotropic).y));
+    }
+
+    SECTION("geodetic dataset in web mercator")
+    {
+        // Web Mercator stretches y by 1 / cos(latitude), the minimum is at the southern edge.
+        const auto dataset = open("/austria/at_100m_epsg4326.tif");
+        const auto size = DatasetReader(dataset, Projection::WebMercator, 1).min_pixel_size(mercator_bounds);
+        REQUIRE(size);
+        const double south = geodetic_bounds.min.y * std::numbers::pi / 180;
+        CHECK(size->x == Catch::Approx(pixel_size(dataset).x * metres_per_degree).epsilon(1e-3));
+        CHECK(size->y == Catch::Approx(pixel_size(dataset).y * metres_per_degree / std::cos(south)).epsilon(1e-3));
+    }
+
+    SECTION("bounds larger than the dataset are clipped to its coverage")
+    {
+        const auto dataset = open("/austria/at_100m_epsg4326.tif");
+        const radix::tile::SrsBounds world { glm::dvec2(-srs::webmercator_half_extent), glm::dvec2(srs::webmercator_half_extent) };
+        const auto size = DatasetReader(dataset, Projection::WebMercator, 1).min_pixel_size(world);
+        REQUIRE(size);
+        const double south = dataset->bounds().value().min.y * std::numbers::pi / 180;
+        CHECK(size->y == Catch::Approx(pixel_size(dataset).y * metres_per_degree / std::cos(south)).epsilon(1e-3));
+    }
+
+    SECTION("projected dataset in web mercator")
+    {
+        // About 100 m on the ground, i.e. 1 / cos(47°) * 100 m in Web Mercator, reduced slightly by the grid rotation.
+        const auto dataset = open("/austria/at_100m_mgi.tif");
+        const auto size = DatasetReader(dataset, Projection::WebMercator, 1).min_pixel_size(mercator_bounds);
+        REQUIRE(size);
+        CHECK(size->x > 130);
+        CHECK(size->x < 155);
+        CHECK(size->y > 130);
+        CHECK(size->y < 155);
+    }
+
+    SECTION("bounds outside the coverage")
+    {
+        const auto dataset = open("/austria/at_100m_epsg4326.tif");
+        CHECK(!DatasetReader(dataset, Projection::Geodetic, 1).min_pixel_size({ { 0.0, 0.0 }, { 1.0, 1.0 } }));
     }
 }

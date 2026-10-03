@@ -18,12 +18,14 @@
 
 #include "DatasetReader.h"
 #include "Dataset.h"
+#include "srs.h"
 
 #include <cmath>
 #include <fmt/core.h>
 #include <gdal.h>
 #include <gdal_priv.h>
 #include <gdalwarper.h>
+#include <libassert/assert.hpp>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -46,6 +48,17 @@ std::string toWkt(const OGRSpatialReference& srs)
     std::string wkt_string(wkt_char_string);
     CPLFree(wkt_char_string);
     return wkt_string;
+}
+
+OGRSpatialReference target_srs(DatasetReader::Projection projection)
+{
+    switch (projection) {
+    case DatasetReader::Projection::WebMercator:
+        return srs::webmercator();
+    case DatasetReader::Projection::Geodetic:
+        return srs::wgs84();
+    }
+    PANIC("unsupported projection", static_cast<unsigned>(projection));
 }
 
 std::array<double, 6> computeGeoTransform(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
@@ -121,13 +134,16 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
 
 }
 
-DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, const OGRSpatialReference& targetSRS, unsigned band)
+DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, Projection projection, unsigned band)
     : m_dataset(dataset)
+    , m_projection(projection)
     , m_dataset_srs_wkt(toWkt(Error::throwing_unwrap(dataset->srs())))
-    , m_target_srs_wkt(toWkt(targetSRS))
-    , m_requires_reprojection(!Error::throwing_unwrap(dataset->srs()).IsSame(&targetSRS))
     , m_band(band)
 {
+    const auto target = target_srs(projection);
+    m_target_srs_wkt = toWkt(target);
+    m_requires_reprojection = !Error::throwing_unwrap(dataset->srs()).IsSame(&target);
+
     if (band > dataset->n_bands())
         throw std::runtime_error(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));
 }
@@ -154,6 +170,66 @@ radix::Raster<float> DatasetReader::readFrom(const std::shared_ptr<Dataset>& sou
         throw std::runtime_error("couldn't read data");
 
     return heights_data;
+}
+
+Expected<glm::dvec2> DatasetReader::min_pixel_size(const radix::tile::SrsBounds& bounds) const
+{
+    constexpr unsigned samples_per_axis = 5;
+    constexpr double step_fraction = 1e-3;
+
+    auto coverage = m_projection == Projection::WebMercator ? m_dataset->mercator_coverage() : m_dataset->geodetic_coverage();
+    if (!coverage) {
+        return Error::propagate(std::move(coverage), "compute dataset coverage");
+    }
+    // Each sample is a point followed by its x and y neighbours. Steps point inwards,
+    // so neighbours stay within the coverage and never cross the antimeridian.
+    std::vector<glm::dvec2> points;
+    std::vector<glm::dvec2> steps;
+    for (const auto& box : *coverage) {
+        const radix::tile::SrsBounds region { glm::max(bounds.min, box.min), glm::min(bounds.max, box.max) };
+        if (region.min.x >= region.max.x || region.min.y >= region.max.y) {
+            continue;
+        }
+        const glm::dvec2 centre = (region.min + region.max) / 2.0;
+        const glm::dvec2 step = step_fraction * (region.max - region.min);
+        for (unsigned y = 0; y < samples_per_axis; ++y) {
+            for (unsigned x = 0; x < samples_per_axis; ++x) {
+                const glm::dvec2 point = glm::mix(region.min, region.max, glm::dvec2(x, y) / double(samples_per_axis - 1));
+                const glm::dvec2 inward_step = glm::mix(step, -step, glm::greaterThan(point, centre));
+                points.insert(points.end(), { point, point + glm::dvec2(inward_step.x, 0), point + glm::dvec2(0, inward_step.y) });
+                steps.push_back(inward_step);
+            }
+        }
+    }
+    if (steps.empty()) {
+        return Error::fail(Error::Code::InvalidInput, "bounds do not intersect the coverage of dataset " + m_dataset->name());
+    }
+
+    auto source_srs = m_dataset->srs();
+    if (!source_srs) {
+        return Error::propagate(std::move(source_srs));
+    }
+    auto transform = srs::transformation(target_srs(m_projection), *source_srs);
+    if (!transform) {
+        return Error::propagate(std::move(transform));
+    }
+    if (auto transformed = srs::transform_points_inplace(transform->get(), points); !transformed) {
+        return Error::propagate(std::move(transformed), "transform pixel size samples into dataset SRS");
+    }
+
+    // The coverage already required a north-up geotransform without rotation.
+    std::array<double, 6> geo_transform {};
+    const auto geo_transform_result = m_dataset->gdalDataset()->GetGeoTransform(geo_transform.data());
+    ASSERT(geo_transform_result == CE_None);
+    const glm::dvec2 source_pixel_size(geo_transform[1], geo_transform[5]);
+    glm::dvec2 result(std::numeric_limits<double>::infinity());
+    for (std::size_t i = 0; i < steps.size(); ++i) {
+        // Source pixels traversed per target unit along target x and y.
+        const glm::dvec2 along_x = glm::abs((points[3 * i + 1] - points[3 * i]) / (steps[i].x * source_pixel_size));
+        const glm::dvec2 along_y = glm::abs((points[3 * i + 2] - points[3 * i]) / (steps[i].y * source_pixel_size));
+        result = glm::min(result, 1.0 / glm::dvec2(along_x.x + along_x.y, along_y.x + along_y.y));
+    }
+    return result;
 }
 
 namespace {

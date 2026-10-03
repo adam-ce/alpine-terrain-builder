@@ -99,7 +99,7 @@ set(LIBIGL_COPYLEFT_CORE ON)
 set(LIBIGL_RESTRICTED_TRIANGLE ON)
 alp_add_git_repository(libigl URL https://github.com/libigl/libigl.git COMMITISH v2.6.0)
 
-alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 6babc632401cb95a701ce431cb68adf91e2c1b71 NOT_SYSTEM)
+alp_add_git_repository(radix URL https://github.com/AlpineMapsOrg/radix.git COMMITISH 39bf8b0c89459b3266048086a8d0121992c8f430 NOT_SYSTEM)
 
 set(ALP_CLI_COMPONENT_OPTIONS
     ALP_BUILD_RF_BUILDER

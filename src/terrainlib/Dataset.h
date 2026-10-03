@@ -63,15 +63,9 @@ public:
     [[nodiscard]] Expected<OGRSpatialReference> srs() const;
     [[nodiscard]] unsigned int widthInPixels() const;
     [[nodiscard]] unsigned int heightInPixels() const;
-    [[nodiscard]] Expected<double> widthInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
-    [[nodiscard]] Expected<double> heightInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const;
     [[nodiscard]] unsigned int n_bands() const;
     [[nodiscard]] GDALDataset *gdalDataset();
     [[nodiscard]] const GDALDataset *gdalDataset() const;
-
-    [[nodiscard]] Expected<double> gridResolution(const OGRSpatialReference& target_srs) const;
-    [[nodiscard]] Expected<double> pixelWidthIn(const OGRSpatialReference& target_srs) const;
-    [[nodiscard]] Expected<double> pixelHeightIn(const OGRSpatialReference& target_srs) const;
 
 private:
     Dataset(const std::filesystem::path path, GDALDataset *dataset);

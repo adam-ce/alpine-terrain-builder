@@ -23,9 +23,6 @@
 #include <gdal_priv.h>
 
 #include "Dataset.h"
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/types.hpp"
 #include "init.h"
 #include "srs.h"
 
@@ -49,14 +46,6 @@ void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &
 TEST_CASE("datasets are as expected") {
     auto d_mgi = Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
     auto d_wgs84 = Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
-
-    OGRSpatialReference webmercator;
-    webmercator.importFromEPSG(3857);
-    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-    OGRSpatialReference wgs84;
-    wgs84.importFromEPSG(4326);
-    wgs84.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     SECTION("file name") {
         CHECK(d_mgi.name() == "at_mgi");
@@ -91,21 +80,6 @@ TEST_CASE("datasets are as expected") {
         CHECK(d_mgi.widthInPixels() == 620);
         CHECK(d_mgi.heightInPixels() == 350);
         CHECK(d_mgi.n_bands() == 1);
-
-        const auto northern = 49.222158096;
-        const auto southern = 46.077736128;
-        const auto eastern = 17.58967912;
-        const auto western = 9.323270147;
-
-        CHECK(d_mgi.pixelWidthIn(wgs84).value() == Approx((eastern - western) / 620));
-        CHECK(d_mgi.pixelHeightIn(wgs84).value() == Approx((northern - southern) / 350));
-        CHECK(d_mgi.gridResolution(wgs84).value() == Approx((northern - southern) / 350));
-
-        const auto wgs84_grid = ctb::GlobalGeodetic(256);
-        CHECK(wgs84_grid.zoomForResolution(d_mgi.gridResolution(wgs84).value()) == 7);
-
-        const auto webmercator_grid = ctb::GlobalMercator();
-        CHECK(webmercator_grid.zoomForResolution(d_mgi.gridResolution(webmercator).value()) == 7);
     }
 }
 
@@ -125,41 +99,6 @@ TEST_CASE("vector datasets use the layer spatial reference") {
     Dataset dataset(raw_dataset);
     const OGRSpatialReference actual_srs = dataset.srs().value();
     CHECK(actual_srs.IsSame(&expected_srs));
-}
-
-TEST_CASE("bbox width pixels") {
-    auto d_mgi = Dataset(ALP_TEST_DATA_DIR "/austria/at_mgi.tif");
-    auto d_wgs84 = Dataset(ALP_TEST_DATA_DIR "/austria/at_wgs84.tif");
-
-    OGRSpatialReference webmercator;
-    webmercator.importFromEPSG(3857);
-    webmercator.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
-
-    CHECK(d_mgi.widthInPixels(d_mgi.bounds().value(), d_mgi.srs().value()).value() == Approx(620.0));
-    CHECK(d_mgi.heightInPixels(d_mgi.bounds().value(), d_mgi.srs().value()).value() == Approx(350.0));
-    CHECK(d_mgi.widthInPixels(srs::non_exact_bounds_transform(d_mgi.bounds().value(), d_mgi.srs().value(), webmercator).value(), webmercator).value()
-        == Approx(620.0));
-    CHECK(d_mgi.heightInPixels(srs::non_exact_bounds_transform(d_mgi.bounds().value(), d_mgi.srs().value(), webmercator).value(), webmercator).value()
-        == Approx(350.0));
-
-    auto adjust_bounds = [](auto bounds) {
-        const auto unadjusted_width = bounds.width();
-        const auto unadjusted_height = bounds.height();
-        bounds.min += glm::dvec2{unadjusted_width * 0.2, unadjusted_height * 0.3};
-        bounds.max -= glm::dvec2{unadjusted_width * 0.1, unadjusted_height * 0.2};
-        return bounds;
-    };
-
-    CHECK(d_wgs84.widthInPixels(adjust_bounds(d_wgs84.bounds().value()), d_wgs84.srs().value()).value() == Approx(620.0 * 0.7));
-    CHECK(d_wgs84.heightInPixels(adjust_bounds(d_wgs84.bounds().value()), d_wgs84.srs().value()).value() == Approx(350.0 * 0.5));
-
-    const auto webmercator_bounds = srs::non_exact_bounds_transform(d_wgs84.bounds().value(), d_wgs84.srs().value(), webmercator).value();
-    CHECK(d_wgs84.widthInPixels(webmercator_bounds, webmercator).value() == Approx(620.0));
-    CHECK(d_wgs84.heightInPixels(webmercator_bounds, webmercator).value() == Approx(350.0));
-
-    const auto webmercator_adjusted_bounds = adjust_bounds(webmercator_bounds);
-    CHECK(d_wgs84.widthInPixels(webmercator_adjusted_bounds, webmercator).value() == Approx(620.0 * 0.7));
-    CHECK(d_wgs84.heightInPixels(webmercator_adjusted_bounds, webmercator).value() == Approx(350.0 * 0.5));
 }
 
 namespace {

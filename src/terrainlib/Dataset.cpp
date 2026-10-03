@@ -224,16 +224,6 @@ unsigned Dataset::heightInPixels() const {
     return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
 }
 
-Expected<double> Dataset::widthInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
-{
-    return pixelWidthIn(bounds_srs).transform([&](double pixel_width) { return bounds.width() / pixel_width; });
-}
-
-Expected<double> Dataset::heightInPixels(const radix::tile::SrsBounds& bounds, const OGRSpatialReference& bounds_srs) const
-{
-    return pixelHeightIn(bounds_srs).transform([&](double pixel_height) { return bounds.height() / pixel_height; });
-}
-
 unsigned Dataset::n_bands() const {
     const auto n = m_gdal_dataset->GetRasterCount();
     DEBUG_ASSERT(n >= 0);
@@ -245,42 +235,4 @@ GDALDataset *Dataset::gdalDataset() {
 }
 const GDALDataset *Dataset::gdalDataset() const {
     return m_gdal_dataset.get();
-}
-
-Expected<double> Dataset::gridResolution(const OGRSpatialReference& target_srs) const
-{
-    auto width = pixelWidthIn(target_srs);
-    if (!width) {
-        return width;
-    }
-    auto height = pixelHeightIn(target_srs);
-    if (!height) {
-        return height;
-    }
-    return std::min(*width, *height);
-}
-
-namespace {
-Expected<radix::tile::SrsBounds> bounds_in(const Dataset& dataset, const OGRSpatialReference& target_srs)
-{
-    auto bounds = dataset.bounds();
-    if (!bounds) {
-        return bounds;
-    }
-    auto reference = dataset.srs();
-    if (!reference) {
-        return Error::propagate(std::move(reference));
-    }
-    return srs::non_exact_bounds_transform(*bounds, *reference, target_srs);
-}
-} // namespace
-
-Expected<double> Dataset::pixelWidthIn(const OGRSpatialReference& target_srs) const
-{
-    return bounds_in(*this, target_srs).transform([&](const radix::tile::SrsBounds& bounds) { return bounds.width() / widthInPixels(); });
-}
-
-Expected<double> Dataset::pixelHeightIn(const OGRSpatialReference& target_srs) const
-{
-    return bounds_in(*this, target_srs).transform([&](const radix::tile::SrsBounds& bounds) { return bounds.height() / heightInPixels(); });
 }

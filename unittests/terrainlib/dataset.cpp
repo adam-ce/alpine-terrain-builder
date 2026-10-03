@@ -41,8 +41,9 @@ void checkBounds(const radix::tile::SrsBounds &a, const radix::tile::SrsBounds &
     const auto heightErrorIn = std::abs(a.height() - b.height()) / a.height();
     const auto widthErrorIn = std::abs(a.width() - b.width()) / a.width();
     //  fmt::print("height error = {}, width error = {}\n", heightErrorIn, widthErrorIn);
-    CHECK(heightErrorIn < 0.001);
-    CHECK(widthErrorIn < 0.001);
+    // Reprojected coverage includes a guard band of 1/258 of the extent per side.
+    CHECK(heightErrorIn < 0.01);
+    CHECK(widthErrorIn < 0.01);
 }
 
 TEST_CASE("datasets are as expected") {
@@ -69,22 +70,22 @@ TEST_CASE("datasets are as expected") {
         REQUIRE_FALSE(d_mgi.srs().value().IsSame(&wgs84));
     }
 
-    SECTION("bounds") {
+    SECTION("coverage")
+    {
         {
-            //      fmt::print("webmercator: \n");
-            checkBounds(d_mgi.bounds(webmercator).value(), d_wgs84.bounds(webmercator).value());
+            const auto mgi_coverage = d_mgi.mercator_coverage().value();
+            const auto wgs84_coverage = d_wgs84.mercator_coverage().value();
+            REQUIRE(mgi_coverage.size() == 1);
+            REQUIRE(wgs84_coverage.size() == 1);
+            checkBounds(mgi_coverage.front(), wgs84_coverage.front());
         }
         {
-            //      fmt::print("d_wgs84: \n");
-            checkBounds(d_mgi.bounds(d_wgs84.srs().value()).value(), d_wgs84.bounds(d_wgs84.srs().value()).value());
+            const auto mgi_coverage = d_mgi.geodetic_coverage().value();
+            const auto wgs84_coverage = d_wgs84.geodetic_coverage().value();
+            REQUIRE(mgi_coverage.size() == 1);
+            REQUIRE(wgs84_coverage.size() == 1);
+            checkBounds(mgi_coverage.front(), wgs84_coverage.front());
         }
-        //    {
-        //      // doesn't work: wgs84 was created by projecting the original mgi data. since wgs84 is warped, the projection creates a border.
-        //      //               when backprojecting to mgi, there is still a border in the raster data (but widthout height information).
-        //      //               this is not an error in the code, and impossible to avoid when rerasterising warped raster data
-        //      fmt::print("d_mgi: \n");
-        //      checkBounds(d_mgi.bounds(d_mgi.srs()), d_wgs84.bounds(d_mgi.srs()));
-        //    }
     }
     SECTION("resolution") {
         CHECK(d_mgi.widthInPixels() == 620);

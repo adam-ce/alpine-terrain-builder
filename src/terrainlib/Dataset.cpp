@@ -174,69 +174,6 @@ Expected<radix::tile::SrsAndHeightBounds> Dataset::bounds3d(bool approx_ok) cons
     return bounds3d;
 }
 
-Expected<radix::tile::SrsBounds> Dataset::bounds(const OGRSpatialReference& targetSrs) const
-{
-    const auto bounds_result = bounds();
-    if (!bounds_result) {
-        return bounds_result;
-    }
-    const auto l_bounds = *bounds_result;
-    const auto west = l_bounds.min.x;
-    const auto east = l_bounds.max.x;
-    const auto north = l_bounds.max.y;
-    const auto south = l_bounds.min.y;
-
-    auto data_srs = srs();
-    if (!data_srs) {
-        return Error::propagate(std::move(data_srs));
-    }
-    if (targetSrs.IsSame(&*data_srs))
-        return l_bounds;
-
-    // We need to transform the bounds to the target SRS
-    // this might involve warping, i.e. some of the edges can be arcs.
-    // therefore we want to walk the perimiter and get min/max from there.
-    // a resolution of 2000 samples per border should give a good enough approximation.
-
-    // hey, check out inline virtual int TransformBounds(const double xmin, const double ymin, const double xmax, const double ymax, double *out_xmin, double *out_ymin, double *out_xmax, double *out_ymax, const int densify_pts)
-    std::vector<double> x;
-    std::vector<double> y;
-    auto addCoordinate = [&](double xv, double yv) { x.emplace_back(xv); y.emplace_back(yv); };
-
-    const auto deltaX = l_bounds.width() / 2000.0;
-    if (deltaX <= 0.0)
-        return Error::fail(Error::Code::Unsupported, "west coordinate > east coordinate");
-    for (double s = west; s < east; s += deltaX) {
-        addCoordinate(s, south);
-        addCoordinate(s, north);
-    }
-    const auto deltaY = (north - south) / 2000.0;
-    if (deltaY <= 0.0)
-        return Error::fail(Error::Code::Unsupported, "south coordinate > north coordinate");
-    for (double s = south; s < north; s += deltaY) {
-        addCoordinate(west, s);
-        addCoordinate(east, s);
-    }
-    // don't wanna miss out the max/max edge vertex
-    addCoordinate(east, north);
-
-    auto transformer = srs::transformation(*data_srs, targetSrs);
-    if (!transformer) {
-        return Error::propagate(std::move(transformer));
-    }
-    if (!(*transformer)->Transform(int(x.size()), x.data(), y.data())) {
-        return Error::fail(Error::Code::InvalidInput, "transform dataset bounds to target SRS");
-    }
-
-    DEBUG_ASSERT(!x.empty());
-    DEBUG_ASSERT(!y.empty());
-    const double target_minX = *std::min_element(x.begin(), x.end());
-    const double target_maxX = *std::max_element(x.begin(), x.end());
-    const double target_minY = *std::min_element(y.begin(), y.end());
-    const double target_maxY = *std::max_element(y.begin(), y.end());
-    return radix::tile::SrsBounds { { target_minX, target_minY }, { target_maxX, target_maxY } };
-}
-
 Expected<std::vector<radix::tile::SrsBounds>> Dataset::geodetic_coverage() const
 {
     auto reference = srs();

@@ -241,7 +241,7 @@ Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(OGRCoordinateTran
     // Compute bounds from transformed points
     radix::geometry::Aabb3d target_bounds;
     target_bounds.min = glm::dvec3(std::numeric_limits<double>::max());
-    target_bounds.max = glm::dvec3(std::numeric_limits<double>::min());
+    target_bounds.max = glm::dvec3(std::numeric_limits<double>::lowest());
     for (const auto& point : points) {
         target_bounds.expand_by(point);
     }

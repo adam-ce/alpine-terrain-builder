@@ -374,6 +374,9 @@ namespace {
 
 Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
 {
+    if ((bounds.min.x < -webmercator_half_extent || bounds.max.x > webmercator_half_extent) && webmercator().IsSame(&reference)) {
+        return Error::fail(Error::Code::Unsupported, "coverage of Web Mercator bounds outside the world extent");
+    }
     const auto geographic = wgs84();
     radix::tile::SrsBounds longitude_latitude = bounds;
     if (!reference.IsSame(&geographic)) {

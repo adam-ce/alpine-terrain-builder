@@ -57,8 +57,8 @@ public:
     // Bounds of a north-up raster without rotation or shear, in its own SRS.
     [[nodiscard]] Expected<radix::tile::SrsBounds> bounds() const;
     [[nodiscard]] Expected<radix::tile::SrsAndHeightBounds> bounds3d(bool approx_ok = false) const;
-    // See srs::geodetic_coverage and srs::mercator_coverage.
-    [[nodiscard]] Expected<std::vector<radix::tile::SrsBounds>> geodetic_coverage() const;
+    // See srs::geographic_coverage and srs::mercator_coverage.
+    [[nodiscard]] Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage() const;
     [[nodiscard]] Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage() const;
     [[nodiscard]] Expected<OGRSpatialReference> srs() const;
     [[nodiscard]] unsigned int widthInPixels() const;

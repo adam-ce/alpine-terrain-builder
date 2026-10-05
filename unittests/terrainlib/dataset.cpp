@@ -69,8 +69,8 @@ TEST_CASE("datasets are as expected") {
             checkBounds(mgi_coverage.front(), wgs84_coverage.front());
         }
         {
-            const auto mgi_coverage = d_mgi.geodetic_coverage().value();
-            const auto wgs84_coverage = d_wgs84.geodetic_coverage().value();
+            const auto mgi_coverage = d_mgi.geographic_coverage().value();
+            const auto wgs84_coverage = d_wgs84.geographic_coverage().value();
             REQUIRE(mgi_coverage.size() == 1);
             REQUIRE(wgs84_coverage.size() == 1);
             checkBounds(mgi_coverage.front(), wgs84_coverage.front());
@@ -135,11 +135,11 @@ TEST_CASE("dataset coverage is split at the antimeridian")
 {
     const auto dataset = memory_raster({ 170, 0.625, 0, 5, 0, -0.3125 }, { 32, 32 }, 4326);
 
-    const auto geodetic = dataset.geodetic_coverage();
-    REQUIRE(geodetic);
-    REQUIRE(geodetic->size() == 2);
-    check_bounds_near((*geodetic)[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
-    check_bounds_near((*geodetic)[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
+    const auto geographic = dataset.geographic_coverage();
+    REQUIRE(geographic);
+    REQUIRE(geographic->size() == 2);
+    check_bounds_near((*geographic)[0], { { 170, -5 }, { 180, 5 } }, 1e-9);
+    check_bounds_near((*geographic)[1], { { -180, -5 }, { -170, 5 } }, 1e-9);
 
     const auto mercator_bounds = dataset.mercator_coverage();
     REQUIRE(mercator_bounds);
@@ -152,10 +152,10 @@ TEST_CASE("dataset coverage beyond the polar limit is empty in web mercator")
 {
     const auto dataset = memory_raster({ 10, 0.1, 0, 89, 0, -0.02 }, { 32, 32 }, 4326);
 
-    const auto geodetic = dataset.geodetic_coverage();
-    REQUIRE(geodetic);
-    REQUIRE(geodetic->size() == 1);
-    check_bounds_near(geodetic->front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
+    const auto geographic = dataset.geographic_coverage();
+    REQUIRE(geographic);
+    REQUIRE(geographic->size() == 1);
+    check_bounds_near(geographic->front(), { { 10, 88.36 }, { 13.2, 89 } }, 1e-9);
 
     const auto mercator_bounds = dataset.mercator_coverage();
     REQUIRE(mercator_bounds);
@@ -179,10 +179,10 @@ TEST_CASE("global dataset coverage is a single world rectangle")
 {
     const auto dataset = memory_raster({ -180, 0.5, 0, 90, 0, -0.5 }, { 720, 360 }, 4326);
 
-    const auto geodetic = dataset.geodetic_coverage();
-    REQUIRE(geodetic);
-    REQUIRE(geodetic->size() == 1);
-    check_bounds_near(geodetic->front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
+    const auto geographic = dataset.geographic_coverage();
+    REQUIRE(geographic);
+    REQUIRE(geographic->size() == 1);
+    check_bounds_near(geographic->front(), { { -180, -90 }, { 180, 90 } }, 1e-9);
 
     const auto mercator_bounds = dataset.mercator_coverage();
     REQUIRE(mercator_bounds);

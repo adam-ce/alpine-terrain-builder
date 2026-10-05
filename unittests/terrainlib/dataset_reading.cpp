@@ -98,14 +98,14 @@ TEST_CASE("reading")
         "/austria/pizbuin_1m_epsg4326.tif",
     };
 
-    OGRSpatialReference geodetic_srs;
-    geodetic_srs.importFromEPSG(4326);
-    geodetic_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    OGRSpatialReference geographic_srs;
+    geographic_srs.importFromEPSG(4326);
+    geographic_srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
     SECTION("check for min and max heights")
     {
         const std::array test_projections = {
-            std::make_pair(DatasetReader::Projection::Geodetic, 4326),
+            std::make_pair(DatasetReader::Projection::Geographic, 4326),
             std::make_pair(DatasetReader::Projection::WebMercator, 3857),
         };
         const std::array test_locations = {
@@ -130,7 +130,7 @@ TEST_CASE("reading")
         };
 
         for (const auto& test : test_locations) {
-            const auto [test_name, test_datasets, geodetic_bounds, limits] = test;
+            const auto [test_name, test_datasets, geographic_bounds, limits] = test;
 
             for (std::string dataset_name : test_datasets) {
                 const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
@@ -139,7 +139,7 @@ TEST_CASE("reading")
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                    const auto srs_bounds = srs::non_exact_bounds_transform(geodetic_bounds, geodetic_srs, srs).value();
+                    const auto srs_bounds = srs::non_exact_bounds_transform(geographic_bounds, geographic_srs, srs).value();
 
                     require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, test_projection, 1);
@@ -194,8 +194,8 @@ TEST_CASE("reading")
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
             const auto ref_dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())).value();
-            require_projection_available(*ref_dataset, geodetic_srs);
-            const auto ref_reader = DatasetReader(ref_dataset, DatasetReader::Projection::Geodetic, 1);
+            require_projection_available(*ref_dataset, geographic_srs);
+            const auto ref_reader = DatasetReader(ref_dataset, DatasetReader::Projection::Geographic, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
             if (ALP_UNITTESTS_DEBUG_IMAGES) {
                 REQUIRE(debug_out(ref_heights, fmt::format("./heights_ref.png")).has_value());
@@ -203,8 +203,8 @@ TEST_CASE("reading")
 
             for (std::string dataset_name : datasets) {
                 const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
-                require_projection_available(*dataset, geodetic_srs);
-                const auto reader = DatasetReader(dataset, DatasetReader::Projection::Geodetic, 1);
+                require_projection_available(*dataset, geographic_srs);
+                const auto reader = DatasetReader(dataset, DatasetReader::Projection::Geographic, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
 
                 const auto s = std::string("/austria/").length();
@@ -243,8 +243,8 @@ TEST_CASE("min pixel size")
     };
     const double metres_per_degree = 6378137.0 * std::numbers::pi / 180;
     // Within all Austrian test datasets.
-    const radix::tile::SrsBounds geodetic_bounds { { 12.0, 47.0 }, { 14.0, 48.0 } };
-    const auto mercator_bounds = srs::non_exact_bounds_transform(geodetic_bounds, srs::wgs84(), srs::webmercator()).value();
+    const radix::tile::SrsBounds geographic_bounds { { 12.0, 47.0 }, { 14.0, 48.0 } };
+    const auto mercator_bounds = srs::non_exact_bounds_transform(geographic_bounds, srs::wgs84(), srs::webmercator()).value();
 
     SECTION("same srs as the dataset")
     {
@@ -255,19 +255,19 @@ TEST_CASE("min pixel size")
         CHECK(mercator_size->y == Catch::Approx(pixel_size(mercator).y));
 
         const auto anisotropic = open("/austria/at_x149m_y100m_epsg4326.tif");
-        const auto geodetic_size = DatasetReader(anisotropic, Projection::Geodetic, 1).min_pixel_size(geodetic_bounds);
-        REQUIRE(geodetic_size);
-        CHECK(geodetic_size->x == Catch::Approx(pixel_size(anisotropic).x));
-        CHECK(geodetic_size->y == Catch::Approx(pixel_size(anisotropic).y));
+        const auto geographic_size = DatasetReader(anisotropic, Projection::Geographic, 1).min_pixel_size(geographic_bounds);
+        REQUIRE(geographic_size);
+        CHECK(geographic_size->x == Catch::Approx(pixel_size(anisotropic).x));
+        CHECK(geographic_size->y == Catch::Approx(pixel_size(anisotropic).y));
     }
 
-    SECTION("geodetic dataset in web mercator")
+    SECTION("geographic dataset in web mercator")
     {
         // Web Mercator stretches y by 1 / cos(latitude), the minimum is at the southern edge.
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
         const auto size = DatasetReader(dataset, Projection::WebMercator, 1).min_pixel_size(mercator_bounds);
         REQUIRE(size);
-        const double south = geodetic_bounds.min.y * std::numbers::pi / 180;
+        const double south = geographic_bounds.min.y * std::numbers::pi / 180;
         CHECK(size->x == Catch::Approx(pixel_size(dataset).x * metres_per_degree).epsilon(1e-3));
         CHECK(size->y == Catch::Approx(pixel_size(dataset).y * metres_per_degree / std::cos(south)).epsilon(1e-3));
     }
@@ -297,6 +297,6 @@ TEST_CASE("min pixel size")
     SECTION("bounds outside the coverage")
     {
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
-        CHECK(!DatasetReader(dataset, Projection::Geodetic, 1).min_pixel_size({ { 0.0, 0.0 }, { 1.0, 1.0 } }));
+        CHECK(!DatasetReader(dataset, Projection::Geographic, 1).min_pixel_size({ { 0.0, 0.0 }, { 1.0, 1.0 } }));
     }
 }

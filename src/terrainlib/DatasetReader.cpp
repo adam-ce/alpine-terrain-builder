@@ -55,7 +55,7 @@ OGRSpatialReference target_srs(DatasetReader::Projection projection)
     switch (projection) {
     case DatasetReader::Projection::WebMercator:
         return srs::webmercator();
-    case DatasetReader::Projection::Geodetic:
+    case DatasetReader::Projection::Geographic:
         return srs::wgs84();
     }
     PANIC("unsupported projection", static_cast<unsigned>(projection));
@@ -177,7 +177,7 @@ Expected<glm::dvec2> DatasetReader::min_pixel_size(const radix::tile::SrsBounds&
     constexpr unsigned samples_per_axis = 5;
     constexpr double step_fraction = 1e-3;
 
-    auto coverage = m_projection == Projection::WebMercator ? m_dataset->mercator_coverage() : m_dataset->geodetic_coverage();
+    auto coverage = m_projection == Projection::WebMercator ? m_dataset->mercator_coverage() : m_dataset->geographic_coverage();
     if (!coverage) {
         return Error::propagate(std::move(coverage), "compute dataset coverage");
     }

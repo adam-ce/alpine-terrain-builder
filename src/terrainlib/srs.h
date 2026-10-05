@@ -218,7 +218,7 @@ constexpr double webmercator_latitude_limit = 85.0511287798066;
 /// WGS84 longitude/latitude bounds in degrees covering the given bounds.
 /// Longitudes lie in [-180, 180]; coverage crossing the antimeridian is split into two bounds.
 /// Reprojected coverage includes a guard band, because edge sampling can miss extrema of curved edges.
-Expected<std::vector<radix::tile::SrsBounds>> geodetic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds);
+Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds);
 /// Web Mercator bounds covering the given bounds within the polar latitude limits.
 /// Returns zero (polar-only coverage), one, or two (crossing the antimeridian) bounds.
 Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds);

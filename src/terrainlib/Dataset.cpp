@@ -174,7 +174,7 @@ Expected<radix::tile::SrsAndHeightBounds> Dataset::bounds3d(bool approx_ok) cons
     return bounds3d;
 }
 
-Expected<std::vector<radix::tile::SrsBounds>> Dataset::geodetic_coverage() const
+Expected<std::vector<radix::tile::SrsBounds>> Dataset::geographic_coverage() const
 {
     auto reference = srs();
     if (!reference) {
@@ -184,7 +184,7 @@ Expected<std::vector<radix::tile::SrsBounds>> Dataset::geodetic_coverage() const
     if (!l_bounds) {
         return Error::propagate(std::move(l_bounds));
     }
-    return srs::geodetic_coverage(*reference, *l_bounds);
+    return srs::geographic_coverage(*reference, *l_bounds);
 }
 
 Expected<std::vector<radix::tile::SrsBounds>> Dataset::mercator_coverage() const

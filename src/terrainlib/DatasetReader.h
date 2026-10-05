@@ -32,7 +32,7 @@ class Dataset;
 
 class DatasetReader {
 public:
-    enum class Projection { WebMercator, Geodetic };
+    enum class Projection { WebMercator, Geographic };
 
     template <typename PixelType>
     struct Samples {

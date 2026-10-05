@@ -286,14 +286,14 @@ std::expected<OGRSpatialReference, std::string> from_user_input(const std::strin
     return srs;
 }
 
-Expected<std::vector<radix::tile::SrsBounds>> geodetic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
+Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
 {
     constexpr int boundary_samples = 257;
-    const auto geodetic = wgs84();
+    const auto geographic = wgs84();
     radix::tile::SrsBounds longitude_latitude = bounds;
-    const bool reprojected = !reference.IsSame(&geodetic);
+    const bool reprojected = !reference.IsSame(&geographic);
     if (reprojected) {
-        auto transform = transformation(reference, geodetic);
+        auto transform = transformation(reference, geographic);
         if (!transform) {
             return Error::propagate(std::move(transform));
         }
@@ -307,7 +307,7 @@ Expected<std::vector<radix::tile::SrsBounds>> geodetic_coverage(const OGRSpatial
                     &longitude_latitude.max.x,
                     &longitude_latitude.max.y,
                     boundary_samples)) {
-            return Error::fail(Error::Code::InvalidInput, "transform bounds to geodetic coordinates");
+            return Error::fail(Error::Code::InvalidInput, "transform bounds to geographic coordinates");
         }
     }
     double west = longitude_latitude.min.x;
@@ -315,7 +315,7 @@ Expected<std::vector<radix::tile::SrsBounds>> geodetic_coverage(const OGRSpatial
     double south = longitude_latitude.min.y;
     double north = longitude_latitude.max.y;
     if (!std::isfinite(west) || !std::isfinite(east) || !std::isfinite(south) || !std::isfinite(north)) {
-        return Error::fail(Error::Code::InvalidInput, "nonfinite geodetic coverage bounds");
+        return Error::fail(Error::Code::InvalidInput, "nonfinite geographic coverage bounds");
     }
     // TransformBounds reports antimeridian-crossing bounds with east < west.
     if (east < west) {
@@ -348,7 +348,7 @@ Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatial
 {
     const auto mercator = webmercator();
     const glm::dvec2 half_extent(webmercator_half_extent);
-    // Avoid the geodetic round trip, it would widen exact Web Mercator bounds by a guard band.
+    // Avoid the geographic round trip, it would widen exact Web Mercator bounds by a guard band.
     if (reference.IsSame(&mercator) && bounds.min.x >= -webmercator_half_extent && bounds.max.x <= webmercator_half_extent) {
         const radix::tile::SrsBounds clipped { glm::max(bounds.min, -half_extent), glm::min(bounds.max, half_extent) };
         if (clipped.min.x >= clipped.max.x || clipped.min.y >= clipped.max.y) {
@@ -356,12 +356,12 @@ Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatial
         }
         return std::vector<radix::tile::SrsBounds> { clipped };
     }
-    auto geodetic = geodetic_coverage(reference, bounds);
-    if (!geodetic) {
-        return geodetic;
+    auto geographic = geographic_coverage(reference, bounds);
+    if (!geographic) {
+        return geographic;
     }
     std::vector<radix::tile::SrsBounds> result;
-    for (const auto& longitude_latitude : *geodetic) {
+    for (const auto& longitude_latitude : *geographic) {
         // Web Mercator diverges towards the poles; PROJ returns large finite values there.
         const double south = std::max(-webmercator_latitude_limit, longitude_latitude.min.y);
         const double north = std::min(webmercator_latitude_limit, longitude_latitude.max.y);

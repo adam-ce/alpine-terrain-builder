@@ -222,5 +222,22 @@ Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpati
 /// Web Mercator bounds covering the given bounds within the polar latitude limits.
 /// Returns zero (polar-only coverage), one, or two (crossing the antimeridian) bounds.
 Expected<std::vector<radix::tile::SrsBounds>> mercator_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds);
+/// ECEF bounds covering the given bounds of a 2D SRS, whose z is ellipsoidal height.
+/// Goes to longitude/latitude via geographic_coverage, then analytically to ECEF:
+/// within a longitude/latitude/height box, every ECEF coordinate is monotonic along each
+/// axis, except at longitudes -90, 0, 90 and the equator. Evaluating all combinations of
+/// the box limits and the turning values inside it gives the exact ECEF bounds of that box.
+/// Compound SRSes are unsupported.
+Expected<radix::geometry::Aabb3d> ecef_coverage(const OGRSpatialReference& reference, const radix::geometry::Aabb3d& bounds);
+/// Bounds in a 2D SRS covering the given ECEF bounds; z is ellipsoidal height.
+/// Goes analytically to longitude/latitude first: longitude from the corners of the xy
+/// rectangle, latitude and height from a few points given by the distance to the polar axis
+/// and z. WGS84 and Web Mercator results are exact; other SRSes use GDAL's densified
+/// boundary transformation with a guard band. Geographic bounds are split at the
+/// antimeridian, so usually there is one bounds, or two when crossing it; Web Mercator
+/// returns none outside its latitude limits.
+/// Fails for compound SRSes, for bounds within 43 km of the earth's centre, where PROJ is
+/// erratic, and if the transformation fails.
+Expected<std::vector<radix::geometry::Aabb3d>> ecef2srs_coverage(const radix::geometry::Aabb3d& bounds, const OGRSpatialReference& reference);
 
 } // namespace srs

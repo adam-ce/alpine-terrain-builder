@@ -346,6 +346,12 @@ namespace {
         return true;
     }
 
+    // Distance in metres by which horizontal datum shifts at the given ellipsoidal heights in metres
+    // may differ from those at height zero, at which bounds are transformed. Empirical: a survey of
+    // the PROJ 9.6 operations of 27 datums to and from WGS84 found at most 0.19 mm per metre of
+    // height (Pulkovo 1942); this allows 1.6 times that.
+    double datum_margin(double min_height, double max_height) { return 0.0003 * std::max(std::abs(min_height), std::abs(max_height)); }
+
     // Longitude ranges in degrees of the points in an ECEF xy rectangle. Longitude is the angle
     // of the point around the polar axis, so its range is spanned by the corners, unless the
     // rectangle contains the polar axis (all longitudes) or crosses the antimeridian (split).
@@ -484,9 +490,13 @@ Expected<radix::geometry::Aabb3d> ecef_coverage(const OGRSpatialReference& refer
     for (const auto& point : *points) {
         result.expand_by(point);
     }
-    // Allow for rounding in the transformation.
-    result.min -= glm::dvec3(1e-3);
-    result.max += glm::dvec3(1e-3);
+    // Allow for rounding in the transformation, and for datum shifts at the heights of the bounds.
+    double margin = 1e-3;
+    if (!wgs84().IsSame(&reference) && !webmercator().IsSame(&reference)) {
+        margin += datum_margin(bounds.min.z, bounds.max.z);
+    }
+    result.min -= glm::dvec3(margin);
+    result.max += glm::dvec3(margin);
     return result;
 }
 
@@ -566,12 +576,19 @@ Expected<std::vector<radix::geometry::Aabb3d>> ecef2srs_coverage(const radix::ge
             covered.insert(covered.end(), mercator->begin(), mercator->end());
         }
     } else {
+        // Allow for datum shifts at the heights of the box: the margin is a distance, so the
+        // geographic bounds of the expanded box include all points within it.
+        const double margin = datum_margin(height_range.x, height_range.y);
+        auto expanded = ecef2srs_coverage({ bounds.min - margin, bounds.max + margin }, wgs84_srs);
+        if (!expanded) {
+            return Error::propagate(std::move(expanded));
+        }
         auto transform = transformation(wgs84_srs, reference);
         if (!transform) {
             return Error::propagate(std::move(transform));
         }
-        for (const auto& box : geographic) {
-            auto transformed = guarded_bounds_transform(transform->get(), box);
+        for (const auto& box : *expanded) {
+            auto transformed = guarded_bounds_transform(transform->get(), radix::tile::SrsBounds(box));
             if (!transformed) {
                 return Error::propagate(std::move(transformed), "transform coverage to " + friendly_name(reference));
             }

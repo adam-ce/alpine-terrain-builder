@@ -233,6 +233,24 @@ TEST_CASE("Coverage of ECEF boxes stays within the bounds of the SRS", "[srs][co
     }
 }
 
+TEST_CASE("Coverage allows for height-dependent datum shifts", "[srs][coverage]")
+{
+    // MGI shifts by about 0.3 m between heights 0 and 20 km at Vienna. Degenerate boxes in
+    // Austria Lambert get a tiny guard band, which would hide less than that.
+    const auto lambert = srs::from_epsg(31287).value();
+    for (const double height : { -20000.0, 20000.0 }) {
+        CAPTURE(height);
+        const auto ecef = ecef_point(16.37, 48.21, height);
+        const auto projected = srs::transform_point(srs::ecef(), lambert, ecef).value();
+        const auto backward = srs::ecef2srs_coverage({ ecef, ecef }, lambert);
+        REQUIRE(backward);
+        CHECK(count_uncovered(*backward, { projected }) == 0);
+        const auto forward = srs::ecef_coverage(lambert, { projected, projected });
+        REQUIRE(forward);
+        CHECK(forward->contains_inclusive(srs::transform_point(lambert, srs::ecef(), projected).value()));
+    }
+}
+
 TEST_CASE("Coverage functions handle ECEF, compound SRSes and invalid bounds", "[srs][coverage]")
 {
     const Bounds box = cube(ecef_point(16.37, 48.21, 250), 500);

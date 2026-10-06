@@ -77,7 +77,11 @@ namespace {
 
 Expected<std::unique_ptr<OGRCoordinateTransformation>> uncached_transformation(const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs)
 {
-    std::unique_ptr<OGRCoordinateTransformation> transform(OGRCreateCoordinateTransformation(&source_srs, &target_srs));
+    auto source = source_srs;
+    auto target = target_srs;
+    source.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    target.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+    std::unique_ptr<OGRCoordinateTransformation> transform(OGRCreateCoordinateTransformation(&source, &target));
     if (!transform) {
         return Error::fail(Error::Code::InvalidInput, "create SRS transformation from " + friendly_name(source_srs) + " to " + friendly_name(target_srs));
     }
@@ -511,6 +515,9 @@ Expected<std::vector<radix::geometry::Aabb3d>> ecef2srs_coverage(const radix::ge
     }
     if (reference.IsCompound()) {
         return Error::fail(Error::Code::Unsupported, "coverage of ECEF bounds in compound SRS " + friendly_name(reference));
+    }
+    if (reference.IsGeographic() && std::abs(reference.GetAngularUnits() - glm::radians(1.0)) > 1e-12) {
+        return Error::fail(Error::Code::Unsupported, "coverage of ECEF bounds in non-degree geographic SRS " + friendly_name(reference));
     }
 
     // Latitude and height depend only on z and the distance p to the polar axis; the box covers

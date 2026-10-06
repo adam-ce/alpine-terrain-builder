@@ -142,22 +142,6 @@ unsupported and fail explicitly. Output modes are float32 scalar and RGB8.
 GDAL's declared NoData and mask handling decide source validity; black imagery
 is not treated as missing.
 
-### Adaptive resolution
-
-The local sampling ratio is the largest directional stretch of the local
-transformation from RF pixel coordinates into source-pixel coordinates,
-estimated as the largest singular value of a finite-difference Jacobian. Its
-limit is 1.25, so limited downsampling is permitted. Pure rotation does not
-increase the ratio. Area alone is insufficient because it can hide excessive
-reduction along one direction.
-
-Choose the coarsest candidate tile whose estimated ratio satisfies the limit;
-otherwise refine it. The ratio is sampled across each candidate, with denser
-sampling where estimates vary or approach the limit. This is an approximation,
-not a proven bound. Failure to meet the limit at the maximum zoom is an error.
-
-A 4096-pixel tile at zoom z has the pixel spacing of a 256-pixel tile at z+4.
-
 ### Filtering
 
 Use GDAL Lanczos resampling on original-resolution source data, avoiding

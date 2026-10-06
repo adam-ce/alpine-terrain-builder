@@ -352,12 +352,12 @@ inline std::expected<ReferencedPolygonMask, LoadError> load_referenced_from_path
         return std::unexpected(LoadErrorKind::FileNotFound);
     }
 
-    auto ds_opt = Dataset::open_vector(path);
-    if (!ds_opt.has_value()) {
-        LOG_ERROR("Failed to load mask datset: {}", path);
+    auto opened = Dataset::open_vector(path);
+    if (!opened) {
+        LOG_ERROR("Failed to load mask dataset: {}", opened.error().to_string());
         return std::unexpected(LoadErrorKind::FileNotFound);
     }
-    Dataset dataset = std::move(ds_opt.value());
+    Dataset dataset = std::move(*opened);
     return load_referenced_from_dataset(dataset);
 }
 

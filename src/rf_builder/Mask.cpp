@@ -147,7 +147,7 @@ Expected<Mask> Mask::open(const std::string& identifier)
 {
     auto dataset = Dataset::open_vector(identifier);
     if (!dataset) {
-        return Error::fail(Error::Code::InvalidInput, "open RF vector mask", identifier);
+        return Error::propagate(std::move(dataset), "open RF vector mask");
     }
     auto loaded = vector_mask::load_referenced_from_dataset(*dataset);
     if (!loaded) {

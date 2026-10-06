@@ -49,26 +49,26 @@ static GDALDataset *open_gdal_dataset(const std::filesystem::path &path, unsigne
     return static_cast<GDALDataset *>(GDALOpenEx(path_str.c_str(), flags, nullptr, nullptr, nullptr));
 }
 
-std::optional<Dataset> Dataset::open_raster(std::filesystem::path path) {
+Expected<Dataset> Dataset::open_raster(std::filesystem::path path)
+{
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
-        return std::optional<Dataset>(Dataset(path, dataset));
+        return Dataset(path, dataset);
     }
-    LOG_ERROR("Couldn't open raster dataset {}.\n", path);
-    return std::nullopt;
+    return Error::fail(Error::Code::Io, "open raster dataset", path);
 }
-std::optional<Dataset> Dataset::open_vector(std::filesystem::path path) {
+Expected<Dataset> Dataset::open_vector(std::filesystem::path path)
+{
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_VECTOR)) {
-        return std::optional<Dataset>(Dataset(path, dataset));
+        return Dataset(path, dataset);
     }
-    LOG_ERROR("Couldn't open vector dataset {}.\n", path);
-    return std::nullopt;
+    return Error::fail(Error::Code::Io, "open vector dataset", path);
 }
-std::optional<std::shared_ptr<Dataset>> Dataset::open_shared_raster(std::filesystem::path path) {
+Expected<std::shared_ptr<Dataset>> Dataset::open_shared_raster(std::filesystem::path path)
+{
     if (GDALDataset *dataset = open_gdal_dataset(path, GDAL_OF_RASTER)) {
         return std::make_shared<Dataset>(Dataset(path, dataset));
     }
-    LOG_ERROR("Couldn't open shared raster dataset {}.\n", path);
-    return std::nullopt;
+    return Error::fail(Error::Code::Io, "open raster dataset", path);
 }
 
 Dataset::Dataset(std::filesystem::path path) {

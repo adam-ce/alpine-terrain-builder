@@ -133,7 +133,7 @@ TEST_CASE("reading")
             const auto [test_name, test_datasets, geographic_bounds, limits] = test;
 
             for (std::string dataset_name : test_datasets) {
-                const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
+                const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 for (const auto& [test_projection, test_srs] : test_projections) {
                     OGRSpatialReference srs;
                     srs.importFromEPSG(test_srs);
@@ -193,7 +193,7 @@ TEST_CASE("reading")
         for (const auto& test : test_data) {
             auto [test_name, datasets, ref_bounds, render_width, render_height, max_abs_diff, max_mse] = test;
 
-            const auto ref_dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())).value();
+            const auto ref_dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(datasets.front())));
             require_projection_available(*ref_dataset, geographic_srs);
             const auto ref_reader = DatasetReader(ref_dataset, DatasetReader::Projection::Geographic, 1);
             const auto ref_heights = ref_reader.read(ref_bounds, render_width, render_height);
@@ -202,7 +202,7 @@ TEST_CASE("reading")
             }
 
             for (std::string dataset_name : datasets) {
-                const auto dataset = Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)).value();
+                const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(dataset_name)));
                 require_projection_available(*dataset, geographic_srs);
                 const auto reader = DatasetReader(dataset, DatasetReader::Projection::Geographic, 1);
                 const auto heights = reader.read(ref_bounds, render_width, render_height);
@@ -235,7 +235,7 @@ TEST_CASE("reading")
 TEST_CASE("min pixel size")
 {
     using Projection = DatasetReader::Projection;
-    const auto open = [](const char* name) { return Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name)).value(); };
+    const auto open = [](const char* name) { return Error::throwing_unwrap(Dataset::open_shared_raster(ALP_TEST_DATA_DIR + std::string(name))); };
     const auto pixel_size = [](const std::shared_ptr<Dataset>& dataset) {
         std::array<double, 6> geo_transform {};
         REQUIRE(dataset->gdalDataset()->GetGeoTransform(geo_transform.data()) == CE_None);

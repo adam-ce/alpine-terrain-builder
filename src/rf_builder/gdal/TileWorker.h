@@ -49,13 +49,10 @@ public:
     {
         const auto halo = Error::asserting_unwrap(nodata::halo(record.tile_side, record.nodata_search_radius, record.nodata_smoothing_kernel_size));
         auto processor = Error::asserting_unwrap(nodata::Processor::create(record.nodata_search_radius, record.nodata_smoothing_kernel_size));
-        auto dataset = Dataset::open_raster(inputs::gdal_identifier(record.dataset));
-        if (!dataset) {
-            Error::raise(Error::Code::InvalidInput, "open RF worker dataset", record.dataset);
-        }
-        auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset->gdalDataset()));
+        auto dataset = Error::throwing_unwrap(Dataset::open_raster(inputs::gdal_identifier(record.dataset)), "open RF worker dataset");
+        auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset.gdalDataset()));
         auto mask = Error::throwing_unwrap(Mask::open(inputs::gdal_identifier(record.mask)));
-        return TileWorker(std::move(*dataset), std::move(transform), std::move(mask), record, halo, std::move(processor));
+        return TileWorker(std::move(dataset), std::move(transform), std::move(mask), record, halo, std::move(processor));
     }
 
     // Returns no tile when the mask excludes every sample; throws Error::Exception on failure.

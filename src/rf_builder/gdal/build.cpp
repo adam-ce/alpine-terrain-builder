@@ -127,12 +127,9 @@ Report build(const Options& options, const std::function<bool()>& stop_requested
     }
     const auto dataset_identifier = Error::throwing_unwrap(inputs::identifier(options.dataset));
     const auto mask_identifier = Error::throwing_unwrap(inputs::identifier(options.mask));
-    auto dataset = Dataset::open_raster(inputs::gdal_identifier(dataset_identifier));
-    if (!dataset) {
-        Error::raise(Error::Code::InvalidInput, "open RF source dataset", options.dataset);
-    }
-    const auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset->gdalDataset()));
-    auto bands = selected_bands(options, *dataset->gdalDataset());
+    auto dataset = Error::throwing_unwrap(Dataset::open_raster(inputs::gdal_identifier(dataset_identifier)), "open RF source dataset");
+    const auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset.gdalDataset()));
+    auto bands = selected_bands(options, *dataset.gdalDataset());
     const auto mask = Error::throwing_unwrap(Mask::open(inputs::gdal_identifier(mask_identifier)));
     const auto entry = Error::throwing_unwrap(run::attribution(output));
     inputs::Record record { dataset_identifier, mask_identifier, std::move(bands), options.mode, options.attribution_index, options.tile_side, entry };

@@ -41,9 +41,9 @@ public:
     Dataset(std::filesystem::path path);
     Dataset(GDALDataset* dataset); // takes over ownership
     ~Dataset();
-    static std::optional<Dataset> open_raster(std::filesystem::path path);
-    static std::optional<Dataset> open_vector(std::filesystem::path path);
-    static std::optional<std::shared_ptr<Dataset>> open_shared_raster(std::filesystem::path path);
+    static Expected<Dataset> open_raster(std::filesystem::path path);
+    static Expected<Dataset> open_vector(std::filesystem::path path);
+    static Expected<std::shared_ptr<Dataset>> open_shared_raster(std::filesystem::path path);
     Dataset clone();
 
     Dataset(Dataset &&) noexcept = default;

@@ -33,6 +33,9 @@
 
 namespace terrainbuilder {
 
+/// Coarser nodes touch the earth's centre, where coverage in the dataset's SRS is unavailable.
+constexpr octree::Id::Level min_target_level = 2;
+
 void build_and_save_patch(
     Dataset &dataset,
     const OGRSpatialReference &target_bounds_srs,

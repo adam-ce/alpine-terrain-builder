@@ -36,6 +36,13 @@ enum class BuildMeshError {
 };
 std::ostream &operator<<(std::ostream &os, BuildMeshError error);
 
+/// Parts of a dataset's native bounds that may contain points within the given ECEF bounds.
+/// Geographic longitudes are shifted by whole turns into the turn centred on the native bounds,
+/// so that a dataset stored, e.g., at longitudes [180, 190] is read for [-180, -170].
+/// Each location is read at most once, so there is a seam at the edges of that turn.
+Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
+    const OGRSpatialReference& dataset_srs, const radix::tile::SrsBounds& native_bounds, const radix::geometry::Aabb3d& ecef_bounds);
+
 /// Builds a mesh from the given height dataset.
 std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     Dataset &dataset,

@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <span>
 #include <vector>
 
 #include <gdal_priv.h>
@@ -117,25 +118,20 @@ using vector_mask::process_geometry;
 using vector_mask::load_referenced_from_dataset;
 
 namespace {
-void convert_to_ecef_and_project_onto_sphere(MultipolygonWithHoles2 &polygons, const SphereProjector &projector, const OGRSpatialReference &srs) {
-    const auto srs_transform = Error::asserting_unwrap(srs::transformation(srs, srs::ecef()));
-    for (auto &polygon : polygons.polygons_with_holes()) {
-        for (auto &cgal_point : polygon.outer_boundary()) {
-            const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-            const glm::dvec3 ecef_point = Error::asserting_unwrap(srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0)));
-            const glm::dvec2 projected_point = projector.project_point(ecef_point);
-            cgal_point = convert::to_cgal_point<Kernel>(projected_point);
-        }
-        for (auto &hole : polygon.holes()) {
-            for (auto &cgal_point : hole) {
-                const glm::dvec2 source_point = convert::to_glm_point(cgal_point);
-                const glm::dvec3 ecef_point = Error::asserting_unwrap(srs::transform_point(srs_transform.get(), glm::dvec3(source_point, 0)));
-                const glm::dvec2 projected_point = projector.project_point(ecef_point);
-                cgal_point = convert::to_cgal_point<Kernel>(projected_point);
+    template <typename Function>
+    void for_each_point(MultipolygonWithHoles2& polygons, Function function)
+    {
+        for (auto& polygon : polygons.polygons_with_holes()) {
+            for (auto& cgal_point : polygon.outer_boundary()) {
+                function(cgal_point);
+            }
+            for (auto& hole : polygon.holes()) {
+                for (auto& cgal_point : hole) {
+                    function(cgal_point);
+                }
             }
         }
     }
-}
 
 /*
 glm::dvec2 calculate_radius_squared_range(const SimpleMesh3d &mesh) {
@@ -179,15 +175,17 @@ inline SpherePolygonMask project_onto_sphere(ReferencedPolygonMask ref_mask, con
     auto srs = std::move(ref_mask.srs);
 
     // Translate to ecef and project onto sphere
-    const auto source_bounds_cgal = mask_2d.bbox();
-    const radix::geometry::Aabb3d source_bounds(
-        glm::dvec3(source_bounds_cgal.xmin(), source_bounds_cgal.ymin(), 0),
-        glm::dvec3(source_bounds_cgal.xmax(), source_bounds_cgal.ymax(), 0));
-    const radix::geometry::Aabb3d ecef_bounds = Error::asserting_unwrap(srs::non_exact_bounds_transform(source_bounds, srs, srs::ecef()));
-    const glm::dvec3 bounds_center = ecef_bounds.centre();
-    const glm::dvec3 tangent_point = scale_to_length(bounds_center, radius);
+    std::vector<glm::dvec3> ecef_points;
+    for_each_point(mask_2d, [&](const Point2& cgal_point) { ecef_points.emplace_back(convert::to_glm_point(cgal_point), 0); });
+    const auto srs_transform = Error::asserting_unwrap(srs::transformation(srs, srs::ecef()));
+    Error::asserting_unwrap(srs::transform_points_inplace(srs_transform.get(), ecef_points));
+    // Unlike the bounds in the source srs, the bounds of the points stay on the mask's side of the
+    // earth for masks split at the antimeridian.
+    const radix::geometry::Aabb3d ecef_bounds = radix::geometry::find_bounds(std::span<const glm::dvec3>(ecef_points));
+    const glm::dvec3 tangent_point = scale_to_length(ecef_bounds.centre(), radius);
     const SphereProjector projector(tangent_point);
-    convert_to_ecef_and_project_onto_sphere(mask_2d, projector, srs);
+    auto ecef_point = ecef_points.begin();
+    for_each_point(mask_2d, [&](Point2& cgal_point) { cgal_point = convert::to_cgal_point<Kernel>(projector.project_point(*ecef_point++)); });
     return SpherePolygonMask(mask_2d, projector);
 }
 

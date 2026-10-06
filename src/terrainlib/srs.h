@@ -177,30 +177,6 @@ inline Expected<std::vector<glm::tvec2<T>>> transform_points_to_2d(OGRCoordinate
     return transformed;
 }
 
-Expected<radix::tile::SrsBounds> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& bounds);
-Expected<radix::tile::SrsBounds> non_exact_bounds_transform(
-    const radix::tile::SrsBounds& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs);
-Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(OGRCoordinateTransformation* transform, const radix::geometry::Aabb3d& bounds);
-Expected<radix::geometry::Aabb3d> non_exact_bounds_transform(
-    const radix::geometry::Aabb3d& bounds, const OGRSpatialReference& sourceSrs, const OGRSpatialReference& targetSrs);
-
-/// Transforms bounds from one srs to another,
-/// in such a way that all points inside the original bounds are guaranteed to also be in the new bounds.
-/// But there can be points inside the new bounds that were not present in the original ones.
-Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(OGRCoordinateTransformation* transform, const radix::tile::SrsBounds& source_bounds);
-Expected<radix::tile::SrsBounds> encompassing_bounds_transfer(
-    const OGRSpatialReference& source_srs, const OGRSpatialReference& target_srs, const radix::tile::SrsBounds& source_bounds);
-
-Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(OGRCoordinateTransformation* transform,
-    const radix::geometry::Aabb3d& source_bounds,
-    const uint32_t intermediate_points_edges = 21,
-    const uint32_t intermediate_points_faces = 5);
-Expected<radix::geometry::Aabb3d> encompassing_bounds_transfer(const OGRSpatialReference& source_srs,
-    const OGRSpatialReference& target_srs,
-    const radix::geometry::Aabb3d& source_bounds,
-    const uint32_t intermediate_points_edges = 21,
-    const uint32_t intermediate_points_faces = 5);
-
 std::expected<OGRSpatialReference, std::string> from_epsg(const uint32_t epsg);
 
 std::expected<OGRSpatialReference, std::string> from_user_input(const std::string& user_input);
@@ -232,11 +208,11 @@ Expected<radix::geometry::Aabb3d> ecef_coverage(const OGRSpatialReference& refer
 /// Bounds in a 2D SRS covering the given ECEF bounds; z is ellipsoidal height.
 /// Goes analytically to longitude/latitude first: longitude from the corners of the xy
 /// rectangle, latitude and height from a few points given by the distance to the polar axis
-/// and z. WGS84 and Web Mercator results are exact; other SRSes use GDAL's densified
+/// and z. WGS84 and Web Mercator results are quasi exact (as tight as it gets using proj); other SRSes use GDAL's densified
 /// boundary transformation with a guard band. Geographic bounds are split at the
 /// antimeridian, so usually there is one bounds, or two when crossing it; Web Mercator
 /// returns none outside its latitude limits.
-/// Fails for compound SRSes, for bounds within 43 km of the earth's centre, where PROJ is
+/// Fails for compound SRSes, for bounds close to the earth's centre, where PROJ is
 /// erratic, and if the transformation fails.
 Expected<std::vector<radix::geometry::Aabb3d>> ecef2srs_coverage(const radix::geometry::Aabb3d& bounds, const OGRSpatialReference& reference);
 

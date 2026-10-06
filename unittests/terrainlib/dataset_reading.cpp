@@ -139,7 +139,8 @@ TEST_CASE("reading")
                     srs.importFromEPSG(test_srs);
                     srs.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
 
-                    const auto srs_bounds = srs::non_exact_bounds_transform(geographic_bounds, geographic_srs, srs).value();
+                    const auto srs_corners = srs::transform_points(geographic_srs, srs, std::array { geographic_bounds.min, geographic_bounds.max }).value();
+                    const radix::tile::SrsBounds srs_bounds { srs_corners[0], srs_corners[1] };
 
                     require_projection_available(*dataset, srs);
                     const DatasetReader reader(dataset, test_projection, 1);
@@ -244,7 +245,8 @@ TEST_CASE("min pixel size")
     const double metres_per_degree = 6378137.0 * std::numbers::pi / 180;
     // Within all Austrian test datasets.
     const radix::tile::SrsBounds geographic_bounds { { 12.0, 47.0 }, { 14.0, 48.0 } };
-    const auto mercator_bounds = srs::non_exact_bounds_transform(geographic_bounds, srs::wgs84(), srs::webmercator()).value();
+    const auto mercator_corners = srs::transform_points(srs::wgs84(), srs::webmercator(), std::array { geographic_bounds.min, geographic_bounds.max }).value();
+    const radix::tile::SrsBounds mercator_bounds { mercator_corners[0], mercator_corners[1] };
 
     SECTION("same srs as the dataset")
     {

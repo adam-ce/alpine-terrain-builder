@@ -101,6 +101,7 @@ add_executable(unittests_terrainlib
     terrainlib/raster_store.cpp
     terrainlib/spatial_lookup.cpp
     terrainlib/srs_coverage.cpp
+    terrainlib/srs_bounds.cpp
     terrainlib/string_utils.cpp
     terrainlib/texture_dilate_colors.cpp
     terrainlib/tiny_vector.cpp
@@ -120,6 +121,8 @@ target_link_libraries(unittests_glm_serialization_aligned PRIVATE glm::glm zpp_b
 if(TARGET sfbuilderlib)
     add_executable(unittests_sfbuilder
         catch2_helpers.h
+        temporary_directory.h
+        sf_builder/coverage.cpp
         sf_builder/mesh.cpp
         sf_builder/texture.cpp
     )

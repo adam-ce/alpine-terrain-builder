@@ -128,6 +128,9 @@ radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data
     } else {
         LOG_ERROR_AND_EXIT("Invalid number of args for --node. Expected 2 or 4.");
     }
+    if (target_node.level() < terrainbuilder::min_target_level) {
+        LOG_ERROR_AND_EXIT("The level of --node must be at least {}.", unsigned(terrainbuilder::min_target_level));
+    }
 
     return octree::Space::earth().get_node_bounds(target_node);
 }
@@ -173,7 +176,7 @@ void log_dataset_overview(const Dataset &dataset) {
     }
     const auto bounds = *boundsResult;
 
-    const auto boundsEcefResult = srs::encompassing_bounds_transfer(datasetSrs, srs::ecef(), bounds);
+    const auto boundsEcefResult = srs::ecef_coverage(datasetSrs, bounds);
     if (!boundsEcefResult) {
         LOG_ERROR("Failed to transform dataset bounds to ECEF: {}", boundsEcefResult.error().to_string());
         return;
@@ -286,7 +289,8 @@ int run(std::span<char *> args) {
 
     octree::Id::Level target_level;
     batch->add_option("--target-level", target_level, "Level of detail for batch generation")
-        ->required();
+        ->required()
+        ->check(CLI::Range(unsigned(terrainbuilder::min_target_level), unsigned(octree::Id::max_level())));
     std::filesystem::path output_base_path;
     batch->add_option("--output", output_base_path, "Output path were the meshes are written to.")
         ->required();

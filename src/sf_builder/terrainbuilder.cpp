@@ -34,6 +34,7 @@
 
 #include <fmt/core.h>
 #include <glm/glm.hpp>
+#include <libassert/assert.hpp>
 #include <ogr_spatialref.h>
 #include <opencv2/core/mat.hpp>
 #include <radix/geometry.h>
@@ -209,6 +210,11 @@ Expected<void> build_all_patches(
     const std::string &output_format,
     const bool overwrite_existing
 ) {
+    if (target_level < min_target_level) {
+        return Error::fail(
+            Error::Code::InvalidInput, fmt::format("target level {} is below the minimum of {}", unsigned(target_level), unsigned(min_target_level)));
+    }
+
     if (!std::filesystem::exists(output_base_path)) {
         LOG_TRACE("Output base path {} does not exist, creating it", output_base_path);
         std::filesystem::create_directories(output_base_path);
@@ -234,14 +240,19 @@ Expected<void> build_all_patches(
         return Error::propagate(std::move(dataset_srs_result), "read dataset SRS");
     }
     const auto dataset_srs = *dataset_srs_result;
-    auto dataset_bounds_result = dataset.bounds3d(true);
+    auto dataset_bounds_result = dataset.bounds3d(false);
     if (!dataset_bounds_result) {
         return Error::propagate(std::move(dataset_bounds_result), "read dataset bounds");
     }
     const auto dataset_bounds = *dataset_bounds_result;
+    auto dataset_coverage_result = dataset.geographic_coverage();
+    if (!dataset_coverage_result) {
+        return Error::propagate(std::move(dataset_coverage_result), "read dataset coverage");
+    }
+    const auto dataset_coverage = *dataset_coverage_result;
 
     const auto ecef_srs = srs::ecef();
-    auto ecef_bounds_result = srs::encompassing_bounds_transfer(dataset_srs, ecef_srs, dataset_bounds);
+    auto ecef_bounds_result = srs::ecef_coverage(dataset_srs, dataset_bounds);
     if (!ecef_bounds_result) {
         return Error::propagate(std::move(ecef_bounds_result), "transform dataset bounds to ECEF");
     }
@@ -251,20 +262,39 @@ Expected<void> build_all_patches(
         space.find_smallest_node_encompassing_bounds(ecef_bounds),
         "Dataset is outside the octree root node.");
 
+    // Nodes within this radius contain no terrain: it is 100 km below the earth's mean radius.
+    constexpr double terrain_free_radius = 6371008 - 100000;
+    const auto within_terrain_free_radius = [](const radix::geometry::Aabb3d& bounds) {
+        const glm::dvec3 farthest_corner = glm::max(glm::abs(bounds.min), glm::abs(bounds.max));
+        return glm::length(farthest_corner) < terrain_free_radius;
+    };
+    // Below min_target_level, nodes touch the centre and are traversed without coverage checks.
+    // From there on, those nodes are within the terrain free radius, which keeps the remaining
+    // ones far enough from the centre for ecef2srs_coverage.
+    ASSERT(glm::length(space.get_node_size_at_level(min_target_level)) < terrain_free_radius);
+    const auto intersects_dataset = [&](const std::vector<radix::geometry::Aabb3d>& node_coverage) {
+        for (const radix::geometry::Aabb3d& node_part : node_coverage) {
+            if (node_part.max.z < dataset_bounds.min.z || dataset_bounds.max.z < node_part.min.z) {
+                continue;
+            }
+            for (const radix::tile::SrsBounds& dataset_part : dataset_coverage) {
+                if (radix::geometry::intersect(radix::tile::SrsBounds(node_part), dataset_part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
     tbb::concurrent_vector<octree::Id> concurrent_targets;
 
     tbb::task_group tg;
     std::function<void(octree::Id)> process_node;
 
-    // Validate once, so that the per-thread transformations below cannot fail.
-    if (auto transform = srs::transformation(ecef_srs, dataset_srs); !transform) {
-        return Error::propagate(std::move(transform), "create ECEF to dataset transformation");
-    }
-    tbb::enumerable_thread_specific<std::shared_ptr<OGRCoordinateTransformation>> transform_ecef_dataset([&]() {
-        auto local_ecef_srs = ecef_srs;
-        auto local_dataset_srs = dataset_srs;
-        return Error::asserting_unwrap(srs::transformation(local_ecef_srs, local_dataset_srs));
-    });
+    // SRS objects are not shared between threads.
+    tbb::enumerable_thread_specific<OGRSpatialReference> local_wgs84_srs([]() { return srs::wgs84(); });
+    tbb::enumerable_thread_specific<OGRSpatialReference> local_dataset_srs([&]() { return dataset_srs; });
+    const auto native_bounds = radix::tile::SrsBounds(dataset_bounds);
 
     process_node = [&](octree::Id node) {
         // Check if node intersects with ecef bounds of dataset
@@ -272,11 +302,19 @@ Expected<void> build_all_patches(
         if (!radix::geometry::intersect(node_bounds, ecef_bounds)) {
             return;
         }
-
-        // Check if node bounds in dataset srs intersect with dataset
-        const auto node_bounds_dataset_srs = Error::asserting_unwrap(srs::encompassing_bounds_transfer(&*transform_ecef_dataset.local(), node_bounds, 7, 3));
-        if (!radix::geometry::intersect(node_bounds_dataset_srs, dataset_bounds)) {
+        if (within_terrain_free_radius(node_bounds)) {
             return;
+        }
+
+        // Check if node coverage intersects with dataset in geographic coordinates
+        if (node.level() >= min_target_level) {
+            const auto node_coverage = srs::ecef2srs_coverage(node_bounds, local_wgs84_srs.local());
+            if (!node_coverage) {
+                // Keep the node, dropping it could lose terrain.
+                LOG_WARN("Failed to compute coverage of node {}: {}", node, node_coverage.error().to_string());
+            } else if (!intersects_dataset(*node_coverage)) {
+                return;
+            }
         }
 
         if (node.level() < target_level) {
@@ -286,6 +324,11 @@ Expected<void> build_all_patches(
                 }
             }
         } else if (node.level() == target_level) {
+            // Geographic coverage includes nodes outside of the native bounds of projected datasets.
+            const auto windows = native_read_windows(local_dataset_srs.local(), native_bounds, node_bounds);
+            if (windows && windows->empty()) {
+                return;
+            }
             concurrent_targets.push_back(node);
         }
     };

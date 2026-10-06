@@ -484,14 +484,10 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
         return std::nullopt;
     }
 
-    // Start by transforming the input bounds into the srs the tiles are in.
-    const auto encompassing_bounds_result = srs::encompassing_bounds_transfer(target_srs, grid.getSRS(), target_bounds);
-    if (!encompassing_bounds_result) {
-        LOG_ERROR("Failed to transform texture target bounds: {}", encompassing_bounds_result.error().to_string());
-        return std::nullopt;
-    }
-    const radix::tile::SrsBounds encompassing_bounds = *encompassing_bounds_result;
-    // Then we find the smallest tile (id) that encompasses these bounds.
+    // The texture is linear in the srs of the tiles, the uvs are linear in the target srs.
+    ASSERT(target_srs.IsSame(&grid.getSRS()));
+    const radix::tile::SrsBounds& encompassing_bounds = target_bounds;
+    // Find the smallest tile (id) that encompasses these bounds.
     radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value();
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 

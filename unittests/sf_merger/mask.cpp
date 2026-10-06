@@ -21,6 +21,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <cmath>
 #include <filesystem>
 
 #include <CGAL/Polygon_mesh_processing/orientation.h>
@@ -178,6 +179,28 @@ TEST_CASE("mask triangulation and extrusion preserve polygon components") {
             check_closed_volume(component);
         }
     }
+}
+
+TEST_CASE("masks split at the antimeridian are projected around their centre")
+{
+    MultipolygonWithHoles2 polygons;
+    polygons.add_polygon(make_square(glm::dvec2(170, -20), glm::dvec2(180, -15)));
+    polygons.add_polygon(make_square(glm::dvec2(-180, -20), glm::dvec2(-170, -15)));
+    const SpherePolygonMask mask = mask::project_onto_sphere(ReferencedPolygonMask { std::move(polygons), srs::wgs84() }, earth::radius());
+    REQUIRE(mask.polygons.number_of_polygons_with_holes() == 2);
+    radix::geometry::Aabb2d projected_bounds;
+    for (const auto& polygon : mask.polygons.polygons_with_holes()) {
+        for (const auto& point : polygon.outer_boundary()) {
+            const glm::dvec2 projected = convert::to_glm_point(point);
+            REQUIRE(std::isfinite(projected.x));
+            REQUIRE(std::isfinite(projected.y));
+            projected_bounds.expand_by(projected);
+        }
+    }
+    // In radians; the mask spans 20 by 5 degrees. A tangent point far from the mask would spread
+    // it over the projection, or, at a pole, make it degenerate.
+    CHECK(projected_bounds.width() < 0.5);
+    CHECK(projected_bounds.height() < 0.5);
 }
 
 TEST_CASE("multi-component masks use union semantics") {

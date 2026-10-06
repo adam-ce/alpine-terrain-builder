@@ -18,6 +18,7 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <cmath>
 #include <numeric>
 #include <ranges>
 #include <utility>
@@ -180,26 +181,64 @@ Expected<std::vector<glm::dvec2>> generate_uv_space(const std::vector<glm::dvec3
     return uvs;
 }
 
-radix::geometry::Aabb3d extend_bounds_to_3d(radix::geometry::Aabb2d bounds2d) {
-    const double infinity = std::numeric_limits<double>::infinity();
-    const glm::dvec3 min(bounds2d.min, -infinity);
-    const glm::dvec3 max(bounds2d.max, infinity);
-    return radix::geometry::Aabb3d(min, max);
-}
-
 BuildMeshError log_transformation_error(const Error& error)
 {
     LOG_ERROR("Mesh transformation failed: {}", error.to_string());
     return BuildMeshError::TransformationFailed;
 }
+
+// Shifts longitude bounds in degrees by whole turns into the turn starting at west_edge,
+// splitting them at its end.
+std::vector<radix::tile::SrsBounds> wrap_longitudes(const radix::tile::SrsBounds& bounds, const double west_edge)
+{
+    constexpr double turn = 360;
+    const double west = bounds.min.x - turn * std::floor((bounds.min.x - west_edge) / turn);
+    const double east = west + bounds.width();
+    if (east <= west_edge + turn) {
+        return { { { west, bounds.min.y }, { east, bounds.max.y } } };
+    }
+    return { { { west, bounds.min.y }, { west_edge + turn, bounds.max.y } }, { { west_edge, bounds.min.y }, { east - turn, bounds.max.y } } };
 }
 
-std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_tile(
-    Dataset &dataset,
-    const OGRSpatialReference &mesh_srs,
-    const OGRSpatialReference &tile_srs, const radix::tile::SrsBounds &tile_bounds,
-    const OGRSpatialReference &texture_srs, radix::tile::SrsBounds &texture_bounds) {
-    return build_reference_mesh_patch(dataset, mesh_srs, tile_srs, extend_bounds_to_3d(tile_bounds), texture_srs, texture_bounds);
+// Appends the meshes without merging vertices.
+SimpleMesh concatenate(std::vector<SimpleMesh>&& meshes)
+{
+    if (meshes.size() == 1) {
+        return std::move(meshes.front());
+    }
+    SimpleMesh result;
+    for (const SimpleMesh& mesh : meshes) {
+        const glm::uvec3 offset(static_cast<glm::uint>(result.positions.size()));
+        for (const glm::uvec3& triangle : mesh.triangles) {
+            result.triangles.push_back(triangle + offset);
+        }
+        result.positions.insert(result.positions.end(), mesh.positions.begin(), mesh.positions.end());
+    }
+    return result;
+}
+} // namespace
+
+Expected<std::vector<radix::tile::SrsBounds>> native_read_windows(
+    const OGRSpatialReference& dataset_srs, const radix::tile::SrsBounds& native_bounds, const radix::geometry::Aabb3d& ecef_bounds)
+{
+    auto coverage = srs::ecef2srs_coverage(ecef_bounds, dataset_srs);
+    if (!coverage) {
+        return Error::propagate(std::move(coverage));
+    }
+    // Geographic coverage is in degrees, within [-180, 180].
+    const double west_edge = native_bounds.centre().x - 180;
+    std::vector<radix::tile::SrsBounds> windows;
+    for (const radix::geometry::Aabb3d& bounds : *coverage) {
+        const radix::tile::SrsBounds bounds_2d(bounds);
+        const auto parts = dataset_srs.IsGeographic() ? wrap_longitudes(bounds_2d, west_edge) : std::vector { bounds_2d };
+        for (const auto& part : parts) {
+            const radix::tile::SrsBounds window(glm::max(part.min, native_bounds.min), glm::min(part.max, native_bounds.max));
+            if (window.min.x < window.max.x && window.min.y < window.max.y) {
+                windows.push_back(window);
+            }
+        }
+    }
+    return windows;
 }
 
 std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
@@ -213,60 +252,93 @@ std::expected<SimpleMesh, BuildMeshError> build_reference_mesh_patch(
     }
     const OGRSpatialReference& source_srs = *source_srs_result;
 
-    // Translate tile bounds from tile srs into the source srs, so we know what data to read.
-    Expected<radix::tile::SrsBounds> target_bounds_result;
-    if (std::isinf(clip_bounds.min.z) && std::isinf(clip_bounds.max.z)) {
-        // Make target bounds 2d if the unbounded by height.
-        target_bounds_result = srs::encompassing_bounds_transfer(clip_srs, source_srs, radix::tile::SrsBounds(clip_bounds));
-    } else {
-        target_bounds_result = srs::encompassing_bounds_transfer(clip_srs, source_srs, clip_bounds);
+    // Coverage in the source srs is computed from ECEF bounds.
+    const bool unbounded_height = !std::isfinite(clip_bounds.min.z) || !std::isfinite(clip_bounds.max.z);
+    radix::geometry::Aabb3d ecef_clip_bounds = clip_bounds;
+    if (const auto ecef_srs = srs::ecef(); !clip_srs.IsSame(&ecef_srs)) {
+        // The source srs is 2D, so the windows for bounds unbounded in height don't depend on the
+        // height they are computed at.
+        radix::geometry::Aabb3d finite_clip_bounds = clip_bounds;
+        if (!std::isfinite(finite_clip_bounds.min.z)) {
+            finite_clip_bounds.min.z = std::isfinite(clip_bounds.max.z) ? clip_bounds.max.z : 0;
+        }
+        if (!std::isfinite(finite_clip_bounds.max.z)) {
+            finite_clip_bounds.max.z = finite_clip_bounds.min.z;
+        }
+        const auto ecef_bounds = srs::ecef_coverage(clip_srs, finite_clip_bounds);
+        if (!ecef_bounds) {
+            return std::unexpected(log_transformation_error(ecef_bounds.error()));
+        }
+        ecef_clip_bounds = *ecef_bounds;
     }
-    if (!target_bounds_result) {
-        return std::unexpected(log_transformation_error(target_bounds_result.error()));
-    }
-    const radix::tile::SrsBounds target_bounds_in_source_srs = *target_bounds_result;
 
-    // Read height data according to bounds directly from dataset (no interpolation).
+    // Find what data to read in the source srs.
+    const auto native_bounds = dataset.bounds();
+    if (!native_bounds) {
+        return std::unexpected(log_transformation_error(native_bounds.error()));
+    }
+    const auto windows = native_read_windows(source_srs, *native_bounds, ecef_clip_bounds);
+    if (!windows) {
+        return std::unexpected(log_transformation_error(windows.error()));
+    }
+
+    // Read height data in each window directly from dataset (no interpolation).
     RawDatasetReader reader(dataset);
-    radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(target_bounds_in_source_srs);
-    add_border_to_aabb(pixel_bounds, Border(1));
-    LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
-    auto read_result = reader.read_data_in_pixel_bounds_clamped(pixel_bounds);
-    if (!read_result.has_value() || read_result->buffer().empty()) {
+    const float no_data_value = reader.get_no_data_value();
+    bool any_read = false;
+    std::vector<SimpleMesh> meshes_in_source_srs;
+    for (const radix::tile::SrsBounds& window : *windows) {
+        radix::geometry::Aabb2i pixel_bounds = reader.transform_srs_bounds_to_pixel_bounds(window);
+        add_border_to_aabb(pixel_bounds, Border(1));
+        LOG_TRACE("Reading pixels [({}, {})-({}, {})] from dataset", pixel_bounds.min.x, pixel_bounds.min.y, pixel_bounds.max.x, pixel_bounds.max.y);
+        auto read_result = reader.read_data_in_pixel_bounds_clamped(pixel_bounds);
+        if (!read_result.has_value()) {
+            return std::unexpected(BuildMeshError::OutOfBounds);
+        }
+        if (read_result->buffer().empty()) {
+            continue;
+        }
+        any_read = true;
+        const radix::Raster<float> height_map = std::move(*read_result);
+
+        LOG_TRACE("Finding valid pixels");
+        const radix::RasterMask valid_mask = radix::raster::transform(height_map, [=](const float height) { return height != no_data_value; });
+
+        LOG_TRACE("Transforming pixels to vertices");
+        auto source_points_result = radix::raster::transform(height_map, valid_mask, [&](const float height, const glm::uvec2& coords) {
+            return convert_pixel_to_vertex(height, coords, reader, pixel_bounds);
+        });
+        DEBUG_ASSERT(source_points_result.has_value());
+        if (!source_points_result.has_value())
+            return std::unexpected(BuildMeshError::EmptyRegion);
+        const auto source_points = std::move(*source_points_result);
+
+        LOG_TRACE("Generating triangles");
+        SimpleMesh mesh = meshify(source_points, valid_mask);
+        // Check if we even have any valid vertices. Can happen if all of the region is padding.
+        if (mesh.vertex_count() != 0 && mesh.face_count() != 0) {
+            meshes_in_source_srs.push_back(std::move(mesh));
+        }
+    }
+    if (!any_read) {
         return std::unexpected(BuildMeshError::OutOfBounds);
     }
-    const radix::Raster<float> height_map = std::move(*read_result);
-
-    LOG_TRACE("Finding valid pixels");
-    const float no_data_value = reader.get_no_data_value();
-    const radix::RasterMask valid_mask = radix::raster::transform(height_map, [=](const float height) {
-        return height != no_data_value;
-    });
-
-    LOG_TRACE("Transforming pixels to vertices");
-    auto source_points_result = radix::raster::transform(height_map, valid_mask, [&](const float height, const glm::uvec2& coords) {
-        return convert_pixel_to_vertex(height, coords, reader, pixel_bounds);
-    });
-    DEBUG_ASSERT(source_points_result.has_value());
-    if (!source_points_result.has_value())
-        return std::unexpected(BuildMeshError::EmptyRegion);
-    const auto source_points = std::move(*source_points_result);
-
-    LOG_TRACE("Generating triangles");
-    SimpleMesh mesh_in_source_srs = meshify(source_points, valid_mask);
-    // Check if we even have any valid vertices. Can happen if all of the region is padding.
-    if (mesh_in_source_srs.vertex_count() == 0 || mesh_in_source_srs.face_count() == 0) {
+    if (meshes_in_source_srs.empty()) {
         return std::unexpected(BuildMeshError::EmptyRegion);
     }
+    SimpleMesh mesh_in_source_srs = concatenate(std::move(meshes_in_source_srs));
 
-    // Fast check if all vertices will be clipped
-    const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
-    const auto approx_clip_bounds = srs::encompassing_bounds_transfer(source_srs, clip_srs, actual_source_bounds);
-    if (!approx_clip_bounds) {
-        return std::unexpected(log_transformation_error(approx_clip_bounds.error()));
-    }
-    if (!radix::geometry::intersect(*approx_clip_bounds, clip_bounds)) {
-        return std::unexpected(BuildMeshError::EmptyRegion);
+    // Fast check if all vertices will be clipped. Horizontally, the windows already are close to
+    // the clip bounds, so this only applies to their heights.
+    if (!unbounded_height) {
+        const radix::geometry::Aabb3d actual_source_bounds = calculate_bounds(mesh_in_source_srs);
+        const auto actual_ecef_bounds = srs::ecef_coverage(source_srs, actual_source_bounds);
+        if (!actual_ecef_bounds) {
+            return std::unexpected(log_transformation_error(actual_ecef_bounds.error()));
+        }
+        if (!radix::geometry::intersect(*actual_ecef_bounds, ecef_clip_bounds)) {
+            return std::unexpected(BuildMeshError::EmptyRegion);
+        }
     }
 
     LOG_TRACE("Clipping mesh based on target bounds");

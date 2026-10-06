@@ -20,7 +20,6 @@
 #include "../temporary_directory.h"
 #include "Dataset.h"
 #include "gdal/cli.h"
-#include "gdal/planning.h"
 #include "init.h"
 #include <catch2/benchmark/catch_benchmark.hpp>
 #include <catch2/catch_approx.hpp>
@@ -256,10 +255,6 @@ TEST_CASE("RF periodic seam reads narrow source strips and postprocessing does n
     auto transform = RasterTransform::create(dataset);
     REQUIRE(transform);
     const double step = 2 * half / 4096;
-    const RasterTransform::Bounds probe { { -step / 8, -step }, { step, step } };
-    auto ratio = rf_builder::gdal::planning::estimate(probe, step, [&](glm::dvec2 point) { return transform->source_pixel(point, false); });
-    REQUIRE(ratio);
-    CHECK(*ratio == Catch::Approx(1));
     const RasterTransform::Bounds bounds { { west - 16 * step, -16 * step }, { west + 16 * step, 16 * step } };
     auto read = DatasetReader::read_scalar(dataset, *transform, bounds, 32, 1);
     REQUIRE(read);

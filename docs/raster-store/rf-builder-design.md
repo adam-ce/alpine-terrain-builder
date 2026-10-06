@@ -58,10 +58,10 @@ containing no output pixel centres can disappear.
 The caller must split mask polygons at the antimeridian. Continuous,
 out-of-range longitudes are not accepted as a mask convention.
 
-Source footprints may cross the antimeridian; output RF tile IDs remain
-canonical, and filters see neighbours across the longitude seam. Coverage is
-clipped to the square Web Mercator world (about ±85.05112878°). Latitude never
-wraps.
+Source footprints may cross the antimeridian. EPSG:3857 inputs must stay within
+the canonical horizontal world extent (approximately ±20,037,508 metres).
+Output RF tile IDs remain canonical. Coverage is clipped to the square Web
+Mercator world (about ±85.05112878°). Latitude never wraps.
 
 ### Stored value mapping
 
@@ -136,11 +136,10 @@ The builder does not assemble mosaics from file lists or select their overlap
 priorities; that is the job of the prepared dataset. A VRT can expose adjacent
 files as one source and let filters read across their boundaries.
 
-Inputs must have an explicit CRS and an affine geotransform, including rotated
-or skewed grids. GCP, RPC, and geolocation-array georeferencing are
-unsupported and fail explicitly. Output modes are float32 scalar and RGB8.
-GDAL's declared NoData and mask handling decide source validity; black imagery
-is not treated as missing.
+Inputs must have an explicit CRS and an affine geotransform. GCP, RPC, and
+geolocation-array georeferencing are unsupported and fail explicitly. Output
+modes are float32 scalar and RGB8. GDAL's declared NoData and mask handling
+decide source validity; black imagery is not treated as missing.
 
 ### Filtering
 

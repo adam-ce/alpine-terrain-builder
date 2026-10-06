@@ -23,6 +23,7 @@
 #include <CGAL/Arr_trapezoid_ric_point_location.h>
 
 #include "Dataset.h"
+#include "srs.h"
 #include "vector_mask.h"
 
 namespace rf_builder {
@@ -175,7 +176,7 @@ Expected<Mask> Mask::open(const std::string& identifier)
                 return Error::fail(Error::Code::InvalidInput, "split RF mask polygons at the antimeridian; out-of-range longitudes are unsupported", identifier);
             }
         }
-        auto bounds = RasterTransform::coverage(reference, { { box.xmin(), box.ymin() }, { box.xmax(), box.ymax() } });
+        auto bounds = srs::mercator_coverage(reference, { { box.xmin(), box.ymin() }, { box.xmax(), box.ymax() } });
         if (!bounds) {
             return Error::propagate(std::move(bounds), "compute RF mask coverage");
         }

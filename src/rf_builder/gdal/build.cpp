@@ -69,13 +69,17 @@ std::vector<unsigned> selected_bands(const Options& options, GDALDataset& datase
 }
 
 template <typename PixelType>
-Report produce(
-    const Options& options, const RasterTransform& transform, const Mask& mask, const inputs::Record& record, const std::function<bool()>& stop_requested)
+Report produce(const Options& options,
+    const std::vector<planning::Bounds>& source_coverage,
+    const DatasetReader& reader,
+    const Mask& mask,
+    const inputs::Record& record,
+    const std::function<bool()>& stop_requested)
 {
     std::vector<TileWorker<PixelType>> workers;
-    const auto source_pixel = [&](glm::dvec2 point) { return transform.source_pixel(point, false); };
+    const auto pixel_size = [&](const planning::Bounds& bounds) { return reader.min_pixel_size(bounds); };
     const auto halo = Error::asserting_unwrap(nodata::halo(options.tile_side, record.nodata_search_radius, record.nodata_smoothing_kernel_size));
-    planning::Cursor cursor(options.tile_side, transform.bounds(), mask.bounds(), source_pixel, halo);
+    planning::Cursor cursor(options.tile_side, source_coverage, mask.bounds(), pixel_size, halo);
     run::Source<PixelType> source;
     source.attribution = record.attribution;
     source.validate_cache = [&](const auto& path) { return inputs::validate_cache(path, record); };
@@ -83,7 +87,7 @@ Report produce(
     source.total = [&](const run::Poll& poll) {
         LOG_INFO("RF planning: counting candidate tiles");
         std::uint64_t total = 0;
-        planning::traverse(options.tile_side, transform.bounds(), mask.bounds(), source_pixel, [&](const auto&) { ++total; }, poll, halo);
+        planning::traverse(options.tile_side, source_coverage, mask.bounds(), pixel_size, [&](const auto&) { ++total; }, poll, halo);
         return double(total);
     };
     source.next = [&](const run::Poll& poll) { return cursor.next(poll); };
@@ -127,9 +131,10 @@ Report build(const Options& options, const std::function<bool()>& stop_requested
     }
     const auto dataset_identifier = Error::throwing_unwrap(inputs::identifier(options.dataset));
     const auto mask_identifier = Error::throwing_unwrap(inputs::identifier(options.mask));
-    auto dataset = Error::throwing_unwrap(Dataset::open_raster(inputs::gdal_identifier(dataset_identifier)), "open RF source dataset");
-    const auto transform = Error::throwing_unwrap(RasterTransform::create(*dataset.gdalDataset()));
-    auto bands = selected_bands(options, *dataset.gdalDataset());
+    const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(inputs::gdal_identifier(dataset_identifier)), "open RF source dataset");
+    const auto source_coverage = Error::throwing_unwrap(dataset->mercator_coverage(), "compute RF source coverage");
+    auto bands = selected_bands(options, *dataset->gdalDataset());
+    const DatasetReader reader(dataset, DatasetReader::Projection::WebMercator, bands.front());
     const auto mask = Error::throwing_unwrap(Mask::open(inputs::gdal_identifier(mask_identifier)));
     const auto entry = Error::throwing_unwrap(run::attribution(output));
     inputs::Record record { dataset_identifier, mask_identifier, std::move(bands), options.mode, options.attribution_index, options.tile_side, entry };
@@ -139,9 +144,9 @@ Report build(const Options& options, const std::function<bool()>& stop_requested
     record.value_mapping = options.value_mapping.value_or(
         options.mode == Mode::Colour ? raster_store::pixel::default_mapping<glm::u8vec3> : raster_store::pixel::default_mapping<float>);
     if (options.mode == Mode::Scalar) {
-        return produce<float>(options, transform, mask, record, stop_requested);
+        return produce<float>(options, source_coverage, reader, mask, record, stop_requested);
     }
-    return produce<glm::u8vec3>(options, transform, mask, record, stop_requested);
+    return produce<glm::u8vec3>(options, source_coverage, reader, mask, record, stop_requested);
 }
 
 } // namespace rf_builder::gdal

@@ -113,9 +113,9 @@ _Avoid_: NoData pixel, invalid pixel (for a stored zero-attribution pixel)
   absent. The supplying source ancestor need not be retained as an RF tile.
 
 **Local sampling ratio**
-: The largest directional stretch from an output pixel spacing into source-pixel
-  coordinates at a location. It expresses the local reduction in source detail
-  without treating a pure rotation as a change in resolution.
+: The output pixel spacing divided by the smallest source pixel size at a
+  location, both measured in output coordinates. Values above one reduce source
+  detail.
 
 **Channel**
 : One kind of raster data, such as orthophoto RGB, a digital surface model

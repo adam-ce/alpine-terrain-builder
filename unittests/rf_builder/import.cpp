@@ -27,6 +27,7 @@
 #include "init.h"
 #include "io/bytes.h"
 #include "raster_store/storage.h"
+#include "srs.h"
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
@@ -263,11 +264,9 @@ TEST_CASE("RF affine transforms support rotation and skew and reject unsupported
     CHECK_FALSE(RasterTransform::create(*source.gdalDataset()));
 }
 
-TEST_CASE("RF planning measures directional stretch and chooses disjoint mixed zooms", "[rf-builder]")
+TEST_CASE("RF planning chooses disjoint mixed zooms", "[rf-builder]")
 {
     using namespace rf_builder::gdal::planning;
-    CHECK(directional_stretch({ 0, 1 }, { -1, 0 }) == Catch::Approx(1));
-    CHECK(directional_stretch({ 2, 0 }, { 0, 0.5 }) == Catch::Approx(2));
     const auto world = RasterTransform::tile_bounds({ 0, { 0, 0 } });
     const double half = RasterTransform::world_half_extent;
     const unsigned halo = GENERATE(0u, 7u);
@@ -276,7 +275,7 @@ TEST_CASE("RF planning measures directional stretch and chooses disjoint mixed z
         16,
         { world },
         { world },
-        [half](glm::dvec2 point) -> Expected<glm::dvec2> { return glm::dvec2(point.x / half * (point.x < 0 ? 4 : 256), point.y / half * 4); },
+        [half](const Bounds& bounds) -> Expected<glm::dvec2> { return glm::dvec2(half / (bounds.max.x > 0 ? 256 : 4), half / 4); },
         [&](const Key& key) { selected.push_back(key); },
         {},
         halo);
@@ -300,7 +299,7 @@ TEST_CASE("RF planning retains narrow masks until the selected resolution", "[rf
     const Bounds narrow { bounds.min + glm::dvec2(1, 1), bounds.min + glm::dvec2(2, 2) };
     std::vector<Key> selected;
     rf_builder::gdal::planning::traverse(
-        16, { bounds }, { narrow }, [](glm::dvec2 point) -> Expected<glm::dvec2> { return point; }, [&](const Key& key) { selected.push_back(key); });
+        16, { bounds }, { narrow }, [](const Bounds&) -> Expected<glm::dvec2> { return glm::dvec2(1); }, [&](const Key& key) { selected.push_back(key); });
     CHECK_FALSE(selected.empty());
     CHECK(selected.front().zoom_level > 3);
 }
@@ -649,7 +648,7 @@ TEST_CASE("rf-builder command reports a published snapshot and rejects invalid b
     CHECK_FALSE(std::filesystem::exists(fixture.directory.path() / "bad.part"));
 }
 
-TEST_CASE("RF imports rotated and skewed grids through the command pipeline", "[rf-builder]")
+TEST_CASE("RF rejects rotated and skewed grids", "[rf-builder]")
 {
     Fixture fixture;
     const double spacing = fixture.bounds.width() / 32;
@@ -657,8 +656,7 @@ TEST_CASE("RF imports rotated and skewed grids through the command pipeline", "[
         auto source
             = source_raster(fixture.options.dataset, 32, 1, { fixture.bounds.min.x, spacing, spacing * 0.2, fixture.bounds.max.y, spacing * 0.3, -spacing });
     }
-    const auto result = rf_builder::gdal::build(fixture.options);
-    CHECK(result.tile_count > 0);
+    CHECK(thrown([&] { rf_builder::gdal::build(fixture.options); }) == Error::Code::Unsupported);
 }
 
 TEST_CASE("RF planning rejects a ratio that cannot fit the maximum supported zoom", "[rf-builder]")
@@ -669,7 +667,7 @@ TEST_CASE("RF planning rejects a ratio that cannot fit the maximum supported zoo
             16,
             { bounds },
             { bounds },
-            [](glm::dvec2 position) -> Expected<glm::dvec2> { return position * 1e12; },
+            [](const Bounds&) -> Expected<glm::dvec2> { return glm::dvec2(1e-12); },
             [](const Key&) { FAIL("No tile may be accepted"); });
     }) == Error::Code::Unsupported);
 }
@@ -680,7 +678,7 @@ TEST_CASE("RF curved projected coverage retains edge extrema between densificati
     REQUIRE(polar.importFromEPSG(3413) == OGRERR_NONE);
     polar.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
     const Bounds rectangle_bounds { { -100000, -2000000 }, { 100000, -1000000 } };
-    auto coverage = RasterTransform::coverage(polar, rectangle_bounds);
+    auto coverage = srs::mercator_coverage(polar, rectangle_bounds);
     REQUIRE(coverage);
     OGRSpatialReference mercator;
     REQUIRE(mercator.importFromEPSG(3857) == OGRERR_NONE);

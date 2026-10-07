@@ -31,6 +31,7 @@
 #include "Mask.h"
 #include "vector_mask.h"
 #include "raster_store/storage.h"
+#include "srs.h"
 
 namespace {
 void write_mask(const std::filesystem::path& path, const std::vector<std::string>& polygons)
@@ -216,7 +217,7 @@ TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-
     // Western boundary, central city, and eastern exterior at the planned zoom.
     for (const auto key : { radix::tile::Id { 13, { 4464, 2840 } }, { 13, { 4468, 2840 } }, { 13, { 4473, 2840 } } }) {
         const auto started = std::chrono::steady_clock::now();
-        const auto bounds = RasterTransform::tile_bounds(key);
+        const auto bounds = srs::webmercator_tile_bounds(key);
         auto samples = DatasetReader::read_scalar(*dataset->gdalDataset(), *transform, bounds, side, 1);
         REQUIRE(samples);
         const auto read = std::chrono::steady_clock::now();

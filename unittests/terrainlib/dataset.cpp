@@ -190,3 +190,19 @@ TEST_CASE("global dataset coverage is a single world rectangle")
     const double half = srs::webmercator_half_extent;
     check_bounds_near(mercator_bounds->front(), { { -half, -half }, { half, half } }, 1e-3);
 }
+
+TEST_CASE("dataset bounds reject GCP, RPC and geolocation-array georeferencing")
+{
+    auto dataset = memory_raster({ 10, 0.1, 0, 50, 0, -0.1 }, { 32, 32 }, 4326);
+    REQUIRE(dataset.bounds());
+    SECTION("GCPs")
+    {
+        GDAL_GCP gcp {};
+        REQUIRE(dataset.gdalDataset()->SetGCPs(1, &gcp, dataset.gdalDataset()->GetSpatialRef()) == CE_None);
+    }
+    SECTION("RPC") { REQUIRE(dataset.gdalDataset()->SetMetadataItem("LINE_OFF", "1", "RPC") == CE_None); }
+    SECTION("geolocation arrays") { REQUIRE(dataset.gdalDataset()->SetMetadataItem("X_DATASET", "longitudes.tif", "GEOLOCATION") == CE_None); }
+    const auto bounds = dataset.bounds();
+    REQUIRE(!bounds);
+    CHECK(bounds.error().code() == Error::Code::Unsupported);
+}

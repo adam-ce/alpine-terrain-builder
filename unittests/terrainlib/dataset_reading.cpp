@@ -34,6 +34,7 @@
 #include "Dataset.h"
 #include "DatasetReader.h"
 #include "ctb/types.hpp"
+#include "init.h"
 #include "io/image.h"
 #include "srs.h"
 
@@ -300,5 +301,35 @@ TEST_CASE("min pixel size")
     {
         const auto dataset = open("/austria/at_100m_epsg4326.tif");
         CHECK(!DatasetReader(dataset, Projection::Geographic, 1).min_pixel_size({ { 0.0, 0.0 }, { 1.0, 1.0 } }));
+    }
+}
+
+TEST_CASE("geographic datasets wider than 360 degrees wrap around their centre")
+{
+    initialize_gdal_once();
+    // 0.5° pixels from -0.5 to 360.5, each storing its centre longitude. GDAL only wraps
+    // sources overlapping themselves by at most about one pixel.
+    constexpr int width = 722;
+    constexpr int height = 240;
+    auto* driver = GetGDALDriverManager()->GetDriverByName("MEM");
+    REQUIRE(driver != nullptr);
+    const auto dataset = std::make_shared<Dataset>(driver->Create("", width, height, 1, GDT_Float32, nullptr));
+    std::array<double, 6> geo_transform { -0.5, 0.5, 0, 60, 0, -0.5 };
+    REQUIRE(dataset->gdalDataset()->SetGeoTransform(geo_transform.data()) == CE_None);
+    const auto reference = srs::wgs84();
+    REQUIRE(dataset->gdalDataset()->SetSpatialRef(&reference) == CE_None);
+    std::vector<float> longitudes(std::size_t(width) * height);
+    for (std::size_t i = 0; i < longitudes.size(); ++i) {
+        longitudes[i] = float(-0.25 + 0.5 * double(i % width));
+    }
+    REQUIRE(dataset->gdalDataset()->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, width, height, longitudes.data(), width, height, GDT_Float32, 0, 0) == CE_None);
+
+    const DatasetReader reader(dataset, DatasetReader::Projection::WebMercator, 1);
+    const double degree = srs::webmercator_half_extent / 180;
+    for (const double longitude : { -90.0, 90.0 }) {
+        const auto values = reader.read({ { (longitude - 1) * degree, -degree }, { (longitude + 1) * degree, degree } }, 4, 4);
+        for (const float value : values.buffer()) {
+            CHECK(value == Catch::Approx(longitude < 0 ? longitude + 360 : longitude).margin(1.5));
+        }
     }
 }

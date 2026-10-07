@@ -22,6 +22,7 @@
 #include <libassert/assert.hpp>
 #include <optional>
 #include "raster_store/StoreTraits.h"
+#include "srs.h"
 
 namespace rf_builder::gdal::planning {
 namespace {
@@ -58,7 +59,7 @@ std::optional<radix::tile::Id> Cursor::next(const std::function<void()>& poll)
         }
         const auto key = m_pending.back();
         m_pending.pop_back();
-        const auto tile_bounds = RasterTransform::tile_bounds(key);
+        const auto tile_bounds = srs::webmercator_tile_bounds(key);
         bool intersects = false;
         double ratio = 0;
         const double spacing = tile_bounds.width() / m_side;

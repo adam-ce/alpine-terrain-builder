@@ -147,16 +147,6 @@ Expected<RasterTransform> RasterTransform::create(GDALDataset& dataset)
     return result;
 }
 
-RasterTransform::Bounds RasterTransform::tile_bounds(const radix::tile::Id& key)
-{
-    // ldexp avoids both 1u << 32 and tile-coordinate * tile-dimension overflow.
-    const double side = std::ldexp(2 * world_half_extent, -int(key.zoom_level));
-    return { { -world_half_extent + double(key.coords.x) * side,
-                 world_half_extent - (double(key.coords.y) + 1) * side },
-        { -world_half_extent + (double(key.coords.x) + 1) * side,
-            world_half_extent - double(key.coords.y) * side } };
-}
-
 Expected<glm::dvec2> RasterTransform::source_pixel(glm::dvec2 point, bool wrap_longitude) const
 {
     if (!m_to_source->Transform(1, &point.x, &point.y) || !std::isfinite(point.x) || !std::isfinite(point.y)) {

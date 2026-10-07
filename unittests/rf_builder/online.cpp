@@ -19,6 +19,7 @@
 #include "../temporary_directory.h"
 #include "HttpFixture.h"
 #include "raster_store/storage.h"
+#include "srs.h"
 #include "tiles/TileWorker.h"
 #include "tiles/build.h"
 #include <catch2/benchmark/catch_benchmark.hpp>
@@ -136,7 +137,7 @@ struct Fixture {
         options.output = { directory.path() / "result", 16, 1, std::nullopt, 1 };
         options.retry = { std::chrono::milliseconds(5), std::chrono::milliseconds(100), std::chrono::milliseconds(30), std::chrono::milliseconds(20) };
         write_text(options.provider, json(server.base()));
-        mask(options.mask, RasterTransform::tile_bounds(root));
+        mask(options.mask, srs::webmercator_tile_bounds(root));
         const std::string entity
             = R"({"spatial_resolution":1,"acquisition_date":"2026","ingestion_date":"today","copyright":"test","copyright_link":"https://example.org","license":"test"})";
         write_text(directory.path() / "source_attribution_table.json", "[" + entity + "," + entity + "]");
@@ -294,7 +295,7 @@ TEST_CASE("Online fallback samples across RF and source boundaries in linear lig
 {
     Fixture fixture;
     const Key candidate { 4, { 5, 4 } };
-    mask(fixture.options.mask, RasterTransform::tile_bounds(candidate));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds(candidate));
     fixture.pyramid.clear();
     fixture.pyramid[path({ 3, { 2, 2 } })] = image(8);
     fixture.pyramid[path({ 3, { 3, 2 } })] = image(8, { 255, 255, 255 }); // Outside mask, still contributes.
@@ -320,8 +321,8 @@ TEST_CASE("Online fallback samples across RF and source boundaries in linear lig
 TEST_CASE("Online conservative coverage weights preserve area across overlaps and subdivision", "[rf-builder][online]")
 {
     const Key root { 2, { 1, 1 } };
-    const auto bounds = RasterTransform::tile_bounds(root);
-    tiles::planning::Coverage coverage({ bounds, bounds, RasterTransform::tile_bounds({ 3, { 2, 2 } }) });
+    const auto bounds = srs::webmercator_tile_bounds(root);
+    tiles::planning::Coverage coverage({ bounds, bounds, srs::webmercator_tile_bounds({ 3, { 2, 2 } }) });
     CHECK(coverage.weight(root) == Catch::Approx(1. / 16));
     double total = 0;
     for (const auto& child : coverage.children(root).children) {
@@ -402,7 +403,7 @@ TEST_CASE("Online fallback wraps longitude extends true coverage edges and never
     Fixture fixture;
     const unsigned scenario = GENERATE(0u, 1u, 2u);
     const Key candidate = scenario == 2 ? Key { 4, { 4, 0 } } : Key { 4, { 15, 4 } };
-    mask(fixture.options.mask, RasterTransform::tile_bounds(candidate));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds(candidate));
     fixture.pyramid.clear();
     const Key supplying = scenario == 2 ? Key { 3, { 2, 0 } } : Key { 3, { 7, 2 } };
     fixture.pyramid[path(supplying)] = image(8);
@@ -438,7 +439,7 @@ TEST_CASE("Online fallback agrees when the same source region is split into RF w
     Fixture fixture;
     fixture.pyramid[path({ 3, { 2, 2 } })] = image(8, {}, true);
     const auto whole = Key { 3, { 2, 2 } };
-    mask(fixture.options.mask, RasterTransform::tile_bounds(whole));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds(whole));
     auto record = fixture.record();
     auto mask_data = rf_builder::Mask::open(record.mask);
     REQUIRE(mask_data);
@@ -473,7 +474,7 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
 {
     Fixture fixture;
     fixture.mixed();
-    auto bounds = RasterTransform::tile_bounds({ 5, { 8, 8 } });
+    auto bounds = srs::webmercator_tile_bounds({ 5, { 8, 8 } });
     const auto spacing = bounds.width() / 8;
     // This interval misses all centres at source zoom 3 but contains zoom-5 centres.
     bounds.min.x += spacing * 0.4;
@@ -488,8 +489,8 @@ TEST_CASE("Online narrow masks survive conservative refinement and holes select 
         CHECK(key.zoom_level == 4);
     }
     fixture.options.output.output = fixture.directory.path() / "hole";
-    const auto outer = RasterTransform::tile_bounds(fixture.root);
-    const auto hole = RasterTransform::tile_bounds({ 4, { 5, 5 } });
+    const auto outer = srs::webmercator_tile_bounds(fixture.root);
+    const auto hole = srs::webmercator_tile_bounds({ 4, { 5, 5 } });
     write_text(fixture.options.mask,
         fmt::format(
             R"({{"type":"FeatureCollection","crs":{{"type":"name","properties":{{"name":"EPSG:3857"}}}},"features":[{{"type":"Feature","properties":{{}},"geometry":{{"type":"Polygon","coordinates":[[[{0},{1}],[{2},{1}],[{2},{3}],[{0},{3}],[{0},{1}]],[[{4},{5}],[{4},{7}],[{6},{7}],[{6},{5}],[{4},{5}]]]}}}}]}})",
@@ -727,7 +728,7 @@ TEST_CASE("Online coordinator reports weighted progress during idle and out-of-o
 TEST_CASE("Online mixed-resolution import measurement", "[.][online-benchmark]")
 {
     Fixture fixture;
-    const tiles::planning::Coverage weights({ RasterTransform::tile_bounds({ 0, { 0, 0 } }) });
+    const tiles::planning::Coverage weights({ srs::webmercator_tile_bounds({ 0, { 0, 0 } }) });
     unsigned weight_sample = 0;
     BENCHMARK("Online geographic completion weight")
     {
@@ -739,7 +740,7 @@ TEST_CASE("Online mixed-resolution import measurement", "[.][online-benchmark]")
     fixture.options.output.jobs = 2;
     fixture.options.retry = {};
     fixture.root = { 0, { 0, 0 } };
-    mask(fixture.options.mask, RasterTransform::tile_bounds(fixture.root));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds(fixture.root));
     write_text(fixture.options.provider, json(fixture.server.base(), 4, 6, side));
     fixture.pyramid.clear();
     const auto coarse = image(side, { 50, 100, 150 });
@@ -767,7 +768,7 @@ TEST_CASE("Online fallback supports zoom gaps through 30 and rejects larger prov
     const unsigned gap = GENERATE(30u, 31u, 32u);
     const Key candidate { gap, { (1u << 27) - 1, (1u << 27) - 1 } };
     fixture.options.output.tile_side = 8;
-    mask(fixture.options.mask, RasterTransform::tile_bounds({ 0, { 0, 0 } }));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds({ 0, { 0, 0 } }));
     write_text(fixture.options.provider, json(fixture.server.base(), 0, gap));
     fixture.pyramid.clear();
     fixture.pyramid[path({ 0, { 0, 0 } })] = image(8, { 255, 255, 255 });
@@ -796,7 +797,7 @@ TEST_CASE("Online Lanczos fallback fetches outer support and ignores unrelated n
     const bool broken_support = GENERATE(false, true);
     const Key candidate { 5, { 9, 8 } };
     fixture.options.output.tile_side = 8;
-    mask(fixture.options.mask, RasterTransform::tile_bounds(candidate));
+    mask(fixture.options.mask, srs::webmercator_tile_bounds(candidate));
     fixture.pyramid.clear();
     fixture.pyramid[path({ 3, { 2, 2 } })] = image(8);
     const auto west = path({ 3, { 1, 2 } });

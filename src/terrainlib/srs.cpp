@@ -243,6 +243,14 @@ namespace {
     }
 } // namespace
 
+radix::tile::SrsBounds webmercator_tile_bounds(const radix::tile::Id& key)
+{
+    // ldexp avoids both 1u << 32 and tile-coordinate * tile-dimension overflow.
+    const double side = std::ldexp(2 * webmercator_half_extent, -int(key.zoom_level));
+    return { { -webmercator_half_extent + double(key.coords.x) * side, webmercator_half_extent - (double(key.coords.y) + 1) * side },
+        { -webmercator_half_extent + (double(key.coords.x) + 1) * side, webmercator_half_extent - double(key.coords.y) * side } };
+}
+
 Expected<std::vector<radix::tile::SrsBounds>> geographic_coverage(const OGRSpatialReference& reference, const radix::tile::SrsBounds& bounds)
 {
     if ((bounds.min.x < -webmercator_half_extent || bounds.max.x > webmercator_half_extent) && webmercator().IsSame(&reference)) {

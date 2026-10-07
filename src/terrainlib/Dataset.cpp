@@ -121,6 +121,10 @@ Dataset::~Dataset() = default;
 
 Expected<radix::tile::SrsBounds> Dataset::bounds() const
 {
+    // GDAL would silently prefer the geotransform over these, even when it is less accurate.
+    if (m_gdal_dataset->GetGCPCount() != 0 || CSLCount(m_gdal_dataset->GetMetadata("RPC")) != 0 || CSLCount(m_gdal_dataset->GetMetadata("GEOLOCATION")) != 0) {
+        return Error::fail(Error::Code::Unsupported, "dataset " + name() + " has GCP, RPC or geolocation-array georeferencing");
+    }
     std::array<double, 6> adfGeoTransform = {};
     if (m_gdal_dataset->GetGeoTransform(adfGeoTransform.data()) != CE_None) {
         return Error::fail(Error::Code::Unsupported, "dataset " + name() + " has no geotransform");

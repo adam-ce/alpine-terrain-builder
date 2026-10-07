@@ -132,7 +132,7 @@ std::string rectangle(const Bounds& bounds)
 
 struct Fixture {
     test::TemporaryDirectory directory { "rf-import" };
-    Bounds bounds = RasterTransform::tile_bounds({ 3, { 4, 3 } });
+    Bounds bounds = srs::webmercator_tile_bounds({ 3, { 4, 3 } });
     rf_builder::gdal::Options options;
     Fixture(unsigned bands = 1)
     {
@@ -205,7 +205,7 @@ TEST_CASE("RF scalar and RGB snapshots publish disjoint attributed tiles", "[rf-
 
 TEST_CASE("RF reader uses per-channel validity and preserves ordinary black and sentinel values", "[rf-builder]")
 {
-    const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
     auto source = source_raster({}, 32, 3, affine_for(bounds, 32));
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
@@ -267,7 +267,7 @@ TEST_CASE("RF affine transforms support rotation and skew and reject unsupported
 TEST_CASE("RF planning chooses disjoint mixed zooms", "[rf-builder]")
 {
     using namespace rf_builder::gdal::planning;
-    const auto world = RasterTransform::tile_bounds({ 0, { 0, 0 } });
+    const auto world = srs::webmercator_tile_bounds({ 0, { 0, 0 } });
     const double half = RasterTransform::world_half_extent;
     const unsigned halo = GENERATE(0u, 7u);
     std::vector<Key> selected;
@@ -290,12 +290,12 @@ TEST_CASE("RF planning chooses disjoint mixed zooms", "[rf-builder]")
         }
     }
     CHECK(levels.size() >= 2);
-    CHECK(RasterTransform::tile_bounds({ 32, { UINT32_MAX, UINT32_MAX } }).max.x == half);
+    CHECK(srs::webmercator_tile_bounds({ 32, { UINT32_MAX, UINT32_MAX } }).max.x == half);
 }
 
 TEST_CASE("RF planning retains narrow masks until the selected resolution", "[rf-builder]")
 {
-    const auto bounds = RasterTransform::tile_bounds({ 3, { 4, 3 } });
+    const auto bounds = srs::webmercator_tile_bounds({ 3, { 4, 3 } });
     const Bounds narrow { bounds.min + glm::dvec2(1, 1), bounds.min + glm::dvec2(2, 2) };
     std::vector<Key> selected;
     rf_builder::gdal::planning::traverse(
@@ -610,7 +610,7 @@ TEST_CASE("rf-builder command reports a published snapshot and rejects invalid b
     }
     SECTION("no candidates intersect the mask") {
         fixture.options.mask = (fixture.directory.path() / "outside.gpkg").string();
-        mask(fixture.options.mask, rectangle(RasterTransform::tile_bounds({ 3, { 1, 1 } })));
+        mask(fixture.options.mask, rectangle(srs::webmercator_tile_bounds({ 3, { 1, 1 } })));
         expected_tiles = 0;
         expected_candidates = 0;
     }
@@ -661,7 +661,7 @@ TEST_CASE("RF rejects rotated and skewed grids", "[rf-builder]")
 
 TEST_CASE("RF planning rejects a ratio that cannot fit the maximum supported zoom", "[rf-builder]")
 {
-    const auto bounds = RasterTransform::tile_bounds({ 32, { 0, 0 } });
+    const auto bounds = srs::webmercator_tile_bounds({ 32, { 0, 0 } });
     CHECK(thrown([&] {
         rf_builder::gdal::planning::traverse(
             16,
@@ -709,7 +709,7 @@ TEST_CASE("RF ignores GDAL threading environment for its synchronous transformer
     };
     const Configuration threads("GDAL_NUM_THREADS", "2");
     const Configuration chunks("WARP_THREAD_CHUNK_SIZE", "1");
-    const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
     auto source = source_raster({}, 32, 1, affine_for(bounds, 32));
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
@@ -725,8 +725,7 @@ TEST_CASE("RF excludes invalid projection probes outside a coarse source footpri
     auto source = source_raster({}, 4, 1, { -3500000, 2000000, 0, 4000000, 0, -2000000 }, 32632);
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
-    auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform,
-        RasterTransform::tile_bounds({ 0, { 0, 0 } }), 16, 1);
+    auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform, srs::webmercator_tile_bounds({ 0, { 0, 0 } }), 16, 1);
     INFO((read ? "" : read.error().to_string()));
     REQUIRE(read);
 }
@@ -901,7 +900,7 @@ TEST_CASE("RF value mapping defaults and overrides persist without changing pixe
 
 TEST_CASE("RF warped nonfinite samples are invalid before RGB byte conversion", "[rf-builder][rf-nodata]")
 {
-    const auto bounds = RasterTransform::tile_bounds({ 5, { 16, 15 } });
+    const auto bounds = srs::webmercator_tile_bounds({ 5, { 16, 15 } });
     auto source = source_raster({}, 32, 3, affine_for(bounds, 32));
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);

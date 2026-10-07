@@ -96,7 +96,7 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
     auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
     options->hSrcDS = dataset->gdalDataset();
     options->nBandCount = 1;
-    options->eResampleAlg = GDALResampleAlg::GRA_Cubic;
+    options->eResampleAlg = GDALResampleAlg::GRA_Lanczos;
     options->panSrcBands = static_cast<int*>(CPLMalloc(sizeof(int) * 1));
     options->panDstBands = static_cast<int*>(CPLMalloc(sizeof(int) * 1));
     options->padfSrcNoDataReal = static_cast<double*>(CPLMalloc(sizeof(double) * 1));
@@ -119,7 +119,7 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
     }
     constexpr auto use_approximation = true;
     if (use_approximation) {
-        const auto error_threshold = 0.5;
+        const auto error_threshold = 0.125;
         auto image_transform_args = make_image_transform_args(reader, dataset, bounds, width, height);
         options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, image_transform_args.get(), error_threshold);
         options->pfnTransformer = GDALApproxTransform;
@@ -137,12 +137,20 @@ WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, co
 DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, Projection projection, unsigned band)
     : m_dataset(dataset)
     , m_projection(projection)
-    , m_dataset_srs_wkt(toWkt(Error::throwing_unwrap(dataset->srs())))
     , m_band(band)
 {
+    auto source = Error::throwing_unwrap(dataset->srs());
     const auto target = target_srs(projection);
     m_target_srs_wkt = toWkt(target);
-    m_requires_reprojection = !Error::throwing_unwrap(dataset->srs()).IsSame(&target);
+    m_requires_reprojection = !source.IsSame(&target);
+    if (source.IsGeographic() && std::abs(source.GetAngularUnits() - std::numbers::pi / 180) < 1e-12) {
+        // GDAL wraps longitudes around the source centre only for sources up to about 360° wide.
+        // Wider ones need it too, e.g. -0.5..360.5, as reprojected longitudes lie in -180..180.
+        if (const auto bounds = dataset->bounds()) {
+            source.SetExtension("GEOGCS", "CENTER_LONG", fmt::format("{}", (bounds->min.x + bounds->max.x) / 2).c_str());
+        }
+    }
+    m_dataset_srs_wkt = toWkt(source);
 
     if (band > dataset->n_bands())
         throw std::runtime_error(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));

@@ -36,7 +36,6 @@ public:
 
     static Expected<RasterTransform> create(GDALDataset& dataset);
     static Expected<std::vector<Bounds>> coverage(const OGRSpatialReference& reference, const Bounds& bounds);
-    static Bounds tile_bounds(const radix::tile::Id& key);
 
     // Sampling estimates can omit source-branch wrapping to keep derivatives
     // continuous at a global raster's longitude seam.

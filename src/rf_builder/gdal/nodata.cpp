@@ -19,6 +19,7 @@
 #include "nodata.h"
 
 #include "Dataset.h"
+#include "srs.h"
 #include <fmt/format.h>
 #include <gdal_alg.h>
 
@@ -39,7 +40,7 @@ Expected<unsigned> halo(unsigned tile_side, unsigned search_radius, unsigned ker
 
 Window window(const radix::tile::Id& key, unsigned tile_side, unsigned halo_width)
 {
-    const auto bounds = RasterTransform::tile_bounds(key);
+    const auto bounds = srs::webmercator_tile_bounds(key);
     const double spacing = bounds.width() / tile_side;
     const std::uint64_t rows = std::uint64_t(tile_side) << key.zoom_level;
     const std::uint64_t first_row = std::uint64_t(tile_side) * key.coords.y;

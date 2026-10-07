@@ -20,6 +20,7 @@
 #include "io/image.h"
 #include "raster/algorithm/scale.h"
 #include "raster_store/StoreTraits.h"
+#include "srs.h"
 #include <algorithm>
 #include <libassert/assert.hpp>
 
@@ -205,7 +206,7 @@ run::Prepared<glm::u8vec3> TileWorker::prepare(const run::Key& key)
             assemble(tile, valid, key, *source, *supplier);
         }
     }
-    const auto bounds = RasterTransform::tile_bounds(key);
+    const auto bounds = srs::webmercator_tile_bounds(key);
     const double spacing = bounds.width() / m_record.tile_side;
     std::vector<glm::dvec2> centres(m_record.tile_side);
     for (unsigned row = 0; row < m_record.tile_side; ++row) {

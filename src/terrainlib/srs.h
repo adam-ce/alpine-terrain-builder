@@ -190,6 +190,8 @@ inline OGRSpatialReference mgi() { return from_epsg(4312).value(); }
 constexpr double webmercator_half_extent = 20037508.342789244;
 /// Latitude in degrees at which Web Mercator y reaches webmercator_half_extent.
 constexpr double webmercator_latitude_limit = 85.0511287798066;
+/// Web Mercator bounds of an XYZ tile; valid up to zoom level 32.
+radix::tile::SrsBounds webmercator_tile_bounds(const radix::tile::Id& key);
 
 /// WGS84 longitude/latitude bounds in degrees covering the given bounds.
 /// Longitudes lie in [-180, 180]; coverage crossing the antimeridian is split into two bounds.

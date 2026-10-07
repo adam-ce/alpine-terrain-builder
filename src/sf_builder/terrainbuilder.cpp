@@ -45,8 +45,6 @@
 #include <tbb/task_group.h>
 
 #include "Dataset.h"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
 #include "srs.h"
 
 #include "ProgressIndicator.h"
@@ -84,7 +82,6 @@ std::optional<SimpleMesh> build_patch(
     const OGRSpatialReference &texture_srs,
     const TileProvider* tile_provider,
     const OGRSpatialReference &mesh_srs) {
-    const ctb::Grid grid = ctb::GlobalMercator();
     radix::tile::SrsBounds texture_bounds;
 
     std::chrono::high_resolution_clock::time_point start;
@@ -128,7 +125,7 @@ std::optional<SimpleMesh> build_patch(
     if (tile_provider != nullptr) {
         start = std::chrono::high_resolution_clock::now();
         LOG_INFO("Assembling mesh texture");
-        std::optional<AssembledTexture> texture = assemble_texture_from_tiles(grid, texture_srs, texture_bounds, *tile_provider);
+        std::optional<AssembledTexture> texture = assemble_texture_from_tiles(texture_srs, texture_bounds, *tile_provider);
         if (!texture.has_value()) {
             LOG_ERROR("Failed to assemble texture");
             // TODO: should we return nullopt here?

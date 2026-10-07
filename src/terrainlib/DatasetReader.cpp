@@ -37,7 +37,6 @@
 #include "Dataset.h"
 #include <stdexcept>
 #include <radix/raster.h>
-#include "ctb/types.hpp"
 #include "log.h"
 
 namespace {

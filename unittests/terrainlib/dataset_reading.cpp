@@ -33,7 +33,6 @@
 #include <gdal_priv.h>
 #include "Dataset.h"
 #include "DatasetReader.h"
-#include "ctb/types.hpp"
 #include "init.h"
 #include "io/image.h"
 #include "srs.h"

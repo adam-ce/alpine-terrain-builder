@@ -19,10 +19,14 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <numeric>
+#include <optional>
 #include <span>
+#include <stdexcept>
 #include <vector>
 #include <cstdint>
 #include <csignal>
@@ -33,8 +37,6 @@
 #include <opencv2/opencv.hpp>
 #include <radix/geometry.h>
 
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
 #include "geometry/geometry.h"
 #include "numeric/glm_math.h"
 #include "numeric/int_math.h"
@@ -57,14 +59,43 @@ namespace terrainbuilder {
     return reference_zoom_level + zoom_level_change;
 }
 
+/// Searches for the smallest Web Mercator tile that encompasses the given bounding box.
+[[nodiscard]] inline std::optional<radix::tile::Id> find_smallest_encompassing_tile(const radix::tile::SrsBounds& bounds)
+{
+    // We dont want to recurse indefinetely if the bounds are empty.
+    if (bounds.width() == 0 || bounds.height() == 0) {
+        throw std::invalid_argument("bounds cannot be empty");
+    }
+
+    const std::array<glm::dvec2, 4> points = { bounds.min, bounds.max, glm::dvec2(bounds.min.x, bounds.max.y), glm::dvec2(bounds.max.x, bounds.min.y) };
+    const auto all_points_inside = [&](const radix::tile::Id& tile) {
+        const radix::tile::SrsBounds tile_bounds = srs::webmercator_tile_bounds(tile);
+        return std::ranges::all_of(points, [&](const glm::dvec2& point) { return tile_bounds.contains_inclusive(point); });
+    };
+
+    // We start at the root tile and repeatedly check every subtile until we find one that contains all
+    // of the bounding box.
+    radix::tile::Id current_smallest_encompassing_tile(0, { 0, 0 });
+    if (!all_points_inside(current_smallest_encompassing_tile)) {
+        return std::nullopt;
+    }
+    while (true) {
+        const std::array<radix::tile::Id, 4> children = current_smallest_encompassing_tile.children();
+        const auto child = std::ranges::find_if(children, all_points_inside);
+        // Stop if none of the children contains all of the points.
+        if (child == children.end()) {
+            return current_smallest_encompassing_tile;
+        }
+        current_smallest_encompassing_tile = *child;
+    }
+}
+
 /// Find all the tiles needed to construct the texture for the given target bounds under the root tile.
 /// The result tiles are ordered in such a way that they can be sequentially written to a texture.
 /// Larger tiles are only included if they are not covered by smaller tiles.
 [[nodiscard]] inline std::vector<radix::tile::Id> find_relevant_tiles_to_splatter_in_bounds(
     /// The root tile specifying the tiles to consider.
     const radix::tile::Id root_tile,
-    /// Specifes the grid used to organize the image tiles.
-    const ctb::Grid &grid,
     /// The bounds for which texture data should be created.
     const radix::tile::SrsBounds &target_bounds,
     /// Provider class that maps tile ids to their textures.
@@ -77,7 +108,7 @@ namespace terrainbuilder {
     // at a high zoom level. So we try to estimate the actual zoom level of the target bounds and recurse at least
     // to that level to find relevant textures.
     if (!min_zoom_level_to_examine.has_value()) {
-        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, grid.srsBounds(root_tile, false), target_bounds) + 1;
+        min_zoom_level_to_examine = estimate_zoom_level(root_tile.zoom_level, srs::webmercator_tile_bounds(root_tile), target_bounds) + 1;
     }
     
     // A list of tiles determined to be relevant for the target bounds.
@@ -90,7 +121,7 @@ namespace terrainbuilder {
         }
 
         // Check if we even require this tile to fill the target region.
-        const radix::tile::SrsBounds tile_bounds = grid.srsBounds(tile, false);
+        const radix::tile::SrsBounds tile_bounds = srs::webmercator_tile_bounds(tile);
         if (!radix::geometry::intersect(target_bounds, tile_bounds)) {
             return true;
         }
@@ -370,8 +401,6 @@ inline uint32_t find_max_zoom_level(const std::span<const radix::tile::Id> tiles
 [[nodiscard]]
 inline AssembledTexture splatter_tiles_to_texture(
     const radix::tile::Id root_tile,
-    /// Specifes the grid used to organize the image tiles.
-    const ctb::Grid &grid,
     /// The bounds for which texture data should be created.
     const radix::tile::SrsBounds &target_bounds,
     /// A mapping from tile id to a filesystem path.
@@ -386,7 +415,7 @@ inline AssembledTexture splatter_tiles_to_texture(
         return {};
     }
 
-    const radix::tile::SrsBounds root_tile_bounds = grid.srsBounds(root_tile, false);
+    const radix::tile::SrsBounds root_tile_bounds = srs::webmercator_tile_bounds(root_tile);
 
     const uint32_t max_zoom_level = find_max_zoom_level(tiles_to_splatter);
     DEBUG_ASSERT(max_zoom_level >= root_tile.zoom_level);
@@ -463,8 +492,6 @@ inline AssembledTexture splatter_tiles_to_texture(
 /// Creates a texture for the given region.
 [[nodiscard]]
 inline std::optional<AssembledTexture> assemble_texture_from_tiles(
-    /// Specifes the grid used to organize the image tiles.
-    const ctb::Grid &grid,
     /// Specifies the srs the target bounds are in.
     const OGRSpatialReference &target_srs,
     /// The bounds for which texture data should be created.
@@ -485,10 +512,10 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // The texture is linear in the srs of the tiles, the uvs are linear in the target srs.
-    ASSERT(target_srs.IsSame(&grid.getSRS()));
+    ASSERT(srs::webmercator().IsSame(&target_srs));
     const radix::tile::SrsBounds& encompassing_bounds = target_bounds;
     // Find the smallest tile (id) that encompasses these bounds.
-    radix::tile::Id smallest_encompassing_tile = grid.findSmallestEncompassingTile(encompassing_bounds).value();
+    radix::tile::Id smallest_encompassing_tile = find_smallest_encompassing_tile(encompassing_bounds).value();
     LOG_TRACE("Smallest encompassing tile for texture bounds is {}", radix::tile::to_string(smallest_encompassing_tile));
 
     if (max_zoom.has_value() && smallest_encompassing_tile.zoom_level > max_zoom.value()) {
@@ -500,9 +527,9 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
         smallest_encompassing_tile = smallest_encompassing_tile.parent();
     }
 
-    // Tile pixel coordinates are stored as 32-bit unsigned ints (see PixelPoint/i_pixel), so
-    // coords.x * grid.tileSize() overflows past this zoom level; never recurse deeper than that.
-    const uint32_t max_safe_zoom_level = static_cast<uint32_t>(std::log2(std::numeric_limits<uint32_t>::max() / grid.tileSize()));
+    // Very small target bounds can push the examined zoom level arbitrarily deep, but
+    // srs::webmercator_tile_bounds is only valid up to this zoom level; never recurse deeper than that.
+    const uint32_t max_safe_zoom_level = 32;
     const uint32_t clamped_max_zoom = std::min(max_zoom.value_or(max_safe_zoom_level), max_safe_zoom_level);
 
     // The padding reaches past the requested bounds, so select tiles for slightly grown bounds.
@@ -512,7 +539,7 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
 
     // Find relevant tiles in bounds
     const std::vector<radix::tile::Id> tiles_to_splatter = find_relevant_tiles_to_splatter_in_bounds(
-        smallest_encompassing_tile, grid, selection_bounds, tile_provider, clamped_max_zoom);
+        smallest_encompassing_tile, selection_bounds, tile_provider, clamped_max_zoom);
     LOG_TRACE("Found {} relevant texture tiles", tiles_to_splatter.size());
 
     // If we found to relevant tiles, we are done.
@@ -522,6 +549,6 @@ inline std::optional<AssembledTexture> assemble_texture_from_tiles(
     }
 
     // Splatter tiles into texture buffer
-    return splatter_tiles_to_texture(smallest_encompassing_tile, grid, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter, min_padding, alignment);
+    return splatter_tiles_to_texture(smallest_encompassing_tile, encompassing_bounds, tile_provider, tiles_to_splatter, rescale_filter, min_padding, alignment);
 }
 }

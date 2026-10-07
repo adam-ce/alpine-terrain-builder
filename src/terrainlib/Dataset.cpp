@@ -30,7 +30,6 @@
 #include <libassert/assert.hpp>
 #include <ogrsf_frmts.h>
 
-#include "ctb/Grid.hpp"
 #include "init.h"
 #include "log.h"
 #include "srs.h"
@@ -221,11 +220,11 @@ Expected<OGRSpatialReference> Dataset::srs() const
 }
 
 unsigned Dataset::widthInPixels() const {
-    return ctb::i_pixel(m_gdal_dataset->GetRasterXSize());
+    return unsigned(m_gdal_dataset->GetRasterXSize());
 }
 
 unsigned Dataset::heightInPixels() const {
-    return ctb::i_pixel(m_gdal_dataset->GetRasterYSize());
+    return unsigned(m_gdal_dataset->GetRasterYSize());
 }
 
 unsigned Dataset::n_bands() const {

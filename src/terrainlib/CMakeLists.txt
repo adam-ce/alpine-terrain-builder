@@ -65,13 +65,6 @@ add_library(terrainlib
     containers/UnionFind.h
     containers/Vector2D.h
 
-    ctb/CTBException.hpp
-    ctb/GlobalGeodetic.hpp ctb/GlobalGeodetic.cpp
-    ctb/GlobalMercator.hpp ctb/GlobalMercator.cpp
-    ctb/Grid.hpp
-    ctb/TileCoordinate.hpp
-    ctb/types.hpp
-
     geometry/CoordFrame.h
     geometry/PlaneFrame.h
     geometry/Rect.h

@@ -38,10 +38,6 @@
 #include "octree/Space.h"
 #include "tile_provider.h"
 
-#include "ctb/GlobalGeodetic.hpp"
-#include "ctb/GlobalMercator.hpp"
-#include "ctb/Grid.hpp"
-
 OGRSpatialReference parse_srs(const std::string &user_input) {
     const auto result = srs::from_user_input(user_input);
     if (!result) {
@@ -91,23 +87,16 @@ radix::geometry::Aabb3d parse_bounds_from_tile(
     const std::vector<uint32_t> &data,
     const OGRSpatialReference &srs) {
 
-    // Determine the correct Grid type based on SRS
-    std::optional<ctb::Grid> grid;
     const OGRSpatialReference &webmercator_srs = srs::webmercator();
-    const OGRSpatialReference &wgs84_srs = srs::wgs84();
-    if (srs.IsSame(&webmercator_srs)) {
-        grid = ctb::GlobalMercator();
-    } else if (srs.IsSame(&wgs84_srs)) {
-        grid = ctb::GlobalGeodetic();
-    } else {
-        LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) or WGS84 (EPSG:4326) supported for --tile.");
+    if (!srs.IsSame(&webmercator_srs)) {
+        LOG_ERROR_AND_EXIT("Only WebMercator (EPSG:3857) supported for --tile.");
     }
 
     const uint32_t zoom_level = data[0];
     const glm::uvec2 tile_coords(data[1], data[2]);
     const radix::tile::Id target_tile(zoom_level, tile_coords);
 
-    return extend_bounds_to_3d(grid->srsBounds(target_tile, false));
+    return extend_bounds_to_3d(srs::webmercator_tile_bounds(target_tile));
 }
 
 radix::geometry::Aabb3d parse_bounds_from_node(const std::vector<uint64_t> &data, const OGRSpatialReference &srs) {

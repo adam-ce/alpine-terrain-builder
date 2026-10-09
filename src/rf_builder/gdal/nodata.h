@@ -24,6 +24,7 @@
 #include <array>
 #include <libassert/assert.hpp>
 #include <limits>
+#include <ranges>
 
 namespace rf_builder::gdal::nodata {
 
@@ -43,16 +44,18 @@ public:
 
     // Throws Error::Exception when GDAL cannot fill the NoData pixels. The
     // samples must cover the square output at offset.
-    template <typename PixelType>
-    radix::Raster<PixelType> process(const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, unsigned side, const std::array<float, 3>& fallback)
+    template <typename Samples>
+    radix::Raster<std::ranges::range_value_t<decltype(Samples::data)>> process(
+        const Samples& samples, glm::uvec2 offset, unsigned side, const std::array<float, 3>& fallback)
     {
-        radix::Raster<PixelType> result(side);
+        radix::Raster<std::ranges::range_value_t<decltype(Samples::data)>> result(side);
         process(samples, offset, fallback, result);
         return result;
     }
 
     template <typename PixelType>
-    void process(const DatasetReader::Samples<PixelType>& samples, glm::uvec2 offset, const std::array<float, 3>& fallback, radix::Raster<PixelType>& result)
+    void process(
+        const typename DatasetReader<PixelType>::Samples& samples, glm::uvec2 offset, const std::array<float, 3>& fallback, radix::Raster<PixelType>& result)
     {
         const unsigned side = result.width();
         ASSERT(side > 0 && result.height() == side && samples.data.size() == samples.valid.size());

@@ -20,9 +20,13 @@
 #include "Dataset.h"
 #include "srs.h"
 
+#include <algorithm>
+#include <climits>
 #include <cmath>
+#include <cstddef>
 #include <fmt/core.h>
 #include <gdal.h>
+#include <gdal_alg.h>
 #include <gdal_priv.h>
 #include <gdalwarper.h>
 #include <libassert/assert.hpp>
@@ -31,11 +35,12 @@
 #include <mutex>
 #include <numbers>
 #include <ogr_spatialref.h>
+#include <span>
+#include <string>
 #include <utility>
+#include <vector>
 #include <vrtdataset.h>
 
-#include "Dataset.h"
-#include <stdexcept>
 #include <radix/raster.h>
 #include "log.h"
 
@@ -49,142 +54,269 @@ std::string toWkt(const OGRSpatialReference& srs)
     return wkt_string;
 }
 
-OGRSpatialReference target_srs(DatasetReader::Projection projection)
+OGRSpatialReference target_srs(srs::Projection projection)
 {
     switch (projection) {
-    case DatasetReader::Projection::WebMercator:
+    case srs::Projection::WebMercator:
         return srs::webmercator();
-    case DatasetReader::Projection::Geographic:
+    case srs::Projection::Geographic:
         return srs::wgs84();
     }
     PANIC("unsupported projection", static_cast<unsigned>(projection));
 }
 
-std::array<double, 6> computeGeoTransform(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
-{
-    return { bounds.min.x, bounds.width() / width, 0,
-        bounds.max.y, 0, -bounds.height() / height };
-}
-
-using GdalImageTransformArgsPtr = std::unique_ptr<void, decltype(&GDALDestroyGenImgProjTransformer)>;
-GdalImageTransformArgsPtr make_image_transform_args(const DatasetReader& reader,
-    Dataset* dataset,
-    const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
-{
-    CPLStringList transformOptions;
-    if (reader.isReprojecting()) {
-        transformOptions.SetNameValue("SRC_SRS", reader.dataset_srs_wkt().c_str());
-        transformOptions.SetNameValue("DST_SRS", reader.target_srs_wkt().c_str());
-    }
-    auto args = GdalImageTransformArgsPtr(GDALCreateGenImgProjTransformer2(dataset->gdalDataset(), nullptr, transformOptions.List()), &GDALDestroyGenImgProjTransformer);
-    if (!args) {
-        throw std::runtime_error("GDALCreateGenImgProjTransformer2 failed.");
-    }
-
-    const auto adfGeoTransform = computeGeoTransform(bounds, width, height);
-    GDALSetGenImgProjTransformerDstGeoTransform(args.get(), adfGeoTransform.data());
-
-    return args;
-}
-
 using GdalWarpOptionsPtr = std::unique_ptr<GDALWarpOptions, decltype(&GDALDestroyWarpOptions)>;
-using WarpOptionData = std::pair<GdalWarpOptionsPtr, GdalImageTransformArgsPtr>;
+using ApproxTransformer = std::unique_ptr<void, decltype(&GDALDestroyApproxTransformer)>;
 
-WarpOptionData makeWarpOptions(const DatasetReader& reader, Dataset* dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height)
+// Maximum approximation error in source pixels.
+constexpr double approximation_error = 0.125;
+
+template <typename Pixel>
+constexpr GDALDataType source_type = std::is_same_v<Pixel, float> ? GDT_Float32 : GDT_Byte;
+
+static_assert(sizeof(glm::u8vec3) == 3 && alignof(glm::u8vec3) == 1 && std::is_trivially_copyable_v<glm::u8vec3>);
+static_assert(offsetof(glm::u8vec3, x) == 0 && offsetof(glm::u8vec3, y) == 1 && offsetof(glm::u8vec3, z) == 2);
+
+// The selected bands, followed by an alpha band exposing their effective
+// masks unless all of them are valid everywhere.
+struct Source {
+    std::unique_ptr<VRTDataset> dataset;
+    int alpha_band = 0;
+};
+
+Expected<Source> make_source(GDALDataset& dataset, std::span<const unsigned> bands)
 {
+    Source source { std::make_unique<VRTDataset>(dataset.GetRasterXSize(), dataset.GetRasterYSize()) };
+    std::vector<GDALRasterBand*> inputs;
+    bool all_valid = true;
+    for (const unsigned band : bands) {
+        auto* input = dataset.GetRasterBand(int(band));
+        if (source.dataset->AddBand(input->GetRasterDataType(), nullptr) != CE_None
+            || static_cast<VRTSourcedRasterBand*>(source.dataset->GetRasterBand(source.dataset->GetRasterCount()))->AddSimpleSource(input) != CE_None) {
+            return Error::fail(Error::Code::Io, fmt::format("expose source band {}: {}", band, CPLGetLastErrorMsg()));
+        }
+        auto* mask = input->GetMaskBand();
+        if (!mask) {
+            return Error::fail(Error::Code::Io, fmt::format("get mask of source band {}: {}", band, CPLGetLastErrorMsg()));
+        }
+        if (mask->GetRasterDataType() != GDT_Byte) {
+            return Error::fail(Error::Code::Unsupported, fmt::format("mask of source band {} is not of type Byte", band));
+        }
+        all_valid = all_valid && (input->GetMaskFlags() & GMF_ALL_VALID) != 0;
+        inputs.push_back(input);
+    }
+    if (all_valid) {
+        return source;
+    }
+    // GDAL returns per-dataset masks as one shared object. Otherwise, the
+    // minimum is the AND of binary masks. It must not have NoData, which min skips.
+    const bool shared = std::ranges::all_of(inputs, [&](auto* input) { return input->GetMaskBand() == inputs.front()->GetMaskBand(); });
+    CPLStringList options;
+    if (!shared) {
+        options.SetNameValue("subclass", "VRTDerivedRasterBand");
+        options.SetNameValue("PixelFunctionType", "min");
+    }
+    if (source.dataset->AddBand(GDT_Byte, options.List()) != CE_None) {
+        return Error::fail(Error::Code::Io, fmt::format("create source validity band: {}", CPLGetLastErrorMsg()));
+    }
+    source.alpha_band = source.dataset->GetRasterCount();
+    auto* alpha = static_cast<VRTSourcedRasterBand*>(source.dataset->GetRasterBand(source.alpha_band));
+    for (auto* input : shared ? std::span(inputs).first(1) : std::span(inputs)) {
+        if (alpha->AddMaskBandSource(input) != CE_None) {
+            return Error::fail(Error::Code::Io, fmt::format("expose source band mask: {}", CPLGetLastErrorMsg()));
+        }
+    }
+    return source;
+}
+
+// Warps all source bands at once into samples, with destination alpha as validity.
+template <typename Pixel>
+Expected<void> warp(const Source& source, const ApproxTransformer& transformer, typename DatasetReader<Pixel>::Samples& samples)
+{
+    constexpr int channel_count = int(DatasetReader<Pixel>::channel_count);
+    const glm::uvec2 size = samples.data.size();
+    auto* driver = GetGDALDriverManager()->GetDriverByName("MEM");
+    if (!driver) {
+        return Error::fail(Error::Code::Unsupported, "GDAL MEM driver is required");
+    }
+    // The destination bands only borrow the sample buffers.
+    GDALDatasetUniquePtr destination(driver->Create("", int(size.x), int(size.y), 0, GDT_Unknown, nullptr));
+    if (!destination) {
+        return Error::fail(Error::Code::Io, fmt::format("create warp destination: {}", CPLGetLastErrorMsg()));
+    }
+    const auto add_band = [&](GDALDataType type, std::byte* data, GSpacing pixel_offset) {
+        CPLStringList options;
+        options.SetNameValue("DATAPOINTER", fmt::format("{}", static_cast<const void*>(data)).c_str());
+        options.SetNameValue("PIXELOFFSET", fmt::format("{}", pixel_offset).c_str());
+        options.SetNameValue("LINEOFFSET", fmt::format("{}", pixel_offset * GSpacing(size.x)).c_str());
+        return destination->AddBand(type, options.List()) == CE_None;
+    };
+    auto* data = samples.data.bytes().data();
+    for (int channel = 0; channel < channel_count; ++channel) {
+        if (!add_band(source_type<Pixel>, data + channel * GDALGetDataTypeSizeBytes(source_type<Pixel>), GSpacing(sizeof(Pixel)))) {
+            return Error::fail(Error::Code::Io, fmt::format("attach warp destination data: {}", CPLGetLastErrorMsg()));
+        }
+    }
+    if (!add_band(GDT_Byte, samples.valid.bytes().data(), 1)) {
+        return Error::fail(Error::Code::Io, fmt::format("attach warp destination validity: {}", CPLGetLastErrorMsg()));
+    }
+
     auto options = GdalWarpOptionsPtr(GDALCreateWarpOptions(), &GDALDestroyWarpOptions);
-    options->hSrcDS = dataset->gdalDataset();
-    options->nBandCount = 1;
-    options->eResampleAlg = GDALResampleAlg::GRA_Lanczos;
-    options->panSrcBands = static_cast<int*>(CPLMalloc(sizeof(int) * 1));
-    options->panDstBands = static_cast<int*>(CPLMalloc(sizeof(int) * 1));
-    options->padfSrcNoDataReal = static_cast<double*>(CPLMalloc(sizeof(double) * 1));
-    options->padfSrcNoDataImag = static_cast<double*>(CPLMalloc(sizeof(double) * 1));
-    options->padfDstNoDataReal = static_cast<double*>(CPLMalloc(sizeof(double) * 1));
-    options->padfDstNoDataImag = static_cast<double*>(CPLMalloc(sizeof(double) * 1));
-    {
-        int bGotNoData = false;
-        double noDataValue = dataset->gdalDataset()->GetRasterBand(1)->GetNoDataValue(&bGotNoData);
-        if (!bGotNoData)
-            noDataValue = -32768;
-
-        options->padfSrcNoDataReal[0] = noDataValue;
-        options->padfSrcNoDataImag[0] = 0;
-        options->padfDstNoDataReal[0] = noDataValue;
-        options->padfDstNoDataImag[0] = 0;
-
-        options->panSrcBands[0] = int(reader.dataset_band());
-        options->panDstBands[0] = 1;
+    options->hSrcDS = source.dataset.get();
+    options->hDstDS = destination.get();
+    GDALWarpInitDefaultBandMapping(options.get(), channel_count);
+    options->nSrcAlphaBand = source.alpha_band;
+    options->nDstAlphaBand = channel_count + 1;
+    options->eResampleAlg = GRA_Lanczos;
+    options->eWorkingDataType = source_type<Pixel>;
+    options->pfnTransformer = GDALApproxTransform;
+    options->pTransformerArg = transformer.get();
+    // A window without valid source coverage is an empty read rather than a failure.
+    options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "INIT_DEST", "0");
+    options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "ERROR_OUT_IF_EMPTY_SOURCE_WINDOW", "FALSE");
+    // Callers parallelize across readers.
+    options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "NUM_THREADS", "1");
+    options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "SRC_ALPHA_MAX", "255");
+    options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "DST_ALPHA_MAX", "255");
+    GDALWarpOperation operation;
+    if (operation.Initialize(options.get()) != CE_None || operation.ChunkAndWarpImage(0, 0, int(size.x), int(size.y)) != CE_None) {
+        return Error::fail(Error::Code::Io, fmt::format("warp source bands: {}", CPLGetLastErrorMsg()));
     }
-    constexpr auto use_approximation = true;
-    if (use_approximation) {
-        const auto error_threshold = 0.125;
-        auto image_transform_args = make_image_transform_args(reader, dataset, bounds, width, height);
-        options->pTransformerArg = GDALCreateApproxTransformer(GDALGenImgProjTransform, image_transform_args.get(), error_threshold);
-        options->pfnTransformer = GDALApproxTransform;
-        return { std::move(options), std::move(image_transform_args) };
-    }
-
-    options->pTransformerArg = make_image_transform_args(reader, dataset, bounds, width, height).release();
-    options->pfnTransformer = GDALGenImgProjTransform;
-
-    return { std::move(options), GdalImageTransformArgsPtr(nullptr, &GDALDestroyGenImgProjTransformer) };
+    return {};
+}
 }
 
-}
-
-DatasetReader::DatasetReader(const std::shared_ptr<Dataset>& dataset, Projection projection, unsigned band)
-    : m_dataset(dataset)
-    , m_projection(projection)
-    , m_band(band)
+template <typename Pixel>
+void DatasetReader<Pixel>::TransformerDeleter::operator()(Transformer* transformer) const
 {
-    auto source = Error::throwing_unwrap(dataset->srs());
+    GDALDestroyGenImgProjTransformer(transformer);
+}
+
+template <typename Pixel>
+DatasetReader<Pixel>::DatasetReader(std::shared_ptr<Dataset> dataset,
+    srs::Projection projection,
+    std::array<unsigned, channel_count> bands,
+    Pixel default_pixel,
+    std::unique_ptr<Transformer, TransformerDeleter> transformer)
+    : m_dataset(std::move(dataset))
+    , m_projection(projection)
+    , m_bands(bands)
+    , m_default_pixel(default_pixel)
+    , m_transformer(std::move(transformer))
+{
+}
+
+template <typename Pixel>
+Expected<DatasetReader<Pixel>> DatasetReader<Pixel>::make(
+    std::shared_ptr<Dataset> dataset, const srs::Projection projection, const std::array<unsigned, channel_count> bands, const Pixel default_pixel)
+{
+    ASSERT(dataset);
+    if constexpr (std::is_same_v<Pixel, float>) {
+        if (!std::isfinite(default_pixel)) {
+            return Error::fail(Error::Code::InvalidInput, "default pixel must be finite");
+        }
+    }
+    auto& gdal_dataset = *dataset->gdalDataset();
+    for (const unsigned band : bands) {
+        if (band == 0 || band > unsigned(gdal_dataset.GetRasterCount())) {
+            return Error::fail(Error::Code::InvalidInput,
+                fmt::format("dataset {} does not contain band number {} (there are {} bands)", dataset->name(), band, gdal_dataset.GetRasterCount()));
+        }
+        const auto type = gdal_dataset.GetRasterBand(int(band))->GetRasterDataType();
+        if (type != source_type<Pixel>) {
+            return Error::fail(Error::Code::Unsupported,
+                fmt::format("band {} of dataset {} has type {}, but the reader requires {}",
+                    band,
+                    dataset->name(),
+                    GDALGetDataTypeName(type),
+                    GDALGetDataTypeName(source_type<Pixel>)));
+        }
+    }
+
+    auto source = dataset->srs();
+    if (!source) {
+        return Error::propagate(std::move(source), "read SRS of dataset " + dataset->name());
+    }
     const auto target = target_srs(projection);
-    m_target_srs_wkt = toWkt(target);
-    m_requires_reprojection = !source.IsSame(&target);
-    if (source.IsGeographic() && std::abs(source.GetAngularUnits() - std::numbers::pi / 180) < 1e-12) {
+    const bool requires_reprojection = !source->IsSame(&target);
+    if (source->IsGeographic() && std::abs(source->GetAngularUnits() - std::numbers::pi / 180) < 1e-12) {
         // GDAL wraps longitudes around the source centre only for sources up to about 360° wide.
         // Wider ones need it too, e.g. -0.5..360.5, as reprojected longitudes lie in -180..180.
         if (const auto bounds = dataset->bounds()) {
-            source.SetExtension("GEOGCS", "CENTER_LONG", fmt::format("{}", (bounds->min.x + bounds->max.x) / 2).c_str());
+            source->SetExtension("GEOGCS", "CENTER_LONG", fmt::format("{}", (bounds->min.x + bounds->max.x) / 2).c_str());
         }
     }
-    m_dataset_srs_wkt = toWkt(source);
-
-    if (band > dataset->n_bands())
-        throw std::runtime_error(fmt::format("Dataset does not contain band number {} (there are {} bands).", band, dataset->n_bands()));
+    CPLStringList transformer_options;
+    if (requires_reprojection) {
+        transformer_options.SetNameValue("SRC_SRS", toWkt(*source).c_str());
+        transformer_options.SetNameValue("DST_SRS", toWkt(target).c_str());
+    }
+    // Creates both transformation directions, so reads rebuild no PROJ state.
+    std::unique_ptr<Transformer, TransformerDeleter> transformer(
+        static_cast<Transformer*>(GDALCreateGenImgProjTransformer2(&gdal_dataset, nullptr, transformer_options.List())));
+    if (!transformer) {
+        return Error::fail(Error::Code::Unsupported, fmt::format("create transformer for dataset {}: {}", dataset->name(), CPLGetLastErrorMsg()));
+    }
+    return DatasetReader(std::move(dataset), projection, bands, default_pixel, std::move(transformer));
 }
 
-radix::Raster<float> DatasetReader::read(const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
+template <typename Pixel>
+Expected<typename DatasetReader<Pixel>::Samples> DatasetReader<Pixel>::read(const radix::tile::SrsBounds& bounds, const glm::uvec2 size)
 {
-    return readFrom(m_dataset, bounds, width, height);
+    if (size.x == 0 || size.y == 0 || size.x > unsigned(INT_MAX) || size.y > unsigned(INT_MAX)) {
+        return Error::fail(Error::Code::InvalidInput, fmt::format("read size {}x{} is empty or exceeds GDAL dimensions", size.x, size.y));
+    }
+    const std::uint64_t count = std::uint64_t(size.x) * size.y;
+    if (count > std::vector<Pixel>().max_size() || count > std::vector<std::uint8_t>().max_size()) {
+        return Error::fail(Error::Code::ResourceExhausted, fmt::format("read size {}x{} exceeds raster capacity", size.x, size.y));
+    }
+    const glm::dvec2 pixel_size = (bounds.max - bounds.min) / glm::dvec2(size);
+    const auto finite = [](glm::dvec2 value) { return std::isfinite(value.x) && std::isfinite(value.y); };
+    if (!finite(bounds.min) || !finite(bounds.max) || !finite(pixel_size) || !(pixel_size.x > 0) || !(pixel_size.y > 0)) {
+        return Error::fail(Error::Code::InvalidInput, "read bounds must be finite and nonempty");
+    }
+
+    CPLErrorReset();
+    const std::array<double, 6> geo_transform { bounds.min.x, pixel_size.x, 0, bounds.max.y, 0, -pixel_size.y };
+    GDALSetGenImgProjTransformerDstGeoTransform(m_transformer.get(), geo_transform.data());
+    ApproxTransformer transformer(
+        GDALCreateApproxTransformer(GDALGenImgProjTransform, m_transformer.get(), approximation_error), &GDALDestroyApproxTransformer);
+    if (!transformer) {
+        return Error::fail(Error::Code::Internal, fmt::format("create approximate transformer: {}", CPLGetLastErrorMsg()));
+    }
+    auto source = make_source(*m_dataset->gdalDataset(), m_bands);
+    if (!source) {
+        return Error::propagate(std::move(source), "prepare dataset " + m_dataset->name());
+    }
+    Samples result { radix::Raster<Pixel>(size), radix::Raster<std::uint8_t>(size) };
+    if (auto warped = warp<Pixel>(*source, transformer, result); !warped) {
+        return Error::propagate(std::move(warped), "read dataset " + m_dataset->name());
+    }
+
+    // Neither destination NoData nor INIT_DEST can replace this pass: GDAL
+    // alters valid pixels equal to NoData and writes pixels with zero alpha.
+    auto data = result.data.buffer();
+    auto valid = result.valid.buffer();
+    for (std::size_t i = 0; i < data.size(); ++i) {
+        bool is_valid = valid[i] != 0;
+        if constexpr (std::is_same_v<Pixel, float>) {
+            is_valid = is_valid && std::isfinite(data[i]);
+        }
+        if (!is_valid) {
+            data[i] = m_default_pixel;
+            valid[i] = 0;
+        }
+    }
+    return result;
 }
 
-radix::Raster<float> DatasetReader::readFrom(const std::shared_ptr<Dataset>& source_dataset, const radix::tile::SrsBounds& bounds, unsigned width, unsigned height) const
-{
-    // if we have performance problems with the warping, it'd still be possible to approximate the warping operation with a linear transform (mostly when zoomed in / on higher zoom levels).
-    // CTB does this in GDALTiler.cpp around line 375 ("// Decide if we are doing an approximate or exact transformation").
-
-    auto warp_options = makeWarpOptions(*this, source_dataset.get(), bounds, width, height);
-    auto adfGeoTransform = computeGeoTransform(bounds, width, height);
-    auto warped_dataset = Dataset(static_cast<GDALDataset*>(GDALCreateWarpedVRT(source_dataset->gdalDataset(), int(width), int(height), adfGeoTransform.data(), warp_options.first.get())));
-
-    auto* heights_band = warped_dataset.gdalDataset()->GetRasterBand(1); // non-owning pointer
-    auto heights_data = radix::Raster<float>({ width, height });
-    if (heights_band->RasterIO(GF_Read, 0, 0, int(width), int(height),
-            static_cast<void*>(heights_data.buffer().data()), int(width), int(height), GDT_Float32, 0, 0)
-        != CE_None)
-        throw std::runtime_error("couldn't read data");
-
-    return heights_data;
-}
-
-Expected<glm::dvec2> DatasetReader::min_pixel_size(const radix::tile::SrsBounds& bounds) const
+template <typename Pixel>
+Expected<glm::dvec2> DatasetReader<Pixel>::min_pixel_size(const radix::tile::SrsBounds& bounds) const
 {
     constexpr unsigned samples_per_axis = 5;
     constexpr double step_fraction = 1e-3;
 
-    auto coverage = m_projection == Projection::WebMercator ? m_dataset->mercator_coverage() : m_dataset->geographic_coverage();
+    auto coverage = m_projection == srs::Projection::WebMercator ? m_dataset->mercator_coverage() : m_dataset->geographic_coverage();
     if (!coverage) {
         return Error::propagate(std::move(coverage), "compute dataset coverage");
     }
@@ -296,7 +428,11 @@ int transform_import(void* argument, int destination_to_source, int count,
 }
 }
 
-Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(
+template class DatasetReader<float>;
+template class DatasetReader<glm::u8vec3>;
+
+namespace deprecated {
+Expected<DatasetReader<float>::Samples> read_scalar(
     GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const glm::uvec2 size, const unsigned band)
 {
     if (size.x == 0 || size.y == 0 || size.x > unsigned((std::numeric_limits<int>::max)()) || size.y > unsigned((std::numeric_limits<int>::max)())
@@ -412,7 +548,7 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(
     if (operation.Initialize(options.get()) != CE_None || operation.ChunkAndWarpImage(0, 0, int(size.x), int(size.y)) != CE_None || coordinates.failed) {
         return Error::fail(Error::Code::Io, "warp RF source band: " + std::string(CPLGetLastErrorMsg()));
     }
-    Samples<float> result { radix::Raster<float>(size), radix::Raster<std::uint8_t>(size) };
+    DatasetReader<float>::Samples result { radix::Raster<float>(size), radix::Raster<std::uint8_t>(size) };
     auto* output = destination.gdalDataset();
     if (output->GetRasterBand(1)->RasterIO(GF_Read, 0, 0, int(size.x), int(size.y), result.data.buffer().data(), int(size.x), int(size.y), GDT_Float32, 0, 0)
         != CE_None) {
@@ -431,14 +567,14 @@ Expected<DatasetReader::Samples<float>> DatasetReader::read_scalar(
     return result;
 }
 
-Expected<DatasetReader::Samples<glm::u8vec3>> DatasetReader::read_colour(
+Expected<DatasetReader<glm::u8vec3>::Samples> read_colour(
     GDALDataset& dataset, const RasterTransform& transform, const radix::tile::SrsBounds& bounds, const glm::uvec2 size, const std::array<unsigned, 3>& bands)
 {
     if (size.x == 0 || size.y == 0 || size.x > unsigned((std::numeric_limits<int>::max)()) || size.y > unsigned((std::numeric_limits<int>::max)())
         || std::size_t(size.x) > std::vector<glm::u8vec3>().max_size() / size.y) {
         return Error::fail(Error::Code::InvalidInput, "invalid RF RGB read dimensions");
     }
-    Samples<glm::u8vec3> result { radix::Raster<glm::u8vec3>(size), radix::Raster<std::uint8_t>(size, 255) };
+    DatasetReader<glm::u8vec3>::Samples result { radix::Raster<glm::u8vec3>(size), radix::Raster<std::uint8_t>(size, 255) };
     for (unsigned channel = 0; channel < 3; ++channel) {
         auto samples = read_scalar(dataset, transform, bounds, size, bands[channel]);
         if (!samples) {
@@ -466,3 +602,4 @@ Expected<DatasetReader::Samples<glm::u8vec3>> DatasetReader::read_colour(
     }
     return result;
 }
+} // namespace deprecated

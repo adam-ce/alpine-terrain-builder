@@ -218,7 +218,7 @@ TEST_CASE("RF serial tile phase timings on a supplied Vienna DSM", "[.][rf-tile-
     for (const auto key : { radix::tile::Id { 13, { 4464, 2840 } }, { 13, { 4468, 2840 } }, { 13, { 4473, 2840 } } }) {
         const auto started = std::chrono::steady_clock::now();
         const auto bounds = srs::webmercator_tile_bounds(key);
-        auto samples = DatasetReader::read_scalar(*dataset->gdalDataset(), *transform, bounds, side, 1);
+        auto samples = deprecated::read_scalar(*dataset->gdalDataset(), *transform, bounds, side, 1);
         REQUIRE(samples);
         const auto read = std::chrono::steady_clock::now();
         std::vector<glm::dvec2> centres(side);

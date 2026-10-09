@@ -186,6 +186,8 @@ inline OGRSpatialReference webmercator() { return from_epsg(3857).value(); }
 inline OGRSpatialReference wgs84() { return from_epsg(4326).value(); }
 inline OGRSpatialReference mgi() { return from_epsg(4312).value(); }
 
+enum class Projection { WebMercator, Geographic };
+
 /// Half the side length of the square Web Mercator world in metres.
 constexpr double webmercator_half_extent = 20037508.342789244;
 /// Latitude in degrees at which Web Mercator y reaches webmercator_half_extent.

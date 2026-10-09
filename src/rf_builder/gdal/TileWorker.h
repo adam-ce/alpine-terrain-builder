@@ -61,11 +61,11 @@ public:
         const auto window = nodata::window(key, m_record.tile_side, m_halo);
         const auto& bounds = window.bounds;
         auto samples = Error::throwing_unwrap(
-            [&]() -> Expected<DatasetReader::Samples<PixelType>> {
+            [&]() -> Expected<typename DatasetReader<PixelType>::Samples> {
                 if constexpr (std::is_same_v<PixelType, float>) {
-                    return DatasetReader::read_scalar(*m_dataset.gdalDataset(), m_transform, bounds, window.size, m_record.bands[0]);
+                    return deprecated::read_scalar(*m_dataset.gdalDataset(), m_transform, bounds, window.size, m_record.bands[0]);
                 } else {
-                    return DatasetReader::read_colour(
+                    return deprecated::read_colour(
                         *m_dataset.gdalDataset(), m_transform, bounds, window.size, { m_record.bands[0], m_record.bands[1], m_record.bands[2] });
                 }
             }(),

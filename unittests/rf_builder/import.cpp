@@ -71,13 +71,14 @@ Dataset source_raster(const std::filesystem::path& path,
     const unsigned bands,
     std::array<double, 6> affine,
     int epsg = 3857,
-    GDALDataType type = GDT_Float32)
+    GDALDataType type = GDT_Float32,
+    bool lossless = false)
 {
     initialize_gdal_once();
     auto* driver = GetGDALDriverManager()->GetDriverByName(path.empty() ? "MEM" : "GTiff");
     REQUIRE(driver);
     CPLStringList creation_options;
-    if (!path.empty() && bands == 3 && type == GDT_Byte) {
+    if (!path.empty() && bands == 3 && type == GDT_Byte && !lossless) {
         creation_options.SetNameValue("TILED", "YES");
         creation_options.SetNameValue("BLOCKXSIZE", "16");
         creation_options.SetNameValue("BLOCKYSIZE", "16");
@@ -210,23 +211,23 @@ TEST_CASE("RF reader uses per-channel validity and preserves ordinary black and 
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     for (int band = 1; band <= 3; ++band) { REQUIRE(source.gdalDataset()->GetRasterBand(band)->Fill(0) == CE_None); }
-    auto black = DatasetReader::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
+    auto black = deprecated::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
     REQUIRE(black);
     CHECK(black->valid.buffer()[16 * 32 + 16] != 0);
     CHECK(black->data.buffer()[16 * 32 + 16] == glm::u8vec3(0));
     auto* green = source.gdalDataset()->GetRasterBand(2);
     REQUIRE(green->SetNoDataValue(0) == CE_None);
-    auto invalid = DatasetReader::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
+    auto invalid = deprecated::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
     REQUIRE(invalid);
     CHECK(std::ranges::none_of(invalid->valid.buffer(), [](auto value) { return value != 0; }));
     REQUIRE(green->DeleteNoDataValue() == CE_None);
     REQUIRE(green->CreateMaskBand(0) == CE_None);
     REQUIRE(green->GetMaskBand()->Fill(0) == CE_None);
-    auto masked = DatasetReader::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
+    auto masked = deprecated::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
     REQUIRE(masked);
     CHECK(std::ranges::none_of(masked->valid.buffer(), [](auto value) { return value != 0; }));
     REQUIRE(source.gdalDataset()->GetRasterBand(1)->Fill(-32768) == CE_None);
-    auto ordinary = DatasetReader::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 1);
+    auto ordinary = deprecated::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 1);
     REQUIRE(ordinary);
     CHECK(ordinary->valid.buffer()[16 * 32 + 16] != 0);
     CHECK(ordinary->data.buffer()[16 * 32 + 16] == -32768);
@@ -514,7 +515,7 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
     auto transform = RasterTransform::create(*mosaic.gdalDataset());
     REQUIRE(transform);
     const Bounds window { { 8.25, 0.25 }, { 24.25, 16.25 } };
-    auto combined = DatasetReader::read_scalar(*mosaic.gdalDataset(), *transform, window, 16, 1);
+    auto combined = deprecated::read_scalar(*mosaic.gdalDataset(), *transform, window, 16, 1);
     REQUIRE(combined);
     auto reference = source_raster({}, 32, 1, { 0, 1, 0, 16, 0, -1 });
     std::vector<float> values(32 * 32, 10);
@@ -524,7 +525,7 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
     REQUIRE(reference.gdalDataset()->GetRasterBand(1)->RasterIO(GF_Write, 0, 0, 32, 32, values.data(), 32, 32, GDT_Float32, 0, 0) == CE_None);
     auto reference_transform = RasterTransform::create(*reference.gdalDataset());
     REQUIRE(reference_transform);
-    auto expected = DatasetReader::read_scalar(*reference.gdalDataset(), *reference_transform, window, 16, 1);
+    auto expected = deprecated::read_scalar(*reference.gdalDataset(), *reference_transform, window, 16, 1);
     REQUIRE(expected);
     // Compare our source assembly, not GDAL's filter formula.
     for (unsigned x = 0; x < 16; ++x) {
@@ -533,8 +534,7 @@ TEST_CASE("RF imports a prepared VRT across a file boundary using base-resolutio
     const int level = 2;
     REQUIRE(reference.gdalDataset()->BuildOverviews("NEAREST", 1, &level, 0, nullptr, nullptr, nullptr) == CE_None);
     REQUIRE(reference.gdalDataset()->GetRasterBand(1)->GetOverview(0)->Fill(222) == CE_None);
-    auto base = DatasetReader::read_scalar(*reference.gdalDataset(), *reference_transform,
-        { { 0, -16 }, { 32, 16 } }, 16, 1);
+    auto base = deprecated::read_scalar(*reference.gdalDataset(), *reference_transform, { { 0, -16 }, { 32, 16 } }, 16, 1);
     REQUIRE(base);
     CHECK(base->data.buffer()[8 * 16 + 4] != 222);
 }
@@ -554,9 +554,9 @@ TEST_CASE("RF filtering agrees across output windows and a longitude seam", "[rf
     const Bounds east { { half - width, -width / 2 }, { half, width / 2 } };
     const Bounds west { { -half, -width / 2 }, { -half + width, width / 2 } };
     const Bounds across { { half - width, -width }, { half + width, width } };
-    auto right_edge = DatasetReader::read_scalar(*source.gdalDataset(), *transform, east, 16, 1);
-    auto left_edge = DatasetReader::read_scalar(*source.gdalDataset(), *transform, west, 16, 1);
-    auto joined = DatasetReader::read_scalar(*source.gdalDataset(), *transform, across, 32, 1);
+    auto right_edge = deprecated::read_scalar(*source.gdalDataset(), *transform, east, 16, 1);
+    auto left_edge = deprecated::read_scalar(*source.gdalDataset(), *transform, west, 16, 1);
+    auto joined = deprecated::read_scalar(*source.gdalDataset(), *transform, across, 32, 1);
     REQUIRE(right_edge);
     REQUIRE(left_edge);
     REQUIRE(joined);
@@ -714,7 +714,7 @@ TEST_CASE("RF ignores GDAL threading environment for its synchronous transformer
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     CPLErrorReset();
-    auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 1);
+    auto read = deprecated::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 1);
     REQUIRE(read);
     CHECK(CPLGetLastErrorType() < CE_Failure);
     CHECK(read->valid.buffer()[16 * 32 + 16] != 0);
@@ -725,7 +725,7 @@ TEST_CASE("RF excludes invalid projection probes outside a coarse source footpri
     auto source = source_raster({}, 4, 1, { -3500000, 2000000, 0, 4000000, 0, -2000000 }, 32632);
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
-    auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform, srs::webmercator_tile_bounds({ 0, { 0, 0 } }), 16, 1);
+    auto read = deprecated::read_scalar(*source.gdalDataset(), *transform, srs::webmercator_tile_bounds({ 0, { 0, 0 } }), 16, 1);
     INFO((read ? "" : read.error().to_string()));
     REQUIRE(read);
 }
@@ -735,7 +735,7 @@ TEST_CASE("RF default-size tile can contain a source smaller than GDAL probe spa
     auto source = source_raster({}, 32, 1, { 100, 1, 0, 200, 0, -1 });
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
-    auto read = DatasetReader::read_scalar(*source.gdalDataset(), *transform, { { 0, 0 }, { 4096, 4096 } }, 4096, 1);
+    auto read = deprecated::read_scalar(*source.gdalDataset(), *transform, { { 0, 0 }, { 4096, 4096 } }, 4096, 1);
     INFO((read ? "" : read.error().to_string()));
     REQUIRE(read);
     CHECK(read->valid.buffer()[std::size_t(4096 - 184) * 4096 + 116] != 0);
@@ -905,10 +905,10 @@ TEST_CASE("RF warped nonfinite samples are invalid before RGB byte conversion", 
     auto transform = RasterTransform::create(*source.gdalDataset());
     REQUIRE(transform);
     REQUIRE(source.gdalDataset()->GetRasterBand(2)->Fill(GENERATE(double(NAN), double(INFINITY))) == CE_None);
-    auto scalar = DatasetReader::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 2);
+    auto scalar = deprecated::read_scalar(*source.gdalDataset(), *transform, bounds, 32, 2);
     REQUIRE(scalar);
     CHECK(std::ranges::none_of(scalar->valid.buffer(), [](auto value) { return value != 0; }));
-    auto rgb = DatasetReader::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
+    auto rgb = deprecated::read_colour(*source.gdalDataset(), *transform, bounds, 32, { 1, 2, 3 });
     REQUIRE(rgb);
     CHECK(std::ranges::none_of(rgb->valid.buffer(), [](auto value) { return value != 0; }));
     auto processor = rf_builder::gdal::nodata::Processor::create(5, 5);
@@ -922,10 +922,12 @@ TEST_CASE("RF import stores configured replacements with zero attribution", "[rf
     const unsigned bands = GENERATE(1u, 3u);
     Fixture fixture(bands);
     {
-        auto source = source_raster(fixture.options.dataset, 32, bands, affine_for(fixture.bounds, 32));
+        // RGB sources must be Byte; a lossless one keeps the NoData sentinel exact.
+        auto source = source_raster(fixture.options.dataset, 32, bands, affine_for(fixture.bounds, 32), 3857, bands == 1 ? GDT_Float32 : GDT_Byte, true);
         auto* missing = source.gdalDataset()->GetRasterBand(bands == 1 ? 1 : 2);
-        REQUIRE(missing->SetNoDataValue(-9999) == CE_None);
-        std::vector<float> hole(16 * 16, -9999);
+        const double nodata = bands == 1 ? -9999 : 255;
+        REQUIRE(missing->SetNoDataValue(nodata) == CE_None);
+        std::vector<float> hole(16 * 16, float(nodata));
         REQUIRE(missing->RasterIO(GF_Write, 8, 8, 16, 16, hole.data(), 16, 16, GDT_Float32, 0, 0) == CE_None);
     }
     fixture.options.nodata_default_value = bands == 1 ? std::vector<double> { 12 } : std::vector<double> { 128, 64, 32 };

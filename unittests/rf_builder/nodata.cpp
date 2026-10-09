@@ -31,7 +31,7 @@ namespace {
 namespace nodata = rf_builder::gdal::nodata;
 
 template <typename T>
-DatasetReader::Samples<T> samples(unsigned side, T value)
+typename DatasetReader<T>::Samples samples(unsigned side, T value)
 {
     return { radix::Raster<T>(glm::uvec2(side), value), radix::Raster<std::uint8_t>(glm::uvec2(side), 1) };
 }
@@ -256,7 +256,7 @@ TEST_CASE("RF periodic seam reads narrow source strips and postprocessing does n
     REQUIRE(transform);
     const double step = 2 * half / 4096;
     const RasterTransform::Bounds bounds { { west - 16 * step, -16 * step }, { west + 16 * step, 16 * step } };
-    auto read = DatasetReader::read_scalar(dataset, *transform, bounds, 32, 1);
+    auto read = deprecated::read_scalar(dataset, *transform, bounds, 32, 1);
     REQUIRE(read);
     auto* band = static_cast<CountingBand*>(dataset.GetRasterBand(1));
     CHECK(band->read_count > 0);

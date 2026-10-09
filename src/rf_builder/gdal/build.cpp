@@ -71,7 +71,7 @@ std::vector<unsigned> selected_bands(const Options& options, GDALDataset& datase
 template <typename PixelType>
 Report produce(const Options& options,
     const std::vector<planning::Bounds>& source_coverage,
-    const DatasetReader& reader,
+    const DatasetReader<PixelType>& reader,
     const Mask& mask,
     const inputs::Record& record,
     const std::function<bool()>& stop_requested)
@@ -134,7 +134,6 @@ Report build(const Options& options, const std::function<bool()>& stop_requested
     const auto dataset = Error::throwing_unwrap(Dataset::open_shared_raster(inputs::gdal_identifier(dataset_identifier)), "open RF source dataset");
     const auto source_coverage = Error::throwing_unwrap(dataset->mercator_coverage(), "compute RF source coverage");
     auto bands = selected_bands(options, *dataset->gdalDataset());
-    const DatasetReader reader(dataset, DatasetReader::Projection::WebMercator, bands.front());
     const auto mask = Error::throwing_unwrap(Mask::open(inputs::gdal_identifier(mask_identifier)));
     const auto entry = Error::throwing_unwrap(run::attribution(output));
     inputs::Record record { dataset_identifier, mask_identifier, std::move(bands), options.mode, options.attribution_index, options.tile_side, entry };
@@ -144,8 +143,14 @@ Report build(const Options& options, const std::function<bool()>& stop_requested
     record.value_mapping = options.value_mapping.value_or(
         options.mode == Mode::Colour ? raster_store::pixel::default_mapping<glm::u8vec3> : raster_store::pixel::default_mapping<float>);
     if (options.mode == Mode::Scalar) {
+        const auto reader = Error::throwing_unwrap(
+            DatasetReader<float>::make(dataset, srs::Projection::WebMercator, { record.bands[0] }, fallback[0]), "open RF source reader");
         return produce<float>(options, source_coverage, reader, mask, record, stop_requested);
     }
+    const auto reader = Error::throwing_unwrap(
+        DatasetReader<glm::u8vec3>::make(
+            dataset, srs::Projection::WebMercator, { record.bands[0], record.bands[1], record.bands[2] }, glm::u8vec3(fallback[0], fallback[1], fallback[2])),
+        "open RF source reader");
     return produce<glm::u8vec3>(options, source_coverage, reader, mask, record, stop_requested);
 }
 

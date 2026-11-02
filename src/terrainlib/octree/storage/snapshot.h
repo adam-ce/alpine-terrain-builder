@@ -32,7 +32,7 @@
 
 namespace octree::storage {
 
-// Creates an empty storage in <final_path>.part; see store::snapshot.
+// Creates an empty storage in a new attempt of final_path; see store::snapshot.
 template <typename NodeData, typename CodecResolver>
 Expected<store::IndexedStorage<StoreTraits, NodeData>> create(const std::filesystem::path& final_path,
     std::string payload_class,
@@ -44,15 +44,16 @@ Expected<store::IndexedStorage<StoreTraits, NodeData>> create(const std::filesys
     if (!codec) {
         return Error::propagate(std::move(codec), "resolve octree storage codec \"" + codec_selector + "\"");
     }
-    auto partial = store::snapshot::create_partial(final_path);
-    if (!partial) {
-        return Error::propagate(std::move(partial));
+    auto attempt = store::snapshot::create_partial(final_path);
+    if (!attempt) {
+        return Error::propagate(std::move(attempt));
     }
-    auto storage
-        = store::make_storage<StoreTraits, NodeData>(*partial, index_format(), mapping, std::move(payload_class), std::move(codec_selector), std::move(*codec));
+    auto storage = store::make_storage<StoreTraits, NodeData>(
+        attempt->path, index_format(), mapping, std::move(payload_class), std::move(codec_selector), std::move(*codec));
     if (!storage) {
         return Error::propagate(std::move(storage));
     }
+    storage->set_snapshot_lock(std::move(attempt->lock));
     // Even an empty incomplete snapshot has a readable checkpoint.
     if (auto saved = storage->save_index(); !saved) {
         return Error::propagate(std::move(saved), "create initial octree index");
@@ -60,14 +61,14 @@ Expected<store::IndexedStorage<StoreTraits, NodeData>> create(const std::filesys
     return store::IndexedStorage<StoreTraits, NodeData>(std::move(*storage));
 }
 
-// Saves the index and renames <final>.part to <final>.
+// Saves the index and publishes the attempt to its final path; see store::snapshot.
 template <typename NodeData>
 Expected<void> publish(store::IndexedStorage<StoreTraits, NodeData> storage)
 {
     if (auto saved = storage.save_index(); !saved) {
         return Error::propagate(std::move(saved), "save octree index before publication");
     }
-    return store::snapshot::publish(storage.base_path());
+    return store::snapshot::publish(storage.base_path(), storage.take_snapshot_lock());
 }
 
 } // namespace octree::storage

@@ -52,7 +52,7 @@ inline Expected<IndexedStorage> open_folder_indexed(const std::filesystem::path&
     return octree::storage::open_folder_indexed<mesh::Simple>(path, std::string(payload_class), ".sfmesh", mesh::codec::from_extension, std::move(options));
 }
 
-// Creates an empty storage in <path>.part; see store::snapshot.
+// Creates an empty storage in a new attempt of path; see store::snapshot.
 inline Expected<IndexedStorage> create(const std::filesystem::path& path, OpenOptions options = {})
 {
     return octree::storage::create<mesh::Simple>(path,

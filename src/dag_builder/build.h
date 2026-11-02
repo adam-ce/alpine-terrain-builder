@@ -51,7 +51,7 @@ struct BuildOptions {
     bool parallelize = false;
 };
 
-// Debug meshes go beside the output as <output>-debug, also while it is built in <output>.part.
+// Debug meshes go beside the output as <output>-debug, also while it is built in an attempt.
 std::filesystem::path debug_mesh_path(const std::filesystem::path& output_path);
 
 Expected<void> build_full(

@@ -129,7 +129,9 @@ Args cli::parse(int argc, const char *const *argv) {
         ->required()
         ->check(CLI::ExistingDirectory);
 
-    app.add_option("--output", args.output_path, "New path for the generated dag levels; they are written to <output>.part, which is renamed to <output> when complete")
+    app.add_option("--output",
+           args.output_path,
+           "New path for the generated dag levels; they are written to <output>.<UTC time>.part, which is renamed to <output> when complete")
         ->required();
 
     std::vector<uint64_t> root_node_values;

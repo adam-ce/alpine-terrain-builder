@@ -47,8 +47,9 @@ Args cli::parse(int argc, const char *const *argv) {
         ->check(CLI::ExistingFile);
 
     merge
-        .add_option(
-            "--output", merge_args.output_path, "New path for the merged dataset; it is written to <output>.part, which is renamed to <output> when complete")
+        .add_option("--output",
+            merge_args.output_path,
+            "New path for the merged dataset; it is written to <output>.<UTC time>.part, which is renamed to <output> when complete")
         ->required();
 
     merge.add_option("--cache", merge_args.cache_path, "Incomplete .part output of an earlier merge with the same inputs to reuse")
@@ -73,7 +74,9 @@ Args cli::parse(int argc, const char *const *argv) {
         ->required()
         ->check(CLI::ExistingFile);
 
-    cut.add_option("--output", cut_args.output_path, "New path for the cut dataset; it is written to <output>.part, which is renamed to <output> when complete")
+    cut.add_option("--output",
+           cut_args.output_path,
+           "New path for the cut dataset; it is written to <output>.<UTC time>.part, which is renamed to <output> when complete")
         ->required();
 
     cut.add_flag("--keep-inside,!--keep-outside", cut_args.keep_inside, "Keep the part of the dataset thats inside/outside the mask.");

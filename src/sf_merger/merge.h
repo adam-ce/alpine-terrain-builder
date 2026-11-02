@@ -292,7 +292,7 @@ inline Expected<void> merge_datasets(const mesh::storage::IndexedStorage& left_d
     return {};
 }
 
-// Merges into <output_path>.part and publishes it to output_path; see store::snapshot.
+// Merges into a new attempt and publishes it to output_path; see store::snapshot.
 // The cache must be an incomplete merge output with the same record.
 inline Expected<void> merge_datasets(const mesh::storage::IndexedStorage& left_dataset,
     const mesh::storage::IndexedStorage& right_dataset,

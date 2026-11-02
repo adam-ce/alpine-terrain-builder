@@ -25,6 +25,7 @@
 #include "merge.h"
 #include "mesh/storage.h"
 #include "store/inputs.h"
+#include "store/snapshot.h"
 
 namespace {
 
@@ -218,7 +219,9 @@ TEST_CASE("SF merge stops on request and reuses cached nodes", "[sfmerger][sf][s
         REQUIRE_FALSE(merged.has_value());
         CHECK(merged.error().code() == Error::Code::Cancelled);
         CHECK_FALSE(std::filesystem::exists(output));
-        const auto partial = directory.path() / "output.part";
+        const auto attempts = store::snapshot::attempts(output).value();
+        REQUIRE(attempts.size() == 1);
+        const auto& partial = attempts.front();
         CHECK(std::filesystem::exists(partial / store::inputs::file_name));
         CHECK(mesh::storage::open_index(partial / octree::storage::index_file_name).has_value());
     }

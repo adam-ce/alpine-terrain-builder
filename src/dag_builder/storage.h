@@ -70,7 +70,7 @@ open_folder_indexed(const std::filesystem::path &path, OpenOptions options = {})
         std::move(options));
 }
 
-// Creates an empty storage in <path>.part; see store::snapshot.
+// Creates an empty storage in a new attempt of path; see store::snapshot.
 inline Expected<IndexedStorage> create(const std::filesystem::path& path)
 {
     return octree::storage::create<dag::ClusterBatch>(

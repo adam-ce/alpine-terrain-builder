@@ -274,7 +274,9 @@ int run(std::span<char *> args) {
         ->required()
         ->check(CLI::Range(unsigned(terrainbuilder::min_target_level), unsigned(octree::Id::max_level())));
     std::filesystem::path output_base_path;
-    batch->add_option("--output", output_base_path, "New output path; the meshes are written to <output>.part, which is renamed to <output> when complete")
+    batch
+        ->add_option(
+            "--output", output_base_path, "New output path; the meshes are written to <output>.<UTC time>.part, which is renamed to <output> when complete")
         ->required();
     std::string output_format;
     batch->add_option("--format", output_format, "Output mesh format")

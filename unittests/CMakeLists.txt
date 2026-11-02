@@ -31,6 +31,7 @@ function(atb_configure_test target)
 endfunction()
 
 add_executable(unittests_terrainlib
+    attempts.h
     catch2_helpers.h
     opencv_helpers.h
     temporary_directory.h

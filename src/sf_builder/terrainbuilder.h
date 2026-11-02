@@ -56,7 +56,7 @@ std::optional<SimpleMesh> build_patch(
     const TileProvider *tile_provider,
     const OGRSpatialReference &mesh_srs);
 
-// Builds all nodes at record.target_level into <output_path>.part and publishes it to
+// Builds all nodes at record.target_level into a new attempt and publishes it to
 // output_path. Nodes in the cache, an incomplete earlier build with the same record, are
 // linked instead of built. When stop_requested returns true, the active nodes are finished
 // and the incomplete snapshot is retained, and the result is an error with code Cancelled.

@@ -31,6 +31,7 @@
 #include "cli_support/log.h"
 #include "store/IndexFormat.h"
 #include "store/RawStorage.h"
+#include "store/snapshot.h"
 
 namespace store {
 
@@ -69,6 +70,7 @@ public:
         , m_hashes(std::move(other.m_hashes))
         , m_persistence(std::move(other.m_persistence))
         , m_dirty(std::exchange(other.m_dirty, false))
+        , m_snapshot_lock(std::move(other.m_snapshot_lock))
     {
         other.m_index.reset();
         other.m_hashes.clear();
@@ -86,6 +88,7 @@ public:
         m_hashes = std::move(other.m_hashes);
         m_persistence = std::move(other.m_persistence);
         m_dirty = std::exchange(other.m_dirty, false);
+        m_snapshot_lock = std::move(other.m_snapshot_lock);
         other.m_index.reset();
         other.m_hashes.clear();
         other.m_persistence.reset();
@@ -281,6 +284,11 @@ public:
 
     Expected<void> save_or_create_index() { return save_index(); }
 
+    // The lock of the snapshot attempt this storage writes; it is held until destruction,
+    // after the final index save, or until taken for publication.
+    void set_snapshot_lock(snapshot::Lock lock) { m_snapshot_lock = std::move(lock); }
+    snapshot::Lock take_snapshot_lock() { return std::move(m_snapshot_lock); }
+
 protected:
     Index<Traits>& index_mut() { return m_index.value(); }
     const Index<Traits>& index_ref() const { return m_index.value(); }
@@ -333,6 +341,7 @@ private:
     Key2Hash_Map<Traits> m_hashes;
     std::optional<Persistence> m_persistence = std::nullopt;
     mutable bool m_dirty = false;
+    snapshot::Lock m_snapshot_lock;
 };
 
 } // namespace store

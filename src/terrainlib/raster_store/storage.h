@@ -128,8 +128,8 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (!codec) {
         return Error::propagate(std::move(codec));
     }
-    auto table
-        = attribution::read_table(options.copy_attribution_from_index.value_or(store::snapshot::partial_path(destination) / io::manifest::index_file_name));
+    // Resolve the table as readers of the published snapshot will.
+    auto table = attribution::read_table(options.copy_attribution_from_index.value_or(destination / io::manifest::index_file_name));
     if (!table) {
         return Error::propagate(std::move(table), "resolve attribution for new raster snapshot");
     }
@@ -137,7 +137,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (!created) {
         return Error::propagate(std::move(created));
     }
-    const auto& partial_path = *created;
+    const auto& partial_path = created->path;
     if (options.copy_attribution_from_index) {
         auto copied = attribution::copy_table(*options.copy_attribution_from_index, partial_path);
         if (!copied) {
@@ -157,6 +157,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (!storage) {
         return Error::propagate(std::move(storage));
     }
+    storage->set_snapshot_lock(std::move(created->lock));
     // Even an empty newly created snapshot has a readable checkpoint.
     if (auto saved = storage->save_index(); !saved) {
         return Error::propagate(std::move(saved), "create initial raster index");
@@ -176,10 +177,12 @@ Expected<void> publish(std::unique_ptr<IndexedStorage<PixelType>> storage)
     if (!store::snapshot::is_partial(partial_path)) {
         return Error::fail(Error::Code::InvalidInput, "publication requires an incomplete .part snapshot", partial_path);
     }
+    // The lock outlives the handle until publication has renamed the attempt and deleted the others.
+    auto lock = storage->take_snapshot_lock();
     if (auto finished = detail::finish_output(std::move(storage)); !finished) {
         return Error::propagate(std::move(finished), "finish raster snapshot before publication");
     }
-    return store::snapshot::publish(partial_path);
+    return store::snapshot::publish(partial_path, std::move(lock));
 }
 
 } // namespace raster_store::storage

@@ -415,10 +415,11 @@ TEST_CASE("raster snapshots checkpoint metadata dimensions and publish explicitl
     TemporaryDirectory directory;
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
-    const auto partial = directory.path() / "snapshot.part";
     auto created_result = storage::create<float>(final, small_options());
     REQUIRE(created_result);
     auto [created, created_metadata] = std::move(*created_result);
+    const auto partial = created->base_path();
+    CHECK(store::snapshot::attempts(final).value() == std::vector { partial });
     CHECK_FALSE(storage::open<float>(partial));
     CHECK_FALSE(storage::open<float>(partial / ""));
     CHECK(storage::open<float>(partial, { .allow_incomplete = true }));
@@ -688,11 +689,12 @@ TEST_CASE("abandoned raster output checkpoints but never publishes", "[raster-st
     TemporaryDirectory directory;
     write_table(directory.path());
     const auto final = directory.path() / "snapshot";
-    const auto partial = directory.path() / "snapshot.part";
+    std::filesystem::path partial;
     {
         auto created_result = storage::create<float>(final, small_options());
         REQUIRE(created_result);
         auto [created, created_metadata] = std::move(*created_result);
+        partial = created->base_path();
         REQUIRE(created->save({ 0, { 0, 0 } }, raster_store::Tile<float>(4)));
     }
     CHECK_FALSE(std::filesystem::exists(final));
@@ -749,7 +751,7 @@ TEST_CASE("snapshot geometry and mapping validation precede creation", "[raster-
     }
     SECTION("unknown placement") { options.placement = static_cast<raster_store::pixel::Placement>(99); }
     CHECK_FALSE(storage::create<float>(directory.path() / "snapshot", options));
-    CHECK_FALSE(std::filesystem::exists(directory.path() / "snapshot.part"));
+    CHECK(store::snapshot::attempts(directory.path() / "snapshot").value().empty());
 }
 
 TEST_CASE("vertex snapshots include the overlap in their stored tiles", "[raster-store][storage]")

@@ -18,9 +18,12 @@
 
 #include <filesystem>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "../attempts.h"
 #include "../temporary_directory.h"
 #include "io/byte.h"
 #include "io/envelope.h"
@@ -53,46 +56,62 @@ Expected<mesh::storage::IndexedStorage> create_mesh_storage(const std::filesyste
 
 } // namespace
 
-TEST_CASE("snapshots are created as .part and published by renaming", "[store][snapshot]")
+TEST_CASE("snapshots are created as time-stamped attempts and published by renaming", "[store][snapshot]")
 {
     TemporaryDirectory directory("snapshot");
     const auto final_path = directory.path() / "nested" / "output";
-    const auto partial_path = store::snapshot::partial_path(final_path);
-    CHECK(partial_path.filename() == "output.part");
-    CHECK(store::snapshot::is_partial(partial_path));
+    CHECK(store::snapshot::attempts(final_path).value().empty());
+
+    const auto lock_path = directory.path() / "nested" / "output.lock";
+    auto first = store::snapshot::create_partial(final_path);
+    REQUIRE(first.has_value());
+    CHECK(std::filesystem::is_directory(first->path));
+    CHECK(store::snapshot::is_partial(first->path));
     CHECK_FALSE(store::snapshot::is_partial(final_path));
+    CHECK(first->path.filename().string().starts_with("output."));
+    CHECK(first->path.filename().string().size() == std::string("output.yyyymmddThhmmss.mmmZ.part").size());
+    CHECK(std::filesystem::exists(lock_path));
+    // The lock excludes a concurrent run on the same output until it is released.
+    const auto concurrent = store::snapshot::create_partial(final_path);
+    REQUIRE_FALSE(concurrent.has_value());
+    CHECK(concurrent.error().code() == Error::Code::AlreadyExists);
+    first->lock = {};
+    // Consecutive attempts get distinct times that sort chronologically.
+    test::wait_for_next_attempt_time();
+    auto second = store::snapshot::create_partial(final_path.string() + "/");
+    REQUIRE(second.has_value());
+    CHECK(first->path < second->path);
 
-    const auto created = store::snapshot::create_partial(final_path);
-    REQUIRE(created.has_value());
-    CHECK(*created == partial_path);
-    CHECK(std::filesystem::is_directory(partial_path));
-
-    SECTION("an existing .part is rejected")
-    {
-        const auto again = store::snapshot::create_partial(final_path);
-        REQUIRE_FALSE(again.has_value());
-        CHECK(again.error().code() == Error::Code::AlreadyExists);
+    const auto older = final_path.parent_path() / "output.20200101T000000.000Z.part";
+    REQUIRE(std::filesystem::create_directory(older));
+    const auto other = final_path.parent_path() / "output.v2.20200101T000000.000Z.part";
+    for (const auto& ignored : { final_path.parent_path() / "output.part", other, final_path.parent_path() / "other.20200101T000000.000Z.part" }) {
+        REQUIRE(std::filesystem::create_directory(ignored));
     }
+    CHECK(store::snapshot::attempts(final_path).value() == std::vector { older, first->path, second->path });
 
     SECTION("a .part final path is rejected")
     {
-        const auto rejected = store::snapshot::create_partial(partial_path);
+        const auto rejected = store::snapshot::create_partial(first->path);
         REQUIRE_FALSE(rejected.has_value());
         CHECK(rejected.error().code() == Error::Code::InvalidInput);
     }
 
-    SECTION("publication removes the input record and renames")
+    SECTION("publication removes the input record and the lock, renames and deletes the other attempts")
     {
-        REQUIRE(store::inputs::write<Schema>(partial_path, Record { "input", 1 }).has_value());
-        REQUIRE(std::filesystem::exists(partial_path / store::inputs::file_name));
-        REQUIRE(store::snapshot::publish(partial_path).has_value());
-        CHECK_FALSE(std::filesystem::exists(partial_path));
+        REQUIRE(store::inputs::write<Schema>(second->path, Record { "input", 1 }).has_value());
+        REQUIRE(store::snapshot::publish(second->path, std::move(second->lock)).has_value());
         CHECK(std::filesystem::is_directory(final_path));
         CHECK_FALSE(std::filesystem::exists(final_path / store::inputs::file_name));
+        CHECK_FALSE(std::filesystem::exists(lock_path));
+        CHECK(store::snapshot::attempts(final_path).value().empty());
+        CHECK_FALSE(std::filesystem::exists(older));
+        CHECK(std::filesystem::exists(other));
 
         const auto again = store::snapshot::create_partial(final_path);
         REQUIRE_FALSE(again.has_value());
         CHECK(again.error().code() == Error::Code::AlreadyExists);
+        CHECK_FALSE(std::filesystem::exists(lock_path));
     }
 
     SECTION("publication does not replace an existing destination")
@@ -100,12 +119,13 @@ TEST_CASE("snapshots are created as .part and published by renaming", "[store][s
         SECTION("empty directory") { REQUIRE(std::filesystem::create_directory(final_path)); }
         SECTION("nonempty directory") { REQUIRE(io::byte::write(io::byte::span {}, final_path / "keep", io::byte::WriteMode::Overwrite)); }
         SECTION("dangling symlink") { std::filesystem::create_symlink(directory.path() / "missing", final_path); }
-        REQUIRE(store::inputs::write<Schema>(partial_path, Record { "input", 1 }).has_value());
-        const auto published = store::snapshot::publish(partial_path);
+        REQUIRE(store::inputs::write<Schema>(second->path, Record { "input", 1 }).has_value());
+        const auto published = store::snapshot::publish(second->path, std::move(second->lock));
         REQUIRE_FALSE(published.has_value());
         CHECK(published.error().code() == Error::Code::AlreadyExists);
-        // The retained .part stays usable as a cache.
-        CHECK(store::inputs::validate_cache<Schema>(partial_path, Record { "input", 1 }).has_value());
+        // The retained attempts stay usable as caches.
+        CHECK(store::inputs::validate_cache<Schema>(second->path, Record { "input", 1 }).has_value());
+        CHECK(store::snapshot::attempts(final_path).value() == std::vector { older, first->path, second->path });
     }
 }
 
@@ -157,12 +177,15 @@ TEST_CASE("octree snapshots are created empty, published, and fingerprinted", "[
         auto created = create_mesh_storage(final_path);
         REQUIRE(created.has_value());
         auto storage = std::move(*created);
-        CHECK(storage.base_path() == store::snapshot::partial_path(final_path));
+        CHECK(store::snapshot::attempts(final_path).value() == std::vector { storage.base_path() });
         CHECK(std::filesystem::is_regular_file(storage.base_path() / octree::storage::index_file_name));
+        // The storage holds the lock of its output.
+        CHECK_FALSE(create_mesh_storage(final_path).has_value());
         REQUIRE(storage.save(root, triangle()).has_value());
         REQUIRE(octree::storage::publish(std::move(storage)).has_value());
     }
-    CHECK_FALSE(std::filesystem::exists(store::snapshot::partial_path(final_path)));
+    CHECK(store::snapshot::attempts(final_path).value().empty());
+    CHECK_FALSE(std::filesystem::exists(directory.path() / "output.lock"));
 
     const auto reopened = mesh::storage::open_index(final_path / octree::storage::index_file_name);
     REQUIRE(reopened.has_value());

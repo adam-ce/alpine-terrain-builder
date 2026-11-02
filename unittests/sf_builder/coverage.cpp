@@ -32,6 +32,7 @@
 #include "mesh/storage.h"
 #include "mesh_builder.h"
 #include "store/inputs.h"
+#include "store/snapshot.h"
 #include "terrainbuilder.h"
 
 using test::TemporaryDirectory;
@@ -181,13 +182,13 @@ TEST_CASE("batch builds datasets crossing the prime meridian", "[terrainbuilder]
     {
         CHECK_FALSE(terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, batch_record(1)).has_value());
         CHECK_FALSE(std::filesystem::exists(output));
-        CHECK_FALSE(std::filesystem::exists(directory.path() / "output.part"));
+        CHECK(store::snapshot::attempts(output).value().empty());
     }
 
     SECTION("nodes on both sides are built")
     {
         REQUIRE(terrainbuilder::build_all_patches(dataset, webmercator, nullptr, ecef, output, batch_record(12)).has_value());
-        CHECK_FALSE(std::filesystem::exists(directory.path() / "output.part"));
+        CHECK(store::snapshot::attempts(output).value().empty());
         std::size_t east = 0;
         std::size_t west = 0;
         for (const auto& entry : std::filesystem::recursive_directory_iterator(output)) {
@@ -221,7 +222,9 @@ TEST_CASE("batch builds stop on request and reuse cached nodes", "[terrainbuilde
         REQUIRE_FALSE(built.has_value());
         CHECK(built.error().code() == Error::Code::Cancelled);
         CHECK_FALSE(std::filesystem::exists(output));
-        const auto partial = directory.path() / "output.part";
+        const auto attempts = store::snapshot::attempts(output).value();
+        REQUIRE(attempts.size() == 1);
+        const auto& partial = attempts.front();
         CHECK(std::filesystem::exists(partial / store::inputs::file_name));
         CHECK(mesh::storage::open_index(partial / octree::storage::index_file_name).has_value());
     }

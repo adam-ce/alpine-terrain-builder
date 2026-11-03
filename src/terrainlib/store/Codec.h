@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -40,15 +41,11 @@ inline constexpr std::size_t min_hash_size = 4;
 
 // Identifies a part of a node for partial reads: NodeData::Part if it exists, std::monostate otherwise.
 template <typename NodeData>
-struct node_part {
-    using type = std::monostate;
-};
+struct node_part : std::type_identity<std::monostate> { };
 
 template <typename NodeData>
 requires requires { typename NodeData::Part; }
-struct node_part<NodeData> {
-    using type = typename NodeData::Part;
-};
+struct node_part<NodeData> : std::type_identity<typename NodeData::Part> { };
 
 template <typename NodeData>
 using NodePart = typename node_part<NodeData>::type;

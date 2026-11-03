@@ -67,6 +67,15 @@ struct Envelope {
 // zpp_bits prefixes strings and vectors with their 32-bit size.
 inline constexpr std::size_t max_header_size = sizeof(std::uint64_t) + sizeof(std::uint32_t) + max_class_name_size + sizeof(std::uint32_t)
     + sizeof(hash::Algorithm) + sizeof(std::uint32_t) + max_hash_size + sizeof(CompressionAlgorithm) + sizeof(std::uint64_t);
+// A file prefix of max_prefix_size bytes contains the header and the payload length prefix.
+inline constexpr std::size_t max_prefix_size = max_header_size + sizeof(std::uint32_t);
+
+// The compressed payload occupies size bytes from offset in the envelope.
+struct PayloadLocation {
+    Header header;
+    std::uint64_t offset;
+    std::uint64_t size;
+};
 
 template <std::size_t Size>
 struct FixedString {
@@ -169,6 +178,10 @@ Expected<byte::vector> serialize(const typename Schema::latest_type& payload,
 template <typename Schema>
 Expected<typename Schema::latest_type> deserialize(
     byte::span bytes, std::optional<byte::span> expected_hash = std::nullopt, std::size_t max_decompressed_size = default_max_decompressed_size);
+
+// Parses the header and the payload length prefix at the start of an envelope and checks the header
+// like read_header; neither decompresses nor verifies the hash.
+Expected<PayloadLocation> locate_payload(byte::span prefix);
 
 // Reads and decodes only the header of an envelope file. It checks the magic and the algorithm
 // enumerators, but neither the class nor the payload, which it does not read.

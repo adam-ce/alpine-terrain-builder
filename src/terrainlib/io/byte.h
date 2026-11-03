@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
 #include <span>
@@ -42,5 +43,25 @@ enum class WriteMode { Overwrite, CreateNew, Replace };
 Expected<void> write(span bytes, const std::filesystem::path& path, WriteMode mode, bool make_dirs = true);
 // Reads the whole file, or its first max_size bytes if it is longer.
 Expected<vector> read(const std::filesystem::path& path, std::size_t max_size = std::numeric_limits<std::size_t>::max());
+
+// Reads byte ranges of a file with pread; const reads may run concurrently. Implemented for Linux only.
+class RandomAccessFile {
+public:
+    static Expected<RandomAccessFile> open(const std::filesystem::path& path);
+
+    RandomAccessFile(RandomAccessFile&& other) noexcept;
+    ~RandomAccessFile();
+
+    std::uint64_t size() const { return m_size; }
+    // Reads exactly size bytes; fails with CorruptData if the range passes the end of the file.
+    Expected<vector> read(std::uint64_t offset, std::size_t size) const;
+
+private:
+    RandomAccessFile(int descriptor, std::filesystem::path path);
+
+    int m_descriptor = -1;
+    std::uint64_t m_size = 0;
+    std::filesystem::path m_path;
+};
 
 }

@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <limits>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -72,6 +73,45 @@ void check_bytes(const radix::Raster<T>& left, const radix::Raster<T>& right)
 {
     CHECK(left.size() == right.size());
     CHECK(std::ranges::equal(left.bytes(), right.bytes()));
+}
+
+void write_container(const tile_codec::detail::v1::TileContainer& container,
+    const std::filesystem::path& path,
+    const io::envelope::CompressionAlgorithm compression_algorithm = io::envelope::CompressionAlgorithm::None)
+{
+    REQUIRE(io::envelope::write<tile_codec::TileContainerSchema>(container, path, io::byte::WriteMode::Overwrite, true, compression_algorithm));
+}
+
+// Writes a tile container holding one subtile with the given schema.
+template <typename Schema>
+void write_single_subtile(const tile_codec::detail::v1::RasterTile& encoded, const std::filesystem::path& path)
+{
+    auto subtile = io::envelope::serialize<Schema>(encoded);
+    REQUIRE(subtile);
+    write_container({ { 0, subtile->size() }, std::move(*subtile) }, path);
+}
+
+template <typename PixelType>
+raster_store::Tile<PixelType> patterned_tile(const unsigned side)
+{
+    raster_store::Tile<PixelType> tile(side);
+    for (unsigned y = 0; y < side; ++y) {
+        for (unsigned x = 0; x < side; ++x) {
+            if constexpr (std::is_same_v<PixelType, float>) {
+                tile.data.pixel({ x, y }) = float(x) * 0.5f - float(y);
+            } else {
+                tile.data.pixel({ x, y }) = glm::u8vec3(x % 256, y % 256, (x + 3 * y) % 256);
+            }
+            tile.attribution.pixel({ x, y }) = static_cast<std::uint16_t>(7 * x + y);
+        }
+    }
+    return tile;
+}
+
+template <typename T>
+radix::Raster<T> crop(const radix::Raster<T>& source, const radix::geometry::Aabb2ui& region)
+{
+    return raster::algorithm::copy(raster::make_view(source, glm::i64vec2(region.min), region.size()).value()).value();
 }
 
 } // namespace
@@ -219,7 +259,7 @@ TEST_CASE("AMORT validates dimensions and byte counts before allocating typed ra
     SECTION("wrong dimensions") { encoded.width = 4; }
     SECTION("short data") { encoded.data.pop_back(); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
-    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, path.string() + ".amort", io::byte::WriteMode::Overwrite));
+    write_single_subtile<tile_codec::TileSchema>(encoded, path.string() + ".amort");
     CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
 }
 
@@ -259,7 +299,9 @@ TEST_CASE("Image tile codecs store RGB8 data lossily and attribution exactly", "
     wrong_hash.front() ^= std::byte { 1 };
     CHECK_FALSE(codec.read(path, wrong_hash));
     if (codec_name == "amojt") {
-        const auto encoded = io::envelope::read<tile_codec::JpegTileSchema>(codec.paths(path).front());
+        const auto container = io::envelope::read<tile_codec::TileContainerSchema>(codec.paths(path).front());
+        REQUIRE(container);
+        const auto encoded = io::envelope::deserialize<tile_codec::JpegTileSchema>(container->data);
         REQUIRE(encoded);
         const auto jpeg = io::image::encode(tile.data, io::image::Format::Jpeg, { .jpeg_quality = 95 });
         REQUIRE(jpeg);
@@ -284,16 +326,18 @@ TEST_CASE("Image tile codecs validate images and attribution against the tile di
     SECTION("truncated image") { encoded.data.resize(encoded.data.size() / 2); }
     SECTION("long attribution") { encoded.source_attribution.push_back(std::byte { 0 }); }
     const auto filename = codec.paths(path).front();
-    const auto written = codec_name == "amojt" ? io::envelope::write<tile_codec::JpegTileSchema>(encoded, filename, io::byte::WriteMode::Overwrite)
-                                               : io::envelope::write<tile_codec::ImageTileSchema>(encoded, filename, io::byte::WriteMode::Overwrite);
-    REQUIRE(written);
+    if (codec_name == "amojt") {
+        write_single_subtile<tile_codec::JpegTileSchema>(encoded, filename);
+    } else {
+        write_single_subtile<tile_codec::ImageTileSchema>(encoded, filename);
+    }
     const auto read = codec.read(path);
     REQUIRE(read.has_value() == valid);
     if (!valid) {
         CHECK(read.error().code() == Error::Code::CorruptData);
     }
     // AMORT payloads use another envelope class.
-    REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, filename, io::byte::WriteMode::Overwrite));
+    write_single_subtile<tile_codec::TileSchema>(encoded, filename);
     CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
 }
 
@@ -814,6 +858,148 @@ TEST_CASE("AMORT tiles return and verify their payload hash", "[raster-store][co
     CHECK(amort.read(path, different).error().code() == Error::Code::CorruptData);
 }
 
+TEST_CASE("partial tile reads equal crops of full reads", "[raster-store][codec][partial]")
+{
+    const std::string codec_name = GENERATE("amort", "amoft", "amoit", "amojt");
+    CAPTURE(codec_name);
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "tile";
+    // Three subtiles per axis, the last one pixel wide.
+    constexpr unsigned side = 2 * tile_codec::subtile_side + 1;
+    const std::vector<raster_store::Tile<float>::Part> regions {
+        { { 10, 20 }, { 30, 40 } }, // Inside one subtile.
+        { { 200, 20 }, { 300, 40 } }, // Across a vertical subtile edge.
+        { { 250, 250 }, { 262, 262 } }, // Across both subtile edges.
+        { { 512, 0 }, { 513, 513 } }, // The ragged last column.
+        { { 500, 505 }, { 513, 513 } }, // Into the ragged corner.
+        { { 0, 0 }, { 513, 513 } },
+    };
+    const auto check = [&]<typename PixelType>(const raster_store::Tile<PixelType>& tile) {
+        const auto selected = tile_codec::from_name<PixelType>(codec_name, glm::uvec2(side));
+        REQUIRE(selected);
+        const auto& codec = **selected;
+        const auto hash = codec.write(path, tile);
+        REQUIRE(hash);
+        const auto full = codec.read(path, *hash);
+        REQUIRE(full);
+        check_bytes(full->attribution, tile.attribution);
+        if constexpr (std::is_same_v<PixelType, float>) {
+            check_bytes(full->data, tile.data);
+        }
+        for (const auto& region : regions) {
+            CAPTURE(region.min.x, region.min.y, region.max.x, region.max.y);
+            const auto part = codec.read_part(path, region, *hash);
+            REQUIRE(part);
+            check_bytes(part->data, crop(full->data, region));
+            check_bytes(part->attribution, crop(full->attribution, region));
+        }
+    };
+    if (codec_name == "amort" || codec_name == "amoft") {
+        check(patterned_tile<float>(side));
+    } else {
+        check(patterned_tile<glm::u8vec3>(side));
+    }
+}
+
+TEST_CASE("partial tile reads reject invalid regions, hashes and containers", "[raster-store][codec][partial]")
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "tile";
+    const auto file = path.string() + ".amort";
+    // Two subtiles per axis, stored uncompressed so that flipping a byte only changes the hash.
+    constexpr unsigned side = tile_codec::subtile_side + 44;
+    const TileCodec<float> amort(glm::uvec2(side), io::envelope::CompressionAlgorithm::None);
+    const auto hash = amort.write(path, patterned_tile<float>(side));
+    REQUIRE(hash);
+    const raster_store::Tile<float>::Part first_subtile { { 0, 0 }, { 10, 10 } };
+    const raster_store::Tile<float>::Part last_subtile { { 290, 290 }, { side, side } };
+    REQUIRE(amort.read_part(path, first_subtile, *hash));
+
+    SECTION("invalid regions")
+    {
+        CHECK(amort.read_part(path, { { 5, 5 }, { 5, 10 } }).error().code() == Error::Code::InvalidInput);
+        CHECK(amort.read_part(path, { { 0, 0 }, { side + 1, 1 } }).error().code() == Error::Code::InvalidInput);
+        CHECK(amort.read_part(path, {}).error().code() == Error::Code::InvalidInput);
+    }
+
+    SECTION("a different expected hash")
+    {
+        auto different = *hash;
+        different.front() ^= std::byte { 1 };
+        CHECK(amort.read_part(path, first_subtile, different).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("a corrupt subtile fails only reads that cover it")
+    {
+        // The last byte belongs to the last subtile; the container header and its hash stay unchanged.
+        auto bytes = io::byte::read(file).value();
+        bytes.back() ^= std::byte { 1 };
+        REQUIRE(io::byte::write(bytes, file, io::byte::WriteMode::Overwrite));
+        CHECK(amort.read_part(path, first_subtile, *hash));
+        CHECK(amort.read_part(path, last_subtile, *hash).error().code() == Error::Code::CorruptData);
+        CHECK(amort.read(path, *hash).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("a mismatched uncompressed size")
+    {
+        auto envelope = io::envelope::detail::deserialize_from_bytes<io::envelope::Envelope>(io::byte::read(file).value()).value();
+        ++envelope.header.uncompressed_size;
+        REQUIRE(io::byte::write(io::envelope::detail::serialize_to_bytes(envelope).value(), file, io::byte::WriteMode::Overwrite));
+        CHECK(amort.read_part(path, first_subtile, *hash).error().code() == Error::Code::CorruptData);
+        CHECK(amort.read(path, *hash).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("corrupt subtile offsets")
+    {
+        auto container = io::envelope::read<tile_codec::TileContainerSchema>(file).value();
+        auto& offsets = container.subtile_offsets;
+        SECTION("a missing offset") { offsets.pop_back(); }
+        SECTION("a nonzero first offset") { offsets.front() = 1; }
+        SECTION("decreasing offsets") { std::swap(offsets[1], offsets[2]); }
+        SECTION("an offset past the data") { offsets.back() += 1; }
+        write_container(container, file);
+        CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
+        CHECK(amort.read_part(path, first_subtile).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("truncated files")
+    {
+        auto bytes = io::byte::read(file).value();
+        SECTION("in the header") { bytes.resize(20); }
+        SECTION("in the last subtile") { bytes.pop_back(); }
+        REQUIRE(io::byte::write(bytes, file, io::byte::WriteMode::Overwrite));
+        CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
+        CHECK(amort.read_part(path, first_subtile).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("an old single-envelope tile")
+    {
+        const tile_codec::detail::v1::RasterTile encoded { side, side, io::byte::vector(side * side * 4), io::byte::vector(side * side * 2) };
+        REQUIRE(io::envelope::write<tile_codec::TileSchema>(encoded, file, io::byte::WriteMode::Overwrite));
+        CHECK(amort.read(path).error().code() == Error::Code::CorruptData);
+        CHECK(amort.read_part(path, first_subtile).error().code() == Error::Code::CorruptData);
+    }
+
+    SECTION("a compressed container")
+    {
+        write_container(io::envelope::read<tile_codec::TileContainerSchema>(file).value(), file, io::envelope::CompressionAlgorithm::ZstdDefaultCompression);
+        CHECK(amort.read(path));
+        CHECK(amort.read_part(path, first_subtile).error().code() == Error::Code::Unsupported);
+    }
+}
+
+TEST_CASE("tile codecs reject dimensions whose subtile offsets a container cannot hold", "[raster-store][codec][partial]")
+{
+    TemporaryDirectory directory;
+    const auto path = directory.path() / "tile";
+    // The subtile count of the largest side must not wrap around to zero.
+    const TileCodec<float> amort(glm::uvec2(std::numeric_limits<unsigned>::max()));
+    write_container({ { 0 }, {} }, path.string() + ".amort");
+    CHECK(amort.read_part(path, { { 0, 0 }, { 1, 1 } }).error().code() == Error::Code::Unsupported);
+    CHECK(amort.read(path).error().code() == Error::Code::Unsupported);
+    CHECK(amort.write(directory.path() / "other", raster_store::Tile<float>(1)).error().code() == Error::Code::Unsupported);
+}
+
 TEST_CASE("raster index adapters round-trip sorted tile hashes and reject duplicate and invalid keys", "[raster-store][index][hash]")
 {
     store::Index<raster_store::StoreTraits> index;
@@ -856,9 +1042,15 @@ TEST_CASE("raster snapshots checkpoint tile hashes and verify loads against them
     REQUIRE(opened);
     const auto path = opened->first->path_for(key).value();
     CHECK(opened->first->hash_for(key).value() == io::envelope::read_header(path)->hash);
+    const raster_store::Tile<float>::Part region { { 1, 1 }, { 3, 2 } };
+    const auto part = opened->first->load_part(key, region);
+    REQUIRE(part);
+    CHECK(part->data.size() == region.size());
+    CHECK(std::ranges::all_of(part->data, [](const float value) { return value == 1.5f; }));
 
     tile.data.fill(2.5f);
     REQUIRE(std::filesystem::remove(path));
     REQUIRE(TileCodec<float>({ 4, 4 }).write(path.parent_path() / path.stem(), tile));
     CHECK(opened->first->load(key).error().code() == Error::Code::CorruptData);
+    CHECK(opened->first->load_part(key, region).error().code() == Error::Code::CorruptData);
 }

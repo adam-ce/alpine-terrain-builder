@@ -22,22 +22,34 @@
 
 namespace io::envelope {
 
+Expected<PayloadLocation> locate_payload(const byte::span prefix)
+{
+    // zpp_bits resizes containers before checking their size against the input, so the limit bounds allocations.
+    PayloadLocation location {};
+    std::uint32_t size = 0;
+    zpp::bits::in input(prefix, zpp::bits::alloc_limit<max_header_size>());
+    if (const zpp::bits::errc result = input(location.header, size); zpp::bits::failure(result)) {
+        return Error::fail(Error::Code::CorruptData, "deserialize envelope header", std::make_error_code(result.code));
+    }
+    if (auto valid = detail::validate_header(location.header); !valid) {
+        return Error::propagate(std::move(valid), "decode envelope header");
+    }
+    location.offset = input.position();
+    location.size = size;
+    return location;
+}
+
 Expected<Header> read_header(const std::filesystem::path& path)
 {
-    auto file_bytes = ::io::byte::read(path, max_header_size);
+    auto file_bytes = ::io::byte::read(path, max_prefix_size);
     if (!file_bytes) {
         return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
     }
-    // zpp_bits resizes containers before checking their size against the input, so the limit bounds allocations.
-    Header header {};
-    zpp::bits::in input(*file_bytes, zpp::bits::alloc_limit<max_header_size>());
-    if (const zpp::bits::errc result = input(header); zpp::bits::failure(result)) {
-        return Error::fail(Error::Code::CorruptData, "deserialize envelope header of \"" + path.string() + "\"", std::make_error_code(result.code));
+    auto location = locate_payload(*file_bytes);
+    if (!location) {
+        return Error::propagate(std::move(location), "decoding envelope header of \"" + path.string() + "\"");
     }
-    if (auto valid = detail::validate_header(header); !valid) {
-        return Error::propagate(std::move(valid), "decoding envelope header of \"" + path.string() + "\"");
-    }
-    return header;
+    return std::move(location->header);
 }
 
 namespace detail {

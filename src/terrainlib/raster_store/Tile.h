@@ -20,6 +20,7 @@
 
 #include <cstdint>
 
+#include <radix/geometry.h>
 #include <radix/raster.h>
 
 #include "Error.h"
@@ -38,9 +39,17 @@ inline Expected<void> validate_dimensions(const glm::uvec2 dimensions)
 
 template <typename PixelType>
 struct Tile {
+    // A half-open [min, max) region in stored pixels, including the halo.
+    using Part = radix::geometry::Aabb2ui;
+
     explicit Tile(const unsigned side = default_tile_side)
-        : data(side)
-        , attribution(glm::uvec2(side), std::uint16_t { 0 })
+        : Tile(glm::uvec2(side))
+    {
+    }
+
+    explicit Tile(const glm::uvec2 size)
+        : data(size)
+        , attribution(size, std::uint16_t { 0 })
     {
     }
 

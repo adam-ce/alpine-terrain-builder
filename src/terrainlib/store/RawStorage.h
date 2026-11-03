@@ -59,6 +59,14 @@ public:
         return m_codec->read(m_layout.node_path(key), expected_hash);
     }
 
+    Expected<NodeData> load_part(const Key& key, const NodePart<NodeData>& part, const std::optional<NodeDataHashView> expected_hash = std::nullopt) const
+    {
+        if (!Traits::is_valid(key)) {
+            return store::invalid_key_error<Traits>(key);
+        }
+        return m_codec->read_part(m_layout.node_path(key), part, expected_hash);
+    }
+
     Expected<NodeDataHash> save(const Key& key, const NodeData& data) const
     {
         if (!Traits::is_valid(key)) {

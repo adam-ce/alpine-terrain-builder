@@ -95,21 +95,21 @@ public:
     // Compares the node's recorded hash with the identity of the files read.
     Expected<NodeData> load(const Key& key) const
     {
-        if (!Traits::is_valid(key)) {
-            return store::invalid_key_error<Traits>(key);
+        auto expected_hash = expected_load_hash(key);
+        if (!expected_hash) {
+            return Error::propagate(std::move(expected_hash));
         }
-        auto status = m_index->get(key);
-        if (!status) {
-            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
+        return m_raw.load(key, *expected_hash);
+    }
+
+    // Loads a part of the node and compares the node's recorded hash like load.
+    Expected<NodeData> load_part(const Key& key, const NodePart<NodeData>& part) const
+    {
+        auto expected_hash = expected_load_hash(key);
+        if (!expected_hash) {
+            return Error::propagate(std::move(expected_hash));
         }
-        if (!status->has_value() || status->value() == NodeStatus::Virtual) {
-            return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
-        }
-        std::optional<NodeDataHashView> expected_hash;
-        if (const NodeDataHash* hash = recorded_hash(key)) {
-            expected_hash = *hash;
-        }
-        return m_raw.load(key, expected_hash);
+        return m_raw.load_part(key, part, *expected_hash);
     }
 
     Expected<void> save(const Key& key, const NodeData& data)
@@ -289,6 +289,26 @@ protected:
 
 private:
     bool supports_hashing() const { return m_raw.supports_hashing(); }
+
+    // Requires the node to be physically present and returns its recorded hash, if any.
+    Expected<std::optional<NodeDataHashView>> expected_load_hash(const Key& key) const
+    {
+        if (!Traits::is_valid(key)) {
+            return store::invalid_key_error<Traits>(key);
+        }
+        auto status = m_index->get(key);
+        if (!status) {
+            return Error::propagate(std::move(status), "look up node " + Traits::key_to_string(key) + " in storage index before loading");
+        }
+        if (!status->has_value() || status->value() == NodeStatus::Virtual) {
+            return Error::fail(Error::Code::NotFound, "node " + Traits::key_to_string(key) + " is not physically present in the index");
+        }
+        std::optional<NodeDataHashView> expected_hash;
+        if (const NodeDataHash* hash = recorded_hash(key)) {
+            expected_hash = *hash;
+        }
+        return expected_hash;
+    }
 
     const NodeDataHash* recorded_hash(const Key& key) const
     {

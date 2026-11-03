@@ -31,6 +31,16 @@ namespace {
 namespace tile_codec = raster_store::io::tile_codec;
 using FloatCodec = raster_store::io::TileCodec<float, tile_codec::DataEncoding::FloatPredictor>;
 using io::envelope::CompressionAlgorithm;
+
+// Writes a tile container holding one subtile with the given schema.
+template <typename Schema>
+void write_single_subtile(const tile_codec::detail::v1::RasterTile& payload, const std::filesystem::path& path)
+{
+    auto subtile = io::envelope::serialize<Schema>(payload);
+    REQUIRE(subtile);
+    const tile_codec::detail::v1::TileContainer container { { 0, subtile->size() }, std::move(*subtile) };
+    REQUIRE(io::envelope::write<tile_codec::TileContainerSchema>(container, path, io::byte::WriteMode::Overwrite, true, CompressionAlgorithm::None));
+}
 } // namespace
 
 TEST_CASE("Float32 Predictor 3 matches libtiff including plane and row boundaries", "[raster-store][codec][amoft]")
@@ -78,10 +88,12 @@ TEST_CASE("AMOFT preserves all Float32 bits and attribution with both Zstd setti
     REQUIRE(hash);
     CHECK(writer.paths(path).front().extension() == ".amoft");
     CHECK(std::ranges::equal(tile.data.bytes(), original));
-    const auto header = io::envelope::read_header(writer.paths(path).front());
-    REQUIRE(header);
-    CHECK(header->class_name == "raster_store.FloatTile");
-    CHECK(header->compression_algorithm == compression);
+    const auto container = io::envelope::read<tile_codec::TileContainerSchema>(writer.paths(path).front());
+    REQUIRE(container);
+    const auto subtile = io::envelope::locate_payload(container->data);
+    REQUIRE(subtile);
+    CHECK(subtile->header.class_name == "raster_store.FloatTile");
+    CHECK(subtile->header.compression_algorithm == compression);
     // The reader uses the compression setting stored in the envelope.
     const auto decoded = FloatCodec(glm::uvec2(side)).read(path, *hash);
     REQUIRE(decoded);
@@ -105,9 +117,9 @@ TEST_CASE("AMOFT rejects wrong dimensions, byte counts, and envelope classes", "
     SECTION("long data") { payload.data.push_back(std::byte { 0 }); }
     SECTION("short attribution") { payload.source_attribution.pop_back(); }
     SECTION("zero dimensions") { payload.width = payload.height = 0; }
-    REQUIRE(io::envelope::write<tile_codec::FloatTileSchema>(payload, path.string() + ".amoft", io::byte::WriteMode::Overwrite));
+    write_single_subtile<tile_codec::FloatTileSchema>(payload, path.string() + ".amoft");
     CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
-    REQUIRE(io::envelope::write<tile_codec::TileSchema>(payload, path.string() + ".amoft", io::byte::WriteMode::Overwrite));
+    write_single_subtile<tile_codec::TileSchema>(payload, path.string() + ".amoft");
     CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
     CHECK(codec.write(path, raster_store::Tile<float>(4)).error().code() == Error::Code::InvalidInput);
 }

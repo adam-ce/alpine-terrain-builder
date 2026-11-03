@@ -23,10 +23,12 @@
 #include <filesystem>
 #include <future>
 #include <latch>
+#include <limits>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <catch2/catch_template_test_macros.hpp>
@@ -298,6 +300,32 @@ TEST_CASE("byte replace swaps in a new file and leaves hard links to the old one
     CHECK(*io::byte::read(path) == second);
     CHECK(*io::byte::read(link) == first);
     CHECK_FALSE(std::filesystem::exists(temporary_path));
+}
+
+TEST_CASE("random access files read exact ranges and reject reads past the end", "[io][bytes]")
+{
+    TemporaryDirectory directory("random-access");
+    const auto path = directory.path() / "payload";
+    io::byte::vector bytes(1000);
+    for (std::size_t index = 0; index < bytes.size(); ++index) {
+        bytes[index] = std::byte(index % 251);
+    }
+    REQUIRE(io::byte::write(bytes, path, io::byte::WriteMode::CreateNew));
+    auto file = io::byte::RandomAccessFile::open(path);
+    REQUIRE(file.has_value());
+    CHECK(file->size() == bytes.size());
+    CHECK(file->read(0, bytes.size()).value() == bytes);
+    CHECK(std::ranges::equal(file->read(100, 37).value(), std::span(bytes).subspan(100, 37)));
+    CHECK(file->read(bytes.size(), 0).value().empty());
+    CHECK(file->read(990, 11).error().code() == Error::Code::CorruptData);
+    CHECK(file->read(std::numeric_limits<std::uint64_t>::max(), 1).error().code() == Error::Code::CorruptData);
+
+    const auto moved = std::move(*file);
+    CHECK(moved.read(999, 1).value().front() == bytes.back());
+    // A file truncated after opening ends the read early.
+    std::filesystem::resize_file(path, 500);
+    CHECK(moved.read(400, 200).error().code() == Error::Code::CorruptData);
+    CHECK(io::byte::RandomAccessFile::open(directory.path() / "missing").error().code() == Error::Code::NotFound);
 }
 
 TEMPLATE_TEST_CASE("shared storage has no hidden octree dependency", "[store][storage]", octree::StoreTraits, raster_store::StoreTraits)
@@ -620,6 +648,16 @@ TEST_CASE("indexed loads reject valid payloads that differ from the index", "[st
     REQUIRE(std::filesystem::remove(storage.path_for(root).value()));
     REQUIRE(write_int(14, storage.path_for(root).value()).has_value());
     CHECK(storage.load(root).error().code() == Error::Code::CorruptData);
+}
+
+TEST_CASE("codecs without partial reads report them as unsupported", "[store][storage]")
+{
+    static_assert(std::same_as<store::NodePart<int>, std::monostate>);
+    TemporaryDirectory directory("partial-unsupported");
+    const octree::Id root = octree::Id::root();
+    auto storage = make_indexed_storage(directory.path(), std::make_unique<MultiFileCodec>());
+    REQUIRE(storage.save(root, 1).has_value());
+    CHECK(storage.load_part(root, {}).error().code() == Error::Code::Unsupported);
 }
 
 TEST_CASE("storage moves, destruction and thread-safe access keep hashes", "[store][storage][hash]")

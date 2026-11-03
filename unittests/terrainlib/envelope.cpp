@@ -661,6 +661,48 @@ TEST_CASE("Envelope headers are read without the payload")
     SECTION("a missing file") { check_error(io::envelope::read_header(directory.path() / "missing"), Error::Code::NotFound); }
 }
 
+TEST_CASE("Envelope payloads are located from a prefix", "[io][envelope]")
+{
+    const v3::Payload payload { .id = 8, .label = std::string(4096, 'p'), .enabled = true, .samples = { 1, 2 } };
+    const auto bytes = io::envelope::serialize<Schema>(payload, io::envelope::CompressionAlgorithm::None).value();
+    REQUIRE(bytes.size() > io::envelope::max_prefix_size);
+    const auto envelope = decode_envelope(bytes);
+
+    SECTION("the location matches the envelope")
+    {
+        const auto location = io::envelope::locate_payload(std::span(bytes).first(io::envelope::max_prefix_size));
+        REQUIRE(location.has_value());
+        CHECK(location->header.class_name == Schema::class_name);
+        CHECK(location->header.hash == envelope.header.hash);
+        CHECK(location->offset + location->size == bytes.size());
+        CHECK(std::ranges::equal(std::span(bytes).subspan(location->offset), envelope.compressed_data));
+    }
+
+    SECTION("a prefix ending at the payload")
+    {
+        const auto offset = io::envelope::locate_payload(bytes)->offset;
+        const auto location = io::envelope::locate_payload(std::span(bytes).first(offset));
+        REQUIRE(location.has_value());
+        CHECK(location->offset == offset);
+    }
+
+    SECTION("a header of the maximum size")
+    {
+        io::envelope::Envelope maximum = envelope;
+        maximum.header.class_name = std::string(io::envelope::max_class_name_size, 'n');
+        maximum.header.hash = io::byte::vector(io::envelope::max_hash_size, std::byte { 0x5a });
+        const auto location = io::envelope::locate_payload(encode_envelope(maximum));
+        REQUIRE(location.has_value());
+        CHECK(location->offset == io::envelope::max_prefix_size);
+        CHECK(location->size == maximum.compressed_data.size());
+    }
+
+    SECTION("a prefix without the payload size")
+    {
+        check_error(io::envelope::locate_payload(std::span(bytes).first(encode_value(envelope.header).size())), Error::Code::CorruptData);
+    }
+}
+
 TEST_CASE("Envelope files return and verify their payload hash", "[io][envelope][hash]")
 {
     test::TemporaryDirectory directory("envelope-hash");

@@ -18,8 +18,16 @@
  *****************************************************************************/
 
 #include <algorithm>
+#include <cerrno>
 #include <fstream>
 #include <system_error>
+#include <utility>
+
+#ifdef __linux__
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #include "io/byte.h"
 #include "io/utils.h"
@@ -112,6 +120,76 @@ Expected<vector> read(const std::filesystem::path& path, const std::size_t max_s
     }
 
     return buffer;
+}
+
+Expected<RandomAccessFile> RandomAccessFile::open(const std::filesystem::path& path)
+{
+    LOG_TRACE("Opening path {} for random access", path);
+#ifdef __linux__
+    const int descriptor = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (descriptor < 0) {
+        const std::error_code error(errno, std::generic_category());
+        return Error::fail(error == std::errc::no_such_file_or_directory ? Error::Code::NotFound : Error::Code::Io, "open file for reading", path, error);
+    }
+    RandomAccessFile file(descriptor, path);
+    struct stat status {};
+    if (::fstat(descriptor, &status) != 0) {
+        return Error::fail(Error::Code::Io, "determine size of", path, std::error_code(errno, std::generic_category()));
+    }
+    file.m_size = static_cast<std::uint64_t>(status.st_size);
+    return file;
+#else
+    return Error::fail(
+        Error::Code::Unsupported, "random access reads are not implemented on this platform", path, std::make_error_code(std::errc::operation_not_supported));
+#endif
+}
+
+RandomAccessFile::RandomAccessFile(const int descriptor, std::filesystem::path path)
+    : m_descriptor(descriptor)
+    , m_path(std::move(path))
+{
+}
+
+RandomAccessFile::RandomAccessFile(RandomAccessFile&& other) noexcept
+    : m_descriptor(std::exchange(other.m_descriptor, -1))
+    , m_size(other.m_size)
+    , m_path(std::move(other.m_path))
+{
+}
+
+RandomAccessFile::~RandomAccessFile()
+{
+#ifdef __linux__
+    if (m_descriptor >= 0) {
+        ::close(m_descriptor);
+    }
+#endif
+}
+
+Expected<vector> RandomAccessFile::read(const std::uint64_t offset, const std::size_t size) const
+{
+    if (offset > m_size || size > m_size - offset) {
+        return Error::fail(Error::Code::CorruptData, "read past the end of", m_path);
+    }
+    vector bytes(size);
+#ifdef __linux__
+    std::size_t read_size = 0;
+    while (read_size < size) {
+        const ::ssize_t count = ::pread(m_descriptor, bytes.data() + read_size, size - read_size, static_cast<::off_t>(offset + read_size));
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count < 0) {
+            return Error::fail(Error::Code::Io, "read bytes from", m_path, std::error_code(errno, std::generic_category()));
+        }
+        // The file was truncated after it was opened.
+        if (count == 0) {
+            return Error::fail(Error::Code::CorruptData, "read past the end of", m_path);
+        }
+        read_size += static_cast<std::size_t>(count);
+    }
+#endif
+    return bytes;
 }
 
 }

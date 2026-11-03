@@ -22,6 +22,7 @@
 #include <filesystem>
 #include <optional>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 #include <expected>
@@ -36,6 +37,21 @@ using NodeDataHash = io::byte::vector;
 using NodeDataHashView = io::byte::span;
 
 inline constexpr std::size_t min_hash_size = 4;
+
+// Identifies a part of a node for partial reads: NodeData::Part if it exists, std::monostate otherwise.
+template <typename NodeData>
+struct node_part {
+    using type = std::monostate;
+};
+
+template <typename NodeData>
+requires requires { typename NodeData::Part; }
+struct node_part<NodeData> {
+    using type = typename NodeData::Part;
+};
+
+template <typename NodeData>
+using NodePart = typename node_part<NodeData>::type;
 
 // Codec methods must support concurrent calls on the same instance.
 // write creates the node's files exclusively and fails with AlreadyExists if
@@ -55,6 +71,14 @@ public:
     virtual Expected<NodeData> read(const std::filesystem::path&, std::optional<NodeDataHashView> /* expected_hash */ = std::nullopt) const
     {
         return Error::fail(Error::Code::Unsupported, "codec does not support reading");
+    }
+
+    // Reads only the given part of the node. A given expected hash must equal the identity of the
+    // whole node's files, as for read.
+    virtual Expected<NodeData> read_part(
+        const std::filesystem::path&, const NodePart<NodeData>& /* part */, std::optional<NodeDataHashView> /* expected_hash */ = std::nullopt) const
+    {
+        return Error::fail(Error::Code::Unsupported, "codec does not support partial reads");
     }
 
     // Returns the identity of the written node, or an empty hash if the codec does not support hashing.

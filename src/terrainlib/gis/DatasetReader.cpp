@@ -83,6 +83,8 @@ static_assert(offsetof(glm::u8vec3, x) == 0 && offsetof(glm::u8vec3, y) == 1 && 
 struct Source {
     std::unique_ptr<VRTDataset> dataset;
     int alpha_band = 0;
+    // Dataset bands whose GDAL data coverage status, where empty, proves a selected band invalid.
+    std::vector<GDALRasterBand*> coverage {};
 };
 
 Expected<Source> make_source(GDALDataset& dataset, std::span<const unsigned> bands)
@@ -103,8 +105,19 @@ Expected<Source> make_source(GDALDataset& dataset, std::span<const unsigned> ban
         if (mask->GetRasterDataType() != GDT_Byte) {
             return Error::fail(Error::Code::Unsupported, fmt::format("mask of source band {} is not of type Byte", band));
         }
-        all_valid = all_valid && (input->GetMaskFlags() & GMF_ALL_VALID) != 0;
+        const int flags = input->GetMaskFlags();
+        all_valid = all_valid && (flags & GMF_ALL_VALID) != 0;
         inputs.push_back(input);
+        // Empty areas of a band read as its NoData value, or as zero without one.
+        if (flags == GMF_NODATA) {
+            source.coverage.push_back(input);
+        } else if ((flags & (GMF_ALL_VALID | GMF_NODATA)) == 0) {
+            int has_nodata = FALSE;
+            const double nodata = mask->GetNoDataValue(&has_nodata);
+            if (!has_nodata || nodata == 0) {
+                source.coverage.push_back(mask);
+            }
+        }
     }
     if (all_valid) {
         return source;
@@ -128,6 +141,39 @@ Expected<Source> make_source(GDALDataset& dataset, std::span<const unsigned> ban
         }
     }
     return source;
+}
+
+// Exposes the source window GDAL computes for a destination window.
+class WindowedWarpOperation : public GDALWarpOperation {
+public:
+    using GDALWarpOperation::ComputeSourceWindow;
+};
+
+// Whether GDAL knows a selected band to be invalid across the source window of the warp, without reading
+// pixels: VRT areas without sources and sparse GTiff blocks. The warp reads one window per chunk, computed
+// from samples along the chunk edges. Widened by a sampling interval of GDAL's 21 samples per edge and at
+// least the Lanczos radius plus rounding, the output window yields a source window covering theirs.
+bool known_empty(const Source& source, WindowedWarpOperation& operation, glm::uvec2 size)
+{
+    if (source.coverage.empty()) {
+        return false;
+    }
+    CPLErrorStateBackuper quiet(CPLQuietErrorHandler);
+    const glm::i64vec2 margin = glm::max(glm::i64vec2(4), glm::i64vec2((size + 19u) / 20u));
+    const glm::i64vec2 widened = glm::i64vec2(size) + std::int64_t(2) * margin;
+    if (widened.x > INT_MAX || widened.y > INT_MAX) {
+        return false;
+    }
+    int x = 0, y = 0, width = 0, height = 0;
+    double extra_x = 0, extra_y = 0, fill_ratio = 0;
+    if (operation.ComputeSourceWindow(int(-margin.x), int(-margin.y), int(widened.x), int(widened.y), &x, &y, &width, &height, &extra_x, &extra_y, &fill_ratio)
+            != CE_None
+        || width <= 0 || height <= 0) {
+        return false;
+    }
+    return std::ranges::any_of(source.coverage, [&](GDALRasterBand* band) {
+        return band->GetDataCoverageStatus(x, y, width, height, GDAL_DATA_COVERAGE_STATUS_DATA, nullptr) == GDAL_DATA_COVERAGE_STATUS_EMPTY;
+    });
 }
 
 // Warps all source bands at once into samples, with destination alpha as validity.
@@ -179,8 +225,15 @@ Expected<void> warp(const Source& source, const ApproxTransformer& transformer, 
     options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "NUM_THREADS", "1");
     options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "SRC_ALPHA_MAX", "255");
     options->papszWarpOptions = CSLSetNameValue(options->papszWarpOptions, "DST_ALPHA_MAX", "255");
-    GDALWarpOperation operation;
-    if (operation.Initialize(options.get()) != CE_None || operation.ChunkAndWarpImage(0, 0, int(size.x), int(size.y)) != CE_None) {
+    WindowedWarpOperation operation;
+    if (operation.Initialize(options.get()) != CE_None) {
+        return Error::fail(Error::Code::Io, fmt::format("warp source bands: {}", CPLGetLastErrorMsg()));
+    }
+    // The samples are zero, as INIT_DEST leaves them for a warp without valid source pixels.
+    if (known_empty(source, operation, size)) {
+        return {};
+    }
+    if (operation.ChunkAndWarpImage(0, 0, int(size.x), int(size.y)) != CE_None) {
         return Error::fail(Error::Code::Io, fmt::format("warp source bands: {}", CPLGetLastErrorMsg()));
     }
     return {};

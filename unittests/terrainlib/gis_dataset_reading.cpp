@@ -32,6 +32,7 @@
 #include <numbers>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 #include <catch2/catch_approx.hpp>
@@ -151,6 +152,101 @@ void write(GDALRasterBand* band, std::vector<float> values)
 void write_pixel(GDALRasterBand* band, glm::uvec2 position, float value)
 {
     REQUIRE(band->RasterIO(GF_Write, int(position.x), int(position.y), 1, 1, &value, 1, 1, GDT_Float32, 0, 0) == CE_None);
+}
+
+// Counts the warp kernels GDAL runs on this thread during its lifetime.
+class WarpKernelCounter {
+public:
+    WarpKernelCounter()
+    {
+        if (const auto* previous = CPLGetThreadLocalConfigOption("CPL_DEBUG", nullptr)) {
+            m_previous_debug = previous;
+        }
+        CPLSetThreadLocalConfigOption("CPL_DEBUG", "ON");
+        CPLPushErrorHandlerEx(&WarpKernelCounter::handle, this);
+    }
+    WarpKernelCounter(const WarpKernelCounter&) = delete;
+    WarpKernelCounter& operator=(const WarpKernelCounter&) = delete;
+    ~WarpKernelCounter()
+    {
+        CPLPopErrorHandler();
+        CPLSetThreadLocalConfigOption("CPL_DEBUG", m_previous_debug ? m_previous_debug->c_str() : nullptr);
+    }
+    unsigned count() const { return m_count; }
+
+private:
+    static void CPL_STDCALL handle(CPLErr type, CPLErrorNum, const char* message)
+    {
+        if (type == CE_Debug && std::string_view(message).find("GDALWarpKernel()") != std::string_view::npos) {
+            ++static_cast<WarpKernelCounter*>(CPLGetErrorHandlerUserData())->m_count;
+        }
+    }
+    std::optional<std::string> m_previous_debug;
+    unsigned m_count = 0;
+};
+
+// Two 16x16 sources filled with 10, at columns 0 and 48 of a 64x16 VRT mosaic in EPSG:3857.
+std::shared_ptr<gis::Dataset> make_gapped_mosaic(const std::filesystem::path& directory, const std::string& band_properties)
+{
+    make_raster(directory / "left.tif", glm::uvec2(16), 1, GDT_Float32, { 0, 1, 0, 16, 0, -1 });
+    make_raster(directory / "right.tif", glm::uvec2(16), 1, GDT_Float32, { 48, 1, 0, 16, 0, -1 });
+    const auto path = directory / "mosaic.vrt";
+    {
+        std::ofstream vrt(path);
+        vrt << fmt::format(R"(<VRTDataset rasterXSize="64" rasterYSize="16">
+<SRS>EPSG:3857</SRS><GeoTransform>0,1,0,16,0,-1</GeoTransform>
+<VRTRasterBand dataType="Float32" band="1">{}
+<SimpleSource><SourceFilename>{}</SourceFilename><SourceBand>1</SourceBand><SrcRect xOff="0" yOff="0" xSize="16" ySize="16"/><DstRect xOff="0" yOff="0" xSize="16" ySize="16"/></SimpleSource>
+<SimpleSource><SourceFilename>{}</SourceFilename><SourceBand>1</SourceBand><SrcRect xOff="0" yOff="0" xSize="16" ySize="16"/><DstRect xOff="48" yOff="0" xSize="16" ySize="16"/></SimpleSource>
+</VRTRasterBand></VRTDataset>)",
+            band_properties,
+            (directory / "left.tif").string(),
+            (directory / "right.tif").string());
+        REQUIRE(vrt.good());
+    }
+    return Error::throwing_unwrap(gis::Dataset::open_shared_raster(path));
+}
+
+// A 64x16 GTiff in EPSG:3857 with 16x16 tiles, whose tiles at columns 16 to 47 stay sparse.
+// Columns 0 to 15 and 48 to 63 store 10 times the band number, and 255 in the alpha band and mask.
+std::shared_ptr<gis::Dataset> make_sparse_raster(
+    const std::filesystem::path& path, unsigned bands, GDALDataType type, const std::function<void(GDALDataset&)>& configure)
+{
+    gis::gdal::initialize_once();
+    {
+        auto* driver = GetGDALDriverManager()->GetDriverByName("GTiff");
+        REQUIRE(driver != nullptr);
+        CPLStringList options;
+        options.SetNameValue("SPARSE_OK", "TRUE");
+        options.SetNameValue("TILED", "YES");
+        options.SetNameValue("BLOCKXSIZE", "16");
+        options.SetNameValue("BLOCKYSIZE", "16");
+        if (bands == 4) {
+            options.SetNameValue("PHOTOMETRIC", "RGB");
+            options.SetNameValue("ALPHA", "YES");
+        }
+        GDALDatasetUniquePtr dataset(driver->Create(path.c_str(), 64, 16, int(bands), type, options.List()));
+        REQUIRE(dataset);
+        const auto reference = gis::srs::webmercator();
+        std::array<double, 6> geo_transform { 0, 1, 0, 16, 0, -1 };
+        REQUIRE(dataset->SetSpatialRef(&reference) == CE_None);
+        REQUIRE(dataset->SetGeoTransform(geo_transform.data()) == CE_None);
+        configure(*dataset);
+        const auto write_tiles = [](GDALRasterBand* band, float value) {
+            std::vector<float> values(16 * 16, value);
+            for (const int column : { 0, 48 }) {
+                REQUIRE(band->RasterIO(GF_Write, column, 0, 16, 16, values.data(), 16, 16, GDT_Float32, 0, 0) == CE_None);
+            }
+        };
+        for (unsigned band = 1; band <= bands; ++band) {
+            auto* raster_band = dataset->GetRasterBand(int(band));
+            write_tiles(raster_band, raster_band->GetColorInterpretation() == GCI_AlphaBand ? 255.f : 10.f * band);
+        }
+        if ((dataset->GetRasterBand(1)->GetMaskFlags() & (GMF_ALPHA | GMF_NODATA | GMF_ALL_VALID)) == 0) {
+            write_tiles(dataset->GetRasterBand(1)->GetMaskBand(), 255.f);
+        }
+    }
+    return Error::throwing_unwrap(gis::Dataset::open_shared_raster(path));
 }
 
 class FailingBand final : public GDALRasterBand {
@@ -812,6 +908,91 @@ TEST_CASE("dataset reader reads a VRT mosaic like a single raster at base resolu
     const auto base = read_samples(single, { { 0, -16 }, { 32, 16 } }, glm::uvec2(16));
     CHECK(base.valid.pixel({ 4, 8 }) != 0);
     CHECK(base.data.pixel({ 4, 8 }) != 222);
+}
+
+TEST_CASE("dataset reader skips the warp only where a VRT mosaic has no source", "[dataset_reader]")
+{
+    test::TemporaryDirectory directory("dataset-reader");
+    auto mosaic = make_reader(make_gapped_mosaic(directory.path(), "<NoDataValue>-9999</NoDataValue>"), gis::srs::Projection::WebMercator, { 1 }, 0.0F);
+    // The same pixels in one raster, which GDAL cannot know to be empty anywhere.
+    auto single_dataset = make_raster({}, glm::uvec2(64, 16), 1, GDT_Float32, { 0, 1, 0, 16, 0, -1 });
+    auto* single_band = single_dataset->gdalDataset()->GetRasterBand(1);
+    write(single_band, generate(glm::uvec2(64, 16), [](unsigned x, unsigned) { return x < 16 || x >= 48 ? 10.f : -9999.f; }));
+    REQUIRE(single_band->SetNoDataValue(-9999) == CE_None);
+    auto single = make_reader(single_dataset, gis::srs::Projection::WebMercator, { 1 }, 0.0F);
+    for (unsigned column = 0; column <= 48; ++column) {
+        INFO("window at column " << column);
+        const radix::tile::SrsBounds window { { column + 0.25, 0.25 }, { column + 16.25, 16.25 } };
+        std::optional<gis::DatasetReader<float>::Samples> samples;
+        unsigned kernels = 0;
+        {
+            const WarpKernelCounter counter;
+            samples = read_samples(mosaic, window, glm::uvec2(16));
+            kernels = counter.count();
+        }
+        const auto expected = read_samples(single, window, glm::uvec2(16));
+        CHECK(std::ranges::equal(samples->valid, expected.valid));
+        CHECK(std::ranges::equal(samples->data, expected.data));
+        // The output widened by 4 pixels, plus the Lanczos radius of 3, avoids both sources only here.
+        CHECK((kernels == 0) == (column == 23 || column == 24));
+    }
+}
+
+TEST_CASE("dataset reader warps where GDAL reports sources without validity information", "[dataset_reader]")
+{
+    test::TemporaryDirectory directory("dataset-reader");
+    auto mosaic = make_reader(make_gapped_mosaic(directory.path(), ""), gis::srs::Projection::WebMercator, { 1 }, 1.0F);
+    const WarpKernelCounter counter;
+    // Without NoData, areas without sources are valid zeros.
+    const auto samples = read_samples(mosaic, { { 24.25, 0.25 }, { 40.25, 16.25 } }, glm::uvec2(16));
+    CHECK(counter.count() > 0);
+    CHECK(all_valid(samples.valid));
+    CHECK(std::ranges::all_of(samples.data, [](float value) { return value == 0; }));
+}
+
+TEST_CASE("dataset reader skips the warp over sparse GTiff tiles", "[dataset_reader]")
+{
+    test::TemporaryDirectory directory("dataset-reader");
+    const auto path = directory.path() / "sparse.tif";
+    const radix::tile::SrsBounds gap { { 24.25, 0.25 }, { 40.25, 16.25 } };
+    const radix::tile::SrsBounds covered { { 0.25, 0.25 }, { 16.25, 16.25 } };
+    const auto check = [&](auto& reader, auto default_pixel) {
+        {
+            const WarpKernelCounter counter;
+            const auto samples = read_samples(reader, gap, glm::uvec2(16));
+            CHECK(counter.count() == 0);
+            CHECK(std::ranges::none_of(samples.valid, [](std::uint8_t value) { return value != 0; }));
+            CHECK(std::ranges::all_of(samples.data, [&](auto value) { return value == default_pixel; }));
+        }
+        const WarpKernelCounter counter;
+        const auto samples = read_samples(reader, covered, glm::uvec2(16));
+        CHECK(counter.count() > 0);
+        CHECK(samples.valid.pixel({ 4, 8 }) != 0);
+    };
+    SECTION("NoData")
+    {
+        auto reader = make_reader(
+            make_sparse_raster(path, 1, GDT_Float32, [](GDALDataset& dataset) { REQUIRE(dataset.GetRasterBand(1)->SetNoDataValue(-9999) == CE_None); }),
+            gis::srs::Projection::WebMercator,
+            { 1 },
+            0.0F);
+        check(reader, 0.0F);
+    }
+    SECTION("per-dataset mask")
+    {
+        auto reader
+            = make_reader(make_sparse_raster(path, 1, GDT_Float32, [](GDALDataset& dataset) { REQUIRE(dataset.CreateMaskBand(GMF_PER_DATASET) == CE_None); }),
+                gis::srs::Projection::WebMercator,
+                { 1 },
+                0.0F);
+        check(reader, 0.0F);
+    }
+    SECTION("alpha band")
+    {
+        auto reader
+            = make_reader(make_sparse_raster(path, 4, GDT_Byte, [](GDALDataset&) { }), gis::srs::Projection::WebMercator, { 1, 2, 3 }, glm::u8vec3(1, 2, 3));
+        check(reader, glm::u8vec3(1, 2, 3));
+    }
 }
 
 TEST_CASE("dataset reader agrees across adjacent output windows", "[dataset_reader]")

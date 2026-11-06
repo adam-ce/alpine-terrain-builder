@@ -67,7 +67,9 @@ public:
     ~DatasetReader() = default;
 
     // Bounds are in the reader's projection. Windows without valid source
-    // coverage yield default pixels and zero validity.
+    // coverage yield default pixels and zero validity. Windows GDAL knows to
+    // be invalid without reading pixels, such as VRT areas without sources or
+    // sparse GTiff blocks, skip the warp.
     Expected<Samples> read(const radix::tile::SrsBounds& bounds, glm::uvec2 size);
     // Smallest source pixel size within bounds, per axis, in units of the projection.
     // Approximate: sampled on a grid within the dataset coverage.

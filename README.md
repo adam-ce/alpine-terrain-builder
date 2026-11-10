@@ -9,6 +9,35 @@ This repository provides their `terrainlib` dependency, including raster-store.
 When included as a CMake subproject, tools and tests default to disabled.
 Enable individual `ALP_BUILD_*` options explicitly when needed.
 
+## Optional ECW input
+
+The project-managed GDAL build leaves ECW disabled by default. To enable it,
+obtain an ECW SDK licensed for your use and pass these options when configuring
+this project (or tile-foundry):
+
+```sh
+cmake -S . -B build-ecw -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DALP_GDAL_ENABLE_ECW=ON -DECW_ROOT=/absolute/path/to/Desktop_Read-Only
+```
+
+Keep the SDK outside the source and build trees. `ECW_ROOT` points to the SDK
+directory containing `include/NCSECWClient.h`.
+It may also be supplied as an environment variable. GDAL 3.10.3's SDK finder
+supports 3.3 and 5.5 or newer; on Linux, the 5.5 SDK layout includes
+`lib/cpp11abi/x64/release/libNCSEcw.so`. For a nonstandard layout, pass
+`ECW_INCLUDE_DIR` and `ECW_LIBRARY` explicitly. The SDK is not downloaded or
+redistributed by this build. Review the licence bundled with your SDK: the
+5.5 Desktop Read-Only licence permits desktop decoding, not server applications
+or encoding; do not assume a current SDK has the same terms.
+
+Enabling ECW explicitly requires SDK discovery to succeed; a missing SDK fails
+configuration. The ECW driver is built into GDAL. Installed GDAL libraries retain
+the PROJ runtime path and add external link directories to their runtime search
+path, including the SDK library directory on Linux. Keep the SDK at that path;
+on Windows its DLL directory must be on `PATH`. Changing these options or SDK
+paths invalidates the managed GDAL build cache. After replacing an SDK in place,
+use a fresh build directory.
+
 Sanitizer exclusions are maintained in `misc/suppression/`. CI's ASan job also
 enables UBSan and loads [ubsan.txt](misc/suppression/ubsan.txt) for the known CGAL
 arrangement downcasts and the ignored old Boolean value in

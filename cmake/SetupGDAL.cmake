@@ -20,6 +20,8 @@ if(NOT COMMAND alp_setup_cmake_project)
     include(${CMAKE_CURRENT_LIST_DIR}/SetupCMakeProject.cmake)
 endif()
 
+option(ALP_GDAL_ENABLE_ECW "Build GDAL with ECW support (requires a separately licensed ECW SDK)" OFF)
+
 function(alp_setup_gdal)
     set(oneValueArgs GDAL_VERSION GDAL_SHA256 GEOS_VERSION GEOS_SHA256 PROJ_VERSION PROJ_SHA256)
     cmake_parse_arguments(ARG "" "${oneValueArgs}" "" ${ARGN})
@@ -46,6 +48,23 @@ function(alp_setup_gdal)
             -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     )
 
+    set(_ecw_args
+        "-DGDAL_USE_ECW:BOOL=${ALP_GDAL_ENABLE_ECW}"
+        "-DGDAL_ENABLE_DRIVER_ECW:BOOL=${ALP_GDAL_ENABLE_ECW}")
+    if(ALP_GDAL_ENABLE_ECW)
+        # Let GDAL's FindECW select the SDK ABI and reject missing/unsupported SDKs.
+        # Forward the environment hint explicitly so it also enters the build cache key.
+        if(NOT DEFINED ECW_ROOT AND DEFINED ENV{ECW_ROOT})
+            set(ECW_ROOT "$ENV{ECW_ROOT}")
+        endif()
+        _alp_append_cache_arg(_ecw_args ECW_ROOT PATH)
+        _alp_append_cache_arg(_ecw_args ECW_INCLUDE_DIR PATH)
+        _alp_append_cache_arg(_ecw_args ECW_LIBRARY FILEPATH)
+        list(APPEND _ecw_args
+            -DGDAL_ENABLE_DRIVER_ECW_PLUGIN:BOOL=OFF
+            -DCMAKE_INSTALL_RPATH_USE_LINK_PATH:BOOL=ON)
+    endif()
+
     string(REGEX REPLACE "^v" "" _gdal_version "${ARG_GDAL_VERSION}")
     alp_setup_cmake_project(gdal
         URL https://github.com/OSGeo/gdal/releases/download/v${_gdal_version}/gdal-${_gdal_version}.tar.gz
@@ -67,6 +86,7 @@ function(alp_setup_gdal)
             -DGDAL_USE_GEOS=ON
             -DGDAL_USE_SQLITE3=ON
             "-DCMAKE_INSTALL_RPATH=\$ORIGIN/../../proj/lib"
+            ${_ecw_args}
         )
 
     find_package(GDAL CONFIG REQUIRED)

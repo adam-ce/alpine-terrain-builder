@@ -87,7 +87,7 @@ Expected<std::pair<std::unique_ptr<const IndexedStorage<PixelType>>, std::unique
         return Error::propagate(std::move(table), "open raster snapshot attribution");
     }
     const auto resolve_codec
-        = [&metadata](const std::string_view name) { return io::tile_codec::from_name<PixelType>(name, glm::uvec2(metadata->stored_tile_size)); };
+        = [&metadata](const std::string_view name) { return io::TileCodec<PixelType>::from_name(name, glm::uvec2(metadata->stored_tile_size)); };
     auto storage = store::open_index<StoreTraits, Tile<PixelType>>(index_path,
         io::manifest::index_format(),
         { std::move(contents->index), std::move(contents->hashes), metadata->layout_id, metadata->payload_type, metadata->codec_selector },
@@ -124,7 +124,7 @@ Expected<std::pair<std::unique_ptr<IndexedStorage<PixelType>>, std::unique_ptr<c
     if (auto valid = io::manifest::validate(*metadata); !valid) {
         return Error::propagate(std::move(valid));
     }
-    auto codec = io::tile_codec::from_name<PixelType>(options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm);
+    auto codec = io::TileCodec<PixelType>::from_name(options.codec_selector, glm::uvec2(metadata->stored_tile_size), options.compression_algorithm);
     if (!codec) {
         return Error::propagate(std::move(codec));
     }

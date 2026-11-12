@@ -670,20 +670,21 @@ TEST_CASE("Envelope payloads are located from a prefix", "[io][envelope]")
 
     SECTION("the location matches the envelope")
     {
-        const auto location = io::envelope::locate_payload(std::span(bytes).first(io::envelope::max_prefix_size));
-        REQUIRE(location.has_value());
-        CHECK(location->header.class_name == Schema::class_name);
-        CHECK(location->header.hash == envelope.header.hash);
-        CHECK(location->offset + location->size == bytes.size());
-        CHECK(std::ranges::equal(std::span(bytes).subspan(location->offset), envelope.compressed_data));
+        const auto prefix = io::envelope::deserialize_prefix(std::span(bytes).first(io::envelope::max_prefix_size));
+        REQUIRE(prefix.has_value());
+        const auto& [header, location] = *prefix;
+        CHECK(header.class_name == Schema::class_name);
+        CHECK(header.hash == envelope.header.hash);
+        CHECK(location.offset + location.size == bytes.size());
+        CHECK(std::ranges::equal(std::span(bytes).subspan(location.offset), envelope.compressed_data));
     }
 
     SECTION("a prefix ending at the payload")
     {
-        const auto offset = io::envelope::locate_payload(bytes)->offset;
-        const auto location = io::envelope::locate_payload(std::span(bytes).first(offset));
-        REQUIRE(location.has_value());
-        CHECK(location->offset == offset);
+        const auto offset = io::envelope::deserialize_prefix(bytes)->second.offset;
+        const auto prefix = io::envelope::deserialize_prefix(std::span(bytes).first(offset));
+        REQUIRE(prefix.has_value());
+        CHECK(prefix->second.offset == offset);
     }
 
     SECTION("a header of the maximum size")
@@ -691,15 +692,15 @@ TEST_CASE("Envelope payloads are located from a prefix", "[io][envelope]")
         io::envelope::Envelope maximum = envelope;
         maximum.header.class_name = std::string(io::envelope::max_class_name_size, 'n');
         maximum.header.hash = io::byte::vector(io::envelope::max_hash_size, std::byte { 0x5a });
-        const auto location = io::envelope::locate_payload(encode_envelope(maximum));
-        REQUIRE(location.has_value());
-        CHECK(location->offset == io::envelope::max_prefix_size);
-        CHECK(location->size == maximum.compressed_data.size());
+        const auto prefix = io::envelope::deserialize_prefix(encode_envelope(maximum));
+        REQUIRE(prefix.has_value());
+        CHECK(prefix->second.offset == io::envelope::max_prefix_size);
+        CHECK(prefix->second.size == maximum.compressed_data.size());
     }
 
     SECTION("a prefix without the payload size")
     {
-        check_error(io::envelope::locate_payload(std::span(bytes).first(encode_value(envelope.header).size())), Error::Code::CorruptData);
+        check_error(io::envelope::deserialize_prefix(std::span(bytes).first(encode_value(envelope.header).size())), Error::Code::CorruptData);
     }
 }
 

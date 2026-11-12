@@ -188,11 +188,15 @@ add_library(terrainlib
     raster/algorithm/window_transform.h
     raster/algorithm/zip_transform.h
 
+    raster_store/AttributedRaster.h
     raster_store/StoreTraits.h
     raster_store/TilePool.h
     raster_store/Tile.h
     raster_store/attribution.h raster_store/attribution.cpp
+    raster_store/io/ContainerCodec.h raster_store/io/ContainerCodec.cpp
+    raster_store/io/SubtileCoder.h
     raster_store/io/TileCodec.h
+    raster_store/io/definitions.h
     raster_store/io/float_predictor.h raster_store/io/float_predictor.cpp
     raster_store/io/manifest.h raster_store/io/manifest.cpp
     raster_store/path_layout.h

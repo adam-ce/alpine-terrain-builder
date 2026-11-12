@@ -22,21 +22,19 @@
 
 namespace io::envelope {
 
-Expected<PayloadLocation> locate_payload(const byte::span prefix)
+Expected<std::pair<Header, PayloadLocation>> deserialize_prefix(const byte::span prefix)
 {
     // zpp_bits resizes containers before checking their size against the input, so the limit bounds allocations.
-    PayloadLocation location {};
+    Header header {};
     std::uint32_t size = 0;
     zpp::bits::in input(prefix, zpp::bits::alloc_limit<max_header_size>());
-    if (const zpp::bits::errc result = input(location.header, size); zpp::bits::failure(result)) {
+    if (const zpp::bits::errc result = input(header, size); zpp::bits::failure(result)) {
         return Error::fail(Error::Code::CorruptData, "deserialize envelope header", std::make_error_code(result.code));
     }
-    if (auto valid = detail::validate_header(location.header); !valid) {
+    if (auto valid = detail::validate_header(header); !valid) {
         return Error::propagate(std::move(valid), "decode envelope header");
     }
-    location.offset = input.position();
-    location.size = size;
-    return location;
+    return std::pair { std::move(header), PayloadLocation { input.position(), size } };
 }
 
 Expected<Header> read_header(const std::filesystem::path& path)
@@ -45,11 +43,11 @@ Expected<Header> read_header(const std::filesystem::path& path)
     if (!file_bytes) {
         return Error::propagate(std::move(file_bytes), "reading envelope file \"" + path.string() + "\"");
     }
-    auto location = locate_payload(*file_bytes);
-    if (!location) {
-        return Error::propagate(std::move(location), "decoding envelope header of \"" + path.string() + "\"");
+    auto prefix = deserialize_prefix(*file_bytes);
+    if (!prefix) {
+        return Error::propagate(std::move(prefix), "decoding envelope header of \"" + path.string() + "\"");
     }
-    return std::move(location->header);
+    return std::move(prefix->first);
 }
 
 namespace detail {

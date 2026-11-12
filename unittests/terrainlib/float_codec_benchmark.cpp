@@ -34,20 +34,21 @@
 // unittests_terrainlib '[amoft-benchmark]' --benchmark-samples 5
 TEST_CASE("AMORT versus AMOFT whole-tile envelopes on identical Float32 RF data", "[.][amoft-benchmark]")
 {
-    namespace codecs = raster_store::io::tile_codec;
+    namespace schema = raster_store::io::schema;
     using io::envelope::CompressionAlgorithm;
     const char* input = std::getenv("AMOFT_BENCHMARK_TILE");
     REQUIRE(input != nullptr);
     // The tile side follows from the subtile count and the width of the last subtile.
-    const auto container = io::envelope::read<codecs::TileContainerSchema>(input);
+    const auto container = io::envelope::read<schema::TileContainerSchema>(input);
     REQUIRE(container);
-    const auto count = static_cast<unsigned>(std::lround(std::sqrt(double(container->subtile_offsets.size() - 1))));
-    const auto last = io::envelope::deserialize<codecs::TileSchema>(std::span(container->data).subspan(container->subtile_offsets[count * count - 1]));
+    const auto count = static_cast<unsigned>(std::lround(std::sqrt(double(container->index.subtile_offsets.size() - 1))));
+    const auto last
+        = io::envelope::deserialize<schema::RawRasterSubtileSchema>(std::span(container->data).subspan(container->index.subtile_offsets[count * count - 1]));
     REQUIRE(last);
-    const unsigned side = (count - 1) * codecs::subtile_side + last->width;
+    const unsigned side = (count - 1) * raster_store::io::subtile_side + last->width;
     const auto stored = raster_store::io::TileCodec<float>(glm::uvec2(side)).read(std::filesystem::path(input).replace_extension());
     REQUIRE(stored);
-    const codecs::detail::v1::RasterTile source {
+    const raster_store::io::EncodedSubtile source {
         side, side, { stored->data.bytes().begin(), stored->data.bytes().end() }, { stored->attribution.bytes().begin(), stored->attribution.bytes().end() }
     };
     const auto predicted = GENERATE(false, true);
@@ -63,14 +64,14 @@ TEST_CASE("AMORT versus AMOFT whole-tile envelopes on identical Float32 RF data"
         auto payload = source;
         if (predicted) {
             raster_store::io::float_predictor::encode(payload.data, payload.width);
-            return Error::throwing_unwrap(io::envelope::serialize<codecs::FloatTileSchema>(payload, compression));
+            return Error::throwing_unwrap(io::envelope::serialize<schema::FloatPredictorSubtileSchema>(payload, compression));
         }
-        return Error::throwing_unwrap(io::envelope::serialize<codecs::TileSchema>(payload, compression));
+        return Error::throwing_unwrap(io::envelope::serialize<schema::RawRasterSubtileSchema>(payload, compression));
     };
     const auto encoded = encode();
     const auto decode = [&] {
-        auto payload = Error::throwing_unwrap(
-            predicted ? io::envelope::deserialize<codecs::FloatTileSchema>(encoded) : io::envelope::deserialize<codecs::TileSchema>(encoded));
+        auto payload = Error::throwing_unwrap(predicted ? io::envelope::deserialize<schema::FloatPredictorSubtileSchema>(encoded)
+                                                        : io::envelope::deserialize<schema::RawRasterSubtileSchema>(encoded));
         raster_store::Tile<float> tile(payload.width);
         if (predicted) {
             raster_store::io::float_predictor::decode(payload.data, payload.width);
@@ -85,7 +86,7 @@ TEST_CASE("AMORT versus AMOFT whole-tile envelopes on identical Float32 RF data"
 
     // The codec stores 256-pixel subtiles, so its files differ from this whole-tile envelope.
     test::TemporaryDirectory directory;
-    const auto codec = codecs::from_name<float>(predicted ? "amoft" : "amort", glm::uvec2(source.width), compression);
+    const auto codec = raster_store::io::TileCodec<float>::from_name(predicted ? "amoft" : "amort", glm::uvec2(source.width), compression);
     REQUIRE(codec);
     const auto path = directory.path() / "tile";
     const auto hash = (*codec)->write(path, decoded);

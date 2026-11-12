@@ -28,18 +28,20 @@
 #include <catch2/generators/catch_generators.hpp>
 
 namespace {
-namespace tile_codec = raster_store::io::tile_codec;
-using FloatCodec = raster_store::io::TileCodec<float, tile_codec::DataEncoding::FloatPredictor>;
+namespace schema = raster_store::io::schema;
 using io::envelope::CompressionAlgorithm;
+using raster_store::io::DataEncoding;
+using raster_store::io::EncodedSubtile;
+using raster_store::io::TileCodec;
 
 // Writes a tile container holding one subtile with the given schema.
 template <typename Schema>
-void write_single_subtile(const tile_codec::detail::v1::RasterTile& payload, const std::filesystem::path& path)
+void write_single_subtile(const EncodedSubtile& payload, const std::filesystem::path& path)
 {
     auto subtile = io::envelope::serialize<Schema>(payload);
     REQUIRE(subtile);
-    const tile_codec::detail::v1::TileContainer container { { 0, subtile->size() }, std::move(*subtile) };
-    REQUIRE(io::envelope::write<tile_codec::TileContainerSchema>(container, path, io::byte::WriteMode::Overwrite, true, CompressionAlgorithm::None));
+    const schema::v1::TileContainer container { { { 0, subtile->size() } }, std::move(*subtile) };
+    REQUIRE(io::envelope::write<schema::TileContainerSchema>(container, path, io::byte::WriteMode::Overwrite, true, CompressionAlgorithm::None));
 }
 } // namespace
 
@@ -82,20 +84,20 @@ TEST_CASE("AMOFT preserves all Float32 bits and attribution with both Zstd setti
     tile.attribution.fill(0); // Values under NoData must also retain every bit.
     tile.attribution.buffer()[side - 1] = 65534;
     const io::byte::vector original(tile.data.bytes().begin(), tile.data.bytes().end());
-    FloatCodec writer(glm::uvec2(side), compression);
+    const TileCodec<float> writer(glm::uvec2(side), DataEncoding::FloatPredictor, compression);
     const auto path = directory.path() / "tile";
     const auto hash = writer.write(path, tile);
     REQUIRE(hash);
     CHECK(writer.paths(path).front().extension() == ".amoft");
     CHECK(std::ranges::equal(tile.data.bytes(), original));
-    const auto container = io::envelope::read<tile_codec::TileContainerSchema>(writer.paths(path).front());
+    const auto container = io::envelope::read<schema::TileContainerSchema>(writer.paths(path).front());
     REQUIRE(container);
-    const auto subtile = io::envelope::locate_payload(container->data);
+    const auto subtile = io::envelope::deserialize_prefix(container->data);
     REQUIRE(subtile);
-    CHECK(subtile->header.class_name == "raster_store.FloatTile");
-    CHECK(subtile->header.compression_algorithm == compression);
+    CHECK(subtile->first.class_name == "raster_store.FloatTile");
+    CHECK(subtile->first.compression_algorithm == compression);
     // The reader uses the compression setting stored in the envelope.
-    const auto decoded = FloatCodec(glm::uvec2(side)).read(path, *hash);
+    const auto decoded = TileCodec<float>(glm::uvec2(side), DataEncoding::FloatPredictor).read(path, *hash);
     REQUIRE(decoded);
     CHECK(std::ranges::equal(decoded->data.bytes(), original));
     CHECK(std::ranges::equal(decoded->attribution.bytes(), tile.attribution.bytes()));
@@ -109,27 +111,27 @@ TEST_CASE("AMOFT rejects wrong dimensions, byte counts, and envelope classes", "
 {
     test::TemporaryDirectory directory;
     const auto path = directory.path() / "tile";
-    FloatCodec codec(glm::uvec2(3));
-    tile_codec::detail::v1::RasterTile payload { 3, 3, io::byte::vector(36), io::byte::vector(18) };
+    const TileCodec<float> codec(glm::uvec2(3), DataEncoding::FloatPredictor);
+    EncodedSubtile payload { 3, 3, io::byte::vector(36), io::byte::vector(18) };
     SECTION("width mismatch") { payload.width = 4; }
     SECTION("empty data") { payload.data.clear(); }
     SECTION("short data") { payload.data.pop_back(); }
     SECTION("long data") { payload.data.push_back(std::byte { 0 }); }
     SECTION("short attribution") { payload.source_attribution.pop_back(); }
     SECTION("zero dimensions") { payload.width = payload.height = 0; }
-    write_single_subtile<tile_codec::FloatTileSchema>(payload, path.string() + ".amoft");
+    write_single_subtile<schema::FloatPredictorSubtileSchema>(payload, path.string() + ".amoft");
     CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
-    write_single_subtile<tile_codec::TileSchema>(payload, path.string() + ".amoft");
+    write_single_subtile<schema::RawRasterSubtileSchema>(payload, path.string() + ".amoft");
     CHECK(codec.read(path).error().code() == Error::Code::CorruptData);
     CHECK(codec.write(path, raster_store::Tile<float>(4)).error().code() == Error::Code::InvalidInput);
 }
 
 TEST_CASE("AMOFT snapshots require Float32 and reopen with exact data", "[raster-store][codec][amoft]")
 {
-    CHECK(tile_codec::from_name<double>("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
-    CHECK(tile_codec::from_name<std::uint32_t>("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
-    CHECK(tile_codec::from_name<glm::vec3>("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
-    CHECK(tile_codec::from_name<glm::u8vec3>("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    CHECK(TileCodec<double>::from_name("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    CHECK(TileCodec<std::uint32_t>::from_name("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    CHECK(TileCodec<glm::vec3>::from_name("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
+    CHECK(TileCodec<glm::u8vec3>::from_name("amoft", glm::uvec2(4)).error().code() == Error::Code::Unsupported);
     test::TemporaryDirectory directory;
     const std::string table = R"([{"spatial_resolution":1,"acquisition_date":"","ingestion_date":"","copyright":"","copyright_link":"","license":""}])";
     REQUIRE(io::byte::write(std::as_bytes(std::span(table)), directory.path() / raster_store::attribution::file_name, io::byte::WriteMode::CreateNew));

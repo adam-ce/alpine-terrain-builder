@@ -18,12 +18,12 @@
 
 #pragma once
 
-#include <cstdint>
+#include <utility>
 
 #include <radix/geometry.h>
-#include <radix/raster.h>
 
 #include "Error.h"
+#include "raster_store/AttributedRaster.h"
 
 namespace raster_store {
 
@@ -37,24 +37,23 @@ inline Expected<void> validate_dimensions(const glm::uvec2 dimensions)
     return {};
 }
 
+// A whole stored tile including its halo, the store's NodeData.
 template <typename PixelType>
-struct Tile {
+struct Tile : AttributedRaster<PixelType> {
     // A half-open [min, max) region in stored pixels, including the halo.
     using Part = radix::geometry::Aabb2ui;
 
+    using AttributedRaster<PixelType>::AttributedRaster;
+
     explicit Tile(const unsigned side = default_tile_side)
-        : Tile(glm::uvec2(side))
+        : AttributedRaster<PixelType>(glm::uvec2(side))
     {
     }
 
-    explicit Tile(const glm::uvec2 size)
-        : data(size)
-        , attribution(size, std::uint16_t { 0 })
+    explicit Tile(AttributedRaster<PixelType> raster)
+        : AttributedRaster<PixelType>(std::move(raster))
     {
     }
-
-    radix::Raster<PixelType> data;
-    radix::Raster<std::uint16_t> attribution;
 };
 
 } // namespace raster_store

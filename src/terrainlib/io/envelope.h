@@ -72,7 +72,6 @@ inline constexpr std::size_t max_prefix_size = max_header_size + sizeof(std::uin
 
 // The compressed payload occupies size bytes from offset in the envelope.
 struct PayloadLocation {
-    Header header;
     std::uint64_t offset;
     std::uint64_t size;
 };
@@ -181,7 +180,7 @@ Expected<typename Schema::latest_type> deserialize(
 
 // Parses the header and the payload length prefix at the start of an envelope and checks the header
 // like read_header; neither decompresses nor verifies the hash.
-Expected<PayloadLocation> locate_payload(byte::span prefix);
+Expected<std::pair<Header, PayloadLocation>> deserialize_prefix(byte::span prefix);
 
 // Reads and decodes only the header of an envelope file. It checks the magic and the algorithm
 // enumerators, but neither the class nor the payload, which it does not read.

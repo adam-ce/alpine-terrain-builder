@@ -258,11 +258,6 @@ namespace {
         return Error::fail(Error::Code::ResourceExhausted, "decode image");
     }
 
-    bool is_jpeg(byte::span bytes)
-    {
-        return bytes.size() >= 3 && bytes[0] == std::byte { 0xFF } && bytes[1] == std::byte { 0xD8 } && bytes[2] == std::byte { 0xFF };
-    }
-
     // TurboJPEG adds opaque alpha and expands grey to RGB. Warnings, such as for truncated data, are errors.
     template <typename Pixel>
     Expected<radix::Raster<Pixel>> decode_jpeg(byte::span bytes, std::optional<glm::uvec2> expected_size)
@@ -438,6 +433,10 @@ Expected<RGB8> decode_rgb8(byte::span bytes, std::optional<glm::uvec2> expected_
 Expected<RGBA8> decode_rgba8(byte::span bytes, std::optional<glm::uvec2> expected_size) { return decode_raster<glm::u8vec4>(bytes, expected_size); }
 Expected<RGB8> read_rgb8(const std::filesystem::path& path) { return read_raster<glm::u8vec3>(path); }
 Expected<RGBA8> read_rgba8(const std::filesystem::path& path) { return read_raster<glm::u8vec4>(path); }
+bool is_jpeg(byte::span bytes)
+{
+    return bytes.size() >= 3 && bytes[0] == std::byte { 0xFF } && bytes[1] == std::byte { 0xD8 } && bytes[2] == std::byte { 0xFF };
+}
 Expected<void> write(const RGB8& image, const std::filesystem::path& path, WriteOptions options) { return write_image(image, path, options); }
 Expected<void> write(const RGBA8& image, const std::filesystem::path& path, WriteOptions options) { return write_image(image, path, options); }
 

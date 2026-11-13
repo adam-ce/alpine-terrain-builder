@@ -63,6 +63,8 @@ Expected<RGB8> decode_rgb8(byte::span bytes, std::optional<glm::uvec2> expected_
 Expected<RGBA8> decode_rgba8(byte::span bytes, std::optional<glm::uvec2> expected_size = std::nullopt);
 Expected<RGB8> read_rgb8(const std::filesystem::path& path);
 Expected<RGBA8> read_rgba8(const std::filesystem::path& path);
+/// Whether the bytes start with the JPEG signature; the readers above decode such bytes as JPEG.
+bool is_jpeg(byte::span bytes);
 
 /// Select JPEG/PNG/JPEG XL from the extension. Existing symlinks and nonregular files are rejected.
 Expected<void> write(const RGB8& image, const std::filesystem::path& path, WriteOptions options = {});
